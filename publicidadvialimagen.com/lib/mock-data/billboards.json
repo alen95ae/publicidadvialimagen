@@ -1,0 +1,181 @@
+[
+  {
+    "id": 1,
+    "name": "Pantalla LED Premium - Gran Vía",
+    "images": [
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600"
+    ],
+    "monthlyPrice": 2500,
+    "location": "Gran Vía 28, Madrid",
+    "city": "Madrid",
+    "format": "Digital LED",
+    "type": "Premium",
+    "dimensions": "6x3 metros",
+    "visibility": "Alto tráfico",
+    "traffic": "150,000 personas/día",
+    "lighting": "24/7",
+    "resolution": "1920x1080 Full HD",
+    "material": "Pantalla LED exterior",
+    "available": true,
+    "availableMonths": ["2024-02", "2024-03", "2024-04", "2024-05", "2024-06", "2024-07"],
+    "features": [
+      "Resolución 4K",
+      "Contenido dinámico",
+      "Ubicación premium",
+      "Gestión remota",
+      "Soporte técnico 24/7",
+      "Análisis de audiencia"
+    ],
+    "description": "Ubicada en el corazón de Madrid, esta pantalla LED premium ofrece máxima visibilidad en una de las arterias más transitadas de la capital. Perfecta para campañas de alto impacto que buscan alcanzar una audiencia masiva y diversa.",
+    "technicalSpecs": {
+      "resolution": "1920x1080 Full HD",
+      "brightness": "5000 nits",
+      "viewingAngle": "160° horizontal / 140° vertical",
+      "refreshRate": "60Hz",
+      "connectivity": "4G/WiFi",
+      "powerConsumption": "800W promedio"
+    }
+  },
+  {
+    "id": 2,
+    "name": "Valla Tradicional - Autopista A-1",
+    "images": [
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600"
+    ],
+    "monthlyPrice": 1200,
+    "location": "Autopista A-1, Km 15",
+    "city": "Madrid",
+    "format": "Impresa",
+    "type": "Autopista",
+    "dimensions": "8x4 metros",
+    "visibility": "Muy alto tráfico",
+    "traffic": "80,000 vehículos/día",
+    "lighting": "Iluminada",
+    "available": true,
+    "availableMonths": ["2024-01", "2024-02", "2024-03", "2024-06"],
+    "features": ["Doble cara", "Iluminación LED", "Fácil acceso"],
+    "description": "Estratégicamente ubicada en la principal autopista de acceso a Madrid, esta valla tradicional garantiza máxima exposición a miles de conductores diariamente.",
+    "technicalSpecs": {
+      "material": "Lona vinílica premium",
+      "structure": "Acero galvanizado",
+      "lighting": "LED perimetral",
+      "installation": "Profesional incluida"
+    }
+  },
+  {
+    "id": 3,
+    "name": "Parada de Autobús - Centro Comercial",
+    "images": [
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600"
+    ],
+    "monthlyPrice": 800,
+    "location": "Centro Comercial Xanadú",
+    "city": "Madrid",
+    "format": "Backlight",
+    "type": "Mobiliario Urbano",
+    "dimensions": "2x1.5 metros",
+    "visibility": "Medio-alto tráfico",
+    "traffic": "25,000 personas/día",
+    "lighting": "Retroiluminada",
+    "available": true,
+    "availableMonths": ["2024-02", "2024-04", "2024-05", "2024-07"],
+    "features": ["Retroiluminación", "Protección clima", "Zona comercial"],
+    "description": "Perfecta para captar la atención de compradores en una de las zonas comerciales más concurridas de Madrid.",
+    "technicalSpecs": {
+      "lighting": "LED backlight",
+      "protection": "IP65",
+      "material": "Cristal templado",
+      "visibility": "24/7"
+    }
+  },
+  {
+    "id": 4,
+    "name": "Pantalla LED Móvil - Eventos",
+    "images": [
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600"
+    ],
+    "monthlyPrice": 1800,
+    "location": "Servicio móvil Madrid",
+    "city": "Madrid",
+    "format": "Digital LED",
+    "type": "Móvil",
+    "dimensions": "4x2 metros",
+    "visibility": "Eventos específicos",
+    "traffic": "Variable según evento",
+    "lighting": "24/7",
+    "available": true,
+    "availableMonths": ["2024-01", "2024-03", "2024-05", "2024-06"],
+    "features": ["Totalmente móvil", "Eventos personalizados", "Flexibilidad total"],
+    "description": "Máxima flexibilidad para llegar exactamente donde está tu audiencia objetivo. Ideal para eventos, lanzamientos y campañas específicas.",
+    "technicalSpecs": {
+      "mobility": "Vehículo propio",
+      "setup": "30 minutos",
+      "power": "Generador incluido",
+      "coverage": "Comunidad de Madrid"
+    }
+  },
+  {
+    "id": 5,
+    "name": "Valla Digital - Estación Atocha",
+    "images": [
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600"
+    ],
+    "monthlyPrice": 3200,
+    "location": "Estación de Atocha",
+    "city": "Madrid",
+    "format": "Digital LED",
+    "type": "Premium",
+    "dimensions": "5x3 metros",
+    "visibility": "Muy alto tráfico",
+    "traffic": "200,000 personas/día",
+    "lighting": "24/7",
+    "available": false,
+    "availableMonths": ["2024-06", "2024-07", "2024-08"],
+    "features": ["Ubicación estratégica", "Audiencia cautiva", "Alta frecuencia"],
+    "description": "La ubicación más premium de Madrid. Perfecta para marcas que buscan máximo impacto en una audiencia diversa y de alto poder adquisitivo.",
+    "technicalSpecs": {
+      "resolution": "4K Ultra HD",
+      "brightness": "6000 nits",
+      "content": "Gestión profesional",
+      "analytics": "Métricas detalladas"
+    }
+  },
+  {
+    "id": 6,
+    "name": "Valla Tradicional - Entrada Barcelona",
+    "images": [
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600",
+      "/placeholder.svg?height=400&width=600"
+    ],
+    "monthlyPrice": 1500,
+    "location": "Entrada Barcelona Norte",
+    "city": "Barcelona",
+    "format": "Impresa",
+    "type": "Autopista",
+    "dimensions": "7x3.5 metros",
+    "visibility": "Alto tráfico",
+    "traffic": "60,000 vehículos/día",
+    "lighting": "Iluminada",
+    "available": true,
+    "availableMonths": ["2024-02", "2024-03", "2024-04"],
+    "features": ["Primera impresión ciudad", "Doble cara", "Iluminación nocturna"],
+    "description": "La primera impresión que reciben los visitantes de Barcelona. Ubicación estratégica para marcas que quieren dar la bienvenida a la ciudad condal.",
+    "technicalSpecs": {
+      "visibility": "Doble cara",
+      "lighting": "Proyectores LED",
+      "material": "Vinilo premium",
+      "maintenance": "Incluido"
+    }
+  }
+]

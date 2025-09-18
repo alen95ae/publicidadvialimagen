@@ -41,6 +41,7 @@ const modules = [
   { key: "crm", title: "CRM", href: "/panel/crm", icon: Handshake },
   { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
   { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
+  { key: "moderacion", title: "Moderación", href: "/panel/moderacion", icon: ShieldCheck },
   { key: "mapas", title: "Mapas", href: "/panel/mapas", icon: Map },
   { key: "diseno", title: "Diseño Gráfico", href: "/panel/diseno", icon: Palette },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },

@@ -160,7 +160,6 @@ model ContactTagOnContact {
 
   @@id([contactId, tagId])
 }
-
 model Production {
   id                String            @id @default(cuid())
   codigo            String            @unique

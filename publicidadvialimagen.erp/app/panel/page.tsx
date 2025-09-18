@@ -77,7 +77,7 @@ export default function PanelPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <div className="text-xl font-bold text-slate-800">
-              StellarMotion<sup className="text-sm">®</sup>
+              Publicidad Vial Imagen<sup className="text-sm">®</sup>
             </div>
           </div>
           <div className="flex items-center gap-6">

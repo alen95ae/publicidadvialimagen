@@ -1,4 +1,4 @@
-# StellarMotion Panel
+# Publicidad Vial Imagen Panel
 
 Panel de control para gestión de soportes publicitarios desarrollado con Next.js, TypeScript y Tailwind CSS.
 
@@ -28,7 +28,7 @@ Panel de control para gestión de soportes publicitarios desarrollado con Next.j
 1. **Clonar el repositorio**
    ```bash
    git clone <url-del-repo>
-   cd stellarmotion-panel
+   cd publicidadvialimagen-panel
    ```
 
 2. **Instalar dependencias**
@@ -63,7 +63,7 @@ Panel de control para gestión de soportes publicitarios desarrollado con Next.j
 - **Panel**: http://localhost:3000/panel
 
 ### Credenciales de Prueba
-- **Email**: admin@stellarmotion.io
+- **Email**: admin@publicidadvialimagen.com
 - **Contraseña**: admin123
 
 ## 📊 Módulos Disponibles
@@ -165,8 +165,8 @@ npx prisma generate        # Regenerar cliente Prisma
 ## 🎨 Personalización
 
 ### Colores del Tema
-El proyecto usa la paleta de colores de StellarMotion:
-- **Primario**: #D54644 (rojo StellarMotion)
+El proyecto usa la paleta de colores de Publicidad Vial Imagen:
+- **Primario**: #D54644 (rojo Publicidad Vial Imagen)
 - **Hover**: #B03A38 (rojo más oscuro)
 - **Fondo**: gray-50
 - **Texto**: slate-800
@@ -202,7 +202,7 @@ Todos los componentes están basados en shadcn/ui y son completamente personaliz
 
 ## 📄 Licencia
 
-Este proyecto es privado y propiedad de StellarMotion.
+Este proyecto es privado y propiedad de Publicidad Vial Imagen.
 
 ## 📞 Soporte
 
@@ -210,4 +210,4 @@ Para soporte técnico o preguntas, contactar al equipo de desarrollo.
 
 ---
 
-**StellarMotion Panel** - Sistema de gestión de soportes publicitarios
+**Publicidad Vial Imagen Panel** - Sistema de gestión de soportes publicitarios

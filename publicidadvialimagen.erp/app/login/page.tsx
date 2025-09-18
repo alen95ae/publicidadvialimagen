@@ -46,7 +46,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="text-2xl font-bold text-[#D54644] mb-2">
-            StellarMotion<sup className="text-sm">®</sup>
+            Publicidad Vial Imagen<sup className="text-sm">®</sup>
           </div>
           <CardTitle className="text-xl">Iniciar sesión</CardTitle>
           <CardDescription>
@@ -69,7 +69,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@stellarmotion.io"
+                placeholder="admin@publicidadvialimagen.com"
                 required
               />
             </div>
@@ -98,7 +98,7 @@ export default function LoginPage() {
           <div className="mt-4 text-center text-sm text-gray-600">
             <p>Credenciales de prueba:</p>
             <p className="font-mono text-xs mt-1">
-              admin@stellarmotion.io / admin123
+              admin@publicidadvialimagen.com / admin123
             </p>
           </div>
         </CardContent>

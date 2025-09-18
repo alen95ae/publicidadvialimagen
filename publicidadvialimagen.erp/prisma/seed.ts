@@ -5,10 +5,10 @@ const prisma = new PrismaClient()
 
 async function main() {
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@stellarmotion.io' },
+    where: { email: 'admin@publicidadvialimagen.com' },
     update: {},
     create: {
-      email: 'admin@stellarmotion.io',
+      email: 'admin@publicidadvialimagen.com',
       name: 'Admin',
       password: await bcrypt.hash('admin123', 10),
       role: 'ADMIN',
@@ -16,10 +16,10 @@ async function main() {
   })
 
   const comercial1 = await prisma.user.upsert({
-    where: { email: 'maria.garcia@stellarmotion.io' },
+    where: { email: 'maria.garcia@publicidadvialimagen.com' },
     update: {},
     create: {
-      email: 'maria.garcia@stellarmotion.io',
+      email: 'maria.garcia@publicidadvialimagen.com',
       name: 'María García',
       password: await bcrypt.hash('password123', 10),
       role: 'MANAGER',
@@ -27,10 +27,10 @@ async function main() {
   })
 
   const comercial2 = await prisma.user.upsert({
-    where: { email: 'carlos.lopez@stellarmotion.io' },
+    where: { email: 'carlos.lopez@publicidadvialimagen.com' },
     update: {},
     create: {
-      email: 'carlos.lopez@stellarmotion.io',
+      email: 'carlos.lopez@publicidadvialimagen.com',
       name: 'Carlos López',
       password: await bcrypt.hash('password123', 10),
       role: 'OPERATOR',
@@ -38,7 +38,7 @@ async function main() {
   })
 
   const comp = await prisma.company.create({
-    data: { name: 'StellarMotion Media', website: 'https://stellarmotion.io' },
+    data: { name: 'Publicidad Vial Imagen', website: 'https://publicidadvialimagen.com' },
   })
 
   // Crear soportes solo si no existen

@@ -23,6 +23,7 @@ import {
   Settings,
   Power,
   Monitor,
+  Hammer,
 } from "lucide-react"
 
 const modules = [
@@ -39,7 +40,7 @@ const modules = [
   { key: "facturacion", title: "Facturación", href: "/panel/facturacion", icon: Receipt },
   { key: "crm", title: "CRM", href: "/panel/crm", icon: Handshake },
   { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
-  { key: "moderacion", title: "Moderación", href: "/panel/moderacion", icon: ShieldCheck },
+  { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
   { key: "mapas", title: "Mapas", href: "/panel/mapas", icon: Map },
   { key: "diseno", title: "Diseño Gráfico", href: "/panel/diseno", icon: Palette },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },

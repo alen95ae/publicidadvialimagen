@@ -37,6 +37,13 @@ enum SupportStatus {
   NO_DISPONIBLE
 }
 
+enum ProductionStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  ATRASADA
+}
+
 model User {
   id        String    @id @default(cuid())
   email     String    @unique
@@ -152,4 +159,19 @@ model ContactTagOnContact {
   contact   Contact    @relation(fields: [contactId], references: [id])
 
   @@id([contactId, tagId])
+}
+
+model Production {
+  id                String            @id @default(cuid())
+  codigo            String            @unique
+  fecha             DateTime
+  lugarInstalacion  String
+  equipoTrabajo     String
+  responsable       String
+  tiempoEjecucion   String
+  fechaLimite       DateTime
+  estado            ProductionStatus  @default(PENDIENTE)
+  notas             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 }

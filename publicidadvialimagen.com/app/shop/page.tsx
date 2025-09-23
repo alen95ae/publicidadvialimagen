@@ -374,62 +374,29 @@ export default function ShopPage() {
               <Button onClick={clearFilters}>Clear all filters</Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="group relative">
-                  <div className="aspect-square overflow-hidden rounded-lg bg-background">
+                  <div className="w-[222px] h-[147px] overflow-hidden rounded-lg bg-background border">
                     <Image
                       src={product.image || "/placeholder.svg"}
                       alt={product.name}
-                      width={300}
-                      height={300}
+                      width={222}
+                      height={147}
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
-                    <div className="absolute top-4 right-4 flex flex-col gap-2">
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="h-8 w-8 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                      >
-                        <Heart className="h-4 w-4" />
-                        <span className="sr-only">Add to wishlist</span>
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="h-8 w-8 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                      >
-                        <Search className="h-4 w-4" />
-                        <span className="sr-only">Quick view</span>
-                      </Button>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button className="mx-auto">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 bg-black/50">
+                      <Button className="mx-auto bg-primary hover:bg-primary/90">
                         <ShoppingCart className="mr-2 h-4 w-4" />
-                        Add to Cart
+                        Reservar
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-4 space-y-1 text-center">
-                    <Badge variant="outline" className="mb-2">
-                      {product.category}
-                    </Badge>
-                    <h3 className="font-medium">{product.name}</h3>
+                  <div className="mt-2 space-y-1 text-center">
+                    <h3 className="font-medium text-sm">{product.name}</h3>
                     <div className="flex justify-center gap-2">
-                      <span className="text-muted-foreground line-through">${product.price.toFixed(2)}</span>
-                      <span className="font-medium text-primary">${product.offerPrice.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-center">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <svg
-                          key={i}
-                          className={`h-4 w-4 ${i < product.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                        </svg>
-                      ))}
+                      <span className="text-muted-foreground line-through text-xs">${product.price.toFixed(2)}</span>
+                      <span className="font-medium text-primary text-sm">${product.offerPrice.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>

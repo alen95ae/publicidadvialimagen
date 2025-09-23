@@ -422,72 +422,31 @@ export default function PrintShopPage() {
               <Button onClick={clearFilters}>Limpiar todos los filtros</Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredProducts.map((product) => (
-                <Card key={product.id} className="group relative overflow-hidden">
-                  <div className="aspect-[4/3] relative">
+                <div key={product.id} className="group relative">
+                  <div className="w-[222px] h-[147px] overflow-hidden rounded-lg bg-background border">
                     <Image
                       src={product.image || "/placeholder.svg"}
                       alt={product.name}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
+                      width={222}
+                      height={147}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
-                    <div className="absolute top-4 left-4 flex gap-2">
-                      <Badge variant="default" className="bg-primary text-primary-foreground">
-                        {product.category}
-                      </Badge>
-                      {product.waterproof && (
-                        <Badge variant="outline" className="bg-background/90">
-                          Impermeable
-                        </Badge>
-                      )}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 bg-black/50">
+                      <Button className="mx-auto bg-primary hover:bg-primary/90">
+                        <Ruler className="mr-2 h-4 w-4" />
+                        Reservar
+                      </Button>
                     </div>
                   </div>
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="font-semibold text-lg mb-2 text-balance">{product.name}</h3>
-                        <p className="text-sm text-muted-foreground mb-2 text-pretty">{product.recommendedUse}</p>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Shield className="h-4 w-4" />
-                            {product.durability}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            {product.deliveryTime}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1">
-                        {product.features.slice(0, 2).map((feature, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {feature}
-                          </Badge>
-                        ))}
-                        {product.features.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{product.features.length - 2} más
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-2xl font-bold text-primary">€{product.pricePerM2}</span>
-                          <span className="text-sm text-muted-foreground">/m²</span>
-                        </div>
-                        <Button className="bg-primary hover:bg-primary/90" asChild>
-                          <Link href={`/print-shop/${product.id}`}>
-                            <Ruler className="mr-2 h-4 w-4" />
-                            Calcular
-                          </Link>
-                        </Button>
-                      </div>
+                  <div className="mt-2 space-y-1 text-center">
+                    <h3 className="font-medium text-sm">{product.name}</h3>
+                    <div className="flex justify-center gap-2">
+                      <span className="font-medium text-primary text-sm">€{product.pricePerM2}/m²</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}

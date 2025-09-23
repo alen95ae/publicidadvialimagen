@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,8 +46,15 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="text-2xl font-bold text-[#D54644] mb-2">
-            Publicidad Vial Imagen<sup className="text-sm">®</sup>
+          <div className="flex justify-center mb-4">
+            <Image
+              src="/logo-publicidad-vial-imagen.svg"
+              alt="Publicidad Vial Imagen"
+              width={200}
+              height={60}
+              className="h-16 w-auto"
+              priority
+            />
           </div>
           <CardTitle className="text-xl">Iniciar sesión</CardTitle>
           <CardDescription>

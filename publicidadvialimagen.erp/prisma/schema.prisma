@@ -7,49 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  MANAGER
-  OPERATOR
-}
-
-enum ResStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-}
-
-enum ContactKind {
-  INDIVIDUAL
-  COMPANY
-}
-
-enum ContactRelation {
-  CUSTOMER
-  SUPPLIER
-  BOTH
-}
-
-enum SupportStatus {
-  DISPONIBLE
-  OCUPADO
-  RESERVADO
-  NO_DISPONIBLE
-}
-
-enum ProductionStatus {
-  PENDIENTE
-  EN_PROCESO
-  COMPLETADA
-  ATRASADA
-}
-
 model User {
   id        String    @id @default(cuid())
   email     String    @unique
   name      String?
   password  String
-  role      Role      @default(OPERATOR)
+  role      Role      @default("OPERATOR")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   contacts  Contact[]
@@ -92,16 +55,16 @@ model Support {
   country                String?
   priceMonth             Float?
   available              Boolean       @default(true)
-  status                 SupportStatus @default(DISPONIBLE)
+  status                 SupportStatus @default("DISPONIBLE")
   areaM2                 Float?
   pricePerM2             Float?
   productionCost         Float?
   productionCostOverride Boolean       @default(false)
   owner                  String?
-  imageUrl               String? // URL pública de la imagen del soporte
   companyId              String?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
+  imageUrl               String?
   bookings               Reservation[]
   company                Company?      @relation(fields: [companyId], references: [id])
 }
@@ -112,7 +75,7 @@ model Reservation {
   clientId  String
   startDate DateTime
   endDate   DateTime
-  status    ResStatus @default(PENDING)
+  status    ResStatus @default("PENDING")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   client    Client    @relation(fields: [clientId], references: [id])
@@ -121,8 +84,8 @@ model Reservation {
 
 model Contact {
   id           String                @id @default(cuid())
-  kind         ContactKind           @default(COMPANY)
-  relation     ContactRelation       @default(CUSTOMER)
+  kind         ContactKind           @default("COMPANY")
+  relation     ContactRelation       @default("CUSTOMER")
   displayName  String
   legalName    String?
   taxId        String?
@@ -160,17 +123,55 @@ model ContactTagOnContact {
 
   @@id([contactId, tagId])
 }
+
 model Production {
-  id                String            @id @default(cuid())
-  codigo            String            @unique
-  fecha             DateTime
-  lugarInstalacion  String
-  equipoTrabajo     String
-  responsable       String
-  tiempoEjecucion   String
-  fechaLimite       DateTime
-  estado            ProductionStatus  @default(PENDIENTE)
-  notas             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id               String           @id @default(cuid())
+  codigo           String           @unique
+  fecha            DateTime
+  lugarInstalacion String
+  equipoTrabajo    String
+  responsable      String
+  tiempoEjecucion  String
+  fechaLimite      DateTime
+  estado           ProductionStatus @default("PENDIENTE")
+  notas            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  OPERATOR
+}
+
+enum ResStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum ContactKind {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum ContactRelation {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum SupportStatus {
+  DISPONIBLE
+  OCUPADO
+  RESERVADO
+  NO_DISPONIBLE
+}
+
+enum ProductionStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  ATRASADA
 }

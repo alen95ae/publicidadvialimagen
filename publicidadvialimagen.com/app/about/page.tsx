@@ -8,51 +8,80 @@ export default function AboutPage() {
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">About PetDo</h1>
+        <h1 className="text-3xl font-bold mb-2">Sobre nosotros</h1>
         <div className="flex items-center text-sm text-muted-foreground">
           <Link href="/" className="hover:text-primary">
-            Home
+            Inicio
           </Link>
           <span className="mx-2">/</span>
-          <span>About</span>
+          <span>Sobre nosotros</span>
         </div>
       </div>
 
       {/* Hero Section */}
       <div className="grid md:grid-cols-2 gap-8 items-center mb-16">
-        <div>
-          <h2 className="text-3xl font-bold mb-4">Our Story</h2>
+        <div className="relative h-[300px] md:h-[400px] rounded-lg overflow-hidden order-1 md:order-1">
+          <Image
+            src="/publicidad_vial_imagen.png"
+            alt="Equipo de Publicidad Vial Imagen"
+            fill
+            className="object-contain rounded-lg"
+          />
+        </div>
+        <div className="order-2 md:order-2">
+          <h2 className="text-3xl font-bold mb-4">Nuestra historia</h2>
           <p className="text-muted-foreground mb-4">
-            Founded in 2015, PetDo started with a simple mission: to provide high-quality products for pets and make pet
-            parenting easier and more enjoyable.
+            Publicidad Vial Imagen una empresa con 33 años de experiencia en el sector de la publicidad. Disponemos de espacios publicitarios en vía pública para ayudar a nuestros clientes a promocionar su marca, productos y servicios.
           </p>
           <p className="text-muted-foreground mb-4">
-            What began as a small local shop has grown into a trusted online destination for pet lovers across the
-            country. Our founder, Sarah Johnson, a passionate dog owner, recognized the need for premium pet products
-            that prioritize both quality and affordability.
+            Disponemos de última tecnología para proporcionar a nuestros clientes una publicidad de alto impacto y efectiva de forma rápida y sencilla.
           </p>
           <p className="text-muted-foreground">
-            Today, we continue to be guided by our love for animals and commitment to exceptional customer service.
-            Every product in our catalog is carefully selected to ensure it meets our high standards for quality,
-            safety, and value.
+            Nos tomamos la publicidad en serio, por eso ofrecemos productos de calidad y un excelente servicio al cliente. Nuestro equipo de profesionales está aquí para ayudarle con cualquier pregunta o inquietud. ¡No dude en contactar con nosotros si desea obtener más información sobre cómo podemos ayudarle a llevar su publicidad al siguiente nivel!
           </p>
         </div>
-        <div className="relative h-[300px] md:h-[400px] rounded-lg overflow-hidden">
-          <Image
-            src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?q=80&w=2069&auto=format&fit=crop&ixlib=rb-4.0.3"
-            alt="PetDo team with dogs"
-            fill
-            className="object-cover"
-          />
+      </div>
+
+      {/* Second Hero Section */}
+      <div className="grid md:grid-cols-2 gap-8 items-center mb-16">
+        <div className="order-2 md:order-1">
+          <h2 className="text-3xl font-bold mb-4">Nuestra empresa</h2>
+          <p className="text-muted-foreground mb-4">
+            Publicidad Vial Imagen S.R.L. se encuentra a la vanguardia de la publicidad boliviana desde 1980.
+          </p>
+          <p className="text-muted-foreground mb-4">
+            Martín Sillerico, Gerente General y fundador, a través de varias líneas de negocio ha logrado posicionarse a nivel nacional con su amplia gama de productos y servicios.
+          </p>
+          <p className="text-muted-foreground mb-4">
+            Generamos ideas, las diseñamos y las plasmamos, elaborando y produciendo conceptos de marketing con valor para nuestros clientes.
+          </p>
+          <p className="text-muted-foreground">
+            Somos una empresa líder en servicios integrales de publicidad a nivel nacional, reconocida por su capacidad tecnológica y calidad humana que contribuye día a día al desarrollo económico del país.
+          </p>
+        </div>
+        <div className="flex justify-center order-1 md:order-2">
+          <div className="relative">
+            <Image
+              src="/martin_sillerico.png"
+              alt="Martín Sillerico Ariñez"
+              width={300}
+              height={400}
+              className="rounded-lg"
+            />
+            <div className="absolute bottom-4 left-4 right-4 bg-[#be0811]/80 text-white p-3 rounded-lg">
+              <p className="italic text-sm">Martín Sillerico Ariñez</p>
+              <p className="font-bold text-sm">Gerente General</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Values Section */}
       <div className="mb-16">
         <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold mb-4">Our Values</h2>
+          <h2 className="text-3xl font-bold mb-4">Nuestros valores</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            At PetDo, our core values guide everything we do, from product selection to customer service.
+            En Publicidad Vial Imagen, nuestros valores fundamentales guían todo lo que hacemos, desde la selección de espacios hasta el servicio al cliente.
           </p>
         </div>
 
@@ -61,9 +90,9 @@ export default function AboutPage() {
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
               <Heart className="h-6 w-6" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Pet Wellbeing</h3>
+            <h3 className="font-semibold text-lg mb-2">Compromiso</h3>
             <p className="text-muted-foreground">
-              We prioritize products that contribute to the health, happiness, and wellbeing of your pets.
+              Nos comprometemos con el éxito de nuestros clientes, ofreciendo soluciones publicitarias efectivas y de calidad.
             </p>
           </div>
 
@@ -71,9 +100,9 @@ export default function AboutPage() {
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
               <Award className="h-6 w-6" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Quality Assurance</h3>
+            <h3 className="font-semibold text-lg mb-2">Calidad garantizada</h3>
             <p className="text-muted-foreground">
-              We rigorously test and verify all products to ensure they meet our high standards for quality and safety.
+              Todos nuestros espacios y servicios cumplen los más altos estándares de calidad y efectividad publicitaria.
             </p>
           </div>
 
@@ -81,9 +110,9 @@ export default function AboutPage() {
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
               <Users className="h-6 w-6" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Customer Focus</h3>
+            <h3 className="font-semibold text-lg mb-2">Enfoque al cliente</h3>
             <p className="text-muted-foreground">
-              We're dedicated to providing exceptional service and building lasting relationships with our customers.
+              Estamos dedicados a proporcionar un servicio excepcional y construir relaciones duraderas con nuestros clientes.
             </p>
           </div>
 
@@ -91,73 +120,14 @@ export default function AboutPage() {
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
               <Truck className="h-6 w-6" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Reliability</h3>
+            <h3 className="font-semibold text-lg mb-2">Confiabilidad</h3>
             <p className="text-muted-foreground">
-              We deliver on our promises with fast shipping, accurate orders, and responsive customer support.
+              Cumplimos nuestras promesas con entrega rápida, instalaciones precisas y soporte al cliente responsivo.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Team Section */}
-      <div className="mb-16">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold mb-4">Meet Our Team</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            The passionate people behind PetDo who work tirelessly to bring the best products to you and your pets.
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            {
-              name: "Sarah Johnson",
-              role: "Founder & CEO",
-              image:
-                "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3",
-            },
-            {
-              name: "Michael Chen",
-              role: "Head of Product",
-              image:
-                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3",
-            },
-            {
-              name: "Emily Rodriguez",
-              role: "Customer Experience",
-              image:
-                "https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=1961&auto=format&fit=crop&ixlib=rb-4.0.3",
-            },
-            {
-              name: "David Kim",
-              role: "Logistics Manager",
-              image:
-                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3",
-            },
-          ].map((member, index) => (
-            <div key={index} className="bg-card rounded-lg border overflow-hidden">
-              <div className="relative h-64 w-full">
-                <Image src={member.image || "/placeholder.svg"} alt={member.name} fill className="object-cover" />
-              </div>
-              <div className="p-4 text-center">
-                <h3 className="font-semibold text-lg">{member.name}</h3>
-                <p className="text-muted-foreground">{member.role}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="bg-primary text-primary-foreground rounded-lg p-8 md:p-12 text-center">
-        <h2 className="text-2xl md:text-3xl font-bold mb-4">Join the PetDo Family</h2>
-        <p className="max-w-2xl mx-auto mb-6">
-          Discover premium products for your furry friends and join thousands of satisfied pet parents who trust PetDo.
-        </p>
-        <Button size="lg" variant="secondary" asChild>
-          <Link href="/shop">Shop Now</Link>
-        </Button>
-      </div>
     </div>
   )
 }

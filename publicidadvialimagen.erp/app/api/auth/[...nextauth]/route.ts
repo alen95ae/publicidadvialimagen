@@ -12,11 +12,28 @@ const handler = NextAuth({
       name: "Credentials",
       credentials: { email: {}, password: {} },
       async authorize(creds) {
-        if (!creds?.email || !creds?.password) return null
+        console.log('🔐 Intentando autenticar:', { email: creds?.email, hasPassword: !!creds?.password })
+        
+        if (!creds?.email || !creds?.password) {
+          console.log('❌ Credenciales faltantes')
+          return null
+        }
+        
         const user = await prisma.user.findUnique({ where: { email: creds.email } })
-        if (!user) return null
+        if (!user) {
+          console.log('❌ Usuario no encontrado:', creds.email)
+          return null
+        }
+        
+        console.log('✅ Usuario encontrado:', { email: user.email, name: user.name, role: user.role })
+        
         const ok = await bcrypt.compare(creds.password, user.password)
-        if (!ok) return null
+        if (!ok) {
+          console.log('❌ Contraseña incorrecta para:', creds.email)
+          return null
+        }
+        
+        console.log('✅ Autenticación exitosa para:', creds.email)
         return { id: user.id, email: user.email, name: user.name, role: user.role }
       }
     })

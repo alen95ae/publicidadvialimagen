@@ -29,33 +29,9 @@ export default function Header() {
             <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">
               Inicio
             </Link>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 text-sm font-medium transition-colors hover:text-primary">
-                Vallas Publicitarias <ChevronDown className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem>
-                  <Link href="/billboards/led-screens" className="w-full">
-                    Pantallas LED
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/billboards/traditional" className="w-full">
-                    Vallas Tradicionales
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/billboards/street-furniture" className="w-full">
-                    Mobiliario Urbano
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/billboards/mobile" className="w-full">
-                    Publicidad Móvil
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Link href="/billboards" className="text-sm font-medium transition-colors hover:text-primary">
+              Vallas Publicitarias
+            </Link>
             <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
               Impresión
             </Link>
@@ -122,25 +98,9 @@ export default function Header() {
             <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">
               Inicio
             </Link>
-            <details className="group">
-              <summary className="flex cursor-pointer items-center justify-between text-sm font-medium transition-colors hover:text-primary">
-                Vallas Publicitarias <ChevronDown className="h-4 w-4" />
-              </summary>
-              <nav className="mt-2 ml-4 flex flex-col space-y-2">
-                <Link href="/billboards/led-screens" className="text-sm transition-colors hover:text-primary">
-                  Pantallas LED
-                </Link>
-                <Link href="/billboards/traditional" className="text-sm transition-colors hover:text-primary">
-                  Vallas Tradicionales
-                </Link>
-                <Link href="/billboards/street-furniture" className="text-sm transition-colors hover:text-primary">
-                  Mobiliario Urbano
-                </Link>
-                <Link href="/billboards/mobile" className="text-sm transition-colors hover:text-primary">
-                  Publicidad Móvil
-                </Link>
-              </nav>
-            </details>
+            <Link href="/billboards" className="text-sm font-medium transition-colors hover:text-primary">
+              Vallas Publicitarias
+            </Link>
             <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
               Impresión
             </Link>

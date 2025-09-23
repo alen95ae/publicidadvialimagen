@@ -2,15 +2,19 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import "../styles/leaflet.css"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Stellarmotion - Publicidad Exterior y Servicios de Impresión",
+  title: "Publicidad Vial Imagen | Vallas Publicitarias",
   description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca",
-    generator: 'v0.app'
+  generator: 'v0.app',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({

@@ -144,83 +144,43 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
             Compara soportes disponibles en tu ciudad
           </h2>
-          <div className="relative">
-            <div className="flex animate-scroll gap-8 pb-4">
-              {/* First set of cities */}
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-madrid.svg" alt="Madrid" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Madrid</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-barcelona.svg" alt="Barcelona" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Barcelona</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-valencia.svg" alt="Valencia" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Valencia</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-sevilla.svg" alt="Sevilla" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Sevilla</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-bilbao.svg" alt="Bilbao" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Bilbao</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-malaga.svg" alt="Málaga" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Málaga</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-zaragoza.svg" alt="Zaragoza" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Zaragoza</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-murcia.svg" alt="Murcia" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Murcia</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-palma.svg" alt="Palma" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Palma</p>
-              </div>
-              {/* Duplicate set for infinite scroll */}
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-madrid.svg" alt="Madrid" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Madrid</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-barcelona.svg" alt="Barcelona" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Barcelona</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-valencia.svg" alt="Valencia" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Valencia</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-sevilla.svg" alt="Sevilla" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Sevilla</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-bilbao.svg" alt="Bilbao" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Bilbao</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-malaga.svg" alt="Málaga" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Málaga</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-zaragoza.svg" alt="Zaragoza" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Zaragoza</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-murcia.svg" alt="Murcia" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Murcia</p>
-              </div>
-              <div className="flex-shrink-0 text-center">
-                <img src="/city-palma.svg" alt="Palma" className="mx-auto mb-2 w-20 h-20" />
-                <p className="text-sm font-medium text-muted-foreground">Palma</p>
-              </div>
-            </div>
+          <div className="flex justify-center items-center gap-8 pb-4 flex-wrap">
+            <Link href="/billboards?city=La Paz" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_la_paz.png" alt="La Paz" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">La Paz</p>
+            </Link>
+            <Link href="/billboards?city=Santa Cruz" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_santa_cruz_de_la_sierra.png" alt="Santa Cruz" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Santa Cruz</p>
+            </Link>
+            <Link href="/billboards?city=Cochabamba" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_cochabamba.png" alt="Cochabamba" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Cochabamba</p>
+            </Link>
+            <Link href="/billboards?city=El Alto" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_el_alto.png" alt="El Alto" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">El Alto</p>
+            </Link>
+            <Link href="/billboards?city=Sucre" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_sucre.png" alt="Sucre" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Sucre</p>
+            </Link>
+            <Link href="/billboards?city=Potosí" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_potosi.png" alt="Potosí" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Potosí</p>
+            </Link>
+            <Link href="/billboards?city=Tarija" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_tarija.png" alt="Tarija" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Tarija</p>
+            </Link>
+            <Link href="/billboards?city=Oruro" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_oruro.png" alt="Oruro" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Oruro</p>
+            </Link>
+            <Link href="/billboards?city=Trinidad" className="flex-shrink-0 text-center group">
+              <img src="/vallas_publicitarias_trinidad.png" alt="Trinidad" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
+              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Trinidad</p>
+            </Link>
           </div>
         </div>
       </section>
@@ -414,52 +374,220 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="bg-muted py-12 md:py-16">
+      {/* Clients Section */}
+      <section className="py-16 md:py-20 bg-gradient-to-b from-background to-muted/30">
         <div className="container px-4 md:px-6">
-          <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
-            Nuestros Clientes
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold tracking-tight mb-4 md:text-4xl">
+              Confían en Nosotros
           </h2>
-          <div className="flex flex-col">
-            {/* First row - 5 logos */}
-            <div className="flex justify-center items-center">
-              <img src="/client-samsung-new.svg" alt="Samsung" className="h-20 w-auto" />
-              <img src="/client-bcp.svg" alt="BCP" className="h-20 w-auto" />
-              <img src="/client-pacena.svg" alt="Paceña" className="h-20 w-auto" />
-              <img src="/client-coca-cola-new.svg" alt="Coca-Cola" className="h-20 w-auto" />
-              <img src="/client-bnb.svg" alt="BNB" className="h-20 w-auto" />
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              Empresas líderes que han elegido nuestros espacios publicitarios para potenciar su marca
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 md:gap-12 max-w-6xl mx-auto">
+            {/* First row */}
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente1.svg" alt="Cliente 1" className="w-full h-full object-cover" />
+              </div>
             </div>
-            {/* Second row - 5 logos */}
-            <div className="flex justify-center items-center">
-              <img src="/client-yaigo.svg" alt="Yaigo" className="h-20 w-auto" />
-              <img src="/client-pedidosya.svg" alt="PedidosYa" className="h-20 w-auto" />
-              <img src="/client-tigo.svg" alt="Tigo" className="h-20 w-auto" />
-              <img src="/client-lg.svg" alt="LG" className="h-20 w-auto" />
-              <img src="/client-sprite.svg" alt="Sprite" className="h-20 w-auto" />
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente2.svg" alt="Cliente 2" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente3.svg" alt="Cliente 3" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente4.svg" alt="Cliente 4" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente5.svg" alt="Cliente 5" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            {/* Second row */}
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente6.svg" alt="Cliente 6" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente7.svg" alt="Cliente 7" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente8.svg" alt="Cliente 8" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente9.svg" alt="Cliente 9" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center group">
+              <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <img src="/Cliente10.svg" alt="Cliente 10" className="w-full h-full object-cover" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Stats section */}
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div className="text-center">
+              <div className="text-3xl md:text-4xl font-bold text-primary mb-2">+400</div>
+              <div className="text-muted-foreground">Soportes Publicitarios</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl md:text-4xl font-bold text-primary mb-2">+1000</div>
+              <div className="text-muted-foreground">Clientes</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl md:text-4xl font-bold text-primary mb-2">+36</div>
+              <div className="text-muted-foreground">Años de Experiencia</div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-primary text-primary-foreground py-12 md:py-16">
-        <div className="container px-4 md:px-6">
-          <div className="flex flex-col items-center text-center space-y-4 md:space-y-6">
-            <h2 className="text-2xl font-bold tracking-tight md:text-3xl text-balance">Mantente Informado</h2>
-            <p className="max-w-[600px] text-primary-foreground/90 md:text-lg text-pretty">
-              Suscríbete para recibir ofertas especiales, nuevos espacios disponibles y consejos de marketing.
+      {/* Contact Form Section */}
+      <section className="py-16 md:py-20 bg-gradient-to-b from-muted/30 to-background">
+        <div className="container px-4 md:px-6 max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl font-bold tracking-tight mb-4 md:text-3xl text-balance">
+              Contacto
+            </h2>
+            <p className="text-muted-foreground md:text-lg text-pretty mb-2">
+              Contáctenos para una cotización sin compromiso:
             </p>
-            <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row">
-              <Input
-                type="email"
-                placeholder="Ingresa tu email"
-                className="bg-primary-foreground text-foreground border-0"
-              />
-              <Button variant="secondary" className="bg-secondary hover:bg-secondary/90 text-secondary-foreground">
-                Suscribirse
-              </Button>
+            <p className="text-muted-foreground">
+              Contestaremos en pocos minutos
+            </p>
+          </div>
+          
+          <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left Column */}
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="nombre" className="block text-sm font-medium text-foreground mb-2">
+                  Nombre
+                </label>
+                <Input
+                  id="nombre"
+                  type="text"
+                  placeholder="Nombre"
+                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="telefono" className="block text-sm font-medium text-foreground mb-2">
+                  Teléfono <span className="text-primary">*</span>
+                </label>
+                <Input
+                  id="telefono"
+                  type="tel"
+                  placeholder="Teléfono"
+                  required
+                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="ciudad" className="block text-sm font-medium text-foreground mb-2">
+                  Ciudad
+                </label>
+                <Input
+                  id="ciudad"
+                  type="text"
+                  placeholder="Ciudad"
+                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Subir archivo
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full rounded-lg border-gray-300 hover:bg-gray-50 text-gray-700"
+                >
+                  Subir archivo +
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Subir archivo compatible (máximo 15 MB)
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-primary-foreground/70">
-              Al suscribirte, aceptas nuestros Términos de Servicio y Política de Privacidad.
-            </p>
+            
+            {/* Right Column */}
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                  Email <span className="text-primary">*</span>
+                </label>
+              <Input
+                  id="email"
+                type="email"
+                  placeholder="Correo electrónico"
+                  required
+                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="empresa" className="block text-sm font-medium text-foreground mb-2">
+                  Empresa
+                </label>
+                <Input
+                  id="empresa"
+                  type="text"
+                  placeholder="Empresa"
+                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="mensaje" className="block text-sm font-medium text-foreground mb-2">
+                  Tu mensaje
+                </label>
+                <textarea
+                  id="mensaje"
+                  rows={6}
+                  placeholder="Escribe aquí"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-primary resize-none"
+                />
+              </div>
+            </div>
+          </form>
+          
+          <div className="flex justify-end mt-8">
+            <Button
+              type="submit"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-lg font-medium"
+            >
+              Enviar consulta
+            </Button>
           </div>
         </div>
       </section>

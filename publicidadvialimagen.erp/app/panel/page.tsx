@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import Image from "next/image"
 import Link from "next/link"
 import {
   Gauge,
@@ -24,6 +24,7 @@ import {
   Power,
   Monitor,
   Hammer,
+  Package,
 } from "lucide-react"
 
 const modules = [
@@ -41,7 +42,7 @@ const modules = [
   { key: "crm", title: "CRM", href: "/panel/crm", icon: Handshake },
   { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
   { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
-  { key: "moderacion", title: "Moderación", href: "/panel/moderacion", icon: ShieldCheck },
+  { key: "inventario", title: "Inventario", href: "/panel/inventario", icon: Package },
   { key: "mapas", title: "Mapas", href: "/panel/mapas", icon: Map },
   { key: "diseno", title: "Diseño Gráfico", href: "/panel/diseno", icon: Palette },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },
@@ -76,8 +77,15 @@ export default function PanelPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <div className="text-xl font-bold text-slate-800">
-              Publicidad Vial Imagen<sup className="text-sm">®</sup>
+            <div className="flex items-center gap-3">
+              <Image
+                src="/logo-publicidad-vial-imagen.svg"
+                alt="Publicidad Vial Imagen"
+                width={300}
+                height={78}
+                className="h-10 w-auto"
+                priority
+              />
             </div>
           </div>
           <div className="flex items-center gap-6">

@@ -7,9 +7,12 @@ import { Providers } from '@/components/providers'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'ERP | Publicidad Vial Imagen',
+  description: 'Sistema de gestión empresarial para Publicidad Vial Imagen',
   generator: 'v0.app',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({

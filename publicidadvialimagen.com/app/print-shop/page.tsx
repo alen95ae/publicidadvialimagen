@@ -422,10 +422,10 @@ export default function PrintShopPage() {
               <Button onClick={clearFilters}>Limpiar todos los filtros</Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
               {filteredProducts.map((product) => (
-                <div key={product.id} className="group relative">
-                  <div className="w-[222px] h-[147px] overflow-hidden rounded-lg bg-background border">
+                <div key={product.id} className="group relative w-[222px]">
+                  <div className="w-[222px] h-[147px] overflow-hidden rounded-lg bg-background border shadow-sm">
                     <Image
                       src={product.image || "/placeholder.svg"}
                       alt={product.name}
@@ -434,14 +434,14 @@ export default function PrintShopPage() {
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 bg-black/50">
-                      <Button className="mx-auto bg-primary hover:bg-primary/90">
+                      <Button className="mx-auto bg-primary hover:bg-primary/90 text-white">
                         <Ruler className="mr-2 h-4 w-4" />
                         Reservar
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-2 space-y-1 text-center">
-                    <h3 className="font-medium text-sm">{product.name}</h3>
+                  <div className="mt-3 space-y-1 text-center">
+                    <h3 className="font-medium text-sm text-foreground">{product.name}</h3>
                     <div className="flex justify-center gap-2">
                       <span className="font-medium text-primary text-sm">€{product.pricePerM2}/m²</span>
                     </div>

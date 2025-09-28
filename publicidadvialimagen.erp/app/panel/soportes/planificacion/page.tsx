@@ -19,8 +19,10 @@ import {
   ChevronRight,
   MapPin,
   Clock,
-  Users
+  Users,
+  Home
 } from "lucide-react"
+import Sidebar from "@/components/sidebar"
 
 // Datos de ejemplo para la planificación
 const soportesPlanificacion = [
@@ -128,17 +130,38 @@ export default function PlanificacionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Sidebar>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/panel/soportes" className="text-gray-600 hover:text-gray-800 mr-4">
-              <ArrowLeft className="w-5 h-5" />
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/panel" 
+              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
+              title="Volver al panel de control"
+            >
+              <Home className="w-5 h-5" />
             </Link>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-6 h-6 text-[#D54644]" />
-              <div className="text-xl font-bold text-slate-800">Planificación</div>
+            <div className="text-xl font-bold text-slate-800">Soportes</div>
+            <div className="flex items-center gap-6 ml-4">
+              <Link 
+                href="/panel/soportes/gestion" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Soportes
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/planificacion" 
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+              >
+                Planificación
+              </Link>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -149,7 +172,7 @@ export default function PlanificacionPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800 mb-2">Planificación Anual</h1>
           <p className="text-gray-600">Visualiza la ocupación de soportes publicitarios a lo largo del año</p>
@@ -165,12 +188,12 @@ export default function PlanificacionPage() {
                   placeholder="Buscar soportes..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
+                  className="pl-10 max-w-64"
                 />
               </div>
               
               <Select value={filtroCliente} onValueChange={setFiltroCliente}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="max-w-48">
                   <Filter className="w-4 h-4 mr-2" />
                   <SelectValue placeholder="Filtrar por cliente" />
                 </SelectTrigger>
@@ -228,14 +251,14 @@ export default function PlanificacionPage() {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <div className="min-w-[1200px]">
+              <div className="min-w-0 w-full">
                 {/* Header con meses */}
                 <div className="flex border-b border-gray-200 mb-4">
-                  <div className="w-64 p-3 font-medium text-gray-900 border-r border-gray-200">
+                  <div className="flex-shrink-0 w-48 p-3 font-medium text-gray-900 border-r border-gray-200">
                     Soporte
                   </div>
                   {meses.map((mes) => (
-                    <div key={mes} className="w-24 p-3 text-center font-medium text-gray-900 border-r border-gray-200">
+                    <div key={mes} className="flex-shrink-0 w-20 p-2 text-center font-medium text-gray-900 border-r border-gray-200 text-xs">
                       {mes.charAt(0).toUpperCase() + mes.slice(1)}
                     </div>
                   ))}
@@ -245,7 +268,7 @@ export default function PlanificacionPage() {
                 {filteredSoportes.map((soporte) => (
                   <div key={soporte.id} className="flex border-b border-gray-100 hover:bg-gray-50">
                     {/* Información del soporte */}
-                    <div className="w-64 p-3 border-r border-gray-200">
+                    <div className="flex-shrink-0 w-48 p-3 border-r border-gray-200">
                       <div className="space-y-1">
                         <div className="font-medium text-[#D54644]">{soporte.codigo}</div>
                         <div className="text-sm text-gray-600">{soporte.titulo}</div>
@@ -260,7 +283,7 @@ export default function PlanificacionPage() {
                     {meses.map((mes) => {
                       const reservasEnMes = getReservasQueIncluyenMes(soporte, mes)
                       return (
-                        <div key={mes} className="w-24 p-1 border-r border-gray-200 min-h-[60px]">
+                        <div key={mes} className="flex-shrink-0 w-20 p-1 border-r border-gray-200 min-h-[60px]">
                           {reservasEnMes.map((reserva, index) => {
                             const esInicio = reserva.mes === mes
                             const esFin = getMesIndex(reserva.mes) + reserva.duracion - 1 === getMesIndex(mes)
@@ -316,6 +339,6 @@ export default function PlanificacionPage() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </Sidebar>
   )
 }

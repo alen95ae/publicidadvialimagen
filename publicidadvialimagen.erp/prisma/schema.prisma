@@ -12,7 +12,7 @@ model User {
   email     String    @unique
   name      String?
   password  String
-  role      Role      @default("OPERATOR")
+  role      Role      @default(OPERATOR)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   contacts  Contact[]
@@ -55,7 +55,7 @@ model Support {
   country                String?
   priceMonth             Float?
   available              Boolean       @default(true)
-  status                 SupportStatus @default("DISPONIBLE")
+  status                 SupportStatus @default(DISPONIBLE)
   areaM2                 Float?
   pricePerM2             Float?
   productionCost         Float?
@@ -65,6 +65,10 @@ model Support {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
   imageUrl               String?
+  googleMapsLink         String?
+  iluminacion            Boolean?
+  impactosDiarios        Int?
+  images                 String?       // JSON string array
   bookings               Reservation[]
   company                Company?      @relation(fields: [companyId], references: [id])
 }
@@ -75,7 +79,7 @@ model Reservation {
   clientId  String
   startDate DateTime
   endDate   DateTime
-  status    ResStatus @default("PENDING")
+  status    ResStatus @default(PENDING)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   client    Client    @relation(fields: [clientId], references: [id])
@@ -84,8 +88,8 @@ model Reservation {
 
 model Contact {
   id           String                @id @default(cuid())
-  kind         ContactKind           @default("COMPANY")
-  relation     ContactRelation       @default("CUSTOMER")
+  kind         ContactKind           @default(COMPANY)
+  relation     ContactRelation       @default(CUSTOMER)
   displayName  String
   legalName    String?
   taxId        String?
@@ -133,7 +137,7 @@ model Production {
   responsable      String
   tiempoEjecucion  String
   fechaLimite      DateTime
-  estado           ProductionStatus @default("PENDIENTE")
+  estado           ProductionStatus @default(PENDIENTE)
   notas            String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt

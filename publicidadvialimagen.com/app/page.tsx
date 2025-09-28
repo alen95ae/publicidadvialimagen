@@ -127,8 +127,8 @@ export default function HomePage() {
             </div>
             <div className="relative h-[300px] sm:h-[400px] lg:h-[500px] rounded-xl overflow-hidden">
               <Image
-                src="https://static.wixstatic.com/media/b65fb5_8fd3709d0d594afa929ee87f71e3c01a~mv2.jpg/v1/fill/w_1200,h_714,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/b65fb5_8fd3709d0d594afa929ee87f71e3c01a~mv2.jpg"
-                alt="Valla publicitaria Publicidad Vial Imagen"
+                src="/vallas_publicitarias_en_bolivia.png"
+                alt="Vallas publicitarias en Bolivia"
                 fill
                 className="object-cover"
                 priority

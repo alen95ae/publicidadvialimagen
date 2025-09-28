@@ -27,13 +27,39 @@ async function normalizeSupportInput(data: any, existing?: any) {
     productionCost = calcProductionCost(areaM2, data.pricePerM2 ?? existing?.pricePerM2)
   }
 
-  return {
-    ...data,
+  // Filtrar solo campos válidos del esquema de Prisma
+  const validFields = {
+    code: data.code,
+    title: data.title,
+    type: data.type,
+    widthM: data.widthM,
+    heightM: data.heightM,
+    city: data.city,
+    country: data.country,
+    address: data.address,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    priceMonth: data.priceMonth,
+    pricePerM2: data.pricePerM2,
+    owner: data.owner,
+    imageUrl: data.imageUrl,
+    productionCostOverride: data.productionCostOverride,
+    // Campos adicionales que faltaban
+    googleMapsLink: data.googleMapsLink,
+    iluminacion: data.iluminacion,
+    impactosDiarios: data.impactosDiarios,
+    images: data.images,
+    // Campos calculados
     status,
     areaM2,
     productionCost,
-    available: mapAvailableFromStatus(status), // compatibilidad con el booleano existente
+    available: mapAvailableFromStatus(status),
   }
+
+  // Filtrar campos undefined
+  return Object.fromEntries(
+    Object.entries(validFields).filter(([_, value]) => value !== undefined)
+  )
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -55,7 +81,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       )
     }
     
-    return NextResponse.json(item)
+    // Deserializar el campo images
+    const itemWithImages = {
+      ...item,
+      images: item.images ? JSON.parse(item.images) : []
+    }
+    
+    return NextResponse.json(itemWithImages)
   } catch (error) {
     console.error("Error fetching support:", error)
     return NextResponse.json(
@@ -101,10 +133,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         pricePerM2: payload.pricePerM2 ? parseFloat(payload.pricePerM2) : null,
         areaM2: payload.areaM2 ? parseFloat(payload.areaM2) : null,
         productionCost: payload.productionCost ? parseFloat(payload.productionCost) : null,
+        impactosDiarios: payload.impactosDiarios ? parseInt(payload.impactosDiarios) : null,
+        // Campos que no necesitan conversión
+        googleMapsLink: payload.googleMapsLink || null,
+        iluminacion: payload.iluminacion,
+        images: payload.images ? JSON.stringify(payload.images) : null,
       }
     })
     
-    return NextResponse.json(updated)
+    // Deserializar el campo images antes de devolver
+    const updatedWithImages = {
+      ...updated,
+      images: updated.images ? JSON.parse(updated.images) : []
+    }
+    
+    return NextResponse.json(updatedWithImages)
   } catch (error) {
     console.error("Error updating support:", error)
     return NextResponse.json(

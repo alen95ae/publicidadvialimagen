@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 export async function POST(req: Request) {
   try {
     const { ids, action, data } = await req.json() as {
-      ids: string[], action: 'delete'|'update', data?: any
+      ids: string[], action: 'delete'|'update'|'duplicate', data?: any
     }
     
     if (!Array.isArray(ids) || !ids.length) {
@@ -14,6 +14,70 @@ export async function POST(req: Request) {
     if (action === 'delete') {
       await prisma.support.deleteMany({ where: { id: { in: ids } } })
       return NextResponse.json({ ok: true, count: ids.length })
+    }
+
+    if (action === 'duplicate') {
+      const supports = await prisma.support.findMany({ where: { id: { in: ids } } })
+      const duplicated = []
+      
+      for (const support of supports) {
+        // Extraer prefijo y número del código original
+        const codeMatch = support.code.match(/^([A-Z]+)-(\d+)$/)
+        let newCode = support.code
+        
+        if (codeMatch) {
+          const prefix = codeMatch[1] // Ej: "LPZ"
+          const currentNumber = parseInt(codeMatch[2]) // Ej: 169
+          
+          // Buscar el siguiente número disponible
+          let nextNumber = currentNumber + 1
+          let codeExists = true
+          
+          while (codeExists) {
+            const testCode = `${prefix}-${nextNumber}`
+            const existingSupport = await prisma.support.findFirst({
+              where: { code: testCode }
+            })
+            
+            if (!existingSupport) {
+              newCode = testCode
+              codeExists = false
+            } else {
+              nextNumber++
+            }
+          }
+        } else {
+          // Si el código no sigue el patrón esperado, usar timestamp como fallback
+          const timestamp = Date.now().toString().slice(-6)
+          newCode = `${support.code}-${timestamp}`
+        }
+        
+        const duplicatedSupport = await prisma.support.create({
+          data: {
+            code: newCode,
+            title: `${support.title} - copia de`,
+            type: support.type,
+            widthM: support.widthM,
+            heightM: support.heightM,
+            city: support.city,
+            country: support.country,
+            priceMonth: support.priceMonth,
+            status: 'DISPONIBLE',
+            available: true,
+            owner: support.owner,
+            impactosDiarios: support.impactosDiarios,
+            googleMapsLink: support.googleMapsLink,
+            iluminacion: support.iluminacion,
+            images: support.images,
+            areaM2: support.areaM2,
+            pricePerM2: support.pricePerM2,
+            productionCost: support.productionCost
+          }
+        })
+        duplicated.push(duplicatedSupport)
+      }
+      
+      return NextResponse.json({ ok: true, duplicated: duplicated.length })
     }
 
     if (action === 'update') {

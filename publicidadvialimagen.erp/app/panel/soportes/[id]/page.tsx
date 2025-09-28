@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,19 +13,22 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator } from "lucide-react"
+import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, Home } from "lucide-react"
 import { toast } from "sonner"
+import Sidebar from "@/components/sidebar"
+import SupportMap from "@/components/support-map"
+import InteractiveMap from "@/components/interactive-map"
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [
-  'valla','pantalla','totem','parada de bus','mural','pasacalles'
+  'bipolar', 'caminera', 'mega valla', 'mural', 'pantalla', 'pasacalles', 'unipolar', 'tripular'
 ] as const
 
 const STATUS_META = {
-  DISPONIBLE:   { label: 'Disponible',    className: 'bg-emerald-600 text-white' },
-  RESERVADO:    { label: 'Reservado',     className: 'bg-amber-500 text-black' },
-  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-600 text-white' },
-  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-neutral-900 text-white' },
+  DISPONIBLE:   { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
+  RESERVADO:    { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
+  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
+  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
 } as const
 
 interface Support {
@@ -37,16 +40,16 @@ interface Support {
   widthM: number | null
   heightM: number | null
   areaM2: number | null
-  pricePerM2: number | null
-  productionCost: number | null
-  productionCostOverride: boolean
+  iluminacion: boolean | null
   owner: string | null
-  imageUrl: string | null
+  images: string[]
+  googleMapsLink: string | null
   latitude: number | null
   longitude: number | null
   address: string | null
   city: string | null
   country: string | null
+  impactosDiarios: number | null
   priceMonth: number | null
   available: boolean
   company?: { name: string }
@@ -57,7 +60,9 @@ interface Support {
 export default function SoporteDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const id = params.id as string
+  const shouldEdit = searchParams.get('edit') === 'true'
   
   const [support, setSupport] = useState<Support | null>(null)
   const [loading, setLoading] = useState(true)
@@ -71,16 +76,16 @@ export default function SoporteDetailPage() {
     widthM: "",
     heightM: "",
     areaM2: "",
-    pricePerM2: "",
-    productionCost: "",
-    productionCostOverride: false,
+    iluminacion: null as boolean | null,
     owner: "",
-    imageUrl: "",
-    latitude: "",
-    longitude: "",
+    images: [] as string[],
+    googleMapsLink: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
     address: "",
     city: "",
     country: "",
+    impactosDiarios: "",
     priceMonth: "",
     available: true
   })
@@ -91,6 +96,12 @@ export default function SoporteDetailPage() {
     }
   }, [id])
 
+  useEffect(() => {
+    if (shouldEdit && support) {
+      setEditing(true)
+    }
+  }, [shouldEdit, support])
+
   const fetchSupport = async () => {
     try {
       setLoading(true)
@@ -98,6 +109,18 @@ export default function SoporteDetailPage() {
       if (response.ok) {
         const data = await response.json()
         setSupport(data)
+        // Generar Google Maps link si hay coordenadas pero no link
+        let googleMapsLink = data.googleMapsLink || ""
+        if (!googleMapsLink && data.latitude && data.longitude) {
+          googleMapsLink = generateGoogleMapsLink(data.latitude, data.longitude)
+        }
+
+        // Si no hay coordenadas, establecer por defecto La Paz para mostrar chincheta
+        const defaultLat = -16.5000
+        const defaultLng = -68.1500
+        const latitude = data.latitude || defaultLat
+        const longitude = data.longitude || defaultLng
+
         setFormData({
           code: data.code || "",
           title: data.title || "",
@@ -106,18 +129,18 @@ export default function SoporteDetailPage() {
           widthM: data.widthM?.toString() || "",
           heightM: data.heightM?.toString() || "",
           areaM2: data.areaM2?.toString() || "",
-          pricePerM2: data.pricePerM2?.toString() || "",
-          productionCost: data.productionCost?.toString() || "",
-          productionCostOverride: data.productionCostOverride || false,
+          iluminacion: data.iluminacion ?? null,
           owner: data.owner || "",
-          imageUrl: data.imageUrl || "",
-          latitude: data.latitude?.toString() || "",
-          longitude: data.longitude?.toString() || "",
+          images: data.images || [],
+          googleMapsLink,
+          latitude,
+          longitude,
           address: data.address || "",
           city: data.city || "",
           country: data.country || "",
+          impactosDiarios: data.impactosDiarios?.toString() || "",
           priceMonth: data.priceMonth?.toString() || "",
-          available: data.available
+          available: data.available ?? true
         })
       } else {
         toast.error("Soporte no encontrado")
@@ -133,23 +156,173 @@ export default function SoporteDetailPage() {
   // Cálculos automáticos
   const widthM = Number(formData.widthM) || 0
   const heightM = Number(formData.heightM) || 0
-  const pricePerM2 = Number(formData.pricePerM2) || 0
-  const override = formData.productionCostOverride
 
   const areaM2 = useMemo(() => +(Number(widthM) * Number(heightM)).toFixed(2), [widthM, heightM])
   
   useEffect(() => {
     if (editing) {
       setFormData(prev => ({ ...prev, areaM2: areaM2.toString() }))
-      if (!override) {
-        const calculatedCost = +(areaM2 * Number(pricePerM2)).toFixed(2)
-        setFormData(prev => ({ ...prev, productionCost: calculatedCost.toString() }))
-      }
     }
-  }, [areaM2, pricePerM2, override, editing])
+  }, [areaM2, editing])
+
+  // Función para expandir enlaces cortos usando una API externa
+  const expandShortUrl = async (shortUrl: string): Promise<string | null> => {
+    try {
+      console.log('Expanding short URL:', shortUrl)
+      
+      // Usar la API de unshorten.me que no tiene restricciones CORS
+      const response = await fetch(`https://unshorten.me/json/${encodeURIComponent(shortUrl)}`)
+      const data = await response.json()
+      
+      if (data.success && data.resolved_url) {
+        console.log('URL expanded successfully:', data.resolved_url)
+        return data.resolved_url
+      }
+      
+      // Fallback: usar longurl.org
+      const fallbackResponse = await fetch(`https://api.longurl.org/v2/expand?url=${encodeURIComponent(shortUrl)}&format=json`)
+      const fallbackData = await fallbackResponse.json()
+      
+      if (fallbackData['long-url']) {
+        console.log('URL expanded with fallback:', fallbackData['long-url'])
+        return fallbackData['long-url']
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Error expanding URL:', error)
+      return null
+    }
+  }
+
+  // Función para extraer coordenadas de Google Maps link
+  const extractCoordinatesFromGoogleMaps = async (link: string): Promise<{ lat: number, lng: number } | null> => {
+    if (!link || typeof link !== 'string') return null
+    
+    try {
+      console.log('Extracting coordinates from:', link)
+      let urlToProcess = link
+      
+      // Si es un enlace corto, expandirlo primero
+      if (link.includes('goo.gl') || link.includes('maps.app.goo.gl')) {
+        console.log('Short link detected, expanding...')
+        const expandedUrl = await expandShortUrl(link)
+        if (expandedUrl) {
+          urlToProcess = expandedUrl
+          console.log('Using expanded URL:', urlToProcess)
+        } else {
+          console.log('Could not expand short URL')
+          return null
+        }
+      }
+      
+      // Patrones mejorados para diferentes formatos de Google Maps
+      const patterns = [
+        // Formato: @lat,lng,zoom (más común)
+        /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+        // Formato: !3dlat!4dlng
+        /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/,
+        // Formato: ll=lat,lng
+        /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+        // Formato: center=lat,lng
+        /[?&]center=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+        // Formato: q=lat,lng
+        /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+        // Formato directo: lat,lng en la URL
+        /maps.*?(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/,
+        // Formato place: place/lat,lng
+        /place\/.*?@(-?\d+\.?\d*),(-?\d+\.?\d*)/
+      ]
+
+      for (let i = 0; i < patterns.length; i++) {
+        const pattern = patterns[i]
+        const match = urlToProcess.match(pattern)
+        if (match) {
+          const lat = parseFloat(match[1])
+          const lng = parseFloat(match[2])
+          console.log(`Pattern ${i} matched:`, { lat, lng })
+          
+          // Validar que las coordenadas estén en rangos válidos
+          if (!isNaN(lat) && !isNaN(lng) && 
+              lat >= -90 && lat <= 90 && 
+              lng >= -180 && lng <= 180) {
+            console.log('Valid coordinates extracted:', { lat, lng })
+            return { lat, lng }
+          }
+        }
+      }
+      
+      console.log('No coordinates found in link')
+      return null
+    } catch (error) {
+      console.error('Error extracting coordinates:', error)
+      return null
+    }
+  }
+
+  // Función para generar Google Maps link desde coordenadas
+  const generateGoogleMapsLink = (lat: number, lng: number): string => {
+    return `https://www.google.com/maps?q=${lat},${lng}&z=15`
+  }
+
 
   const handleChange = (field: string, value: string | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    console.log(`handleChange called: ${field} = ${value}`)
+    
+    setFormData(prev => {
+      console.log('Previous formData:', prev)
+      const newData = { ...prev, [field]: value }
+      
+      // Si se cambia el Google Maps link, extraer coordenadas automáticamente
+      if (field === 'googleMapsLink' && typeof value === 'string') {
+        console.log('Google Maps link changed:', value)
+        
+        if (value.trim()) {
+          // Mostrar mensaje de carga para enlaces cortos
+          if (value.includes('goo.gl') || value.includes('maps.app.goo.gl')) {
+            toast.info('Expandiendo enlace corto de Google Maps...')
+          }
+          
+          extractCoordinatesFromGoogleMaps(value.trim()).then(coords => {
+            if (coords) {
+              console.log('Coordinates extracted successfully:', coords)
+              setFormData(prev => ({
+                ...prev,
+                latitude: coords.lat,
+                longitude: coords.lng
+              }))
+              
+              // Mostrar mensaje de éxito
+              toast.success(`¡Ubicación encontrada! ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`)
+            } else {
+              console.log('No coordinates found, showing warning')
+              toast.warning('No se pudieron extraer coordenadas del enlace.')
+            }
+          }).catch(error => {
+            console.error('Error extracting coordinates:', error)
+            toast.error('Error al procesar el enlace de Google Maps.')
+          })
+        } else {
+          // Si se borra el link, mantener coordenadas por defecto para que aparezca la chincheta
+          console.log('Link cleared, using default coordinates')
+          newData.latitude = -16.5000
+          newData.longitude = -68.1500
+        }
+      }
+      
+      console.log('Final newData:', newData)
+      return newData
+    })
+  }
+
+  // Función para manejar cambios de coordenadas desde el mapa
+  const handleLocationChange = (lat: number, lng: number) => {
+    setFormData(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+      googleMapsLink: generateGoogleMapsLink(lat, lng)
+    }))
   }
 
   const handleSave = async () => {
@@ -161,10 +334,27 @@ export default function SoporteDetailPage() {
     setSaving(true)
     
     try {
+      // Preparar datos para envío, convirtiendo strings vacíos a null donde corresponda
+      const dataToSend = {
+        ...formData,
+        widthM: formData.widthM ? parseFloat(formData.widthM) : null,
+        heightM: formData.heightM ? parseFloat(formData.heightM) : null,
+        areaM2: formData.areaM2 ? parseFloat(formData.areaM2) : null,
+        priceMonth: formData.priceMonth ? parseFloat(formData.priceMonth) : null,
+        impactosDiarios: formData.impactosDiarios ? parseInt(formData.impactosDiarios) : null,
+        googleMapsLink: formData.googleMapsLink || null,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        address: formData.address || null,
+        city: formData.city || null,
+        country: formData.country || null,
+        owner: formData.owner || null,
+      }
+
       const response = await fetch(`/api/soportes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(dataToSend)
       })
 
       if (response.ok) {
@@ -178,6 +368,7 @@ export default function SoporteDetailPage() {
         toast.error(error.error || "Error al actualizar el soporte")
       }
     } catch (error) {
+      console.error("Error saving support:", error)
       toast.error("Error de conexión")
     } finally {
       setSaving(false)
@@ -239,20 +430,42 @@ export default function SoporteDetailPage() {
     : 'hidden'
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Sidebar>
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/panel/soportes" className="text-gray-600 hover:text-gray-800 mr-4">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Soportes
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/panel" 
+              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
+              title="Ir al panel principal"
+            >
+              <Home className="w-5 h-5" />
             </Link>
-            <div className="text-xl font-bold text-slate-800">
-              {editing ? "Editando Soporte" : support.title}
+            <div className="text-xl font-bold text-slate-800">Soportes</div>
+            <div className="flex items-center gap-6 ml-4">
+              <Link 
+                href="/panel/soportes/gestion" 
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+              >
+                Soportes
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/planificacion" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Planificación
+              </Link>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-4">
             {!editing ? (
               <>
                 <Button
@@ -291,6 +504,12 @@ export default function SoporteDetailPage() {
                   variant="outline"
                   onClick={() => {
                     setEditing(false)
+                    // Generar Google Maps link si hay coordenadas pero no link
+                    let googleMapsLink = support.googleMapsLink || ""
+                    if (!googleMapsLink && support.latitude && support.longitude) {
+                      googleMapsLink = generateGoogleMapsLink(support.latitude, support.longitude)
+                    }
+
                     setFormData({
                       code: support.code || "",
                       title: support.title || "",
@@ -299,17 +518,18 @@ export default function SoporteDetailPage() {
                       widthM: support.widthM?.toString() || "",
                       heightM: support.heightM?.toString() || "",
                       areaM2: support.areaM2?.toString() || "",
-                      pricePerM2: support.pricePerM2?.toString() || "",
-                      productionCost: support.productionCost?.toString() || "",
-                      productionCostOverride: support.productionCostOverride || false,
+                      iluminacion: support.iluminacion ?? null,
                       owner: support.owner || "",
-                      latitude: support.latitude?.toString() || "",
-                      longitude: support.longitude?.toString() || "",
+                      images: support.images || [],
+                      googleMapsLink,
+                      latitude: support.latitude || null,
+                      longitude: support.longitude || null,
                       address: support.address || "",
                       city: support.city || "",
                       country: support.country || "",
+                      impactosDiarios: support.impactosDiarios?.toString() || "",
                       priceMonth: support.priceMonth?.toString() || "",
-                      available: support.available
+                      available: support.available ?? true
                     })
                   }}
                 >
@@ -325,6 +545,8 @@ export default function SoporteDetailPage() {
                 </Button>
               </>
             )}
+            <span className="text-gray-600">Buscar</span>
+            <span className="text-gray-800 font-medium">admin</span>
           </div>
         </div>
       </header>
@@ -373,21 +595,6 @@ export default function SoporteDetailPage() {
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Tipo *</Label>
-                    <Select value={formData.type} onValueChange={(value) => handleChange("type", value)}>
-                      <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
-                        <SelectValue placeholder="Selecciona el tipo" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border border-gray-200 shadow-md">
-                        {TYPE_OPTIONS.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="status">Estado *</Label>
@@ -423,29 +630,6 @@ export default function SoporteDetailPage() {
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="imageUrl">Imagen del soporte</Label>
-                    {formData.imageUrl ? (
-                      <div className="flex items-center gap-3">
-                        <img src={formData.imageUrl} alt="preview" className="h-24 w-40 object-cover rounded-md border" />
-                        <Button variant="outline" onClick={() => handleChange("imageUrl", "")}>Quitar</Button>
-                      </div>
-                    ) : (
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          const fd = new FormData()
-                          fd.set('file', f)
-                          const r = await fetch('/api/uploads', { method: 'POST', body: fd })
-                          const { url } = await r.json()
-                          handleChange("imageUrl", url)
-                        }} 
-                      />
-                    )}
-                  </div>
                 </>
               ) : (
                 <>
@@ -478,10 +662,14 @@ export default function SoporteDetailPage() {
                     </div>
                   )}
 
-                  {support.imageUrl && (
+                  {support.images && support.images.length > 0 && (
                     <div>
-                      <Label className="text-sm font-medium text-gray-700">Imagen</Label>
-                      <img src={support.imageUrl} alt="Imagen del soporte" className="h-32 w-48 object-cover rounded-md border mt-2" />
+                      <Label className="text-sm font-medium text-gray-700">Imágenes</Label>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {support.images.map((image, index) => (
+                          <img key={index} src={image} alt={`Imagen ${index + 1}`} className="h-32 w-48 object-cover rounded-md border" />
+                        ))}
+                      </div>
                     </div>
                   )}
                 </>
@@ -489,15 +677,31 @@ export default function SoporteDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Dimensiones y Costes */}
+          {/* Características Técnicas */}
           <Card>
             <CardHeader>
-              <CardTitle>Dimensiones y Costes</CardTitle>
-              <CardDescription>Medidas y cálculos automáticos</CardDescription>
+              <CardTitle>Características Técnicas</CardTitle>
+              <CardDescription>Especificaciones técnicas del soporte</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {editing ? (
                 <>
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipo *</Label>
+                    <Select value={formData.type} onValueChange={(value) => handleChange("type", value)}>
+                      <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
+                        <SelectValue placeholder="Selecciona el tipo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border border-gray-200 shadow-md">
+                        {TYPE_OPTIONS.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="widthM">Ancho (m)</Label>
@@ -534,46 +738,50 @@ export default function SoporteDetailPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pricePerM2">Precio por m² (€)</Label>
-                    <Input
-                      id="pricePerM2"
-                      type="number"
-                      step="0.01"
-                      value={formData.pricePerM2}
-                      onChange={(e) => handleChange("pricePerM2", e.target.value)}
-                      placeholder="12.00"
-                    />
+                    <Label htmlFor="iluminacion">Iluminación</Label>
+                    <Select value={formData.iluminacion === null ? "" : formData.iluminacion.toString()} onValueChange={(value) => handleChange("iluminacion", value === "" ? null : value === "true")}>
+                      <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
+                        <SelectValue placeholder="Selecciona una opción" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border border-gray-200 shadow-md">
+                        <SelectItem value="true">Sí</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="productionCostOverride"
-                        checked={formData.productionCostOverride}
-                        onCheckedChange={(checked) => handleChange("productionCostOverride", checked)}
-                      />
-                      <span className="text-sm text-muted-foreground">Editar manualmente</span>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="productionCost">Coste de producción (€)</Label>
-                      <Input
-                        id="productionCost"
-                        type="number"
-                        step="0.01"
-                        className="no-spinner"
-                        value={formData.productionCost}
-                        onChange={(e) => handleChange("productionCost", e.target.value)}
-                        placeholder="144.00"
-                        disabled={!formData.productionCostOverride}
-                        className={!formData.productionCostOverride ? "bg-gray-50 no-spinner" : "no-spinner"}
-                      />
-                      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calculator className="h-4 w-4 shrink-0" />
-                        {!formData.productionCostOverride
-                          ? <span>{`Se calcula automáticamente: ${Number(formData.areaM2 || 0).toFixed(2)} m² × ${Number(formData.pricePerM2 || 0).toFixed(2)} €/m²`}</span>
-                          : <span>Modo manual activo.</span>}
-                      </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="images">Imágenes del soporte (máximo 5, 5MB cada una)</Label>
+                    <div className="space-y-3">
+                      {formData.images.map((image, index) => (
+                        <div key={index} className="flex items-center gap-3">
+                          <img src={image} alt={`preview ${index + 1}`} className="h-24 w-40 object-cover rounded-md border" />
+                          <Button variant="outline" onClick={() => {
+                            const newImages = formData.images.filter((_, i) => i !== index)
+                            handleChange("images", newImages)
+                          }}>Quitar</Button>
+                        </div>
+                      ))}
+                      {formData.images.length < 5 && (
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0]
+                            if (!f) return
+                            if (f.size > 5 * 1024 * 1024) {
+                              toast.error("La imagen no puede superar los 5MB")
+                              return
+                            }
+                            const fd = new FormData()
+                            fd.set('file', f)
+                            const r = await fetch('/api/uploads', { method: 'POST', body: fd })
+                            const { url } = await r.json()
+                            handleChange("images", [...formData.images, url])
+                          }} 
+                        />
+                      )}
                     </div>
                   </div>
                 </>
@@ -597,22 +805,13 @@ export default function SoporteDetailPage() {
                     </div>
                   )}
 
-                  {support.pricePerM2 && (
+                  {support.iluminacion !== null && (
                     <div>
-                      <Label className="text-sm font-medium text-gray-700">Precio por m²</Label>
-                      <p className="font-semibold">{formatPrice(support.pricePerM2)}</p>
+                      <Label className="text-sm font-medium text-gray-700">Iluminación</Label>
+                      <p className="font-semibold">{support.iluminacion ? "Sí" : "No"}</p>
                     </div>
                   )}
 
-                  {support.productionCost && (
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Coste de producción</Label>
-                      <p className="font-semibold">{formatPrice(support.productionCost)}</p>
-                      {support.productionCostOverride && (
-                        <p className="text-xs text-gray-500">Valor manual</p>
-                      )}
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
@@ -657,28 +856,30 @@ export default function SoporteDetailPage() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="latitude">Latitud</Label>
-                      <Input
-                        id="latitude"
-                        type="number"
-                        step="0.000001"
-                        value={formData.latitude}
-                        onChange={(e) => handleChange("latitude", e.target.value)}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="longitude">Longitud</Label>
-                      <Input
-                        id="longitude"
-                        type="number"
-                        step="0.000001"
-                        value={formData.longitude}
-                        onChange={(e) => handleChange("longitude", e.target.value)}
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
+                    <Input
+                      id="googleMapsLink"
+                      type="url"
+                      value={formData.googleMapsLink}
+                      onChange={(e) => handleChange("googleMapsLink", e.target.value)}
+                      placeholder="Pega aquí el enlace de Google Maps..."
+                    />
+                    <p className="text-xs text-gray-500">
+                      💡 Pega cualquier enlace de Google Maps y las coordenadas se extraerán automáticamente
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Ubicación en el mapa</Label>
+                    <InteractiveMap
+                      latitude={formData.latitude}
+                      longitude={formData.longitude}
+                      onLocationChange={handleLocationChange}
+                      title={formData.title}
+                      code={formData.code}
+                      className="w-full"
+                    />
                   </div>
                 </>
               ) : (
@@ -699,27 +900,45 @@ export default function SoporteDetailPage() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  {support.googleMapsLink && (
                     <div>
-                      <Label className="text-sm font-medium text-gray-700">Latitud</Label>
-                      <p className="font-mono">{support.latitude || "N/A"}</p>
+                      <Label className="text-sm font-medium text-gray-700">Ubicación</Label>
+                      <div className="flex flex-col gap-1">
+                        <a 
+                          href={support.googleMapsLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-blue-600 hover:text-blue-800 underline text-sm"
+                        >
+                          Ver en Google Maps
+                        </a>
+                        {(support.latitude && support.longitude) && (
+                          <a 
+                            href={`https://www.openstreetmap.org/?mlat=${support.latitude}&mlon=${support.longitude}&zoom=15`}
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-600 hover:text-blue-800 underline text-sm"
+                          >
+                            Ver en OpenStreetMap
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Longitud</Label>
-                      <p className="font-mono">{support.longitude || "N/A"}</p>
-                    </div>
-                  </div>
+                  )}
                 </>
               )}
               
-              {/* Placeholder para mapa futuro */}
-              <div className="aspect-[16/9] bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
-                <div className="text-center">
-                  <MapPin className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-sm">Mapa de ubicación</p>
-                  <p className="text-xs">Integración con Google Maps próximamente</p>
-                </div>
-              </div>
+              {/* Mapa de ubicación */}
+              {!editing && (support.latitude && support.longitude) && (
+                <InteractiveMap
+                  latitude={support.latitude}
+                  longitude={support.longitude}
+                  title={support.title}
+                  code={support.code}
+                  className="w-full"
+                  readOnly={true}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -731,21 +950,43 @@ export default function SoporteDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {editing ? (
-                <div className="space-y-2">
-                  <Label htmlFor="priceMonth">Precio por Mes (€)</Label>
-                  <Input
-                    id="priceMonth"
-                    type="number"
-                    step="0.01"
-                    value={formData.priceMonth}
-                    onChange={(e) => handleChange("priceMonth", e.target.value)}
-                  />
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="impactosDiarios">Impactos Diarios</Label>
+                    <Input
+                      id="impactosDiarios"
+                      type="number"
+                      value={formData.impactosDiarios}
+                      onChange={(e) => handleChange("impactosDiarios", e.target.value)}
+                      placeholder="1000"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="priceMonth">Precio por Mes (€)</Label>
+                    <Input
+                      id="priceMonth"
+                      type="number"
+                      step="0.01"
+                      value={formData.priceMonth}
+                      onChange={(e) => handleChange("priceMonth", e.target.value)}
+                    />
+                  </div>
+                </>
               ) : (
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Precio por Mes</Label>
-                  <p className="text-lg font-semibold">{formatPrice(support.priceMonth)}</p>
-                </div>
+                <>
+                  {support.impactosDiarios && (
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Impactos Diarios</Label>
+                      <p className="text-lg font-semibold">{support.impactosDiarios.toLocaleString()}</p>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Precio por Mes</Label>
+                    <p className="text-lg font-semibold">{formatPrice(support.priceMonth)}</p>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -774,6 +1015,7 @@ export default function SoporteDetailPage() {
           </CardContent>
         </Card>
       </main>
-    </div>
+      </div>
+    </Sidebar>
   )
 }

@@ -4,12 +4,8 @@ import type React from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
-  Gauge,
-  PanelsTopLeft,
-  CalendarCheck,
   Calendar,
   Users,
-  Building2,
   UserCog,
   Globe,
   Wrench,
@@ -17,8 +13,6 @@ import {
   Receipt,
   Handshake,
   MessageSquare,
-  ShieldCheck,
-  Map,
   Palette,
   Settings,
   Power,
@@ -28,23 +22,19 @@ import {
 } from "lucide-react"
 
 const modules = [
-  { key: "tablero", title: "Tablero", href: "/panel/tablero", icon: Gauge },
-  { key: "soportes", title: "Soportes", href: "/panel/soportes", icon: Monitor },
-  { key: "reservas", title: "Reservas", href: "/panel/reservas", icon: CalendarCheck },
+  { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
   { key: "calendario", title: "Calendario", href: "/panel/calendario", icon: Calendar },
   { key: "clientes", title: "Clientes", href: "/panel/clientes", icon: Users },
   { key: "ventas", title: "Ventas", href: "/panel/ventas", icon: Handshake },
-  { key: "empleados", title: "Empleados", href: "/panel/empleados", icon: UserCog },
-  { key: "sitio", title: "Sitio Web", href: "/panel/sitio", icon: Globe },
-  { key: "mantenimiento", title: "Mantenimiento", href: "/panel/mantenimiento", icon: Wrench },
+  { key: "soportes", title: "Soportes", href: "/panel/soportes/gestion", icon: Monitor },
   { key: "metricas", title: "Métricas", href: "/panel/metricas", icon: LineChart },
-  { key: "facturacion", title: "Facturación", href: "/panel/facturacion", icon: Receipt },
-  { key: "crm", title: "CRM", href: "/panel/crm", icon: Handshake },
-  { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
-  { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
   { key: "inventario", title: "Inventario", href: "/panel/inventario", icon: Package },
-  { key: "mapas", title: "Mapas", href: "/panel/mapas", icon: Map },
+  { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
+  { key: "mantenimiento", title: "Mantenimiento", href: "/panel/mantenimiento", icon: Wrench },
   { key: "diseno", title: "Diseño Gráfico", href: "/panel/diseno", icon: Palette },
+  { key: "sitio", title: "Sitio Web", href: "/panel/sitio", icon: Globe },
+  { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad", icon: Receipt },
+  { key: "empleados", title: "Empleados", href: "/panel/empleados", icon: UserCog },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },
   { key: "salir", title: "Salir", href: "/api/auth/signout", icon: Power },
 ]

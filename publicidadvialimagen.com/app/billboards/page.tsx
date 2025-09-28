@@ -295,7 +295,7 @@ export default function BillboardsPage() {
           </AccordionItem>
 
           <AccordionItem value="price">
-            <AccordionTrigger>Precio Mensual (€)</AccordionTrigger>
+            <AccordionTrigger>Precio Mensual (Bs)</AccordionTrigger>
             <AccordionContent>
               <div className="space-y-4 px-1">
                 <Slider
@@ -307,8 +307,8 @@ export default function BillboardsPage() {
                   className="py-4"
                 />
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">€{priceRange[0]}</span>
-                  <span className="text-sm">€{priceRange[1]}</span>
+                  <span className="text-sm">Bs {priceRange[0]}</span>
+                  <span className="text-sm">Bs {priceRange[1]}</span>
                 </div>
               </div>
             </AccordionContent>
@@ -491,7 +491,7 @@ export default function BillboardsPage() {
                 ))}
                 {(priceRange[0] > 0 || priceRange[1] < 5000) && (
                   <Badge variant="secondary" className="flex items-center gap-1">
-                    €{priceRange[0]} - €{priceRange[1]}
+                    Bs {priceRange[0]} - Bs {priceRange[1]}
                     <X className="h-3 w-3 cursor-pointer" onClick={() => setPriceRange([0, 5000])} />
                   </Badge>
                 )}
@@ -525,78 +525,23 @@ export default function BillboardsPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredBillboards.map((billboard) => (
-                <Card key={billboard.id} className="group relative overflow-hidden">
-                  <div className="aspect-[4/3] relative">
+                <Card key={billboard.id} className="overflow-hidden">
+                  <div className="w-full h-[147px] relative">
                     <Image
                       src={billboard.image || "/placeholder.svg"}
                       alt={billboard.name}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
+                      width={222}
+                      height={147}
+                      className="h-full w-full object-cover"
                     />
-                    <div className="absolute top-4 left-4 flex gap-2">
-                      <Badge
-                        variant={billboard.available ? "default" : "secondary"}
-                        className="bg-primary text-primary-foreground"
-                      >
-                        {billboard.format}
-                      </Badge>
-                      {!billboard.available && (
-                        <Badge variant="outline" className="bg-background/90">
-                          Próximamente
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="absolute top-4 right-4">
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="h-8 w-8 rounded-full opacity-0 transition-opacity group-hover:opacity-100 bg-background/90"
-                        asChild
-                      >
-                        <Link href={`/billboards/${billboard.id}`}>
-                          <Eye className="h-4 w-4" />
-                          <span className="sr-only">Ver detalles</span>
-                        </Link>
-                      </Button>
-                    </div>
                   </div>
                   <CardContent className="p-4">
                     <div className="space-y-3">
-                      <div>
-                        <h3 className="font-semibold text-base mb-1 text-balance">{billboard.name}</h3>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                          <MapPin className="h-3 w-3" />
-                          {billboard.location}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {billboard.traffic}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Zap className="h-3 w-3" />
-                            {billboard.dimensions}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1">
-                        {billboard.features.slice(0, 2).map((feature, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {feature}
-                          </Badge>
-                        ))}
-                        {billboard.features.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{billboard.features.length - 2} más
-                          </Badge>
-                        )}
-                      </div>
-
+                      <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-lg font-bold text-primary">
-                            €{billboard.monthlyPrice.toLocaleString()}
+                            Bs {billboard.monthlyPrice.toLocaleString()}
                           </span>
                           <span className="text-xs text-muted-foreground">/mes</span>
                         </div>

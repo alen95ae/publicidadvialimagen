@@ -18,8 +18,11 @@ import {
   Edit,
   Trash2,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Home,
+  Calendar
 } from "lucide-react"
+import Sidebar from "@/components/sidebar"
 
 // Datos de ejemplo para los costes de soportes
 const soportesCostes = [
@@ -139,17 +142,38 @@ export default function CostesPage() {
   const porcentajeBeneficioTotal = (beneficioTotal / totalCostos) * 100
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Sidebar>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/panel/soportes" className="text-gray-600 hover:text-gray-800 mr-4">
-              <ArrowLeft className="w-5 h-5" />
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/panel" 
+              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
+              title="Volver al panel de control"
+            >
+              <Home className="w-5 h-5" />
             </Link>
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-6 h-6 text-[#D54644]" />
-              <div className="text-xl font-bold text-slate-800">Costes</div>
+            <div className="text-xl font-bold text-slate-800">Soportes</div>
+            <div className="flex items-center gap-6 ml-4">
+              <Link 
+                href="/panel/soportes/gestion" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Soportes
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/planificacion" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Planificación
+              </Link>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -160,7 +184,7 @@ export default function CostesPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800 mb-2">Gestión de Costes</h1>
           <p className="text-gray-600">Controla los costes y rentabilidad de los soportes publicitarios</p>
@@ -235,7 +259,7 @@ export default function CostesPage() {
                   placeholder="Buscar soportes..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
+                  className="pl-10 max-w-64"
                 />
               </div>
               <Button variant="outline" size="sm">
@@ -354,6 +378,6 @@ export default function CostesPage() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </Sidebar>
   )
 }

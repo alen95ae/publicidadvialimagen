@@ -27,13 +27,39 @@ async function normalizeSupportInput(data: any, existing?: any) {
     productionCost = calcProductionCost(areaM2, data.pricePerM2 ?? existing?.pricePerM2)
   }
 
-  return {
-    ...data,
+  // Filtrar solo campos válidos del esquema de Prisma
+  const validFields = {
+    code: data.code,
+    title: data.title,
+    type: data.type,
+    widthM: data.widthM,
+    heightM: data.heightM,
+    city: data.city,
+    country: data.country,
+    address: data.address,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    priceMonth: data.priceMonth,
+    pricePerM2: data.pricePerM2,
+    owner: data.owner,
+    imageUrl: data.imageUrl,
+    productionCostOverride: data.productionCostOverride,
+    // Campos adicionales que faltaban
+    googleMapsLink: data.googleMapsLink,
+    iluminacion: data.iluminacion,
+    impactosDiarios: data.impactosDiarios,
+    images: data.images,
+    // Campos calculados
     status,
     areaM2,
     productionCost,
-    available: mapAvailableFromStatus(status), // compatibilidad con el booleano existente
+    available: mapAvailableFromStatus(status),
   }
+
+  // Filtrar campos undefined
+  return Object.fromEntries(
+    Object.entries(validFields).filter(([_, value]) => value !== undefined)
+  )
 }
 
 export async function GET(req: Request) {
@@ -42,6 +68,9 @@ export async function GET(req: Request) {
     const q = searchParams.get("q") || ""
     const statuses = (searchParams.get('status') || '')
       .split(',').map(s => s.trim()).filter(Boolean)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '25')
+    const skip = (page - 1) * limit
     
     const where: any = {
       AND: [
@@ -69,6 +98,10 @@ export async function GET(req: Request) {
       ]
     }
     
+    // Obtener total de registros
+    const total = await prisma.support.count({ where })
+    
+    // Obtener registros paginados
     const supports = await prisma.support.findMany({
       where,
       include: {
@@ -76,10 +109,35 @@ export async function GET(req: Request) {
           select: { name: true }
         }
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit
     })
     
-    return NextResponse.json(supports)
+    // Calcular información de paginación
+    const totalPages = Math.ceil(total / limit)
+    const hasNext = page < totalPages
+    const hasPrev = page > 1
+    
+    // Deserializar el campo images para cada soporte
+    const supportsWithImages = supports.map(support => ({
+      ...support,
+      images: support.images ? JSON.parse(support.images) : []
+    }))
+
+    const result = {
+      data: supportsWithImages,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext,
+        hasPrev
+      }
+    }
+    
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Error fetching supports:", error)
     return NextResponse.json(
@@ -114,10 +172,20 @@ export async function POST(req: Request) {
         pricePerM2: payload.pricePerM2 ? parseFloat(payload.pricePerM2) : null,
         areaM2: payload.areaM2 ? parseFloat(payload.areaM2) : null,
         productionCost: payload.productionCost ? parseFloat(payload.productionCost) : null,
+        impactosDiarios: payload.impactosDiarios ? parseInt(payload.impactosDiarios) : null,
+        googleMapsLink: payload.googleMapsLink || null,
+        iluminacion: payload.iluminacion,
+        images: payload.images ? JSON.stringify(payload.images) : null,
       }
     })
     
-    return NextResponse.json(created, { status: 201 })
+    // Deserializar el campo images antes de devolver
+    const createdWithImages = {
+      ...created,
+      images: created.images ? JSON.parse(created.images) : []
+    }
+    
+    return NextResponse.json(createdWithImages, { status: 201 })
   } catch (error) {
     console.error("Error creating support:", error)
     return NextResponse.json(

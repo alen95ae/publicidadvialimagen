@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
     let created = 0, updated = 0
     for (const r of rows) {
-      // columnas esperadas (case-insensitive): code,title,type,widthM,heightM,city,country,priceMonth,status,owner,pricePerM2,imageUrl
+      // columnas esperadas (case-insensitive): code,title,type,widthM,heightM,city,country,priceMonth,status,owner,impactosDiarios,googleMapsLink
       const code = String(r.code || r.CODE || '').trim()
       if (!code) continue
       
@@ -28,8 +28,8 @@ export async function POST(req: Request) {
         priceMonth: r.priceMonth ? Number(r.priceMonth) : undefined,
         status: r.status,
         owner: r.owner,
-        pricePerM2: r.pricePerM2 ? Number(r.pricePerM2) : undefined,
-        imageUrl: r.imageUrl,
+        impactosDiarios: r.impactosDiarios ? Number(r.impactosDiarios) : undefined,
+        googleMapsLink: r.googleMapsLink,
       }
 
       const exist = await prisma.support.findUnique({ where: { code } })

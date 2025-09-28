@@ -14,17 +14,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Upload, Download, Filter, List, PanelsTopLeft } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Upload, Download, Filter, Home, Monitor, DollarSign, Calendar, Copy } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
+import Sidebar from "@/components/sidebar"
 
 // Constantes para colores de estado
 const STATUS_META = {
-  DISPONIBLE:   { label: 'Disponible',    className: 'bg-emerald-600 text-white' },
-  RESERVADO:    { label: 'Reservado',     className: 'bg-amber-500 text-black' },
-  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-600 text-white' },
-  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-neutral-900 text-white' },
+  DISPONIBLE:   { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
+  RESERVADO:    { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
+  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
+  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
 } as const
 
 // Opciones de tipo
@@ -55,9 +56,17 @@ export default function SoportesPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<string[]>([])
-  const [viewMode, setViewMode] = useState<'table'|'kanban'>("table")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [openImport, setOpenImport] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 25,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  })
   const [ownerDraft, setOwnerDraft] = useState("")
   const [priceMonthDraft, setPriceMonthDraft] = useState("")
   const [titleDraft, setTitleDraft] = useState("")
@@ -73,41 +82,38 @@ export default function SoportesPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const ctrl = new AbortController()
-    const params = new URLSearchParams()
-    if (q) params.set('q', q)
-    if (statusFilter.length) params.set('status', statusFilter.join(','))
-    
-    fetch(`/api/soportes?${params.toString()}`, { signal: ctrl.signal })
-      .then(r => r.json())
-      .then(setSupports)
-      .catch(() => {})
-    
-    return () => ctrl.abort()
+    fetchSupports(q, 1)
   }, [q, statusFilter])
 
-  useEffect(() => {
-    fetchSupports()
-  }, [])
-
-  const fetchSupports = async (query = "") => {
+  const fetchSupports = async (query = "", page: number = currentPage) => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/soportes?q=${encodeURIComponent(query)}`)
+      const params = new URLSearchParams()
+      if (query) params.set('q', query)
+      if (statusFilter.length) params.set('status', statusFilter.join(','))
+      params.set('page', page.toString())
+      params.set('limit', '25')
+      
+      const response = await fetch(`/api/soportes?${params}`)
       if (response.ok) {
-        const data = await response.json()
-        setSupports(data)
+        const result = await response.json()
+        // Asegurar que supports sea siempre un array
+        const supportsData = result.data || result
+        setSupports(Array.isArray(supportsData) ? supportsData : [])
+        setPagination(result.pagination || pagination)
+        setCurrentPage(page)
       } else {
         toast.error("Error al cargar los soportes")
+        setSupports([]) // Establecer array vacío en caso de error
       }
     } catch (error) {
+      console.error("Error fetching supports:", error)
       toast.error("Error de conexión")
+      setSupports([]) // Establecer array vacío en caso de error
     } finally {
       setLoading(false)
     }
   }
-
-
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return
@@ -133,11 +139,50 @@ export default function SoportesPage() {
     }).format(price)
   }
 
-  const ids = supports.map(i => i.id)
+  // Asegurar que supports sea un array antes de usar métodos de array
+  const supportsArray = Array.isArray(supports) ? supports : []
+  const ids = supportsArray.map(i => i.id)
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) && !allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])
   const singleSelected = selectedIds.length === 1
+
+  // Funciones de paginación
+  const handlePageChange = (page: number) => {
+    fetchSupports(q, page)
+  }
+
+  const handlePrevPage = () => {
+    if (pagination.hasPrev) {
+      handlePageChange(currentPage - 1)
+    }
+  }
+
+  const handleNextPage = () => {
+    if (pagination.hasNext) {
+      handlePageChange(currentPage + 1)
+    }
+  }
+
+  // Función para sincronizar con Supabase
+  const syncWithSupabase = async () => {
+    try {
+      const response = await fetch('/api/sync/supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`Sincronización completada: ${result.stats.success} soportes sincronizados`)
+      } else {
+        toast.error('Error al sincronizar con Supabase')
+      }
+    } catch (error) {
+      console.error('Error sincronizando:', error)
+      toast.error('Error de conexión al sincronizar')
+    }
+  }
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = {}
@@ -168,6 +213,31 @@ export default function SoportesPage() {
     fetchSupports()
     setSelected({})
     toast.success(`${ids.length} soportes eliminados`)
+  }
+
+  async function bulkDuplicate() {
+    const ids = Object.keys(selected).filter(id => selected[id])
+    
+    try {
+      const response = await fetch('/api/soportes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'duplicate' })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        fetchSupports()
+        setSelected({})
+        toast.success(`${result.duplicated} soportes duplicados correctamente`)
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || 'Error al duplicar los soportes')
+      }
+    } catch (error) {
+      console.error('Error duplicando soportes:', error)
+      toast.error('Error de conexión')
+    }
   }
 
   async function exportPDF() {
@@ -207,7 +277,7 @@ export default function SoportesPage() {
     if (id) changeStatus(id, newStatus)
   }
 
-  async function handleCsv(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
     
@@ -234,15 +304,39 @@ export default function SoportesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Sidebar>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/panel/soportes" className="text-gray-600 hover:text-gray-800 mr-4">
-              ← Soportes
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/panel" 
+              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
+              title="Ir al panel principal"
+            >
+              <Home className="w-5 h-5" />
             </Link>
             <div className="text-xl font-bold text-slate-800">Soportes</div>
+            <div className="flex items-center gap-6 ml-4">
+              <Link 
+                href="/panel/soportes/gestion" 
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+              >
+                Soportes
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/planificacion" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Planificación
+              </Link>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-gray-600">Buscar</span>
@@ -252,7 +346,7 @@ export default function SoportesPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800 mb-2">Gestión de Soportes</h1>
           <p className="text-gray-600">Administra los soportes publicitarios disponibles</p>
@@ -271,6 +365,7 @@ export default function SoportesPage() {
                     placeholder="Buscar por código, título, ciudad, tipo o propietario..."
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
+                    className="max-w-md"
                   />
                   
                   {/* Filtros avanzados */}
@@ -278,7 +373,7 @@ export default function SoportesPage() {
                     value={statusFilter.length ? statusFilter.join(',') : 'all'}
                     onValueChange={(value) => setStatusFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
                   >
-                    <SelectTrigger className="w-48">
+                    <SelectTrigger className="max-w-48">
                       <Filter className="w-4 h-4 mr-2" />
                       <SelectValue placeholder="Disponibilidad" />
                     </SelectTrigger>
@@ -309,7 +404,7 @@ export default function SoportesPage() {
                     <DialogHeader>
                       <DialogTitle>Importar soportes (CSV)</DialogTitle>
                       <DialogDescription>
-                        Columnas: code,title,type,widthM,heightM,city,country,priceMonth,status,owner,pricePerM2,imageUrl
+                        Columnas: code,title,type,widthM,heightM,city,country,priceMonth,status,owner,impactosDiarios,googleMapsLink
                         <br/>
                         <a href="/api/soportes/import/template" className="underline">Descargar plantilla</a>
                       </DialogDescription>
@@ -333,22 +428,6 @@ export default function SoportesPage() {
                     Nuevo Soporte
                   </Button>
                 </Link>
-                <div className="ml-2 inline-flex rounded-md border border-gray-200 overflow-hidden">
-                  <button
-                    onClick={() => setViewMode('table')}
-                    className={`px-3 py-2 text-sm flex items-center gap-1 ${viewMode==='table' ? 'bg-gray-100 text-gray-900' : 'bg-white text-gray-600'}`}
-                    aria-pressed={viewMode==='table'}
-                  >
-                    <List className="w-4 h-4" /> Tabla
-                  </button>
-                  <button
-                    onClick={() => setViewMode('kanban')}
-                    className={`px-3 py-2 text-sm flex items-center gap-1 border-l border-gray-200 ${viewMode==='kanban' ? 'bg-gray-100 text-gray-900' : 'bg-white text-gray-600'}`}
-                    aria-pressed={viewMode==='kanban'}
-                  >
-                    <PanelsTopLeft className="w-4 h-4" /> Kanban
-                  </button>
-                </div>
               </div>
             </div>
           </CardContent>
@@ -357,7 +436,7 @@ export default function SoportesPage() {
         {/* Results */}
         <Card>
           <CardHeader>
-            <CardTitle>Soportes ({supports.length})</CardTitle>
+            <CardTitle>Soportes ({supportsArray.length})</CardTitle>
             <CardDescription>
               Lista de todos los soportes publicitarios
             </CardDescription>
@@ -499,9 +578,17 @@ export default function SoportesPage() {
                   </TooltipProvider>
 
                   <div className="flex-1" />
+                  <Button variant="outline" onClick={syncWithSupabase}>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Sincronizar Web
+                  </Button>
                   <Button variant="outline" onClick={exportPDF} disabled={!someSelected}>
                     <Download className="w-4 h-4 mr-2" />
                     Catálogo PDF
+                  </Button>
+                  <Button variant="outline" onClick={bulkDuplicate} disabled={!someSelected}>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Duplicar
                   </Button>
                   <Button variant="destructive" onClick={bulkDelete}>
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -513,13 +600,13 @@ export default function SoportesPage() {
 
             {loading ? (
               <div className="text-center py-8 text-gray-500">Cargando...</div>
-            ) : supports.length === 0 ? (
+            ) : supportsArray.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {q ? "No se encontraron soportes" : "No hay soportes registrados"}
               </div>
             ) : (
-              viewMode === 'table' ? (
-              <Table>
+              <div className="overflow-x-auto">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
@@ -541,7 +628,7 @@ export default function SoportesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {supports.map((support) => (
+                  {supportsArray.map((support) => (
                     <TableRow key={support.id}>
                       <TableCell className="w-10">
                         <Checkbox
@@ -604,7 +691,7 @@ export default function SoportesPage() {
                       <TableCell>
                         {support.owner ? (
                           <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${
-                            support.owner.trim().toLowerCase() === 'imagen' ? 'bg-rose-900 text-white' : 'bg-sky-700 text-white'
+                            support.owner.trim().toLowerCase() === 'imagen' ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
                           }`}>
                             {support.owner}
                           </span>
@@ -618,26 +705,26 @@ export default function SoportesPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => router.push(`/panel/soportes/${support.id}`)}
+                            title="Ver soporte"
                           >
-                            <Eye className="w-3 h-3 mr-1" />
-                            Ver
+                            <Eye className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => router.push(`/panel/soportes/${support.id}`)}
+                            onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
+                            title="Editar soporte"
                           >
-                            <Edit className="w-3 h-3 mr-1" />
-                            Editar
+                            <Edit className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDelete(support.id)}
                             className="text-red-600 hover:text-red-700"
+                            title="Eliminar soporte"
                           >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Borrar
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -645,60 +732,68 @@ export default function SoportesPage() {
                   ))}
                 </TableBody>
               </Table>
-              ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                {Object.keys(STATUS_META).map((statusKey) => {
-                  const status = statusKey as keyof typeof STATUS_META
-                  const items = supports.filter(s => s.status === status)
-                  return (
-                    <div key={status} className="bg-white border rounded-lg">
-                      <div className={`px-4 py-3 border-b text-sm font-semibold flex items-center justify-between ${STATUS_META[status].className}`}>
-                        <span>{STATUS_META[status].label}</span>
-                        <span className="text-xs opacity-80">{items.length}</span>
-                      </div>
-                      <div
-                        className="p-3 min-h-[180px] space-y-3"
-                        onDragOver={onDragOver}
-                        onDrop={(e) => onDrop(e, status)}
-                      >
-                        {items.map(item => (
-                          <div
-                            key={item.id}
-                            draggable
-                            onDragStart={(e) => onDragStart(e, item.id)}
-                            className="rounded-md border border-gray-200 bg-white shadow-sm p-3 cursor-move hover:shadow-md transition-shadow"
-                            title={`${item.code} - ${item.title}`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-0.5 font-mono text-xs text-gray-800 border border-neutral-200">
-                                {item.code}
-                              </span>
-                              <span className="text-xs text-gray-500">{item.type}</span>
-                            </div>
-                            <div className="text-sm font-medium line-clamp-2">{item.title}</div>
-                            <div className="mt-2 flex items-center justify-between text-xs text-gray-600">
-                              <div className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> {item.city}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Euro className="w-3 h-3" /> {formatPrice(item.priceMonth)}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {items.length === 0 && (
-                          <div className="text-xs text-gray-400 text-center py-6">Sin elementos</div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
-              )
             )}
           </CardContent>
         </Card>
+
+        {/* Paginación */}
+        {pagination.totalPages > 1 && (
+          <div className="flex justify-center mt-8">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handlePrevPage}
+                disabled={!pagination.hasPrev || loading}
+              >
+                Anterior
+              </Button>
+              
+              {/* Mostrar páginas */}
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                let pageNum;
+                if (pagination.totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= pagination.totalPages - 2) {
+                  pageNum = pagination.totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(pageNum)}
+                    disabled={loading}
+                    className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleNextPage}
+                disabled={!pagination.hasNext || loading}
+              >
+                Siguiente
+              </Button>
+            </div>
+            
+            {/* Información de paginación */}
+            <div className="ml-4 text-sm text-gray-600">
+              Mostrando {((currentPage - 1) * 25) + 1} - {Math.min(currentPage * 25, pagination.total)} de {pagination.total} items
+            </div>
+          </div>
+        )}
       </main>
-    </div>
+    </Sidebar>
   )
 }

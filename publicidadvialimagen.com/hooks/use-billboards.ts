@@ -84,7 +84,7 @@ export function useBillboards() {
           id: soporte.id,
           code: soporte.id, // Usar ID como código temporal
           name: soporte.name,
-          images: [soporte.image],
+          images: soporte.images || [soporte.image], // Usar todas las imágenes disponibles
           monthlyPrice: soporte.monthlyPrice,
           location: soporte.location,
           city: soporte.city,

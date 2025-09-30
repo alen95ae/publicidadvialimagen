@@ -70,24 +70,34 @@ export async function GET(req: Request) {
     }
 
     // Transformar datos para el frontend
-    const transformedSoportes = soportes?.map(soporte => ({
-      id: soporte.id,
-      name: soporte.titulo || soporte.nombre,
-      image: soporte.foto_url || "/placeholder.svg?height=300&width=400",
-      monthlyPrice: soporte['Precio por mes'] || 0,
-      location: soporte.ubicacion || `${soporte.Ciudad}, Bolivia`,
-      city: soporte.Ciudad || 'Bolivia',
-      format: getFormatFromType(soporte.Tipo),
-      type: getTypeFromType(soporte.Tipo),
-      dimensions: `${soporte.Ancho || 0}m x ${soporte.Alto || 0}m`,
-      visibility: getVisibilityFromType(soporte.Tipo),
-      traffic: soporte['Impactos diarios'] ? `${soporte['Impactos diarios'].toLocaleString()} personas/día` : 'Variable',
-      lighting: getLightingFromType(soporte.Tipo),
-      available: soporte.Disponibilidad === 'disponible',
-      availableMonths: generateAvailableMonths(),
-      features: getFeaturesFromType(soporte.Tipo),
-      coordinates: getCoordinatesFromCity(soporte.Ciudad),
-    })) || []
+    const transformedSoportes = soportes?.map(soporte => {
+      // Recopilar todas las imágenes disponibles
+      const images = [
+        soporte.foto_url,
+        soporte.foto_url_2,
+        soporte.foto_url_3
+      ].filter(Boolean) // Filtrar valores nulos/undefined
+      
+      return {
+        id: soporte.id,
+        name: soporte.titulo || soporte.nombre,
+        image: images[0] || "/placeholder.svg?height=300&width=400",
+        images: images, // Incluir todas las imágenes
+        monthlyPrice: soporte['Precio por mes'] || 0,
+        location: soporte.ubicacion || `${soporte.Ciudad}, Bolivia`,
+        city: soporte.Ciudad || 'Bolivia',
+        format: getFormatFromType(soporte.Tipo),
+        type: getTypeFromType(soporte.Tipo),
+        dimensions: `${soporte.Ancho || 0}m x ${soporte.Alto || 0}m`,
+        visibility: getVisibilityFromType(soporte.Tipo),
+        traffic: soporte['Impactos diarios'] ? `${soporte['Impactos diarios'].toLocaleString()} personas/día` : 'Variable',
+        lighting: getLightingFromType(soporte.Tipo),
+        available: soporte.Disponibilidad === 'disponible',
+        availableMonths: generateAvailableMonths(),
+        features: getFeaturesFromType(soporte.Tipo),
+        coordinates: getCoordinatesFromCity(soporte.Ciudad),
+      }
+    }) || []
 
     return NextResponse.json({
       data: transformedSoportes,

@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import { supabaseServer } from "@/lib/supabaseServer"
 import bcrypt from "bcryptjs"
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const handler = NextAuth({
   session: { strategy: "jwt" },
   providers: [
     Credentials({
@@ -59,3 +59,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }
   }
 })
+
+export { handler as GET, handler as POST }

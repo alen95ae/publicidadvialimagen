@@ -1,11 +1,9 @@
-import { auth } from "@/auth"
+import { withAuth } from "next-auth/middleware"
 
-export default auth((req) => {
-  const { nextUrl } = req
-  const isLoggedIn = !!req.auth
-
-  if (!isLoggedIn && nextUrl.pathname.startsWith('/panel')) {
-    return Response.redirect(new URL('/login', nextUrl))
+export default withAuth({
+  pages: { signIn: "/login" },
+  callbacks: {
+    authorized: ({ token }) => !!token
   }
 })
 

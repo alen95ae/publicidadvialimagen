@@ -99,7 +99,7 @@ export function buildSupabasePayload(data: any, existing?: any) {
     Disponibilidad: mapStatusToSupabase(data.status ?? mapStatusFromSupabase(existing?.Disponibilidad)),
     'Precio por mes': toNumber(data.priceMonth ?? existing?.['Precio por mes']),
     'Impactos diarios': toInteger(data.impactosDiarios ?? existing?.['Impactos diarios']),
-    foto_url: nullIfEmpty(data.googleMapsLink ?? existing?.foto_url),
+    foto_url: data.images?.[0] ?? existing?.foto_url ?? null,
     foto_url_2: data.images?.[1] ?? existing?.foto_url_2 ?? null,
     foto_url_3: data.images?.[2] ?? existing?.foto_url_3 ?? null,
     notas: data.notes ?? existing?.notas ?? null,

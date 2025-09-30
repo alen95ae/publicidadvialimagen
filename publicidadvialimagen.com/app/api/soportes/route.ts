@@ -69,68 +69,42 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Error al cargar los soportes' }, { status: 500 })
     }
 
-    // Usar datos mock con imágenes reales para demostración
-    const mockSoportes = [
-      {
-        id: '1',
-        name: 'Valla publicitaria centro comercial',
-        image: '/placeholder.svg?height=300&width=400',
-        images: ['/placeholder.svg?height=300&width=400', '/placeholder.svg?height=300&width=400'],
-        monthlyPrice: 2500,
-        location: 'La Paz, Bolivia',
-        city: 'La Paz',
-        format: 'Impresa',
-        type: 'Autopista',
-        dimensions: '6m x 3m',
-        visibility: 'Alto tráfico',
-        traffic: '15,000 personas/día',
-        lighting: 'Iluminada',
-        available: true,
+    // Transformar datos para el frontend
+    const transformedSoportes = soportes?.map(soporte => {
+      // Recopilar todas las imágenes disponibles y convertir a URLs completas
+      const images = [
+        soporte.foto_url,
+        soporte.foto_url_2,
+        soporte.foto_url_3
+      ].filter(Boolean) // Filtrar valores nulos/undefined
+      .map(img => {
+        // Si la imagen es una ruta relativa, convertirla a URL completa
+        if (img && img.startsWith('/uploads/')) {
+          return `http://localhost:3000${img}`
+        }
+        return img
+      })
+      
+      return {
+        id: soporte.id,
+        name: soporte.titulo || soporte.nombre,
+        image: images[0] || "/placeholder.svg?height=300&width=400",
+        images: images, // Incluir todas las imágenes
+        monthlyPrice: soporte['Precio por mes'] || 0,
+        location: soporte.ubicacion || `${soporte.Ciudad}, Bolivia`,
+        city: soporte.Ciudad || 'Bolivia',
+        format: getFormatFromType(soporte.Tipo),
+        type: getTypeFromType(soporte.Tipo),
+        dimensions: `${soporte.Ancho || 0}m x ${soporte.Alto || 0}m`,
+        visibility: getVisibilityFromType(soporte.Tipo),
+        traffic: soporte['Impactos diarios'] ? `${soporte['Impactos diarios'].toLocaleString()} personas/día` : 'Variable',
+        lighting: getLightingFromType(soporte.Tipo),
+        available: soporte.Disponibilidad === 'disponible',
         availableMonths: generateAvailableMonths(),
-        features: ['Doble cara', 'Iluminación LED', 'Fácil acceso'],
-        coordinates: [-16.5, -68.15],
-      },
-      {
-        id: '2',
-        name: 'Pantalla digital plaza principal',
-        image: '/placeholder.svg?height=300&width=400',
-        images: ['/placeholder.svg?height=300&width=400', '/placeholder.svg?height=300&width=400', '/placeholder.svg?height=300&width=400'],
-        monthlyPrice: 4500,
-        location: 'Santa Cruz, Bolivia',
-        city: 'Santa Cruz',
-        format: 'Digital LED',
-        type: 'Premium',
-        dimensions: '4m x 2.5m',
-        visibility: 'Muy alto tráfico',
-        traffic: '25,000 personas/día',
-        lighting: '24/7',
-        available: true,
-        availableMonths: generateAvailableMonths(),
-        features: ['Resolución 4K', 'Contenido dinámico', 'Ubicación premium'],
-        coordinates: [-17.7833, -63.1833],
-      },
-      {
-        id: '3',
-        name: 'Tótem publicitario avenida principal',
-        image: '/placeholder.svg?height=300&width=400',
-        images: ['/placeholder.svg?height=300&width=400'],
-        monthlyPrice: 1800,
-        location: 'Cochabamba, Bolivia',
-        city: 'Cochabamba',
-        format: 'Impresa',
-        type: 'Móvil',
-        dimensions: '2m x 4m',
-        visibility: 'Variable',
-        traffic: '8,000 personas/día',
-        lighting: 'Variable',
-        available: true,
-        availableMonths: generateAvailableMonths(),
-        features: ['Flexibilidad total', 'Eventos personalizados', 'Ubicación variable'],
-        coordinates: [-17.3833, -66.1667],
+        features: getFeaturesFromType(soporte.Tipo),
+        coordinates: getCoordinatesFromCity(soporte.Ciudad),
       }
-    ]
-
-    const transformedSoportes = mockSoportes
+    }) || []
 
     return NextResponse.json({
       data: transformedSoportes,

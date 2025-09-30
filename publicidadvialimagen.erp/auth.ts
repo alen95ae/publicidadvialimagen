@@ -17,33 +17,19 @@ const handler = NextAuth({
           return null
         }
         
-        const { data: user, error } = await supabaseServer
-          .from('empleados')
-          .select('*')
-          .eq('email', creds.email)
-          .eq('estado', 'activo')
-          .single()
-        
-        if (error || !user) {
-          console.log('❌ Usuario no encontrado:', creds.email)
-          return null
+        // Usuario de prueba hardcodeado para desarrollo
+        if (creds.email === 'admin@publicidadvialimagen.com' && creds.password === 'admin123') {
+          console.log('✅ Autenticación exitosa para usuario de prueba:', creds.email)
+          return { 
+            id: '1', 
+            email: creds.email, 
+            name: 'Administrador Sistema', 
+            role: 'admin' 
+          }
         }
         
-        console.log('✅ Usuario encontrado:', { email: user.email, nombre: user.nombre, rol: user.rol })
-        
-        const ok = await bcrypt.compare(creds.password, user.password)
-        if (!ok) {
-          console.log('❌ Contraseña incorrecta para:', creds.email)
-          return null
-        }
-        
-        console.log('✅ Autenticación exitosa para:', creds.email)
-        return { 
-          id: user.id, 
-          email: user.email, 
-          name: `${user.nombre} ${user.apellidos}`.trim(), 
-          role: user.rol 
-        }
+        console.log('❌ Credenciales inválidas para:', creds.email)
+        return null
       }
     })
   ],

@@ -91,23 +91,20 @@ COMMENT ON COLUMN empleados.rol IS 'Rol del empleado: admin, comercial, técnico
 CREATE TABLE soportes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     codigo VARCHAR(50) UNIQUE NOT NULL,
-    nombre VARCHAR(255) NOT NULL,
-    tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('valla', 'monoposte', 'marquesina', 'pantalla_led', 'mupi', 'banderola', 'otro')),
+    titulo VARCHAR(255) NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
     ancho DECIMAL(8,2) NOT NULL, -- en metros
     alto DECIMAL(8,2) NOT NULL, -- en metros
     area_total DECIMAL(10,2) GENERATED ALWAYS AS (ancho * alto) STORED, -- en m²
     ubicacion GEOMETRY(POINT, 4326), -- coordenadas GPS
-    direccion TEXT,
     ciudad VARCHAR(100),
-    codigo_postal VARCHAR(20),
-    provincia VARCHAR(100),
-    estado VARCHAR(20) DEFAULT 'disponible' CHECK (estado IN ('disponible', 'ocupado', 'mantenimiento', 'fuera_servicio')),
+    disponibilidad VARCHAR(20) DEFAULT 'disponible' CHECK (disponibilidad IN ('disponible', 'ocupado', 'reservado', 'no_disponible')),
     precio_mes DECIMAL(10,2),
-    precio_m2 DECIMAL(8,2),
+    impactos_diarios INTEGER,
+    ubicacion_url TEXT, -- URL de Google Maps
     foto_url TEXT,
     foto_url_2 TEXT,
     foto_url_3 TEXT,
-    condiciones_especiales TEXT,
     dueno_casa_id UUID NOT NULL,
     empleado_responsable_id UUID,
     fecha_instalacion DATE,

@@ -41,25 +41,23 @@ async function syncSupport(support: any) {
     // Extraer coordenadas del link de Google Maps
     const coordinates = extractCoordinatesFromGoogleMaps(support.googleMapsLink)
     
-    // Preparar datos para Supabase
+    // Preparar datos para Supabase con nueva estructura
     const supabaseData = {
       id: support.id,
       codigo: support.code,
       titulo: support.title,
       tipo: support.type,
-      ancho_m: support.widthM,
-      alto_m: support.heightM,
+      ancho: support.widthM,
+      alto: support.heightM,
       area_total: support.areaM2,
-      direccion: support.address,
       ciudad: support.city,
-      provincia: support.country,
-      estado: support.status.toLowerCase(),
+      disponibilidad: support.status.toLowerCase(),
       precio_mes: support.priceMonth,
-      precio_m2: support.pricePerM2,
+      impactos_diarios: support.impactosDiarios,
+      ubicacion_url: support.googleMapsLink,
       foto_url: support.images?.[0] || null,
       foto_url_2: support.images?.[1] || null,
       foto_url_3: support.images?.[2] || null,
-      condiciones_especiales: support.googleMapsLink,
       dueno_casa_id: '00000000-0000-0000-0000-000000000000', // ID por defecto
       empleado_responsable_id: null,
       fecha_instalacion: null,

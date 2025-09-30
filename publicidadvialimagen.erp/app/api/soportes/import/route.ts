@@ -75,36 +75,33 @@ export async function POST(req: Request) {
     let created = 0, updated = 0
     for (const r of rows) {
       try {
-        // columnas esperadas (case-insensitive): code,title,type,widthM,heightM,city,country,priceMonth,status,owner,impactosDiarios,googleMapsLink
-        const code = String(r.code || r.CODE || '').trim()
+        // Mapear columnas en español a inglés
+        const code = String(r.Codigo || r.codigo || r.CODIGO || '').trim()
         if (!code) continue
+        
+        // Mapear disponibilidad a estados del sistema
+        const mapDisponibilidad = (disp: string) => {
+          const d = String(disp || '').toLowerCase()
+          if (d.includes('disponible')) return 'DISPONIBLE'
+          if (d.includes('reservado')) return 'RESERVADO'
+          if (d.includes('ocupado')) return 'OCUPADO'
+          if (d.includes('no disponible')) return 'NO_DISPONIBLE'
+          return 'DISPONIBLE'
+        }
         
         const rawData: any = {
           code,
-          title: r.title ?? r.TITLE,
-          type: r.type ?? r.TYPE,
-          widthM: r.widthM && !isNaN(Number(r.widthM)) ? Number(r.widthM) : undefined,
-          heightM: r.heightM && !isNaN(Number(r.heightM)) ? Number(r.heightM) : undefined,
-          city: r.city, 
-          country: r.country,
-          address: r.address,
-          latitude: r.latitude && !isNaN(Number(r.latitude)) ? Number(r.latitude) : undefined,
-          longitude: r.longitude && !isNaN(Number(r.longitude)) ? Number(r.longitude) : undefined,
-          priceMonth: r.priceMonth && !isNaN(Number(r.priceMonth)) ? Number(r.priceMonth) : undefined,
-          pricePerM2: r.pricePerM2 && !isNaN(Number(r.pricePerM2)) ? Number(r.pricePerM2) : undefined,
-          status: r.status,
-          owner: r.owner,
-          impactosDiarios: r.impactosDiarios && !isNaN(Number(r.impactosDiarios)) ? Number(r.impactosDiarios) : undefined,
-          googleMapsLink: r.googleMapsLink,
-          iluminacion: r.iluminacion === 'true' || r.iluminacion === '1' ? true : r.iluminacion === 'false' || r.iluminacion === '0' ? false : undefined,
-          images: (() => {
-            try {
-              if (!r.images || !r.images.trim() || r.images === '[]') return []
-              return r.images.startsWith('[') ? JSON.parse(r.images) : []
-            } catch {
-              return []
-            }
-          })(),
+          title: r.Titulo || r.titulo || r.TITULO || '',
+          type: r.Tipo || r.tipo || r.TIPO || '',
+          widthM: r.Ancho && !isNaN(Number(r.Ancho)) ? Number(r.Ancho) : undefined,
+          heightM: r.Alto && !isNaN(Number(r.Alto)) ? Number(r.Alto) : undefined,
+          city: r.Ciudad || r.ciudad || r.CIUDAD || '', 
+          country: 'Bolivia', // Por defecto
+          priceMonth: (r['Precio por mes'] || r['Precio_por_mes'] || r.precio_mes) && !isNaN(Number(r['Precio por mes'] || r['Precio_por_mes'] || r.precio_mes)) ? Number(r['Precio por mes'] || r['Precio_por_mes'] || r.precio_mes) : undefined,
+          status: mapDisponibilidad(r.Disponibilidad || r.disponibilidad || r.DISPONIBILIDAD),
+          impactosDiarios: (r['Impactos diarios'] || r['Impactos_diarios'] || r.impactos_diarios) && !isNaN(Number(r['Impactos diarios'] || r['Impactos_diarios'] || r.impactos_diarios)) ? Number(r['Impactos diarios'] || r['Impactos_diarios'] || r.impactos_diarios) : undefined,
+          googleMapsLink: r.Ubicación || r.ubicación || r.UBICACION || '',
+          images: [],
         }
 
         const exist = await prisma.support.findUnique({ where: { code } })

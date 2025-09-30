@@ -98,7 +98,7 @@ CREATE TABLE soportes (
     area_total DECIMAL(10,2) GENERATED ALWAYS AS (ancho * alto) STORED, -- en m²
     ubicacion GEOMETRY(POINT, 4326), -- coordenadas GPS
     ciudad VARCHAR(100),
-    disponibilidad VARCHAR(20) DEFAULT 'disponible' CHECK (disponibilidad IN ('disponible', 'ocupado', 'reservado', 'no_disponible')),
+    estado VARCHAR(20) DEFAULT 'disponible' CHECK (estado IN ('disponible', 'ocupado', 'reservado', 'no_disponible')),
     precio_mes DECIMAL(10,2),
     impactos_diarios INTEGER,
     ubicacion_url TEXT, -- URL de Google Maps

@@ -1,91 +1,82 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import { supabaseServer } from "@/lib/supabaseServer"
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get("q") || ""
-    const relation = searchParams.get("relation")
-    const city = searchParams.get("city")
-    const country = searchParams.get("country")
-    const owner = searchParams.get("owner")
-    const favorite = searchParams.get("favorite")
+    const tipo = searchParams.get("tipo")
+    const ciudad = searchParams.get("ciudad")
+    const pais = searchParams.get("pais")
+    const estado = searchParams.get("estado")
 
-    // Construir filtros (igual que en la API principal)
-    const where: any = {
-      isActive: true
+    // Construir query base
+    let query = supabaseServer
+      .from('clientes')
+      .select('*')
+
+    // Filtros
+    if (estado) {
+      query = query.eq('estado', estado)
+    } else {
+      query = query.eq('estado', 'activo')
     }
 
+    if (tipo) {
+      query = query.eq('tipo_cliente', tipo)
+    }
+
+    if (ciudad) {
+      query = query.eq('ciudad', ciudad)
+    }
+
+    if (pais) {
+      query = query.eq('pais', pais)
+    }
+
+    // Búsqueda de texto
     if (q) {
-      where.OR = [
-        { displayName: { contains: q } },
-        { legalName: { contains: q } },
-        { taxId: { contains: q } },
-        { email: { contains: q } },
-        { city: { contains: q } },
-        { country: { contains: q } }
-      ]
+      query = query.or(`nombre_comercial.ilike.%${q}%,nombre_contacto.ilike.%${q}%,email.ilike.%${q}%,ciudad.ilike.%${q}%`)
     }
 
-    if (relation) where.relation = relation
-    if (city) where.city = city
-    if (country) where.country = country
-    if (owner) where.salesOwnerId = owner
-    if (favorite === "true") where.favorite = true
+    // Obtener todos los clientes con filtros
+    const { data: contacts, error } = await query
+      .order('nombre_comercial', { ascending: true })
 
-    // Obtener todos los contactos con filtros
-    const contacts = await prisma.contact.findMany({
-      where,
-      include: {
-        salesOwner: {
-          select: { name: true }
-        }
-      },
-      orderBy: [
-        { favorite: "desc" },
-        { displayName: "asc" }
-      ]
-    })
+    if (error) {
+      console.error('Error fetching clients from Supabase:', error)
+      return NextResponse.json({ error: 'Error obteniendo clientes' }, { status: 500 })
+    }
 
     // Generar CSV
     const csvHeaders = [
-      "Nombre",
-      "Razón Social",
-      "NIT",
-      "Tipo",
-      "Relación",
-      "Teléfono",
+      "Nombre Comercial",
+      "Nombre Contacto",
       "Email",
-      "Sitio Web",
-      "Dirección 1",
-      "Dirección 2",
+      "Teléfono",
+      "CIF/NIF",
+      "Dirección",
       "Ciudad",
-      "Estado",
       "Código Postal",
       "País",
-      "Comercial",
-      "Favorito",
+      "Tipo Cliente",
+      "Estado",
       "Notas"
     ].join(",")
 
-    const csvRows = contacts.map(contact => [
-      `"${contact.displayName || ""}"`,
-      `"${contact.legalName || ""}"`,
-      `"${contact.taxId || ""}"`,
-      `"${contact.kind === 'COMPANY' ? 'Compañía' : 'Individual'}"`,
-      `"${contact.relation === 'CUSTOMER' ? 'Cliente' : contact.relation === 'SUPPLIER' ? 'Proveedor' : 'Ambos'}"`,
-      `"${contact.phone || ""}"`,
+    const csvRows = (contacts || []).map(contact => [
+      `"${contact.nombre_comercial || ""}"`,
+      `"${contact.nombre_contacto || ""}"`,
       `"${contact.email || ""}"`,
-      `"${contact.website || ""}"`,
-      `"${contact.address1 || ""}"`,
-      `"${contact.address2 || ""}"`,
-      `"${contact.city || ""}"`,
-      `"${contact.state || ""}"`,
-      `"${contact.postalCode || ""}"`,
-      `"${contact.country || ""}"`,
-      `"${contact.salesOwner?.name || ""}"`,
-      `"${contact.favorite ? 'Sí' : 'No'}"`,
-      `"${(contact.notes || "").replace(/"/g, '""')}"`
+      `"${contact.telefono || ""}"`,
+      `"${contact.cif_nif || ""}"`,
+      `"${contact.direccion || ""}"`,
+      `"${contact.ciudad || ""}"`,
+      `"${contact.codigo_postal || ""}"`,
+      `"${contact.pais || ""}"`,
+      `"${contact.tipo_cliente || ""}"`,
+      `"${contact.estado || ""}"`,
+      `"${(contact.notas || "").replace(/"/g, '""')}"`
     ].join(","))
 
     const csvContent = [csvHeaders, ...csvRows].join("\n")
@@ -93,7 +84,7 @@ export async function GET(req: Request) {
     // Crear respuesta con headers para descarga
     const response = new NextResponse(csvContent)
     response.headers.set("Content-Type", "text/csv; charset=utf-8")
-    response.headers.set("Content-Disposition", `attachment; filename="contactos_${new Date().toISOString().split('T')[0]}.csv"`)
+    response.headers.set("Content-Disposition", `attachment; filename="clientes_${new Date().toISOString().split('T')[0]}.csv"`)
     
     return response
   } catch (error) {

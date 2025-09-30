@@ -3,8 +3,8 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { supabaseServer } from '@/lib/supabaseServer'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -46,10 +46,16 @@ export async function GET(req: Request) {
     const ids = (searchParams.get('ids') || '').split(',').map(s => s.trim()).filter(Boolean)
     if (!ids.length) return NextResponse.json({ error: 'ids requeridos' }, { status: 400 })
 
-    const items = await prisma.support.findMany({
-      where: { id: { in: ids } },
-      orderBy: { code: 'asc' }
-    })
+    const { data: items, error } = await supabaseServer
+      .from('soportes')
+      .select('*')
+      .in('id', ids)
+      .order('Codigo', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching supports from Supabase:', error)
+      return NextResponse.json({ error: 'Error obteniendo soportes' }, { status: 500 })
+    }
 
     const pdf = await PDFDocument.create()
     const font = await pdf.embedFont(StandardFonts.Helvetica)
@@ -85,22 +91,22 @@ export async function GET(req: Request) {
         })
       }
 
-      line(`${s.code || '-'} — ${s.title || ''}`, 16, true)
-      const sizeStr = `Tamaño: ${s.widthM ?? 0} × ${s.heightM ?? 0} m`
-      const areaStr = `Área: ${s.areaM2 ?? 0} m²`
-      const row1 = `Tipo: ${s.type || '-'}     ${sizeStr}     ${areaStr}`
+      line(`${s.Codigo || '-'} — ${s.nombre || ''}`, 16, true)
+      const sizeStr = `Tamaño: ${s.Ancho ?? 0} × ${s.Alto ?? 0} m`
+      const areaStr = `Área: ${s.area_total ?? 0} m²`
+      const row1 = `Tipo: ${s.Tipo || '-'}     ${sizeStr}     ${areaStr}`
       line(row1, 11, false)
 
-      const row2 = `Disponibilidad: ${s.status}     Propietario: ${s.owner || '-'}     Precio/mes: ${s.priceMonth ?? '-'}`
+      const row2 = `Disponibilidad: ${s.Disponibilidad}     Propietario: ${s.Propietario || '-'}     Precio/mes: ${s['Precio por mes'] ?? '-'}`
       line(row2, 11, false)
 
       // Imagen (si JPG/PNG)
       y -= 16
       let imgBuf: Uint8Array | null = null
-      if (s.imageUrl) {
-        imgBuf = s.imageUrl.startsWith('http')
-          ? await loadRemote(s.imageUrl)
-          : await loadLocal(s.imageUrl)
+      if (s.foto_url) {
+        imgBuf = s.foto_url.startsWith('http')
+          ? await loadRemote(s.foto_url)
+          : await loadLocal(s.foto_url)
       }
 
       if (imgBuf && (isJpg(imgBuf) || isPng(imgBuf))) {

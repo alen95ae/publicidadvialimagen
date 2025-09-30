@@ -1,11 +1,9 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
+import { supabaseServer } from "@/lib/supabaseServer"
 import bcrypt from "bcryptjs"
 
 const handler = NextAuth({
-  adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   providers: [
     Credentials({
@@ -19,13 +17,19 @@ const handler = NextAuth({
           return null
         }
         
-        const user = await prisma.user.findUnique({ where: { email: creds.email } })
-        if (!user) {
+        const { data: user, error } = await supabaseServer
+          .from('empleados')
+          .select('*')
+          .eq('email', creds.email)
+          .eq('estado', 'activo')
+          .single()
+        
+        if (error || !user) {
           console.log('❌ Usuario no encontrado:', creds.email)
           return null
         }
         
-        console.log('✅ Usuario encontrado:', { email: user.email, name: user.name, role: user.role })
+        console.log('✅ Usuario encontrado:', { email: user.email, nombre: user.nombre, rol: user.rol })
         
         const ok = await bcrypt.compare(creds.password, user.password)
         if (!ok) {
@@ -34,7 +38,12 @@ const handler = NextAuth({
         }
         
         console.log('✅ Autenticación exitosa para:', creds.email)
-        return { id: user.id, email: user.email, name: user.name, role: user.role }
+        return { 
+          id: user.id, 
+          email: user.email, 
+          name: `${user.nombre} ${user.apellidos}`.trim(), 
+          role: user.rol 
+        }
       }
     })
   ],

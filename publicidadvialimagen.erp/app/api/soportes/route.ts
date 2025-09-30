@@ -1,66 +1,6 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
-
-// Funciones de normalización y cálculo
-function toNum(n: any) { const x = Number(n); return isFinite(x) ? x : 0 }
-function calcArea(widthM?: any, heightM?: any) {
-  return +(toNum(widthM) * toNum(heightM)).toFixed(2)
-}
-function calcProductionCost(areaM2: number, pricePerM2?: any) {
-  return +(areaM2 * toNum(pricePerM2)).toFixed(2)
-}
-function mapAvailableFromStatus(status?: string) {
-  return status === 'DISPONIBLE'
-}
-
-async function normalizeSupportInput(data: any, existing?: any) {
-  const widthM  = data.widthM ?? existing?.widthM
-  const heightM = data.heightM ?? existing?.heightM
-  const areaM2  = calcArea(widthM, heightM)
-
-  const status = (data.status ?? existing?.status ?? 'DISPONIBLE') as any
-
-  // Calcula coste si NO está en override
-  let productionCost = data.productionCost
-  const override = Boolean(data.productionCostOverride ?? existing?.productionCostOverride)
-  if (!override) {
-    productionCost = calcProductionCost(areaM2, data.pricePerM2 ?? existing?.pricePerM2)
-  }
-
-  // Filtrar solo campos válidos del esquema de Prisma
-  const validFields = {
-    code: data.code,
-    title: data.title,
-    type: data.type,
-    widthM: data.widthM,
-    heightM: data.heightM,
-    city: data.city,
-    country: data.country,
-    address: data.address,
-    latitude: data.latitude,
-    longitude: data.longitude,
-    priceMonth: data.priceMonth,
-    pricePerM2: data.pricePerM2,
-    owner: data.owner,
-    imageUrl: data.imageUrl,
-    productionCostOverride: data.productionCostOverride,
-    // Campos adicionales que faltaban
-    googleMapsLink: data.googleMapsLink,
-    iluminacion: data.iluminacion,
-    impactosDiarios: data.impactosDiarios,
-    images: data.images,
-    // Campos calculados
-    status,
-    areaM2,
-    productionCost,
-    available: mapAvailableFromStatus(status),
-  }
-
-  // Filtrar campos undefined
-  return Object.fromEntries(
-    Object.entries(validFields).filter(([_, value]) => value !== undefined)
-  )
-}
+import { supabaseServer } from "@/lib/supabaseServer"
+import { buildSupabasePayload, ensureDefaultOwnerId, supabaseRowToSupport } from "./helpers"
 
 export async function GET(req: Request) {
   try {
@@ -72,72 +12,48 @@ export async function GET(req: Request) {
     const limit = parseInt(searchParams.get('limit') || '25')
     const skip = (page - 1) * limit
     
-    const where: any = {
-      AND: [
-        statuses.length ? { status: { in: statuses as any } } : {},
-        {
-          OR: [
-            { code: { contains: q } },
-            { title: { contains: q } },
-            { type: { contains: q } },
-            { city: { contains: q } },
-            { owner: { contains: q } },
-          ]
-        }
-      ]
+    const statusFilters = statuses.map(status => status.toLowerCase())
+
+    let query = supabaseServer
+      .from('soportes')
+      .select('*', { count: 'exact' })
+
+    if (statusFilters.length) {
+      query = query.in('Disponibilidad', statusFilters)
     }
-    
-    if (!q && !statuses.length) {
-      delete where.AND
-      where.OR = [
-        { code: { contains: '' } },
-        { title: { contains: '' } },
-        { type: { contains: '' } },
-        { city: { contains: '' } },
-        { owner: { contains: '' } },
-      ]
+
+    if (q) {
+      const like = `%${q}%`
+      query = query.or(`Codigo.ilike.${like},nombre.ilike.${like},Tipo.ilike.${like},Ciudad.ilike.${like}`)
     }
-    
-    // Obtener total de registros
-    const total = await prisma.support.count({ where })
-    
-    // Obtener registros paginados
-    const supports = await prisma.support.findMany({
-      where,
-      include: {
-        company: {
-          select: { name: true }
-        }
-      },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: limit
-    })
-    
-    // Calcular información de paginación
+
+    const { data, error, count } = await query
+      .order('updated_at', { ascending: false })
+      .range(skip, skip + limit - 1)
+
+    if (error) {
+      console.error('Error fetching supports from Supabase:', error)
+      return NextResponse.json({ error: 'Error obteniendo soportes' }, { status: 500 })
+    }
+
+    const total = count || 0
     const totalPages = Math.ceil(total / limit)
     const hasNext = page < totalPages
     const hasPrev = page > 1
-    
-    // Deserializar el campo images para cada soporte
-    const supportsWithImages = supports.map(support => ({
-      ...support,
-      images: support.images ? JSON.parse(support.images) : []
-    }))
 
-    const result = {
-      data: supportsWithImages,
+    const supports = (data || []).map(supabaseRowToSupport)
+
+    return NextResponse.json({
+      data: supports,
       pagination: {
         page,
         limit,
         total,
         totalPages,
         hasNext,
-        hasPrev
+        hasPrev,
       }
-    }
-    
-    return NextResponse.json(result)
+    })
   } catch (error) {
     console.error("Error fetching supports:", error)
     return NextResponse.json(
@@ -150,7 +66,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const data = await req.json()
-    
+
     // Validación básica
     if (!data.code || !data.title) {
       return NextResponse.json(
@@ -158,34 +74,53 @@ export async function POST(req: Request) {
         { status: 400 }
       )
     }
-    
-    const payload = await normalizeSupportInput(data)
-    
-    const created = await prisma.support.create({ 
-      data: {
-        ...payload,
-        priceMonth: payload.priceMonth ? parseFloat(payload.priceMonth) : null,
-        widthM: payload.widthM ? parseFloat(payload.widthM) : null,
-        heightM: payload.heightM ? parseFloat(payload.heightM) : null,
-        latitude: payload.latitude ? parseFloat(payload.latitude) : null,
-        longitude: payload.longitude ? parseFloat(payload.longitude) : null,
-        pricePerM2: payload.pricePerM2 ? parseFloat(payload.pricePerM2) : null,
-        areaM2: payload.areaM2 ? parseFloat(payload.areaM2) : null,
-        productionCost: payload.productionCost ? parseFloat(payload.productionCost) : null,
-        impactosDiarios: payload.impactosDiarios ? parseInt(payload.impactosDiarios) : null,
-        googleMapsLink: payload.googleMapsLink || null,
-        iluminacion: payload.iluminacion,
-        images: payload.images ? JSON.stringify(payload.images) : null,
-      }
-    })
-    
-    // Deserializar el campo images antes de devolver
-    const createdWithImages = {
-      ...created,
-      images: created.images ? JSON.parse(created.images) : []
+
+    // Verificar si ya existe un soporte con el mismo código
+    const { data: existing, error: existingError } = await supabaseServer
+      .from('soportes')
+      .select('*')
+      .eq('Codigo', data.code)
+      .maybeSingle()
+
+    if (existingError) {
+      console.error('Error checking existing support:', existingError)
+      return NextResponse.json({ error: 'Error verificando soporte existente' }, { status: 500 })
     }
-    
-    return NextResponse.json(createdWithImages, { status: 201 })
+
+    const payload = buildSupabasePayload(data)
+
+    let result
+    if (existing) {
+      // Actualizar soporte existente
+      const { data: updated, error: updateError } = await supabaseServer
+        .from('soportes')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('*')
+        .single()
+
+      if (updateError) {
+        console.error('Error updating support in Supabase:', updateError)
+        return NextResponse.json({ error: 'Error actualizando soporte' }, { status: 500 })
+      }
+      result = updated
+    } else {
+      // Crear nuevo soporte
+      const { data: inserted, error: insertError } = await supabaseServer
+        .from('soportes')
+        .insert([payload])
+        .select('*')
+        .single()
+
+      if (insertError) {
+        console.error('Error creating support in Supabase:', insertError)
+        return NextResponse.json({ error: 'Error creando soporte' }, { status: 500 })
+      }
+      result = inserted
+    }
+
+    const support = supabaseRowToSupport(result)
+    return NextResponse.json(support, { status: 201 })
   } catch (error) {
     console.error("Error creating support:", error)
     return NextResponse.json(

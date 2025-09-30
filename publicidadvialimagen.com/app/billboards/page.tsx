@@ -16,9 +16,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card, CardContent } from "@/components/ui/card"
 import BillboardMap from "@/components/billboard-map"
+import { useBillboards } from "@/hooks/use-billboards"
 
 export default function BillboardsPage() {
   const searchParams = useSearchParams()
+  const { billboards: allBillboards, loading, error } = useBillboards()
   const [priceRange, setPriceRange] = useState([0, 5000])
   const [selectedFilters, setSelectedFilters] = useState({
     cities: [],
@@ -40,7 +42,39 @@ export default function BillboardsPage() {
     }
   }, [searchParams])
 
-  const billboards = [
+  // Si está cargando, mostrar loading
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Cargando vallas publicitarias...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Si hay error, mostrar mensaje
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">Error al cargar las vallas publicitarias</p>
+              <p className="text-gray-600">{error}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const billboards = allBillboards || [
     {
       id: 1,
       name: "Pantalla LED Premium - Gran Vía",

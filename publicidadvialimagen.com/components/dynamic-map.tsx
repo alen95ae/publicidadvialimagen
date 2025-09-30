@@ -4,12 +4,15 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
 import { createBillboardIcon } from "./billboard-icon"
 
 interface BillboardLocation {
-  id: number
+  id: string | number
   name: string
   location: string
   city: string
   monthlyPrice: number
-  coordinates: [number, number] // [lat, lng]
+  coordinates?: {
+    lat: number
+    lng: number
+  } | [number, number] // Soportar ambos formatos
 }
 
 interface DynamicMapProps {
@@ -57,24 +60,42 @@ export default function DynamicMap({ billboards, selectedCity }: DynamicMapProps
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
-        {filteredBillboards.map((billboard) => (
-          <Marker 
-            key={billboard.id} 
-            position={billboard.coordinates}
-            icon={createBillboardIcon()}
-          >
-            <Popup>
-              <div className="p-2">
-                <h3 className="font-semibold text-sm mb-1">{billboard.name}</h3>
-                <p className="text-xs text-muted-foreground mb-1">{billboard.location}</p>
-                <p className="text-xs text-muted-foreground mb-2">{billboard.city}</p>
-                <p className="text-sm font-bold text-primary">
-                  €{billboard.monthlyPrice.toLocaleString()}/mes
-                </p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {filteredBillboards.map((billboard) => {
+          // Normalizar coordenadas
+          let position: [number, number] | null = null
+          
+          if (billboard.coordinates) {
+            if (Array.isArray(billboard.coordinates)) {
+              position = billboard.coordinates
+            } else if (billboard.coordinates.lat && billboard.coordinates.lng) {
+              position = [billboard.coordinates.lat, billboard.coordinates.lng]
+            }
+          }
+          
+          // Solo renderizar si tenemos coordenadas válidas
+          if (!position || isNaN(position[0]) || isNaN(position[1])) {
+            return null
+          }
+          
+          return (
+            <Marker 
+              key={billboard.id} 
+              position={position}
+              icon={createBillboardIcon()}
+            >
+              <Popup>
+                <div className="p-2">
+                  <h3 className="font-semibold text-sm mb-1">{billboard.name}</h3>
+                  <p className="text-xs text-muted-foreground mb-1">{billboard.location}</p>
+                  <p className="text-xs text-muted-foreground mb-2">{billboard.city}</p>
+                  <p className="text-sm font-bold text-primary">
+                    Bs {billboard.monthlyPrice.toLocaleString()}/mes
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          )
+        })}
       </MapContainer>
     </div>
   )

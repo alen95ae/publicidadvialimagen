@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Upload, Download, Filter, Home, Monitor, DollarSign, Calendar, Copy } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Home, Monitor, DollarSign, Calendar, Copy, Upload } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
@@ -57,7 +57,6 @@ export default function SoportesPage() {
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [selected, setSelected] = useState<Record<string, boolean>>({})
-  const [openImport, setOpenImport] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -79,6 +78,8 @@ export default function SoportesPage() {
   const [titleOpen, setTitleOpen] = useState(false)
   const [typeOpen, setTypeOpen] = useState(false)
   const [codeOpen, setCodeOpen] = useState(false)
+  const [openImport, setOpenImport] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -164,25 +165,6 @@ export default function SoportesPage() {
     }
   }
 
-  // Función para sincronizar con Supabase
-  const syncWithSupabase = async () => {
-    try {
-      const response = await fetch('/api/sync/supabase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        toast.success(`Sincronización completada: ${result.stats.success} soportes sincronizados`)
-      } else {
-        toast.error('Error al sincronizar con Supabase')
-      }
-    } catch (error) {
-      console.error('Error sincronizando:', error)
-      toast.error('Error de conexión al sincronizar')
-    }
-  }
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = {}
@@ -192,13 +174,27 @@ export default function SoportesPage() {
 
   async function bulkUpdate(patch: any) {
     const ids = Object.keys(selected).filter(id => selected[id])
-    await fetch('/api/soportes/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, action: 'update', data: patch })
-    })
-    fetchSupports()
-    setSelected({})
+    
+    try {
+      const response = await fetch('/api/soportes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'update', data: patch })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`${result.count || ids.length} soportes actualizados correctamente`)
+        fetchSupports()
+        setSelected({})
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || 'Error al actualizar los soportes')
+      }
+    } catch (error) {
+      console.error('Error en actualización masiva:', error)
+      toast.error('Error de conexión al actualizar')
+    }
   }
 
   async function bulkDelete() {
@@ -277,31 +273,43 @@ export default function SoportesPage() {
     if (id) changeStatus(id, newStatus)
   }
 
-  const handleCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    
-    const fd = new FormData()
-    fd.set('file', f)
-    
+  // Función para manejar la importación de CSV
+  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setImportLoading(true)
     try {
-      const response = await fetch('/api/soportes/import', { method: 'POST', body: fd })
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/soportes/import', {
+        method: 'POST',
+        body: formData
+      })
+
       const result = await response.json()
       
-      if (result.ok) {
-        toast.success(`Importación completada: ${result.created} creados, ${result.updated} actualizados`)
-        fetchSupports()
+      if (response.ok && result.success) {
+        toast.success(`Importación completada: ${result.created} creados, ${result.updated} actualizados${result.skipped > 0 ? `, ${result.skipped} saltados` : ''}${result.errors > 0 ? `, ${result.errors} errores` : ''}`)
+        if (result.errorMessages && result.errorMessages.length > 0) {
+          console.log('Errores:', result.errorMessages)
+        }
+        await fetchSupports(q, currentPage)
+        setOpenImport(false)
       } else {
-        toast.error('Error en la importación')
+        toast.error(`Error: ${result.error}`)
       }
     } catch (error) {
-      toast.error('Error en la importación')
+      console.error('Error al importar:', error)
+      toast.error('Error al importar el archivo')
+    } finally {
+      setImportLoading(false)
+      // Limpiar el input
+      event.target.value = ''
     }
-    
-    setOpenImport(false)
-    // Reset file input
-    e.target.value = ''
   }
+
 
   return (
     <Sidebar>
@@ -393,26 +401,6 @@ export default function SoportesPage() {
               </div>
               
               <div className="flex gap-2">
-                <Dialog open={openImport} onOpenChange={setOpenImport}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <Upload className="w-4 h-4 mr-2" />
-                      Importar CSV
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Importar soportes (CSV)</DialogTitle>
-                      <DialogDescription>
-                        Columnas: code,title,type,widthM,heightM,city,country,priceMonth,status,owner,impactosDiarios,googleMapsLink
-                        <br/>
-                        <a href="/api/soportes/import/template" className="underline">Descargar plantilla</a>
-                      </DialogDescription>
-                    </DialogHeader>
-                    <input type="file" accept=".csv,text/csv" onChange={handleCsv} />
-                  </DialogContent>
-                </Dialog>
-                
                 <Button
                   variant="outline"
                   onClick={exportPDF}
@@ -421,6 +409,32 @@ export default function SoportesPage() {
                   <Download className="w-4 h-4 mr-2" />
                   Catálogo PDF
                 </Button>
+                
+                <Dialog open={openImport} onOpenChange={setOpenImport}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Importar CSV
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Importar soportes (CSV)</DialogTitle>
+                      <DialogDescription>
+                        Columnas: Ciudad, Disponibilidad, Titulo, Precio por mes, Codigo, Ancho, Alto, Impactos dia, Ubicación, Tipo
+                        <br/>
+                        <a href="/api/soportes/import/template" className="underline">Descargar plantilla</a>
+                      </DialogDescription>
+                    </DialogHeader>
+                    <input 
+                      type="file" 
+                      accept=".csv,text/csv" 
+                      onChange={handleCsvImport}
+                      disabled={importLoading}
+                    />
+                    {importLoading && <p>Importando...</p>}
+                  </DialogContent>
+                </Dialog>
                 
                 <Link href="/panel/soportes/nuevo">
                   <Button className="bg-[#D54644] hover:bg-[#B03A38]">
@@ -443,7 +457,7 @@ export default function SoportesPage() {
           </CardHeader>
           <CardContent>
             {/* Barra de acciones masivas */}
-            {someSelected && (
+            {(someSelected || allSelected) && (
               <div className="mb-3 rounded-xl border bg-white p-3 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">
@@ -578,14 +592,6 @@ export default function SoportesPage() {
                   </TooltipProvider>
 
                   <div className="flex-1" />
-                  <Button variant="outline" onClick={syncWithSupabase}>
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Sincronizar Web
-                  </Button>
-                  <Button variant="outline" onClick={exportPDF} disabled={!someSelected}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Catálogo PDF
-                  </Button>
                   <Button variant="outline" onClick={bulkDuplicate} disabled={!someSelected}>
                     <Copy className="w-4 h-4 mr-2" />
                     Duplicar

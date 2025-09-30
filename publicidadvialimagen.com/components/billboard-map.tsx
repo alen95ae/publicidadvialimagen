@@ -18,12 +18,15 @@ const DynamicMap = dynamic(
 )
 
 interface BillboardLocation {
-  id: number
+  id: string | number
   name: string
   location: string
   city: string
   monthlyPrice: number
-  coordinates: [number, number] // [lat, lng]
+  coordinates?: {
+    lat: number
+    lng: number
+  } | [number, number] // Soportar ambos formatos
 }
 
 interface BillboardMapProps {

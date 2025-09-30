@@ -1,86 +1,61 @@
-import { PrismaClient } from "@prisma/client"
 import { NextResponse } from "next/server"
-
-const prisma = new PrismaClient()
+import { supabaseServer } from "@/lib/supabaseServer"
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get("q") || ""
-    const relation = searchParams.get("relation")
-    const city = searchParams.get("city")
-    const country = searchParams.get("country")
-    const owner = searchParams.get("owner")
-    const favorite = searchParams.get("favorite")
+    const tipo = searchParams.get("tipo")
+    const ciudad = searchParams.get("ciudad")
+    const pais = searchParams.get("pais")
+    const estado = searchParams.get("estado")
     const page = parseInt(searchParams.get("page") || "1")
     const pageSize = parseInt(searchParams.get("pageSize") || "50")
+    const skip = (page - 1) * pageSize
 
-    // Construir filtros
-    const where: any = {
-      isActive: true
+    // Construir query base
+    let query = supabaseServer
+      .from('clientes')
+      .select('*', { count: 'exact' })
+
+    // Filtros
+    if (estado) {
+      query = query.eq('estado', estado)
+    } else {
+      query = query.eq('estado', 'activo')
+    }
+
+    if (tipo) {
+      query = query.eq('tipo_cliente', tipo)
+    }
+
+    if (ciudad) {
+      query = query.eq('ciudad', ciudad)
+    }
+
+    if (pais) {
+      query = query.eq('pais', pais)
     }
 
     // Búsqueda de texto
     if (q) {
-      where.OR = [
-        { displayName: { contains: q } },
-        { legalName: { contains: q } },
-        { taxId: { contains: q } },
-        { email: { contains: q } },
-        { city: { contains: q } },
-        { country: { contains: q } }
-      ]
+      query = query.or(`nombre_comercial.ilike.%${q}%,nombre_contacto.ilike.%${q}%,email.ilike.%${q}%,ciudad.ilike.%${q}%`)
     }
 
-    // Filtros específicos
-    if (relation) {
-      where.relation = relation
+    // Aplicar paginación y ordenamiento
+    const { data: contacts, error, count } = await query
+      .order('nombre_comercial', { ascending: true })
+      .range(skip, skip + pageSize - 1)
+
+    if (error) {
+      console.error('Error fetching clients from Supabase:', error)
+      return NextResponse.json({ error: 'Error obteniendo clientes' }, { status: 500 })
     }
 
-    if (city) {
-      where.city = city
-    }
-
-    if (country) {
-      where.country = country
-    }
-
-    if (owner) {
-      where.salesOwnerId = owner
-    }
-
-    if (favorite === "true") {
-      where.favorite = true
-    }
-
-    // Contar total
-    const total = await prisma.contact.count({ where })
-
-    // Obtener contactos con paginación
-    const contacts = await prisma.contact.findMany({
-      where,
-      include: {
-        salesOwner: {
-          select: { name: true, email: true }
-        },
-        tags: {
-          include: {
-            tag: {
-              select: { name: true, color: true }
-            }
-          }
-        }
-      },
-      orderBy: [
-        { favorite: "desc" },
-        { displayName: "asc" }
-      ],
-      skip: (page - 1) * pageSize,
-      take: pageSize
-    })
+    const total = count || 0
 
     return NextResponse.json({
-      items: contacts,
+      items: contacts || [],
       total,
       page,
       pageSize,
@@ -100,48 +75,37 @@ export async function POST(req: Request) {
     const data = await req.json()
     
     // Validación básica
-    if (!data.displayName) {
+    if (!data.nombre_comercial) {
       return NextResponse.json(
-        { error: "Nombre es requerido" },
+        { error: "Nombre comercial es requerido" },
         { status: 400 }
       )
     }
 
-    // Crear contacto
-    const contact = await prisma.contact.create({
-      data: {
-        kind: data.kind || "COMPANY",
-        relation: data.relation || "CUSTOMER",
-        displayName: data.displayName,
-        legalName: data.legalName,
-        taxId: data.taxId,
-        phone: data.phone,
+    // Crear cliente en Supabase
+    const { data: contact, error } = await supabaseServer
+      .from('clientes')
+      .insert([{
+        nombre_comercial: data.nombre_comercial,
+        nombre_contacto: data.nombre_contacto,
         email: data.email,
-        website: data.website,
-        address1: data.address1,
-        address2: data.address2,
-        city: data.city,
-        state: data.state,
-        postalCode: data.postalCode,
-        country: data.country,
-        salesOwnerId: data.salesOwnerId,
-        notes: data.notes,
-        favorite: data.favorite || false,
-        isActive: data.isActive !== false
-      },
-      include: {
-        salesOwner: {
-          select: { name: true, email: true }
-        },
-        tags: {
-          include: {
-            tag: {
-              select: { name: true, color: true }
-            }
-          }
-        }
-      }
-    })
+        telefono: data.telefono,
+        cif_nif: data.cif_nif,
+        direccion: data.direccion,
+        ciudad: data.ciudad,
+        codigo_postal: data.codigo_postal,
+        pais: data.pais || 'Bolivia',
+        tipo_cliente: data.tipo_cliente || 'empresa',
+        estado: data.estado || 'activo',
+        notas: data.notas
+      }])
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('Error creating client in Supabase:', error)
+      return NextResponse.json({ error: 'Error creando cliente' }, { status: 500 })
+    }
 
     return NextResponse.json(contact, { status: 201 })
   } catch (error) {

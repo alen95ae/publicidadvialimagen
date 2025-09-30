@@ -1,28 +1,18 @@
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import { supabaseServer } from "@/lib/supabaseServer"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const contact = await prisma.contact.findUnique({ 
-      where: { id },
-      include: {
-        salesOwner: {
-          select: { name: true, email: true }
-        },
-        tags: {
-          include: {
-            tag: {
-              select: { name: true, color: true }
-            }
-          }
-        }
-      }
-    })
+    const { data: contact, error } = await supabaseServer
+      .from('clientes')
+      .select('*')
+      .eq('id', id)
+      .single()
     
-    if (!contact) {
+    if (error || !contact) {
       return NextResponse.json(
-        { error: "Contacto no encontrado" },
+        { error: "Cliente no encontrado" },
         { status: 404 }
       )
     }
@@ -43,49 +33,38 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const data = await req.json()
     
     // Validación básica
-    if (!data.displayName) {
+    if (!data.nombre_comercial) {
       return NextResponse.json(
-        { error: "Nombre es requerido" },
+        { error: "Nombre comercial es requerido" },
         { status: 400 }
       )
     }
 
-    // Actualizar contacto
-    const contact = await prisma.contact.update({ 
-      where: { id }, 
-      data: {
-        kind: data.kind,
-        relation: data.relation,
-        displayName: data.displayName,
-        legalName: data.legalName,
-        taxId: data.taxId,
-        phone: data.phone,
+    // Actualizar cliente en Supabase
+    const { data: contact, error } = await supabaseServer
+      .from('clientes')
+      .update({
+        nombre_comercial: data.nombre_comercial,
+        nombre_contacto: data.nombre_contacto,
         email: data.email,
-        website: data.website,
-        address1: data.address1,
-        address2: data.address2,
-        city: data.city,
-        state: data.state,
-        postalCode: data.postalCode,
-        country: data.country,
-        salesOwnerId: data.salesOwnerId,
-        notes: data.notes,
-        favorite: data.favorite,
-        isActive: data.isActive
-      },
-      include: {
-        salesOwner: {
-          select: { name: true, email: true }
-        },
-        tags: {
-          include: {
-            tag: {
-              select: { name: true, color: true }
-            }
-          }
-        }
-      }
-    })
+        telefono: data.telefono,
+        cif_nif: data.cif_nif,
+        direccion: data.direccion,
+        ciudad: data.ciudad,
+        codigo_postal: data.codigo_postal,
+        pais: data.pais,
+        tipo_cliente: data.tipo_cliente,
+        estado: data.estado,
+        notas: data.notas
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+    
+    if (error) {
+      console.error('Error updating client in Supabase:', error)
+      return NextResponse.json({ error: 'Error actualizando cliente' }, { status: 500 })
+    }
     
     return NextResponse.json(contact)
   } catch (error) {
@@ -101,10 +80,15 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params
     // Soft delete - marcar como inactivo
-    await prisma.contact.update({
-      where: { id },
-      data: { isActive: false }
-    })
+    const { error } = await supabaseServer
+      .from('clientes')
+      .update({ estado: 'inactivo' })
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Error updating client status in Supabase:', error)
+      return NextResponse.json({ error: 'Error actualizando estado del cliente' }, { status: 500 })
+    }
     
     return NextResponse.json({ ok: true })
   } catch (error) {
@@ -121,23 +105,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params
     const data = await req.json()
     
-    // Actualización parcial (para favoritos, etc.)
-    const contact = await prisma.contact.update({ 
-      where: { id }, 
-      data,
-      include: {
-        salesOwner: {
-          select: { name: true, email: true }
-        },
-        tags: {
-          include: {
-            tag: {
-              select: { name: true, color: true }
-            }
-          }
-        }
-      }
-    })
+    // Actualización parcial
+    const { data: contact, error } = await supabaseServer
+      .from('clientes')
+      .update(data)
+      .eq('id', id)
+      .select('*')
+      .single()
+    
+    if (error) {
+      console.error('Error updating client in Supabase:', error)
+      return NextResponse.json({ error: 'Error actualizando cliente' }, { status: 500 })
+    }
     
     return NextResponse.json(contact)
   } catch (error) {

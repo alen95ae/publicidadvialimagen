@@ -396,6 +396,7 @@ export default function InventarioPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    console.log('Iniciando importación de CSV:', file.name, file.size)
     setImportLoading(true)
     try {
       const formData = new FormData()
@@ -406,21 +407,25 @@ export default function InventarioPage() {
         body: formData
       })
 
+      console.log('Respuesta del servidor:', response.status, response.statusText)
       const result = await response.json()
+      console.log('Resultado:', result)
       
       if (response.ok) {
         alert(`Importación completada: ${result.created} creados, ${result.updated} actualizados${result.errors > 0 ? `, ${result.errors} errores` : ''}`)
         if (result.errorMessages && result.errorMessages.length > 0) {
-          console.log('Errores:', result.errorMessages)
+          console.log('Errores detallados:', result.errorMessages)
+          alert(`Errores encontrados:\n${result.errorMessages.slice(0, 5).join('\n')}`)
         }
         await fetchItems(currentPage)
         setOpenImport(false)
       } else {
-        alert(`Error: ${result.error}`)
+        console.error('Error en la respuesta:', result)
+        alert(`Error: ${result.error || 'Error desconocido'}`)
       }
     } catch (error) {
       console.error('Error al importar:', error)
-      alert('Error al importar el archivo')
+      alert(`Error al importar el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
     } finally {
       setImportLoading(false)
       // Limpiar el input

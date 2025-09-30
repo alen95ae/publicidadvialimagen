@@ -1,112 +1,160 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { supabaseServer } from '@/lib/supabaseServer'
+import { ensureDefaultOwnerId, mapStatusToSupabase } from '../helpers'
+
+interface BulkRequest {
+  ids: string[]
+  action: 'delete' | 'update' | 'duplicate'
+  data?: any
+}
+
+const CODE_REGEX = /^([A-Z]+)-(\d+)$/
+
+async function fetchSupportsByIds(ids: string[]) {
+  const { data, error } = await supabaseServer
+    .from('soportes')
+    .select('*')
+    .in('id', ids)
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+async function generateNextCode(prefix: string, startNumber: number) {
+  let next = startNumber + 1
+  while (true) {
+    const candidate = `${prefix}-${next}`
+    const { data } = await supabaseServer
+      .from('soportes')
+      .select('codigo')
+      .eq('codigo', candidate)
+      .maybeSingle()
+
+    if (!data) return candidate
+    next += 1
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const { ids, action, data } = await req.json() as {
-      ids: string[], action: 'delete'|'update'|'duplicate', data?: any
-    }
-    
+    const { ids, action, data }: BulkRequest = await req.json()
+
     if (!Array.isArray(ids) || !ids.length) {
       return NextResponse.json({ error: 'Sin IDs' }, { status: 400 })
     }
 
     if (action === 'delete') {
-      await prisma.support.deleteMany({ where: { id: { in: ids } } })
+      const { error } = await supabaseServer
+        .from('soportes')
+        .delete()
+        .in('id', ids)
+
+      if (error) {
+        console.error('Error eliminando soportes:', error)
+        return NextResponse.json({ error: 'Error eliminando soportes' }, { status: 500 })
+      }
+
       return NextResponse.json({ ok: true, count: ids.length })
     }
 
     if (action === 'duplicate') {
-      const supports = await prisma.support.findMany({ where: { id: { in: ids } } })
-      const duplicated = []
-      
+      const supports = await fetchSupportsByIds(ids)
+      const ownerId = supports[0]?.dueno_casa_id || (await ensureDefaultOwnerId())
+      let duplicated = 0
+
       for (const support of supports) {
-        // Extraer prefijo y número del código original
-        const codeMatch = support.code.match(/^([A-Z]+)-(\d+)$/)
-        let newCode = support.code
-        
-        if (codeMatch) {
-          const prefix = codeMatch[1] // Ej: "LPZ"
-          const currentNumber = parseInt(codeMatch[2]) // Ej: 169
-          
-          // Buscar el siguiente número disponible
-          let nextNumber = currentNumber + 1
-          let codeExists = true
-          
-          while (codeExists) {
-            const testCode = `${prefix}-${nextNumber}`
-            const existingSupport = await prisma.support.findFirst({
-              where: { code: testCode }
-            })
-            
-            if (!existingSupport) {
-              newCode = testCode
-              codeExists = false
-            } else {
-              nextNumber++
-            }
+        try {
+          let newCode = `${support.codigo}-${Date.now().toString().slice(-4)}`
+          const match = support.codigo?.match(CODE_REGEX)
+          if (match) {
+            const [, prefix, num] = match
+            newCode = await generateNextCode(prefix, parseInt(num, 10))
           }
-        } else {
-          // Si el código no sigue el patrón esperado, usar timestamp como fallback
-          const timestamp = Date.now().toString().slice(-6)
-          newCode = `${support.code}-${timestamp}`
+
+          const insertPayload = {
+            codigo: newCode,
+            titulo: `${support.titulo} - copia`,
+            tipo: support.tipo,
+            ancho: support.ancho,
+            alto: support.alto,
+            ciudad: support.ciudad,
+            estado: 'disponible',
+            precio_mes: support.precio_mes,
+            impactos_diarios: support.impactos_diarios,
+            ubicacion_url: support.ubicacion_url,
+            foto_url: support.foto_url,
+            foto_url_2: support.foto_url_2,
+            foto_url_3: support.foto_url_3,
+            notas: support.notas,
+            dueno_casa_id: ownerId,
+          }
+
+          const { error } = await supabaseServer
+            .from('soportes')
+            .insert([insertPayload])
+
+          if (error) {
+            console.error(`Error duplicando ${support.codigo}:`, error)
+          } else {
+            duplicated += 1
+          }
+        } catch (dupError) {
+          console.error(`Error duplicando ${support.codigo}:`, dupError)
         }
-        
-        const duplicatedSupport = await prisma.support.create({
-          data: {
-            code: newCode,
-            title: `${support.title} - copia de`,
-            type: support.type,
-            widthM: support.widthM,
-            heightM: support.heightM,
-            city: support.city,
-            country: support.country,
-            priceMonth: support.priceMonth,
-            status: 'DISPONIBLE',
-            available: true,
-            owner: support.owner,
-            impactosDiarios: support.impactosDiarios,
-            googleMapsLink: support.googleMapsLink,
-            iluminacion: support.iluminacion,
-            images: support.images,
-            areaM2: support.areaM2,
-            pricePerM2: support.pricePerM2,
-            productionCost: support.productionCost
-          }
-        })
-        duplicated.push(duplicatedSupport)
       }
-      
-      return NextResponse.json({ ok: true, duplicated: duplicated.length })
+
+      return NextResponse.json({ ok: true, duplicated })
     }
 
     if (action === 'update') {
-      // Limpia campos no permitidos
-          // Cambio de código para un único ítem
-    if (data?.__codeSingle) {
-      if (ids.length !== 1) return NextResponse.json({ error: 'Código: seleccione solo 1 elemento' }, { status: 400 })
-      try {
-        await prisma.support.update({ where: { id: ids[0] }, data: { code: String(data.__codeSingle).trim() } })
-        return NextResponse.json({ ok: true, count: 1 })
-      } catch (e) {
-        return NextResponse.json({ error: 'Código duplicado o inválido' }, { status: 409 })
-      }
-    }
+      if (data?.__codeSingle) {
+        if (ids.length !== 1) {
+          return NextResponse.json({ error: 'Código: seleccione solo 1 elemento' }, { status: 400 })
+        }
 
-    const allowed = ['status','owner','type','title','priceMonth'] // 👈 añadidos: title, type
-    const patch: Record<string, any> = {}
-    for (const k of allowed) if (k in (data||{})) patch[k] = data[k]
-    
-    // Sincroniza available con status si llega
-    if ('status' in patch) {
-      patch.available = patch.status === 'DISPONIBLE'
-    }
-    
-    const res = await prisma.support.updateMany({
-      where: { id: { in: ids } },
-      data: patch
-    })
-    return NextResponse.json({ ok: true, count: res.count })
+        const newCode = String(data.__codeSingle).trim()
+        if (!newCode) {
+          return NextResponse.json({ error: 'Código inválido' }, { status: 400 })
+        }
+
+        const { error } = await supabaseServer
+          .from('soportes')
+          .update({ codigo: newCode })
+          .eq('id', ids[0])
+
+        if (error) {
+          return NextResponse.json({ error: 'Código duplicado o inválido' }, { status: 409 })
+        }
+
+        return NextResponse.json({ ok: true, count: 1 })
+      }
+
+      const patch: Record<string, any> = {}
+      if (data?.status) patch.estado = mapStatusToSupabase(data.status)
+      if (data?.type) patch.tipo = data.type
+      if (data?.title) patch.titulo = data.title
+      if (data?.priceMonth !== undefined) patch.precio_mes = Number(data.priceMonth) || 0
+
+      if (data?.owner) {
+        patch.Propietario = data.owner
+      }
+
+      if (!Object.keys(patch).length) {
+        return NextResponse.json({ error: 'Sin campos válidos para actualizar' }, { status: 400 })
+      }
+
+      const { error, count } = await supabaseServer
+        .from('soportes')
+        .update(patch)
+        .in('id', ids)
+        .select('id')
+
+      if (error) {
+        console.error('Error en actualización masiva:', error)
+        return NextResponse.json({ error: 'Error actualizando soportes' }, { status: 500 })
+      }
+
+      return NextResponse.json({ ok: true, count: count ?? ids.length })
     }
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 })

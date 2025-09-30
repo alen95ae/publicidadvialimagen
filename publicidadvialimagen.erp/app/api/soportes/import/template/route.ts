@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
 
 export async function GET() {
-  const csvContent = `Ciudad,Disponibilidad,Titulo,Precio_por_mes,Codigo,Ancho,Alto,Impactos_diarios,Ubicacion,Tipo
-Santa Cruz,Disponible,Valla Centro,1500,SCZ-001,20,15,2500,https://maps.google.com/maps?q=-17.7833,-63.1821&z=15,bipolar
-La Paz,Reservado,Pantalla Avenida,800,LPZ-002,5,3,1800,https://maps.google.com/maps?q=-16.5000,-68.1193&z=15,pantalla
-Cochabamba,Disponible,Mega Valla Industrial,1200,CBB-003,10,4,3200,https://maps.google.com/maps?q=-17.3895,-66.1568&z=15,mega valla`
+  // CSV con UTF-8 BOM para Excel
+  const csvContent = `\uFEFFCiudad,Disponibilidad,Titulo,Precio por mes,Codigo,Ancho,Alto,Impactos dia,Ubicación,Tipo
+La Paz,Disponible,Valla publicitaria centro comercial,2500.00,LP-001,6.0,3.0,15000,https://maps.app.goo.gl/abc123,valla
+Santa Cruz,Reservado,Pantalla digital plaza principal,4500.00,SC-002,4.0,2.5,25000,https://maps.app.goo.gl/def456,pantalla
+Cochabamba,Disponible,Tótem publicitario avenida principal,1800.00,CB-003,2.0,4.0,8000,https://maps.app.goo.gl/ghi789,totem`
 
   return new NextResponse(csvContent, {
     headers: {
-      'Content-Type': 'text/csv',
+      'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="plantilla-soportes.csv"'
     }
   })

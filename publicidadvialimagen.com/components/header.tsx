@@ -33,7 +33,7 @@ export default function Header() {
               Vallas Publicitarias
             </Link>
             <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
-              Impresión
+              Impresión Digital
             </Link>
             <Link href="/about" className="text-sm font-medium transition-colors hover:text-primary">
               Nosotros
@@ -102,7 +102,7 @@ export default function Header() {
               Vallas Publicitarias
             </Link>
             <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
-              Impresión
+              Impresión Digital
             </Link>
             <Link href="/about" className="text-sm font-medium transition-colors hover:text-primary">
               Nosotros

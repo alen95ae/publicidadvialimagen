@@ -1,15 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
+import dynamic from "next/dynamic"
 import { MapPin, Phone, Mail, Clock } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
+
+// Dynamic OSM map (Leaflet) to avoid SSR issues
+const SimpleMap = dynamic(() => import("@/components/simple-map"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center">
+      <p className="text-muted-foreground">Cargando mapa...</p>
+    </div>
+  ),
+})
 
 export default function ContactPage() {
   const [formSubmitted, setFormSubmitted] = useState(false)
@@ -22,165 +31,85 @@ export default function ContactPage() {
 
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Contact Us</h1>
-        <div className="flex items-center text-sm text-muted-foreground">
-          <Link href="/" className="hover:text-primary">
-            Home
-          </Link>
-          <span className="mx-2">/</span>
-          <span>Contact</span>
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-3xl font-bold tracking-tight mb-4 md:text-4xl">Contacto</h1>
+          <p className="text-muted-foreground md:text-lg">
+            ¿Tienes alguna pregunta? Nos encantaría escucharte. Envíanos un mensaje y te responderemos lo antes posible.
+          </p>
         </div>
-      </div>
 
-      <div className="grid md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-          <Card>
-            <CardContent className="p-6">
-              <h2 className="text-2xl font-semibold mb-6">Get in Touch</h2>
+        {/* Formulario de Contacto Completo */}
+        <div className="mb-12">
+          <Card className="shadow-lg">
+            <CardContent className="p-8">
+              <h2 className="text-2xl font-semibold mb-6 text-center">Envíanos un Mensaje</h2>
 
               {formSubmitted ? (
                 <div className="bg-primary/10 text-primary p-4 rounded-lg mb-6">
-                  <h3 className="font-semibold text-lg mb-2">Thank You!</h3>
-                  <p>Your message has been sent successfully. We'll get back to you as soon as possible.</p>
+                  <h3 className="font-semibold text-lg mb-2">¡Gracias!</h3>
+                  <p>Tu mensaje ha sido enviado exitosamente. Te responderemos lo antes posible.</p>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="first-name">First Name</Label>
-                      <Input id="first-name" placeholder="John" required />
+                      <Label htmlFor="name">Nombre</Label>
+                      <Input id="name" placeholder="Tu nombre" required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="last-name">Last Name</Label>
-                      <Input id="last-name" placeholder="Doe" required />
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" type="email" placeholder="tu@email.com" required />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Teléfono</Label>
+                      <Input id="phone" type="tel" placeholder="Tu teléfono" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company">Empresa</Label>
+                      <Input id="company" placeholder="Tu empresa" />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="john.doe@example.com" required />
+                    <Label htmlFor="subject">Asunto</Label>
+                    <Input id="subject" placeholder="¿En qué podemos ayudarte?" required />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (Optional)</Label>
-                    <Input id="phone" type="tel" placeholder="(123) 456-7890" />
+                    <Label htmlFor="message">Mensaje</Label>
+                    <Textarea 
+                      id="message" 
+                      placeholder="Cuéntanos más detalles sobre tu proyecto o consulta..." 
+                      className="min-h-[150px]" 
+                      required 
+                    />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
-                    <Select>
-                      <SelectTrigger id="subject">
-                        <SelectValue placeholder="Select a subject" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="general">General Inquiry</SelectItem>
-                        <SelectItem value="order">Order Status</SelectItem>
-                        <SelectItem value="return">Returns & Refunds</SelectItem>
-                        <SelectItem value="product">Product Information</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="text-center">
+                    <Button type="submit" className="w-full sm:w-auto px-8">
+                      Enviar Mensaje
+                    </Button>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="message">Message</Label>
-                    <Textarea id="message" placeholder="How can we help you?" className="min-h-[150px]" required />
-                  </div>
-
-                  <Button type="submit" className="w-full sm:w-auto">
-                    Send Message
-                  </Button>
                 </form>
               )}
             </CardContent>
           </Card>
         </div>
 
-        <div>
-          <Card>
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-6">Contact Information</h2>
-
-              <div className="space-y-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <MapPin className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium">Address</h3>
-                    <address className="not-italic text-muted-foreground">
-                      123 Pet Street
-                      <br />
-                      Dogville, NY 10001
-                      <br />
-                      United States
-                    </address>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <Phone className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium">Phone</h3>
-                    <p className="text-muted-foreground">
-                      <a href="tel:+11234567890" className="hover:text-primary">
-                        +1 (123) 456-7890
-                      </a>
-                    </p>
-                    <p className="text-muted-foreground">
-                      <a href="tel:+18005551234" className="hover:text-primary">
-                        +1 (800) 555-1234
-                      </a>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <Mail className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium">Email</h3>
-                    <p className="text-muted-foreground">
-                      <a href="mailto:info@petdo.com" className="hover:text-primary">
-                        info@petdo.com
-                      </a>
-                    </p>
-                    <p className="text-muted-foreground">
-                      <a href="mailto:support@petdo.com" className="hover:text-primary">
-                        support@petdo.com
-                      </a>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <Clock className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium">Business Hours</h3>
-                    <p className="text-muted-foreground">Monday - Friday: 9am - 6pm</p>
-                    <p className="text-muted-foreground">Saturday: 10am - 4pm</p>
-                    <p className="text-muted-foreground">Sunday: Closed</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="mt-6">
-            <Card>
-              <CardContent className="p-6">
-                <h2 className="text-xl font-semibold mb-4">Follow Us</h2>
-                <div className="flex gap-4">
-                  <a
-                    href="#"
-                    className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-                  >
+        {/* Redes Sociales */}
+        <div className="mb-12">
+          <Card className="shadow-lg">
+            <CardContent className="p-8">
+              <h2 className="text-xl font-semibold mb-6 text-center">Síguenos en Redes Sociales</h2>
+              
+              <div className="flex justify-center gap-8">
+                {/* LinkedIn */}
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
@@ -191,90 +120,264 @@ export default function ContactPage() {
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="h-5 w-5"
-                    >
-                      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
-                    </svg>
-                    <span className="sr-only">Facebook</span>
-                  </a>
-                  <a
-                    href="#"
-                    className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-5 w-5"
-                    >
-                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                    </svg>
-                    <span className="sr-only">Instagram</span>
-                  </a>
-                  <a
-                    href="#"
-                    className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-5 w-5"
-                    >
-                      <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"></path>
-                    </svg>
-                    <span className="sr-only">Twitter</span>
-                  </a>
-                  <a
-                    href="#"
-                    className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-5 w-5"
+                      className="h-6 w-6"
                     >
                       <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
                       <rect x="2" y="9" width="4" height="12"></rect>
                       <circle cx="4" cy="4" r="2"></circle>
                     </svg>
-                    <span className="sr-only">LinkedIn</span>
-                  </a>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">LinkedIn</h3>
+                    <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
+                  </div>
+                </div>
+
+                {/* Facebook */}
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-6 w-6"
+                    >
+                      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Facebook</h3>
+                    <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
+                  </div>
+                </div>
+
+                {/* Instagram */}
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-6 w-6"
+                    >
+                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Instagram</h3>
+                    <p className="text-muted-foreground text-sm">@imagenpublicidadbolivia</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Título Sucursales */}
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Sucursales</h2>
+        </div>
+
+        {/* Fichas de Sucursales */}
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* La Paz */}
+          <div className="space-y-6">
+            <Card className="shadow-lg">
+              <CardContent className="p-8">
+                <h3 className="text-xl font-semibold mb-6 text-center">La Paz</h3>
+                
+                {/* Imagen de La Paz */}
+                <div className="flex justify-center mb-6">
+                  <div className="w-64 h-64 rounded-lg overflow-hidden shadow-lg">
+                    <img 
+                      src="/sucursal_la_paz_imagen.png" 
+                      alt="Sucursal La Paz" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <MapPin className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Ubicación</h4>
+                      <address className="not-italic text-muted-foreground">
+                        C. Nicolás Acosta Esq. Pedro Blanco<br />
+                        (Alto San Pedro) N° 1471<br />
+                        La Paz, Bolivia
+                      </address>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <Phone className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Teléfonos</h4>
+                      <p className="text-muted-foreground">
+                        <a href="tel:+59122493155" className="hover:text-primary">
+                          (591-2) 2493155 – 2493156
+                        </a>
+                      </p>
+                      <p className="text-muted-foreground">
+                        <a href="tel:+59176244800" className="hover:text-primary">
+                          76244800 – 77229109
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <Mail className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Email</h4>
+                      <p className="text-muted-foreground">
+                        <a href="mailto:contactos@publicidadvialimagen.com" className="hover:text-primary">
+                          contactos@publicidadvialimagen.com
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <Clock className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Horarios</h4>
+                      <p className="text-muted-foreground">Lunes - Viernes: 8:30am - 6:30pm</p>
+                      <p className="text-muted-foreground">Sábados: 9:30am - 1:00pm</p>
+                      <p className="text-muted-foreground">Domingos: Cerrado</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
+
+          {/* Santa Cruz */}
+          <div className="space-y-6">
+            <Card className="shadow-lg">
+              <CardContent className="p-8">
+                <h3 className="text-xl font-semibold mb-6 text-center">Santa Cruz</h3>
+                
+                {/* Imagen de Santa Cruz */}
+                <div className="flex justify-center mb-6">
+                  <div className="w-64 h-64 rounded-lg overflow-hidden shadow-lg">
+                    <img 
+                      src="/sucursal_santa_cruz_imagen.png" 
+                      alt="Sucursal Santa Cruz" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <MapPin className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Ubicación</h4>
+                      <address className="not-italic text-muted-foreground">
+                        Avenida 2 de Agosto, Calle 6<br />
+                        (Entre 4 y 5 Anillo) N° 27<br />
+                        Santa Cruz, Bolivia
+                      </address>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <Phone className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Teléfonos</h4>
+                      <p className="text-muted-foreground">
+                        <a href="tel:+59133494677" className="hover:text-primary">
+                          (591-3) 3494677
+                        </a>
+                      </p>
+                      <p className="text-muted-foreground">
+                        <a href="tel:+59176244800" className="hover:text-primary">
+                          76244800 - 78988344
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <Mail className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Email</h4>
+                      <p className="text-muted-foreground">
+                        <a href="mailto:comercial@publicidadvialimagen.com" className="hover:text-primary">
+                          comercial@publicidadvialimagen.com
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                      <Clock className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Horarios</h4>
+                      <p className="text-muted-foreground">Lunes - Viernes: 8:30am - 5:15pm</p>
+                      <p className="text-muted-foreground">Sábados y Domingos: Cerrado</p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
-      </div>
 
-      {/* Map Section */}
-      <div className="mt-12">
-        <h2 className="text-2xl font-semibold mb-6">Find Us</h2>
-        <div className="h-[400px] bg-muted rounded-lg overflow-hidden relative">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-muted-foreground">Map would be displayed here</p>
-          </div>
+        {/* Mapas de Sucursales (OpenStreetMap) */}
+        <div className="grid md:grid-cols-2 gap-8 mt-8">
+          {/* Mapa de La Paz */}
+          <SimpleMap
+            center={[-16.506308, -68.139439]}
+            heightClassName="h-96"
+            markerTitle="La Paz"
+            markerSubtitle="Publicidad Vial Imagen"
+            markerLinkUrl="https://maps.app.goo.gl/joMzm79QcDd1Tp5VA"
+            markerLinkLabel="Abrir en Google Maps"
+          />
+
+          {/* Mapa de Santa Cruz */}
+          <SimpleMap
+            center={[-17.751314, -63.153452]}
+            heightClassName="h-96"
+            markerTitle="Santa Cruz"
+            markerSubtitle="Publicidad Vial Imagen"
+            markerLinkUrl="https://maps.app.goo.gl/nX8e3qsa2E3rfXQA6"
+            markerLinkLabel="Abrir en Google Maps"
+          />
         </div>
       </div>
     </div>

@@ -18,7 +18,7 @@ import InteractiveMap from "@/components/interactive-map"
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [
-  'bipolar', 'caminera', 'mega valla', 'mural', 'pantalla', 'pasacalles', 'unipolar', 'tripular'
+  'Vallas Publicitarias', 'Pantallas LED', 'Murales', 'Publicidad Móvil'
 ] as const
 
 const STATUS_META = {
@@ -47,7 +47,7 @@ export default function NuevoSoportePage() {
     longitude: -68.1500 as number | null,
     address: "",
     city: "",
-    country: "",
+    country: "BO",
     impactosDiarios: "",
     priceMonth: "",
     available: true
@@ -411,7 +411,7 @@ export default function NuevoSoportePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="type">Tipo *</Label>
+                  <Label htmlFor="type">Tipo de soporte *</Label>
                   <Select value={formData.type} onValueChange={(value) => handleChange("type", value)}>
                     <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
                       <SelectValue placeholder="Selecciona el tipo" />
@@ -548,7 +548,7 @@ export default function NuevoSoportePage() {
                       id="country"
                       value={formData.country}
                       onChange={(e) => handleChange("country", e.target.value)}
-                      placeholder="ES"
+                      placeholder="BO"
                     />
                   </div>
                 </div>

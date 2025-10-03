@@ -21,7 +21,7 @@ import InteractiveMap from "@/components/interactive-map"
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [
-  'bipolar', 'caminera', 'mega valla', 'mural', 'pantalla', 'pasacalles', 'unipolar', 'tripular'
+  'Vallas Publicitarias', 'Pantallas LED', 'Murales', 'Publicidad Móvil'
 ] as const
 
 const STATUS_META = {
@@ -108,6 +108,8 @@ export default function SoporteDetailPage() {
       const response = await fetch(`/api/soportes/${id}`)
       if (response.ok) {
         const data = await response.json()
+        console.log('📥 Soporte recibido del API:', data)
+        console.log('🖼️ Imágenes en el soporte:', data.images)
         setSupport(data)
         // Generar Google Maps link si hay coordenadas pero no link
         let googleMapsLink = data.googleMapsLink || ""
@@ -266,7 +268,7 @@ export default function SoporteDetailPage() {
   }
 
 
-  const handleChange = (field: string, value: string | boolean) => {
+  const handleChange = (field: string, value: string | boolean | string[] | null) => {
     console.log(`handleChange called: ${field} = ${value}`)
     
     setFormData(prev => {
@@ -639,7 +641,7 @@ export default function SoporteDetailPage() {
                       <p className="font-mono font-medium">{support.code}</p>
                     </div>
                     <div>
-                      <Label className="text-sm font-medium text-gray-700">Tipo</Label>
+                      <Label className="text-sm font-medium text-gray-700">Tipo de soporte</Label>
                       <Badge variant="secondary">{support.type}</Badge>
                     </div>
                   </div>
@@ -662,16 +664,31 @@ export default function SoporteDetailPage() {
                     </div>
                   )}
 
-                  {support.images && support.images.length > 0 && (
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Imágenes</Label>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Imágenes</Label>
+                    {support.images && support.images.length > 0 ? (
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         {support.images.map((image, index) => (
-                          <img key={index} src={image} alt={`Imagen ${index + 1}`} className="h-32 w-48 object-cover rounded-md border" />
+                          <div key={index} className="relative">
+                            <img 
+                              src={image} 
+                              alt={`Imagen ${index + 1}`} 
+                              className="h-32 w-full object-cover rounded-md border"
+                              onError={(e) => {
+                                console.error(`❌ Error cargando imagen ${index + 1}:`, image)
+                                e.currentTarget.style.display = 'none'
+                              }}
+                              onLoad={() => {
+                                console.log(`✅ Imagen ${index + 1} cargada correctamente:`, image)
+                              }}
+                            />
+                          </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-sm text-gray-500 mt-1">Sin imágenes</p>
+                    )}
+                  </div>
                 </>
               )}
             </CardContent>
@@ -687,7 +704,7 @@ export default function SoporteDetailPage() {
               {editing ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="type">Tipo *</Label>
+                    <Label htmlFor="type">Tipo de soporte *</Label>
                     <Select value={formData.type} onValueChange={(value) => handleChange("type", value)}>
                       <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
                         <SelectValue placeholder="Selecciona el tipo" />
@@ -749,41 +766,6 @@ export default function SoporteDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
-
-
-                  <div className="space-y-2">
-                    <Label htmlFor="images">Imágenes del soporte (máximo 5, 5MB cada una)</Label>
-                    <div className="space-y-3">
-                      {formData.images.map((image, index) => (
-                        <div key={index} className="flex items-center gap-3">
-                          <img src={image} alt={`preview ${index + 1}`} className="h-24 w-40 object-cover rounded-md border" />
-                          <Button variant="outline" onClick={() => {
-                            const newImages = formData.images.filter((_, i) => i !== index)
-                            handleChange("images", newImages)
-                          }}>Quitar</Button>
-                        </div>
-                      ))}
-                      {formData.images.length < 5 && (
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0]
-                            if (!f) return
-                            if (f.size > 5 * 1024 * 1024) {
-                              toast.error("La imagen no puede superar los 5MB")
-                              return
-                            }
-                            const fd = new FormData()
-                            fd.set('file', f)
-                            const r = await fetch('/api/uploads', { method: 'POST', body: fd })
-                            const { url } = await r.json()
-                            handleChange("images", [...formData.images, url])
-                          }} 
-                        />
-                      )}
-                    </div>
-                  </div>
                 </>
               ) : (
                 <>
@@ -827,7 +809,7 @@ export default function SoporteDetailPage() {
               {editing ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="address">Dirección</Label>
+                    <Label htmlFor="address">Descripción</Label>
                     <Textarea
                       id="address"
                       value={formData.address}
@@ -885,7 +867,7 @@ export default function SoporteDetailPage() {
               ) : (
                 <>
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Dirección</Label>
+                    <Label className="text-sm font-medium text-gray-700">Descripción</Label>
                     <p>{support.address || "No especificada"}</p>
                   </div>
                   
@@ -963,7 +945,7 @@ export default function SoporteDetailPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="priceMonth">Precio por Mes (€)</Label>
+                    <Label htmlFor="priceMonth">Precio por Mes (Bs)</Label>
                     <Input
                       id="priceMonth"
                       type="number"
@@ -971,6 +953,40 @@ export default function SoporteDetailPage() {
                       value={formData.priceMonth}
                       onChange={(e) => handleChange("priceMonth", e.target.value)}
                     />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="images">Imágenes del soporte (máximo 3, 5MB cada una)</Label>
+                    <div className="space-y-3">
+                      {formData.images.map((image, index) => (
+                        <div key={index} className="flex items-center gap-3">
+                          <img src={image} alt={`preview ${index + 1}`} className="h-24 w-40 object-cover rounded-md border" />
+                          <Button variant="outline" onClick={() => {
+                            const newImages = formData.images.filter((_, i) => i !== index)
+                            handleChange("images", newImages)
+                          }}>Quitar</Button>
+                        </div>
+                      ))}
+                      {formData.images.length < 3 && (
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0]
+                            if (!f) return
+                            if (f.size > 5 * 1024 * 1024) {
+                              toast.error("La imagen no puede superar los 5MB")
+                              return
+                            }
+                            const fd = new FormData()
+                            fd.set('file', f)
+                            const r = await fetch('/api/uploads', { method: 'POST', body: fd })
+                            const { url } = await r.json()
+                            handleChange("images", [...formData.images, url])
+                          }} 
+                        />
+                      )}
+                    </div>
                   </div>
                 </>
               ) : (

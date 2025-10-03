@@ -1,131 +1,63 @@
 import { NextResponse } from "next/server"
-import { supabaseServer } from "@/lib/supabaseServer"
-import { buildSupabasePayload, ensureDefaultOwnerId, supabaseRowToSupport } from "./helpers"
+import { airtable } from "@/lib/airtable"
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url)
-    const q = searchParams.get("q") || ""
-    const statuses = (searchParams.get('status') || '')
-      .split(',').map(s => s.trim()).filter(Boolean)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '25')
-    const skip = (page - 1) * limit
+    const records = await airtable("Soportes").select({}).all()
     
-    const statusFilters = statuses.map(status => status.toLowerCase())
-
-    let query = supabaseServer
-      .from('soportes')
-      .select('*', { count: 'exact' })
-
-    if (statusFilters.length) {
-      query = query.in('Disponibilidad', statusFilters)
+    // Debug: ver qué campos están llegando de Airtable
+    console.log("Records from Airtable:", records.length)
+    if (records.length > 0) {
+      console.log("First record fields:", records[0].fields)
+      console.log("Available field names:", Object.keys(records[0].fields))
     }
 
-    if (q) {
-      const like = `%${q}%`
-      query = query.or(`Codigo.ilike.${like},nombre.ilike.${like},Tipo.ilike.${like},Ciudad.ilike.${like}`)
-    }
+    const data = records.map((r) => ({
+      id: r.id,
+      code: r.fields["Código"] || "",
+      title: r.fields["Título"] || "",
+      type: r.fields["Tipo de soporte"] || "Vallas Publicitarias",
+      status: (r.fields["Estado"] || "DISPONIBLE").toUpperCase(), // Convertir a mayúsculas para coincidir con STATUS_META
+      widthM: r.fields["Ancho"] || 0,
+      heightM: r.fields["Alto"] || 0,
+      city: r.fields["Ciudad"] || "",
+      priceMonth: r.fields["Precio por mes"] || 0,
+      impactosDiarios: r.fields["Impactos diarios"] || 0,
+      googleMapsLink: r.fields["Enlace Google Maps"] || "",
+      address: r.fields["Dirección / Notas"] || "",
+      owner: r.fields["Propietario"] || "",
+      available: (r.fields["Estado"] || "").toUpperCase() === "DISPONIBLE",
+      createdAt: r.createdTime,
+      updatedAt: r.fields["Última actualización"] || r.createdTime
+    }))
 
-    const { data, error, count } = await query
-      .order('updated_at', { ascending: false })
-      .range(skip, skip + limit - 1)
-
-    if (error) {
-      console.error('Error fetching supports from Supabase:', error)
-      return NextResponse.json({ error: 'Error obteniendo soportes' }, { status: 500 })
-    }
-
-    const total = count || 0
-    const totalPages = Math.ceil(total / limit)
-    const hasNext = page < totalPages
-    const hasPrev = page > 1
-
-    const supports = (data || []).map(supabaseRowToSupport)
-
-    return NextResponse.json({
-      data: supports,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasNext,
-        hasPrev,
-      }
-    })
-  } catch (error) {
-    console.error("Error fetching supports:", error)
-    return NextResponse.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    )
+    return NextResponse.json({ data })
+  } catch (e: any) {
+    console.error("Error leyendo soportes de Airtable:", e)
+    return NextResponse.json({ error: "No se pudieron obtener los soportes" }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const data = await req.json()
-
-    // Validación básica
-    if (!data.code || !data.title) {
-      return NextResponse.json(
-        { error: "Código y título son requeridos" },
-        { status: 400 }
-      )
+    const body = await req.json()
+    
+    if (!body.code || !body.title) {
+      return NextResponse.json({ error: "Código y título son requeridos" }, { status: 400 })
     }
+    
+    // Construir payload con los nombres correctos de Airtable
+    const payload = buildPayload(body)
+    
+    // Crear nuevo soporte en Airtable
+    const record = await airtable("Soportes").create([{ fields: payload }])
 
-    // Verificar si ya existe un soporte con el mismo código
-    const { data: existing, error: existingError } = await supabaseServer
-      .from('soportes')
-      .select('*')
-      .eq('Codigo', data.code)
-      .maybeSingle()
-
-    if (existingError) {
-      console.error('Error checking existing support:', existingError)
-      return NextResponse.json({ error: 'Error verificando soporte existente' }, { status: 500 })
-    }
-
-    const payload = buildSupabasePayload(data)
-
-    let result
-    if (existing) {
-      // Actualizar soporte existente
-      const { data: updated, error: updateError } = await supabaseServer
-        .from('soportes')
-        .update(payload)
-        .eq('id', existing.id)
-        .select('*')
-        .single()
-
-      if (updateError) {
-        console.error('Error updating support in Supabase:', updateError)
-        return NextResponse.json({ error: 'Error actualizando soporte' }, { status: 500 })
-      }
-      result = updated
-    } else {
-      // Crear nuevo soporte
-      const { data: inserted, error: insertError } = await supabaseServer
-        .from('soportes')
-        .insert([payload])
-        .select('*')
-        .single()
-
-      if (insertError) {
-        console.error('Error creating support in Supabase:', insertError)
-        return NextResponse.json({ error: 'Error creando soporte' }, { status: 500 })
-      }
-      result = inserted
-    }
-
-    const support = supabaseRowToSupport(result)
-    return NextResponse.json(support, { status: 201 })
-  } catch (error) {
-    console.error("Error creating support:", error)
-    return NextResponse.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    )
+    return NextResponse.json(rowToSupport({ 
+      id: record[0].id,
+      ...record[0].fields 
+    }), { status: 201 })
+  } catch (e: any) {
+    console.error("Error creando soporte en Airtable:", e)
+    return NextResponse.json({ error: "No se pudo crear el soporte" }, { status: 500 })
   }
 }

@@ -29,7 +29,7 @@ const STATUS_META = {
 } as const
 
 // Opciones de tipo
-const TYPE_OPTIONS = ['valla','pantalla','totem','parada de bus','mural','pasacalles'] as const
+const TYPE_OPTIONS = ['Vallas Publicitarias','Pantallas LED','Murales','Publicidad Móvil'] as const
 
 interface Support {
   id: string
@@ -135,8 +135,8 @@ export default function SoportesPage() {
   const formatPrice = (price: number | null) => {
     if (!price) return "N/A"
     return new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: "EUR"
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(price)
   }
 
@@ -546,7 +546,7 @@ export default function SoportesPage() {
                     </PopoverTrigger>
                     <PopoverContent className="w-64">
                       <div className="space-y-2">
-                        <Label>Tipo</Label>
+                        <Label>Tipo de soporte</Label>
                         <select
                           className="w-full rounded-md border border-gray-200 bg-white p-2 text-sm"
                           value={typeDraft ?? ''}
@@ -624,9 +624,9 @@ export default function SoportesPage() {
                     </TableHead>
                     <TableHead>Código</TableHead>
                     <TableHead>Título</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead>Tipo de soporte</TableHead>
                     <TableHead>Ubicación</TableHead>
-                    <TableHead>Dimensiones</TableHead>
+                    <TableHead>Dimensiones (m)</TableHead>
                     <TableHead>Precio/Mes</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Propietario</TableHead>
@@ -674,19 +674,15 @@ export default function SoportesPage() {
                       <TableCell>
                         <div className="text-sm">
                           {support.widthM && support.heightM ? (
-                            <span>{support.widthM}m × {support.heightM}m</span>
+                            <span>{support.widthM} × {support.heightM}</span>
                           ) : (
                             <span className="text-gray-500">N/A</span>
-                          )}
-                          {support.areaM2 && (
-                            <div className="text-xs text-gray-600">{support.areaM2} m²</div>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Euro className="w-3 h-3" />
-                          {formatPrice(support.priceMonth)}
+                          {formatPrice(support.priceMonth)} Bs
                         </div>
                       </TableCell>
                       <TableCell>

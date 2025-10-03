@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Ruler, Clock, Shield, Filter, X } from "lucide-react"
+import { Ruler, Clock, Shield, Filter, X, Construction, Home } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -14,6 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card, CardContent } from "@/components/ui/card"
+
+// Cambiar a false para mostrar la página normal
+const MAINTENANCE_MODE = true
 
 export default function PrintShopPage() {
   const [priceRange, setPriceRange] = useState([0, 100])
@@ -327,6 +330,89 @@ export default function PrintShopPage() {
     return true
   })
 
+  // Página de mantenimiento
+  if (MAINTENANCE_MODE) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="container px-4 py-12 md:px-6">
+          <div className="max-w-3xl mx-auto text-center space-y-8">
+            {/* Icono de construcción */}
+            <div className="flex justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full"></div>
+                <div className="relative bg-primary/10 p-8 rounded-full">
+                  <Construction className="h-24 w-24 text-primary animate-pulse" strokeWidth={1.5} />
+                </div>
+              </div>
+            </div>
+
+            {/* Contenido */}
+            <div className="space-y-4">
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+                Próximamente
+              </h1>
+              <p className="text-xl md:text-2xl text-muted-foreground font-medium">
+                Página en Construcción
+              </p>
+              <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+                Estamos trabajando para traerte nuestros servicios de impresión digital. 
+                Muy pronto podrás disfrutar de materiales de alta calidad para tus proyectos publicitarios.
+              </p>
+            </div>
+
+            {/* Características que vendrán */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
+              <Card className="border-primary/20">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center space-y-2">
+                    <Ruler className="h-8 w-8 text-primary" />
+                    <h3 className="font-semibold">Cálculo por m²</h3>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Precios transparentes calculados exactamente
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-primary/20">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center space-y-2">
+                    <Shield className="h-8 w-8 text-primary" />
+                    <h3 className="font-semibold">Alta Calidad</h3>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Materiales profesionales y duraderos
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-primary/20">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center space-y-2">
+                    <Clock className="h-8 w-8 text-primary" />
+                    <h3 className="font-semibold">Entrega Rápida</h3>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Tiempos de producción optimizados
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Botón de regreso */}
+            <div className="pt-8">
+              <Button asChild size="lg" className="gap-2">
+                <Link href="/">
+                  <Home className="h-5 w-5" />
+                  Volver al Inicio
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Página normal de impresión
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">

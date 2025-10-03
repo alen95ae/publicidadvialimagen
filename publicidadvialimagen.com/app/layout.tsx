@@ -5,6 +5,8 @@ import "./globals.css"
 import "../styles/leaflet.css"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
+import { Toaster } from "@/components/ui/toaster"
+import { CampaignsProvider } from "@/components/campaigns-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,11 +27,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="flex min-h-screen flex-col">
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </div>
+        <CampaignsProvider>
+          <div className="flex min-h-screen flex-col">
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
+          <Toaster />
+        </CampaignsProvider>
       </body>
     </html>
   )

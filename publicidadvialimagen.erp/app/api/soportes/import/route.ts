@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { parse } from 'csv-parse/sync'
 import { supabaseServer } from '@/lib/supabaseServer'
-import { buildSupabasePayload } from '../helpers'
+import { buildSupabasePayload, normalizeTipoSoporte, mapStatusToSupabase } from '../helpers'
 
 // Función para asegurar que existe un propietario por defecto
 async function ensureDefaultOwner() {
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       return (value || '').toString().trim()
     }
 
-    // Mapeo de encabezados alternativos
+    // Mapeo de encabezados alternativos → objeto intermedio normalizado
     const mapHeaders = (row: any) => {
       const mapped: any = {}
       
@@ -125,8 +125,8 @@ export async function POST(req: Request) {
         
         if (lowerKey.includes('ciudad')) {
           mapped.ciudad = normalizeText(row[key])
-        } else if (lowerKey.includes('disponibilidad')) {
-          mapped.disponibilidad = normalizeText(row[key])
+        } else if (lowerKey.includes('disponibilidad') || lowerKey.includes('estado')) {
+          mapped.estado = normalizeText(row[key])
         } else if (lowerKey.includes('titulo') || lowerKey.includes('título')) {
           mapped.titulo = normalizeText(row[key])
         } else if (lowerKey.includes('precio') && lowerKey.includes('mes')) {
@@ -140,36 +140,35 @@ export async function POST(req: Request) {
         } else if (lowerKey.includes('impactos') && (lowerKey.includes('dia') || lowerKey.includes('día') || lowerKey.includes('diarios'))) {
           mapped.impactos_diarios = normalizeNumber(row[key], 'Impactos dia')
         } else if (lowerKey.includes('ubicacion') || lowerKey.includes('ubicación')) {
-          mapped.ubicacion = normalizeText(row[key])
+          mapped.ubicacion_url = normalizeText(row[key])
         } else if (lowerKey.includes('tipo')) {
           mapped.tipo = normalizeText(row[key])
+        } else if (lowerKey.includes('foto_url_2')) {
+          mapped.foto_url_2 = normalizeText(row[key])
+        } else if (lowerKey.includes('foto_url_3')) {
+          mapped.foto_url_3 = normalizeText(row[key])
+        } else if (lowerKey.endsWith('foto') || lowerKey.includes('foto_url')) {
+          mapped.foto_url = normalizeText(row[key])
+        } else if (lowerKey.includes('notas') || lowerKey.includes('descripcion') || lowerKey.includes('descripción')) {
+          mapped.notas = normalizeText(row[key])
         }
       })
       
       return mapped
     }
 
-    // Funciones de normalización
-    function normalizeStatus(value: string): string {
-      const v = (value || "").toLowerCase().trim()
-      if (v.includes("reserv")) return "ocupado"
-      if (v.includes("ocup")) return "ocupado"
-      if (v.includes("manten")) return "mantenimiento"
-      if (v.includes("fuera")) return "fuera_servicio"
-      return "disponible"
+    // Normalización de estado a UI y luego a DB
+    function normalizeStatusToDb(value: string): string {
+      const v = (value || '').toLowerCase().trim()
+      let ui: string = 'DISPONIBLE'
+      if (v.includes('reserv')) ui = 'RESERVADO'
+      else if (v.includes('ocup')) ui = 'OCUPADO'
+      else if (v.includes('no dispo') || v.includes('no-dispo') || v.includes('nodispo')) ui = 'NO_DISPONIBLE'
+      return mapStatusToSupabase(ui)
     }
 
-    function normalizeType(value: string): string {
-      const v = (value || "").toLowerCase().trim()
-      if (v.includes("pantalla")) return "pantalla_led"
-      if (v.includes("marquesina")) return "marquesina"
-      if (v.includes("monoposte")) return "monoposte"
-      if (v.includes("mupi")) return "mupi"
-      if (v.includes("banderola")) return "banderola"
-      if (v.includes("valla")) return "valla"
-      if (v.includes("totem") || v.includes("tótem")) return "otro"
-      return "otro"
-    }
+    // ⚠️ YA NO USAMOS normalizeType local, usamos normalizeTipoSoporte de helpers
+    // que es la única fuente de verdad
 
     for (let index = 0; index < rows.length; index++) {
       let mapped: any = {}
@@ -189,84 +188,37 @@ export async function POST(req: Request) {
           skipped++
           continue
         }
+        // Normalizar tipo (a los 4 oficiales)
+        const normalizedType = normalizeTipoSoporte(mapped.tipo || 'Vallas Publicitarias')
+        
         const input = {
           code,
           title,
-          type: normalizeType(mapped.tipo || 'valla'),
+          type: normalizedType,
           widthM: mapped.ancho,
           heightM: mapped.alto,
           priceMonth: mapped.precio_mes,
-          status: normalizeStatus(mapped.disponibilidad),
+          status: normalizeStatusToDb(mapped.estado),
           city: mapped.ciudad || null,
-          googleMapsLink: mapped.ubicacion || null,
+          googleMapsLink: mapped.ubicacion_url || null,
           impactosDiarios: mapped.impactos_diarios,
+          images: [mapped.foto_url, mapped.foto_url_2, mapped.foto_url_3].filter(Boolean),
+          address: mapped.notas || null,
         }
 
         console.log(`Procesando fila ${index + 1}: código=${code}, título=${title}`)
-        console.log(`Normalización: tipo "${mapped.tipo || 'valla'}" → "${input.type}", estado "${mapped.disponibilidad}" → "${input.status}"`)
+        console.log(`Normalización: tipo "${mapped.tipo_soporte || 'Vallas Publicitarias'}" → "${normalizedType}", estado "${mapped.disponibilidad}" → "${input.status}"`)
 
-        // Detectar esquema (minúsculas vs antiguo en Mayúsculas)
-        let schemaUpper = false
-        let existing: any = null
-        {
-          const { data, error } = await supabaseServer
-            .from('soportes')
-            .select('*')
-            .eq('codigo', code)
-            .maybeSingle()
+        // Buscar existente por codigo
+        const { data: existing, error: findError } = await supabaseServer
+          .from('soportes')
+          .select('*')
+          .eq('codigo', code)
+          .maybeSingle()
+        if (findError) throw findError
 
-          if (error) {
-            const msg = String(error.message || '')
-            if (msg.toLowerCase().includes('column') && msg.toLowerCase().includes('codigo')) {
-              schemaUpper = true
-              console.log('Esquema detectado: variante antigua (Mayúsculas). Reintentando consulta por Codigo...')
-              const retry = await supabaseServer
-                .from('soportes')
-                .select('*')
-                .eq('Codigo', code)
-                .maybeSingle()
-              existing = retry.data
-              if (retry.error) {
-                console.error('Error buscando soporte existente (Upper):', retry.error)
-                throw retry.error
-              }
-            } else {
-              console.error('Error buscando soporte existente:', error)
-              throw error
-            }
-          } else {
-            existing = data
-          }
-        }
-
-        // Payload según esquema detectado
-        const payload = schemaUpper
-          ? {
-              Codigo: input.code,
-              nombre: input.title,
-              Tipo: input.type,
-              Ancho: input.widthM ?? 0,
-              Alto: input.heightM ?? 0,
-              Ciudad: input.city,
-              Disponibilidad: input.status, // disponible|reservado|ocupado|no_disponible
-              'Precio por mes': input.priceMonth ?? null,
-              'Impactos diarios': input.impactosDiarios ?? null,
-              ubicacion: input.googleMapsLink ?? null,
-              dueno_casa_id: defaultOwnerId,
-            }
-          : {
-              codigo: input.code,
-              titulo: input.title,
-              tipo: input.type,
-              ancho: input.widthM ?? 0,
-              alto: input.heightM ?? 0,
-              ciudad: input.city,
-              estado: input.status, // disponible|reservado|ocupado|no_disponible
-              precio_mes: input.priceMonth ?? null,
-              impactos_diarios: input.impactosDiarios ?? null,
-              ubicacion_url: input.googleMapsLink ?? null,
-              dueno_casa_id: defaultOwnerId,
-            }
+        // Usar helper para construir payload correcto snake_case
+        const payload = buildSupabasePayload(input, existing || undefined)
 
         if (existing?.id) {
           console.log(`Actualizando soporte existente: ${existing.id}`)
@@ -283,9 +235,18 @@ export async function POST(req: Request) {
           console.log(`Soporte ${code} actualizado correctamente`)
         } else {
           console.log(`Creando nuevo soporte: ${code}`)
+          const insertPayload: any = {
+            dueno_casa_id: defaultOwnerId,
+            estado: input.status || 'disponible',
+            ...payload,
+          }
+          if (!insertPayload.tipo_soporte) insertPayload.tipo_soporte = 'Vallas Publicitarias'
+          if (!insertPayload.ancho) insertPayload.ancho = 1
+          if (!insertPayload.alto)  insertPayload.alto  = 1
+
           const { error: insertError } = await supabaseServer
             .from('soportes')
-            .insert([payload])
+            .insert([insertPayload])
 
           if (insertError) {
             console.error('Error insertando soporte:', insertError)

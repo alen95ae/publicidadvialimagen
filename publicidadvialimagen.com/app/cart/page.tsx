@@ -35,43 +35,7 @@ interface CartItem {
 }
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: "billboard-1",
-      type: "billboard",
-      name: "Pantalla LED Premium - Gran Vía",
-      image: "/placeholder.svg?height=300&width=400",
-      monthlyPrice: 2500,
-      selectedMonths: ["2024-02", "2024-03", "2024-04"],
-      location: "Gran Vía 28, Madrid",
-      quantity: 1,
-      totalPrice: 7500, // 3 months × 2500
-    },
-    {
-      id: "print-1",
-      type: "print",
-      name: "Vinilo Adhesivo Premium",
-      image: "/placeholder.svg?height=300&width=400",
-      pricePerM2: 25,
-      width: 2,
-      height: 1.5,
-      area: 3,
-      addOns: [{ name: "Laminado protector", price: 8 }],
-      quantity: 2,
-      totalPrice: 198, // (25 + 8) × 3 × 2 = 198
-    },
-    {
-      id: "billboard-2",
-      type: "billboard",
-      name: "Valla Tradicional - Autopista A-1",
-      image: "/placeholder.svg?height=300&width=400",
-      monthlyPrice: 1200,
-      selectedMonths: ["2024-03", "2024-04"],
-      location: "Autopista A-1, Km 15",
-      quantity: 1,
-      totalPrice: 2400, // 2 months × 1200
-    },
-  ])
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
 
   const updateQuantity = (id: string, newQuantity: number) => {
     if (newQuantity < 1) return
@@ -135,11 +99,8 @@ export default function CartPage() {
             Parece que aún no has añadido ningún producto a tu carrito.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild>
-              <Link href="/billboards">Explorar Vallas</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/print-shop">Servicios de Impresión</Link>
+            <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white" asChild>
+              <Link href="/print-shop">Explorar servicios de Impresión</Link>
             </Button>
           </div>
         </div>

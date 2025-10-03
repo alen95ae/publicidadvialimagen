@@ -3,12 +3,18 @@
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { MapPin, Phone, Mail, Clock } from "lucide-react"
+// import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
+
+// Configuración de Supabase - DISABLED
+// const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+// const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// const supabase = createClient(supabaseUrl, supabaseKey)
 
 // Dynamic OSM map (Leaflet) to avoid SSR issues
 const SimpleMap = dynamic(() => import("@/components/simple-map"), {
@@ -22,11 +28,60 @@ const SimpleMap = dynamic(() => import("@/components/simple-map"), {
 
 export default function ContactPage() {
   const [formSubmitted, setFormSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    message: ''
+  })
 
-  const handleSubmit = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In a real application, you would handle form submission here
-    setFormSubmitted(true)
+    setIsSubmitting(true)
+
+    try {
+      const { error } = await supabase
+        .from('mensajes')
+        .insert([{
+          nombre: formData.name,
+          email: formData.email,
+          telefono: formData.phone,
+          empresa: formData.company,
+          mensaje: formData.message,
+          origen: 'contacto',
+          estado: 'NUEVO'
+        }])
+
+      if (error) {
+        console.error('Error sending message:', error)
+        alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
+        return
+      }
+
+      setFormSubmitted(true)
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        company: '',
+        message: ''
+      })
+    } catch (error) {
+      console.error('Error sending message:', error)
+      alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -55,43 +110,76 @@ export default function ContactPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Nombre</Label>
-                      <Input id="name" placeholder="Tu nombre" required />
+                      <Input 
+                        id="name" 
+                        name="name"
+                        placeholder="Tu nombre" 
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        required 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" placeholder="tu@email.com" required />
+                      <Input 
+                        id="email" 
+                        name="email"
+                        type="email" 
+                        placeholder="tu@email.com" 
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        required 
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="phone">Teléfono</Label>
-                      <Input id="phone" type="tel" placeholder="Tu teléfono" />
+                      <Input 
+                        id="phone" 
+                        name="phone"
+                        type="tel" 
+                        placeholder="Tu teléfono" 
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        required 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="company">Empresa</Label>
-                      <Input id="company" placeholder="Tu empresa" />
+                      <Input 
+                        id="company" 
+                        name="company"
+                        placeholder="Tu empresa" 
+                        value={formData.company}
+                        onChange={handleInputChange}
+                        required 
+                      />
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Asunto</Label>
-                    <Input id="subject" placeholder="¿En qué podemos ayudarte?" required />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="message">Mensaje</Label>
                     <Textarea 
                       id="message" 
-                      placeholder="Cuéntanos más detalles sobre tu proyecto o consulta..." 
+                      name="message"
+                      placeholder="Escribe tu mensaje aquí (máx. 500 caracteres)" 
                       className="min-h-[150px]" 
+                      maxLength={500}
+                      value={formData.message}
+                      onChange={handleInputChange}
                       required 
                     />
                   </div>
 
                   <div className="text-center">
-                    <Button type="submit" className="w-full sm:w-auto px-8">
-                      Enviar Mensaje
+                    <Button 
+                      type="submit" 
+                      className="w-full sm:w-auto px-8"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
                     </Button>
                   </div>
                 </form>

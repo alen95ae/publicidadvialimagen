@@ -1,109 +1,227 @@
-import { supabaseServer } from '@/lib/supabaseServer'
+import { airtable } from '@/lib/airtable'
 
+export const TIPOS_OFICIALES = [
+  'Vallas Publicitarias',
+  'Pantallas LED',
+  'Murales',
+  'Publicidad Móvil',
+] as const
+export type TipoOficial = typeof TIPOS_OFICIALES[number]
 
-const STATUS_TO_SUPABASE: Record<string, string> = {
-  DISPONIBLE: 'disponible',
-  RESERVADO: 'reservado',
-  OCUPADO: 'ocupado',
-  NO_DISPONIBLE: 'no_disponible',
+const STATUS_TO_DB: Record<string,string> = {
+  DISPONIBLE:'disponible',
+  RESERVADO:'reservado',
+  OCUPADO:'ocupado',
+  NO_DISPONIBLE:'no_disponible',
+}
+const STATUS_FROM_DB: Record<string,string> = {
+  disponible:'DISPONIBLE',
+  reservado:'RESERVADO',
+  ocupado:'OCUPADO',
+  no_disponible:'NO_DISPONIBLE',
 }
 
-const STATUS_FROM_SUPABASE: Record<string, string> = {
-  disponible: 'DISPONIBLE',
-  reservado: 'RESERVADO',
-  ocupado: 'OCUPADO',
-  no_disponible: 'NO_DISPONIBLE',
+export function normalizeTipo(raw?: string): TipoOficial {
+  if (!raw) return 'Vallas Publicitarias'
+  const v = String(raw).trim().toLowerCase()
+  if (['valla','vallas','vallas publicitarias','bipolar','unipolar','tripular','mega valla','caminera'].includes(v)) return 'Vallas Publicitarias'
+  if (['pantalla','pantalla led','pantallas led','pantalla_led','led'].includes(v)) return 'Pantallas LED'
+  if (['mural','murales','marquesina'].includes(v)) return 'Murales'
+  if (['publicidad movil','publicidad móvil','movil','móvil','mobile','pasacalles','otro'].includes(v)) return 'Publicidad Móvil'
+  const eq = TIPOS_OFICIALES.find(t => t.toLowerCase() === v)
+  return eq ?? 'Vallas Publicitarias'
 }
 
-const toNumber = (value: any): number | null => {
-  if (value === null || value === undefined || value === '') return null
-  const num = Number(value)
-  return Number.isFinite(num) ? num : null
+const num = (val:any): number | null => {
+  if (val===undefined || val===null || val==='') return null
+  let s = String(val).trim().replace(/[€$Bs\s]/gi,'')
+  if (s.includes(',')) s = s.replace(/\./g,'').replace(',','.')
+  s = s.replace(/[^0-9+\-.]/g,'')
+  if (!s || s==='-' || s==='.' || s==='-.') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
 }
 
-const toInteger = (value: any): number | null => {
-  if (value === null || value === undefined || value === '') return null
-  const num = parseInt(value, 10)
-  return Number.isFinite(num) ? num : null
+export function uiToDbStatus(ui?: string) {
+  if (!ui) return 'disponible'
+  return STATUS_TO_DB[(ui||'').toUpperCase()] || 'disponible'
+}
+export function dbToUiStatus(db?: string|null) {
+  if (!db) return 'DISPONIBLE'
+  return STATUS_FROM_DB[String(db).toLowerCase()] || 'DISPONIBLE'
 }
 
-const nullIfEmpty = (value: any) => {
-  if (value === null || value === undefined) return null
-  const trimmed = String(value).trim()
-  return trimmed.length ? trimmed : null
+export function mapStatusToSupabase(status: string): string {
+  return uiToDbStatus(status)
 }
 
-export function mapStatusToSupabase(status?: string) {
-  if (!status) return 'disponible'
-  const key = status.toUpperCase()
-  return STATUS_TO_SUPABASE[key] || 'disponible'
-}
-
-export function mapStatusFromSupabase(status?: string | null) {
-  if (!status) return 'DISPONIBLE'
-  return STATUS_FROM_SUPABASE[status.toLowerCase()] || 'DISPONIBLE'
-}
-
-
-export function supabaseRowToSupport(row: any) {
-  const statusValue = row?.estado ?? row?.Disponibilidad
-  const status = mapStatusFromSupabase(statusValue)
-  const images = [row?.foto_url || row?.foto_principal, row?.foto_url_2, row?.foto_url_3].filter(Boolean)
-
-  const code = row?.codigo ?? row?.Codigo
-  const title = row?.titulo ?? row?.Titulo ?? row?.nombre ?? row?.Nombre ?? ''
-  const type = row?.tipo ?? row?.Tipo ?? ''
-  const city = row?.ciudad ?? row?.Ciudad ?? ''
-  const priceMonth = row?.precio_mes ?? row?.['Precio por mes']
-  const width = row?.ancho ?? row?.Ancho
-  const height = row?.alto ?? row?.Alto
-  const impactos = row?.impactos_diarios ?? row?.['Impactos diarios']
-  const googleMaps = row?.ubicacion_url ?? row?.Ubicacion ?? row?.Ubicación ?? null
-
+/** DB -> UI (Airtable format with accents) */
+export function rowToSupport(row:any){
+  // Manejar imágenes de Airtable (arrays de attachments)
+  console.log('🔍 Leyendo imágenes desde Airtable para soporte:', row['Código'])
+  console.log('  - Imagen principal:', row['Imagen principal'])
+  console.log('  - Imagen secundaria 1:', row['Imagen secundaria 1'])
+  console.log('  - Imagen secundaria 2:', row['Imagen secundaria 2'])
+  
+  const images = [
+    row['Imagen principal']?.[0]?.url,
+    row['Imagen secundaria 1']?.[0]?.url,
+    row['Imagen secundaria 2']?.[0]?.url
+  ].filter(Boolean)
+  
+  console.log('📸 URLs de imágenes extraídas:', images)
+  
   return {
     id: row.id,
-    code: code,
-    title: title,
-    type: type,
-    status,
-    widthM: toNumber(width),
-    heightM: toNumber(height),
-    city: city,
-    country: row.pais || 'Bolivia',
-    priceMonth: toNumber(priceMonth),
-    available: status === 'DISPONIBLE',
-    areaM2: toNumber(row.area_total),
-    pricePerM2: null,
-    productionCost: null,
-    owner: row.Propietario || null,
-    imageUrl: images[0] || null,
-    googleMapsLink: googleMaps,
-    impactosDiarios: toInteger(impactos),
+    code: row['Código'] || '',
+    title: row['Título'] || '',
+    type: normalizeTipo(row['Tipo de soporte']),
+    status: (row['Estado'] || 'DISPONIBLE').toUpperCase(),
+    widthM: num(row['Ancho']),
+    heightM: num(row['Alto']),
+    areaM2: num(row['Área total']),
+    city: row['Ciudad'] ?? null,
+    country: row['País'] ?? 'BO',
+    priceMonth: num(row['Precio por mes']),
+    impactosDiarios: row['Impactos diarios'] ?? null,
+    googleMapsLink: row['Enlace Google Maps'] ?? null,
+    latitude: row['Latitud'] ?? null,
+    longitude: row['Longitud'] ?? null,
     images,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    iluminacion: row['Iluminación'] ?? null,
+    address: row['Dirección / Notas'] ?? null,
+    owner: row['Propietario'] ?? null,
+    ownerId: null, // Airtable no usa IDs de propietario de la misma forma
+    available: (row['Estado'] || '').toUpperCase() === 'DISPONIBLE',
+    createdAt: row['Fecha de creación'] || new Date().toISOString(),
+    updatedAt: row['Última actualización'] || new Date().toISOString(),
   }
 }
 
-export function buildSupabasePayload(data: any, existing?: any) {
-  const width = toNumber(data.widthM ?? existing?.Ancho)
-  const height = toNumber(data.heightM ?? existing?.Alto)
+/** UI -> Airtable (con nombres de campos en español con tildes) */
+export function buildPayload(data:any, existing?:any){
+  const payload:any = {}
 
+  if (data.code !== undefined)         payload['Código'] = String(data.code).trim()
+  if (data.title !== undefined)        payload['Título'] = String(data.title)
+  if (data.type !== undefined)         payload['Tipo de soporte'] = normalizeTipo(data.type)
+  else if (existing?.['Tipo de soporte']) payload['Tipo de soporte'] = existing['Tipo de soporte']
+
+  const w = num(data.widthM ?? existing?.Ancho)
+  const h = num(data.heightM ?? existing?.Alto)
+  if (w !== null) payload['Ancho'] = w
+  if (h !== null) payload['Alto'] = h
+
+  // Estado en mayúsculas para Airtable
+  if (data.status !== undefined) {
+    payload['Estado'] = String(data.status).toUpperCase()
+  } else if (existing?.Estado) {
+    payload['Estado'] = existing.Estado
+  }
+
+  if (data.city !== undefined)               payload['Ciudad'] = data.city || null
+  if (data.country !== undefined)            payload['País'] = data.country || 'BO'
+  if (data.priceMonth !== undefined)         payload['Precio por mes'] = num(data.priceMonth)
+  if (data.impactosDiarios !== undefined)    payload['Impactos diarios'] = data.impactosDiarios ?? null
+  if (data.googleMapsLink !== undefined)     payload['Enlace Google Maps'] = data.googleMapsLink || null
+  if (data.latitude !== undefined)           payload['Latitud'] = data.latitude
+  if (data.longitude !== undefined)          payload['Longitud'] = data.longitude
+  if (data.iluminacion !== undefined)        payload['Iluminación'] = data.iluminacion
+  if (data.address !== undefined)            payload['Dirección / Notas'] = data.address || null
+  if (data.owner !== undefined)              payload['Propietario'] = data.owner || null
+
+  // Nota: Área total se calcula automáticamente en Airtable
+  // Las imágenes en Airtable son attachments y requieren manejo especial
+  if (data.images !== undefined && Array.isArray(data.images)) {
+    // Airtable requiere attachments en formato: [{ url: 'https://...' }]
+    // Convertir URLs relativas a absolutas
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    
+    console.log('🖼️ Procesando imágenes para Airtable:', data.images)
+    console.log('🌐 Base URL:', baseUrl)
+    
+    const toAbsoluteUrl = (url: string) => {
+      if (!url) return url
+      if (url.startsWith('http://') || url.startsWith('https://')) return url
+      return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`
+    }
+    
+    if (data.images[0]) {
+      const absUrl = toAbsoluteUrl(data.images[0])
+      console.log('📸 Imagen principal:', absUrl)
+      payload['Imagen principal'] = [{ url: absUrl }]
+    } else {
+      payload['Imagen principal'] = []
+    }
+    
+    if (data.images[1]) {
+      const absUrl = toAbsoluteUrl(data.images[1])
+      console.log('📸 Imagen secundaria 1:', absUrl)
+      payload['Imagen secundaria 1'] = [{ url: absUrl }]
+    } else {
+      payload['Imagen secundaria 1'] = []
+    }
+    
+    if (data.images[2]) {
+      const absUrl = toAbsoluteUrl(data.images[2])
+      console.log('📸 Imagen secundaria 2:', absUrl)
+      payload['Imagen secundaria 2'] = [{ url: absUrl }]
+    } else {
+      payload['Imagen secundaria 2'] = []
+    }
+    
+    console.log('✅ Payload de imágenes construido:', {
+      'Imagen principal': payload['Imagen principal'],
+      'Imagen secundaria 1': payload['Imagen secundaria 1'],
+      'Imagen secundaria 2': payload['Imagen secundaria 2']
+    })
+  }
+  
+  return payload
+}
+
+/** Si no hay propietario, asegura uno por defecto y devuelve su id */
+export async function ensureDefaultOwnerId(): Promise<string> {
+  try {
+    // Try to get existing default owner from Airtable
+    const response = await airtable('Dueños de Casa').select({
+      filterByFormula: `{Nombre} = 'Propietario por Defecto'`,
+      maxRecords: 1
+    }).all()
+    
+    if (response && response.length > 0) {
+      return response[0].id
+    }
+    
+    // Create default owner if not exists
+    const createResponse = await airtable('Dueños de Casa').create({
+      'Nombre': 'Propietario por Defecto',
+      'Tipo Propietario': 'empresa',
+      'Estado': 'activo'
+    })
+    
+    return createResponse.id
+  } catch (error) {
+    console.error('Error ensuring default owner:', error)
+    return 'default-owner-id'
+  }
+}
+
+/** Procesa datos de CSV para importación */
+export function processCsvRow(row: any): any {
   return {
-    Codigo: data.code?.trim() || existing?.Codigo,
-    nombre: data.title ?? existing?.nombre,
-    Tipo: (data.type ?? existing?.Tipo ?? 'valla').toLowerCase(),
-    Ancho: width ?? 0,
-    Alto: height ?? 0,
-    Ciudad: nullIfEmpty(data.city ?? existing?.Ciudad),
-    Disponibilidad: mapStatusToSupabase(data.status ?? mapStatusFromSupabase(existing?.Disponibilidad)),
-    'Precio por mes': toNumber(data.priceMonth ?? existing?.['Precio por mes']),
-    'Impactos diarios': toInteger(data.impactosDiarios ?? existing?.['Impactos diarios']),
-    foto_url: data.images?.[0] ?? existing?.foto_url ?? null,
-    foto_url_2: data.images?.[1] ?? existing?.foto_url_2 ?? null,
-    foto_url_3: data.images?.[2] ?? existing?.foto_url_3 ?? null,
-    notas: data.notes ?? existing?.notas ?? null,
-    Propietario: nullIfEmpty(data.owner ?? existing?.Propietario),
-    dueno_casa_id: existing?.dueno_casa_id || '00000000-0000-0000-0000-000000000000', // UUID por defecto
+    code: row.Codigo || row.codigo,
+    title: row.Titulo || row.titulo,
+    type: row['Tipo Soporte'] || row.tipo_soporte || row.Tipo || row.tipo,
+    status: row.Estado || row.estado || row.Disponibilidad || row.disponibilidad,
+    widthM: num(row.Ancho || row.ancho),
+    heightM: num(row.Alto || row.alto),
+    city: row.Ciudad || row.ciudad,
+    priceMonth: num(row['Precio por mes'] || row.precio_mes || row.Precio || row.precio),
+    impactosDiarios: num(row['Impactos dia'] || row.impactos_dia || row.Impactos || row.impactos),
+    googleMapsLink: row.Ubicación || row.ubicacion || row['Google Maps'] || row.google_maps,
+    address: row.Notas || row.notas || row.Dirección || row.direccion,
+    owner: row.Propietario || row.propietario,
   }
 }

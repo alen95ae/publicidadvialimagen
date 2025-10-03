@@ -1,16 +1,89 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { ShoppingCart, Search, ChevronDown, Globe, User, Menu, X } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
+import { ShoppingCart, Search, Globe, Menu, X, Megaphone } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import UserMenu from "@/components/user-menu"
+import { useCampaignsContext } from "@/components/campaigns-provider"
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchRef = useRef<HTMLDivElement>(null)
+  const { getCampaignCount } = useCampaignsContext()
+
+  // Sugerencias predefinidas
+  const allSuggestions = [
+    "La Paz",
+    "Santa Cruz",
+    "Cochabamba",
+    "El Alto",
+    "Sucre",
+    "Potosí",
+    "Tarija",
+    "Oruro",
+    "Trinidad",
+    "Digital LED",
+    "Pantalla LED",
+    "Valla Tradicional",
+    "Impresa",
+    "Backlight",
+    "Premium",
+    "Autopista",
+    "Mobiliario Urbano",
+    "Móvil",
+  ]
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      router.push(`/billboards?search=${encodeURIComponent(searchQuery.trim())}`)
+      setShowSuggestions(false)
+      setMobileMenuOpen(false)
+    }
+  }
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setSearchQuery(suggestion)
+    router.push(`/billboards?search=${encodeURIComponent(suggestion)}`)
+    setShowSuggestions(false)
+    setMobileMenuOpen(false)
+  }
+
+  // Actualizar sugerencias cuando cambia el query
+  useEffect(() => {
+    if (searchQuery.trim().length > 0) {
+      const filtered = allSuggestions.filter((suggestion) =>
+        suggestion.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      setSuggestions(filtered.slice(0, 5)) // Máximo 5 sugerencias
+      setShowSuggestions(filtered.length > 0)
+    } else {
+      setSuggestions([])
+      setShowSuggestions(false)
+    }
+  }, [searchQuery])
+
+  // Cerrar sugerencias al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background">
@@ -44,32 +117,46 @@ export default function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <div className="hidden md:flex">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="hidden md:flex" ref={searchRef}>
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
               <Input
                 type="search"
-                placeholder="Buscar espacios..."
+                placeholder="Buscar..."
                 className="w-[200px] pl-8 md:w-[250px] rounded-full bg-muted"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => searchQuery.trim() && setShowSuggestions(true)}
               />
-            </div>
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full mt-2 w-full bg-background border rounded-lg shadow-lg overflow-hidden z-50">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
+                    >
+                      <Search className="h-3 w-3 text-muted-foreground" />
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </form>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Globe className="h-5 w-5" />
-                <span className="sr-only">Idioma</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Español</DropdownMenuItem>
-              <DropdownMenuItem>English</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="ghost" size="sm" className="gap-2 hidden md:flex">
+            <Globe className="h-4 w-4" />
+            <span className="text-sm">Español (Bolivia)</span>
+          </Button>
+          <UserMenu />
           <Button variant="ghost" size="icon" className="relative" asChild>
-            <Link href="/login">
-              <User className="h-5 w-5" />
-              <span className="sr-only">Iniciar Sesión</span>
+            <Link href="/campaigns">
+              <Megaphone className="h-5 w-5" />
+              <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary">
+                {getCampaignCount()}
+              </Badge>
+              <span className="sr-only">Mi Campaña</span>
             </Link>
           </Button>
           <Button variant="ghost" size="icon" className="relative" asChild>
@@ -91,8 +178,32 @@ export default function Header() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t p-4 space-y-4 bg-background">
           <div className="relative mb-4">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input type="search" placeholder="Buscar espacios..." className="w-full pl-8 rounded-full bg-muted" />
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+              <Input 
+                type="search" 
+                placeholder="Buscar..." 
+                className="w-full pl-8 rounded-full bg-muted"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => searchQuery.trim() && setShowSuggestions(true)}
+              />
+            </form>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full mt-2 w-full bg-background border rounded-lg shadow-lg overflow-hidden z-50 left-0 right-0">
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
+                  >
+                    <Search className="h-3 w-3 text-muted-foreground" />
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <nav className="flex flex-col space-y-4">
             <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">

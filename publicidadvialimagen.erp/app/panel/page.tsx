@@ -22,7 +22,7 @@ import {
 } from "lucide-react"
 
 const modules = [
-  { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
+  { key: "mensajes", title: "Mensajes", href: "/panel/mensajes", icon: MessageSquare },
   { key: "calendario", title: "Calendario", href: "/panel/calendario", icon: Calendar },
   { key: "clientes", title: "Clientes", href: "/panel/clientes", icon: Users },
   { key: "ventas", title: "Ventas", href: "/panel/ventas", icon: Handshake },

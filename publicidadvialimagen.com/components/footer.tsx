@@ -23,16 +23,13 @@ export default function Footer() {
               <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
                 Vallas Publicitarias
               </Link>
-              <Link href="/billboards/led-screens" className="text-sm text-muted-foreground hover:text-primary">
+              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
                 Pantallas LED
               </Link>
-              <Link href="/billboards/traditional" className="text-sm text-muted-foreground hover:text-primary">
-                Vallas Tradicionales
+              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
+                Murales
               </Link>
-              <Link href="/print-shop" className="text-sm text-muted-foreground hover:text-primary">
-                Impresión Digital
-              </Link>
-              <Link href="/billboards/mobile" className="text-sm text-muted-foreground hover:text-primary">
+              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
                 Publicidad Móvil
               </Link>
             </nav>
@@ -85,7 +82,7 @@ export default function Footer() {
             </p>
             <div className="flex items-center gap-4">
               <div className="flex justify-center gap-4">
-                <Link href="#" className="text-xs text-muted-foreground hover:text-primary">
+                <Link href="/privacy-policy" className="text-xs text-muted-foreground hover:text-primary">
                   Política de Privacidad
                 </Link>
                 <Link href="#" className="text-xs text-muted-foreground hover:text-primary">

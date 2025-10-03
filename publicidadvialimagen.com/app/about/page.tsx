@@ -31,7 +31,7 @@ export default function AboutPage() {
         <div className="order-2 md:order-2">
           <h2 className="text-3xl font-bold mb-4">Nuestra historia</h2>
           <p className="text-muted-foreground mb-4">
-            Publicidad Vial Imagen una empresa con 33 años de experiencia en el sector de la publicidad. Disponemos de espacios publicitarios en vía pública para ayudar a nuestros clientes a promocionar su marca, productos y servicios.
+            Publicidad Vial Imagen una empresa con 36 años de experiencia en el sector de la publicidad. Disponemos de espacios publicitarios en vía pública para ayudar a nuestros clientes a promocionar su marca, productos y servicios.
           </p>
           <p className="text-muted-foreground mb-4">
             Disponemos de última tecnología para proporcionar a nuestros clientes una publicidad de alto impacto y efectiva de forma rápida y sencilla.
@@ -47,7 +47,7 @@ export default function AboutPage() {
         <div className="order-2 md:order-1">
           <h2 className="text-3xl font-bold mb-4">Nuestra empresa</h2>
           <p className="text-muted-foreground mb-4">
-            Publicidad Vial Imagen S.R.L. se encuentra a la vanguardia de la publicidad boliviana desde 1980.
+            Publicidad Vial Imagen S.R.L. se encuentra a la vanguardia de la publicidad boliviana desde 1989.
           </p>
           <p className="text-muted-foreground mb-4">
             Martín Sillerico, Gerente General y fundador, a través de varias líneas de negocio ha logrado posicionarse a nivel nacional con su amplia gama de productos y servicios.

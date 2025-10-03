@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabaseServer'
+import Airtable from 'airtable'
+
+// Configurar Airtable
+const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY })
+  .base(process.env.AIRTABLE_BASE_ID!)
 
 export async function GET(req: Request) {
   try {
@@ -13,96 +17,93 @@ export async function GET(req: Request) {
     const minPrice = searchParams.get('minPrice')
     const maxPrice = searchParams.get('maxPrice')
 
-    let query = supabaseServer
-      .from('soportes')
-      .select('*')
-      .neq('Disponibilidad', 'ocupado') // Mostrar todos excepto los ocupados
+    // Obtener datos de Airtable
+    const records = await base("Soportes").select({
+      filterByFormula: `{Estado} = 'DISPONIBLE'` // Solo mostrar disponibles en la web
+    }).all()
+
+    const soportes = records.map(r => {
+      const soporte = {
+        id: r.id,
+        codigo: r.fields['Código'],
+        titulo: r.fields['Título'],
+        tipo_soporte: r.fields['Tipo de soporte'],
+        estado: r.fields['Estado'],
+        ancho: r.fields['Ancho'],
+        alto: r.fields['Alto'],
+        ciudad: r.fields['Ciudad'],
+        precio_mes: r.fields['Precio por mes'],
+        impactos_diarios: r.fields['Impactos diarios'],
+        ubicacion_url: r.fields['Enlace Google Maps'],
+        foto_url: r.fields['Imagen principal']?.[0]?.url,
+        foto_url_2: r.fields['Imagen secundaria 1']?.[0]?.url,
+        foto_url_3: r.fields['Imagen secundaria 2']?.[0]?.url,
+        notas: r.fields['Dirección / Notas'],
+        propietario: r.fields['Propietario']
+      }
+      
+      // Log de imágenes para depuración
+      if (soporte.foto_url || soporte.foto_url_2 || soporte.foto_url_3) {
+        console.log(`📸 Imágenes en soporte ${soporte.codigo}:`, {
+          principal: soporte.foto_url ? '✅' : '❌',
+          secundaria1: soporte.foto_url_2 ? '✅' : '❌',
+          secundaria2: soporte.foto_url_3 ? '✅' : '❌'
+        })
+      }
+      
+      return soporte
+    })
 
     // Aplicar filtros
+    let filteredSoportes = soportes
+
     if (city) {
-      query = query.ilike('Ciudad', `%${city}%`)
+      filteredSoportes = filteredSoportes.filter(s => 
+        s.ciudad?.toLowerCase().includes(city.toLowerCase())
+      )
     }
-    
-    if (format) {
-      // Mapear formatos del frontend a tipos de la DB
-      const formatMap: Record<string, string> = {
-        'Digital LED': 'pantalla_led',
-        'Impresa': 'valla',
-        'Backlight': 'marquesina'
-      }
-      if (formatMap[format]) {
-        query = query.eq('Tipo', formatMap[format])
-      }
-    }
-    
-    if (type) {
-      // Mapear tipos del frontend a tipos de la DB
-      const typeMap: Record<string, string> = {
-        'Premium': 'pantalla_led',
-        'Autopista': 'valla',
-        'Mobiliario Urbano': 'marquesina',
-        'Móvil': 'otro'
-      }
-      if (typeMap[type]) {
-        query = query.eq('Tipo', typeMap[type])
-      }
-    }
-    
+
     if (minPrice) {
-      query = query.gte('Precio por mes', parseFloat(minPrice))
+      filteredSoportes = filteredSoportes.filter(s => 
+        (s.precio_mes || 0) >= parseFloat(minPrice)
+      )
     }
-    
+
     if (maxPrice) {
-      query = query.lte('Precio por mes', parseFloat(maxPrice))
-    }
-
-    // Paginación
-    const from = (page - 1) * limit
-    const to = from + limit - 1
-    
-    query = query.range(from, to)
-
-    const { data: soportes, error } = await query
-
-    if (error) {
-      console.error('Error fetching soportes:', error)
-      return NextResponse.json({ error: 'Error al cargar los soportes' }, { status: 500 })
+      filteredSoportes = filteredSoportes.filter(s => 
+        (s.precio_mes || 0) <= parseFloat(maxPrice)
+      )
     }
 
     // Transformar datos para el frontend
-    const transformedSoportes = soportes?.map(soporte => {
-      // Recopilar todas las imágenes disponibles y convertir a URLs completas
+    const transformedSoportes = filteredSoportes?.map(soporte => {
+      // Recopilar todas las imágenes disponibles
       const images = [
         soporte.foto_url,
         soporte.foto_url_2,
         soporte.foto_url_3
-      ].filter(Boolean) // Filtrar valores nulos/undefined
-      .map(img => {
-        // Si la imagen es una ruta relativa, convertirla a URL completa
-        if (img && img.startsWith('/uploads/')) {
-          return `http://localhost:3000${img}`
-        }
-        return img
-      })
+      ].filter(Boolean)
+      
+      console.log(`🖼️ Soporte ${soporte.codigo} - ${images.length} imágenes:`, images.length > 0 ? images : 'Sin imágenes')
       
       return {
         id: soporte.id,
-        name: soporte.titulo || soporte.nombre,
+        name: soporte.titulo || soporte.codigo,
         image: images[0] || "/placeholder.svg?height=300&width=400",
-        images: images, // Incluir todas las imágenes
-        monthlyPrice: soporte['Precio por mes'] || 0,
-        location: soporte.ubicacion || `${soporte.Ciudad}, Bolivia`,
-        city: soporte.Ciudad || 'Bolivia',
-        format: getFormatFromType(soporte.Tipo),
-        type: getTypeFromType(soporte.Tipo),
-        dimensions: `${soporte.Ancho || 0}m x ${soporte.Alto || 0}m`,
-        visibility: getVisibilityFromType(soporte.Tipo),
-        traffic: soporte['Impactos diarios'] ? `${soporte['Impactos diarios'].toLocaleString()} personas/día` : 'Variable',
-        lighting: getLightingFromType(soporte.Tipo),
-        available: soporte.Disponibilidad === 'disponible',
+        images: images.length > 0 ? images : ["/placeholder.svg?height=300&width=400"],
+        monthlyPrice: soporte.precio_mes || 0,
+        location: soporte.notas || `${soporte.ciudad}, Bolivia`,
+        city: soporte.ciudad || 'Bolivia',
+        format: getFormatFromType(soporte.tipo_soporte),
+        type: getTypeFromType(soporte.tipo_soporte),
+        dimensions: `${soporte.ancho || 0}m x ${soporte.alto || 0}m`,
+        visibility: getVisibilityFromType(soporte.tipo_soporte),
+        traffic: soporte.impactos_diarios ? `${soporte.impactos_diarios.toLocaleString()} personas/día` : 'Variable',
+        lighting: getLightingFromType(soporte.tipo_soporte),
+        available: soporte.estado === 'DISPONIBLE',
         availableMonths: generateAvailableMonths(),
-        features: getFeaturesFromType(soporte.Tipo),
-        coordinates: getCoordinatesFromCity(soporte.Ciudad),
+        features: getFeaturesFromType(soporte.tipo_soporte),
+        coordinates: getCoordinatesFromCity(soporte.ciudad),
       }
     }) || []
 
@@ -123,70 +124,81 @@ export async function GET(req: Request) {
   }
 }
 
-// Funciones auxiliares para transformar datos
-function getFormatFromType(tipo: string): string {
+// Funciones auxiliares para transformar datos (adaptadas para Airtable)
+function getFormatFromType(tipo?: string): string {
+  if (!tipo) return 'Impresa'
+  const tipoLower = tipo.toLowerCase()
+  
   const formatMap: Record<string, string> = {
-    'pantalla_led': 'Digital LED',
+    'pantallas led': 'Digital LED',
+    'pantalla led': 'Digital LED',
+    'vallas publicitarias': 'Impresa',
     'valla': 'Impresa',
+    'murales': 'Backlight',
+    'publicidad móvil': 'Impresa',
     'marquesina': 'Backlight',
-    'monoposte': 'Impresa',
-    'mupi': 'Backlight',
-    'banderola': 'Impresa',
-    'otro': 'Impresa'
+    'monoposte': 'Impresa'
   }
-  return formatMap[tipo] || 'Impresa'
+  return formatMap[tipoLower] || 'Impresa'
 }
 
-function getTypeFromType(tipo: string): string {
+function getTypeFromType(tipo?: string): string {
+  if (!tipo) return 'Premium'
+  const tipoLower = tipo.toLowerCase()
+  
   const typeMap: Record<string, string> = {
-    'pantalla_led': 'Premium',
+    'pantallas led': 'Premium',
+    'pantalla led': 'Premium',
+    'vallas publicitarias': 'Autopista',
     'valla': 'Autopista',
+    'murales': 'Mobiliario Urbano',
+    'publicidad móvil': 'Móvil',
     'marquesina': 'Mobiliario Urbano',
-    'monoposte': 'Autopista',
-    'mupi': 'Mobiliario Urbano',
-    'banderola': 'Autopista',
-    'otro': 'Móvil'
+    'monoposte': 'Autopista'
   }
-  return typeMap[tipo] || 'Premium'
+  return typeMap[tipoLower] || 'Premium'
 }
 
-function getVisibilityFromType(tipo: string): string {
+function getVisibilityFromType(tipo?: string): string {
+  if (!tipo) return 'Alto tráfico'
+  const tipoLower = tipo.toLowerCase()
+  
   const visibilityMap: Record<string, string> = {
-    'pantalla_led': 'Muy alto tráfico',
-    'valla': 'Alto tráfico',
-    'marquesina': 'Medio-alto tráfico',
-    'monoposte': 'Alto tráfico',
-    'mupi': 'Medio tráfico',
-    'banderola': 'Alto tráfico',
-    'otro': 'Variable'
+    'pantallas led': 'Muy alto tráfico',
+    'pantalla led': 'Muy alto tráfico',
+    'vallas publicitarias': 'Alto tráfico',
+    'murales': 'Medio-alto tráfico',
+    'publicidad móvil': 'Variable'
   }
-  return visibilityMap[tipo] || 'Alto tráfico'
+  return visibilityMap[tipoLower] || 'Alto tráfico'
 }
 
-function getLightingFromType(tipo: string): string {
+function getLightingFromType(tipo?: string): string {
+  if (!tipo) return 'Iluminada'
+  const tipoLower = tipo.toLowerCase()
+  
   const lightingMap: Record<string, string> = {
-    'pantalla_led': '24/7',
-    'valla': 'Iluminada',
-    'marquesina': 'Retroiluminada',
-    'monoposte': 'Iluminada',
-    'mupi': 'Retroiluminada',
-    'banderola': 'Iluminada',
-    'otro': 'Variable'
+    'pantallas led': '24/7',
+    'pantalla led': '24/7',
+    'vallas publicitarias': 'Iluminada',
+    'murales': 'Retroiluminada',
+    'publicidad móvil': 'Variable'
   }
-  return lightingMap[tipo] || 'Iluminada'
+  return lightingMap[tipoLower] || 'Iluminada'
 }
 
-function getFeaturesFromType(tipo: string): string[] {
+function getFeaturesFromType(tipo?: string): string[] {
+  if (!tipo) return ['Ubicación premium', 'Alta visibilidad']
+  const tipoLower = tipo.toLowerCase()
+  
   const featuresMap: Record<string, string[]> = {
-    'pantalla_led': ['Resolución 4K', 'Contenido dinámico', 'Ubicación premium'],
-    'valla': ['Doble cara', 'Iluminación LED', 'Fácil acceso'],
-    'marquesina': ['Retroiluminación', 'Protección clima', 'Zona comercial'],
-    'monoposte': ['Doble cara', 'Iluminación LED', 'Fácil acceso'],
-    'mupi': ['Retroiluminación', 'Protección clima', 'Zona comercial'],
-    'banderola': ['Doble cara', 'Iluminación LED', 'Fácil acceso'],
-    'otro': ['Flexibilidad total', 'Eventos personalizados', 'Ubicación variable']
+    'pantallas led': ['Resolución 4K', 'Contenido dinámico', 'Ubicación premium'],
+    'pantalla led': ['Resolución 4K', 'Contenido dinámico', 'Ubicación premium'],
+    'vallas publicitarias': ['Doble cara', 'Iluminación LED', 'Fácil acceso'],
+    'murales': ['Retroiluminación', 'Protección clima', 'Zona comercial'],
+    'publicidad móvil': ['Flexibilidad total', 'Eventos personalizados', 'Ubicación variable']
   }
-  return featuresMap[tipo] || ['Ubicación premium', 'Alta visibilidad']
+  return featuresMap[tipoLower] || ['Ubicación premium', 'Alta visibilidad']
 }
 
 function getCoordinatesFromCity(ciudad: string): [number, number] {

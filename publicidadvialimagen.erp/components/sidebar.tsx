@@ -26,10 +26,10 @@ import {
 } from "lucide-react"
 
 const modules = [
-  { key: "mensajeria", title: "Mensajería", href: "/panel/mensajeria", icon: MessageSquare },
+  { key: "mensajes", title: "Mensajes", href: "/panel/mensajes", icon: MessageSquare },
   { key: "calendario", title: "Calendario", href: "/panel/calendario", icon: Calendar },
   { key: "clientes", title: "Clientes", href: "/panel/clientes", icon: Users },
-  { key: "ventas", title: "Ventas", href: "/panel/ventas", icon: Handshake },
+  { key: "ventas", title: "Ventas", href: "/panel/ventas/cotizaciones", icon: Handshake },
   { key: "soportes", title: "Soportes", href: "/panel/soportes/gestion", icon: Monitor },
   { key: "metricas", title: "Métricas", href: "/panel/metricas", icon: LineChart },
   { key: "inventario", title: "Inventario", href: "/panel/inventario", icon: Package },

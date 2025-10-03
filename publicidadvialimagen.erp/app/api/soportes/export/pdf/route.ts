@@ -94,7 +94,7 @@ export async function GET(req: Request) {
       line(`${s.Codigo || '-'} — ${s.nombre || ''}`, 16, true)
       const sizeStr = `Tamaño: ${s.Ancho ?? 0} × ${s.Alto ?? 0} m`
       const areaStr = `Área: ${s.area_total ?? 0} m²`
-      const row1 = `Tipo: ${s.Tipo || '-'}     ${sizeStr}     ${areaStr}`
+      const row1 = `Tipo: ${s.tipo_soporte || s.Tipo || '-'}     ${sizeStr}     ${areaStr}`
       line(row1, 11, false)
 
       const row2 = `Disponibilidad: ${s.Disponibilidad}     Propietario: ${s.Propietario || '-'}     Precio/mes: ${s['Precio por mes'] ?? '-'}`

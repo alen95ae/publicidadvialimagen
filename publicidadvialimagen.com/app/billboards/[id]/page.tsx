@@ -1,16 +1,21 @@
 "use client"
 
-import { Label } from "@/components/ui/label"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Calendar, MapPin, Users, Zap, Clock, ArrowLeft, Star, Shield, Truck } from "lucide-react"
+import { Calendar, MapPin, Heart, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+import { useCampaignsContext } from "@/components/campaigns-provider"
+import { useBillboards } from "@/hooks/use-billboards"
 
 interface BillboardDetailPageProps {
   params: {
@@ -19,64 +24,128 @@ interface BillboardDetailPageProps {
 }
 
 export default function BillboardDetailPage({ params }: BillboardDetailPageProps) {
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
-  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [selectedStartDate, setSelectedStartDate] = useState("")
+  const [selectedMonths, setSelectedMonths] = useState("1")
+  const [selectedServices, setSelectedServices] = useState<string[]>([])
+  const [isFavorite, setIsFavorite] = useState(false)
+  const { addToCampaign } = useCampaignsContext()
+  const { billboards, loading } = useBillboards()
+  
+  // Buscar el billboard por ID
+  const billboard = billboards.find(b => b.id === params.id)
+  
+  // Log para depuración
+  useEffect(() => {
+    if (billboard) {
+      console.log('📥 Billboard cargado:', billboard)
+      console.log('🖼️ Imágenes del billboard:', billboard.images)
+    }
+  }, [billboard])
 
-  const billboard = {
-    id: Number.parseInt(params.id),
-    name: "Pantalla LED Premium - Gran Vía",
-    images: [
-      "/placeholder.svg?height=400&width=600",
-      "/placeholder.svg?height=400&width=600",
-      "/placeholder.svg?height=400&width=600",
-    ],
-    monthlyPrice: 2500,
-    location: "Gran Vía 28, Madrid",
-    city: "Madrid",
-    format: "Digital LED",
-    type: "Premium",
-    dimensions: "6x3 metros",
-    visibility: "Alto tráfico",
-    traffic: "150,000 personas/día",
-    lighting: "24/7",
-    resolution: "1920x1080 Full HD",
-    material: "Pantalla LED exterior",
-    available: true,
-    availableMonths: ["2024-02", "2024-03", "2024-04", "2024-05", "2024-06", "2024-07"],
-    features: [
-      "Resolución 4K",
-      "Contenido dinámico",
-      "Ubicación premium",
-      "Gestión remota",
-      "Soporte técnico 24/7",
-      "Análisis de audiencia",
-    ],
-    description:
-      "Ubicada en el corazón de Madrid, esta pantalla LED premium ofrece máxima visibilidad en una de las arterias más transitadas de la capital. Perfecta para campañas de alto impacto que buscan alcanzar una audiencia masiva y diversa.",
-    technicalSpecs: {
-      resolution: "1920x1080 Full HD",
-      brightness: "5000 nits",
-      viewingAngle: "160° horizontal / 140° vertical",
-      refreshRate: "60Hz",
-      connectivity: "4G/WiFi",
-      powerConsumption: "800W promedio",
-    },
+  // Mostrar loading
+  if (loading) {
+    return (
+      <div className="container px-4 py-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando soporte...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const availableMonthsData = [
-    { month: "2024-02", name: "Febrero 2024", available: true },
-    { month: "2024-03", name: "Marzo 2024", available: true },
-    { month: "2024-04", name: "Abril 2024", available: true },
-    { month: "2024-05", name: "Mayo 2024", available: false },
-    { month: "2024-06", name: "Junio 2024", available: true },
-    { month: "2024-07", name: "Julio 2024", available: true },
+  // Mostrar error si no se encuentra
+  if (!billboard) {
+    return (
+      <div className="container px-4 py-8">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Soporte no encontrado</h2>
+          <Button asChild>
+            <Link href="/billboards">Volver a espacios publicitarios</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Preparar datos para mostrar
+  const displayData = {
+    ...billboard,
+    description: billboard.location || "Espacio publicitario de alta visibilidad",
+    technicalSpecs: {
+      dimension: billboard.dimensions,
+      tipo: billboard.format,
+      impactos: billboard.impactos_diarios?.toLocaleString() || billboard.traffic,
+      iluminacion: billboard.lighting
+    }
+  }
+
+  const additionalServices = [
+    { id: "diseno", name: "Diseño gráfico" },
+    { id: "impresion", name: "Impresión de lona" },
+    { id: "instalacion", name: "Instalación en valla" }
   ]
 
-  const toggleMonth = (month: string) => {
-    setSelectedMonths((prev) => (prev.includes(month) ? prev.filter((m) => m !== month) : [...prev, month]))
+  const handleServiceToggle = (serviceId: string) => {
+    setSelectedServices(prev => 
+      prev.includes(serviceId) 
+        ? prev.filter(id => id !== serviceId)
+        : [...prev, serviceId]
+    )
   }
 
-  const totalPrice = selectedMonths.length * billboard.monthlyPrice
+  const getTotalPrice = () => {
+    const basePrice = displayData.monthlyPrice * parseInt(selectedMonths)
+    return basePrice
+  }
+
+  const getEndDate = () => {
+    if (!selectedStartDate || !selectedMonths) return ""
+    const startDate = new Date(selectedStartDate)
+    const endDate = new Date(startDate)
+    endDate.setMonth(endDate.getMonth() + parseInt(selectedMonths))
+    return endDate.toLocaleDateString('es-ES')
+  }
+
+  const handleAddToCampaign = () => {
+    if (!selectedStartDate) {
+      alert("Por favor selecciona una fecha de inicio")
+      return
+    }
+
+    const campaignItem = {
+      id: `${displayData.id}-${Date.now()}`,
+      billboardId: displayData.id,
+      name: displayData.name,
+      city: displayData.city,
+      dimensions: displayData.technicalSpecs.dimension,
+      impacts: displayData.technicalSpecs.impactos,
+      type: displayData.technicalSpecs.tipo,
+      startDate: selectedStartDate,
+      months: parseInt(selectedMonths),
+      image: displayData.images[0] || "/placeholder.svg"
+    }
+
+    console.log('Intentando añadir a campaña:', campaignItem)
+    addToCampaign(campaignItem)
+    
+    // Mostrar mensaje de confirmación
+    const button = document.querySelector('[data-campaign-button]') as HTMLButtonElement
+    if (button) {
+      const originalText = button.textContent
+      button.textContent = "✓ Añadido a campaña"
+      button.disabled = true
+      button.className = button.className.replace('border-[#D54644] text-[#D54644]', 'border-green-500 text-green-500')
+      
+      setTimeout(() => {
+        button.textContent = originalText
+        button.disabled = false
+        button.className = button.className.replace('border-green-500 text-green-500', 'border-[#D54644] text-[#D54644]')
+      }, 2000)
+    }
+  }
 
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
@@ -91,7 +160,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             Vallas Publicitarias
           </Link>
           <span className="mx-2">/</span>
-          <span>{billboard.name}</span>
+          <span>{displayData.name}</span>
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href="/billboards">
@@ -102,208 +171,232 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Images */}
+        {/* Images and Map */}
         <div className="space-y-4">
           <div className="aspect-[4/3] relative rounded-lg overflow-hidden">
             <Image
-              src={billboard.images[0] || "/placeholder.svg"}
-              alt={billboard.name}
+              src={displayData.images[0] || "/placeholder.svg"}
+              alt={displayData.name}
               fill
               className="object-cover"
               priority
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {billboard.images.slice(1).map((image, index) => (
+            {displayData.images.slice(1).map((image, index) => (
               <div key={index} className="aspect-[4/3] relative rounded-lg overflow-hidden">
                 <Image
                   src={image || "/placeholder.svg"}
-                  alt={`${billboard.name} - Vista ${index + 2}`}
+                  alt={`${displayData.name} - Vista ${index + 2}`}
                   fill
                   className="object-cover"
                 />
               </div>
             ))}
           </div>
+          
+          {/* Mapa más pequeño */}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-3">Ubicación</h3>
+            <div className="aspect-[4/3] rounded-lg overflow-hidden">
+              <iframe
+                src="https://www.openstreetmap.org/export/embed.html?bbox=-68.15%2C-16.55%2C-68.10%2C-16.50&layer=mapnik&marker=-16.525%2C-68.125"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Ubicación de la valla publicitaria"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Details */}
+        {/* Details and Booking */}
         <div className="space-y-6">
+          {/* Header */}
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="default" className="bg-primary text-primary-foreground">
-                {billboard.format}
+            <div className="flex items-center justify-between mb-4">
+              <Badge className={displayData.available ? "bg-green-100 text-green-800 border-green-200" : "bg-gray-100 text-gray-800 border-gray-200"}>
+                {displayData.available ? 'Disponible' : 'No disponible'}
               </Badge>
-              <Badge variant="outline">{billboard.type}</Badge>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsFavorite(!isFavorite)}
+                  className={cn(
+                    "p-2",
+                    isFavorite ? "text-red-500" : "text-gray-400"
+                  )}
+                >
+                  <Heart className={cn("h-5 w-5", isFavorite && "fill-current")} />
+                </Button>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold mb-4 text-balance">{billboard.name}</h1>
+            
+            <h1 className="text-3xl font-bold mb-2">{displayData.name}</h1>
             <div className="flex items-center gap-1 text-muted-foreground mb-4">
               <MapPin className="h-5 w-5" />
-              <span>{billboard.location}</span>
-            </div>
-            <p className="text-muted-foreground text-pretty">{billboard.description}</p>
-          </div>
-
-          {/* Key Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              <div>
-                <div className="font-medium">{billboard.traffic}</div>
-                <div className="text-sm text-muted-foreground">Tráfico diario</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
-              <div>
-                <div className="font-medium">{billboard.dimensions}</div>
-                <div className="text-sm text-muted-foreground">Dimensiones</div>
-              </div>
+              <span>{displayData.city}</span>
             </div>
           </div>
 
-          {/* Features */}
-          <div>
-            <h3 className="font-semibold mb-3">Características</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {billboard.features.map((feature, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Star className="h-4 w-4 text-secondary" />
-                  <span className="text-sm">{feature}</span>
+          {/* Características del espacio */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">Características del espacio</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-3">
+                <Ruler className="h-5 w-5 text-gray-400" />
+                <div>
+                  <div className="font-medium">{displayData.technicalSpecs.dimension}</div>
+                  <div className="text-sm text-muted-foreground">Dimensión</div>
                 </div>
-              ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <Building className="h-5 w-5 text-gray-400" />
+                <div>
+                  <div className="font-medium">{displayData.technicalSpecs.tipo}</div>
+                  <div className="text-sm text-muted-foreground">Tipo de soporte</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Eye className="h-5 w-5 text-gray-400" />
+                <div>
+                  <div className="font-medium">{displayData.technicalSpecs.impactos}</div>
+                  <div className="text-sm text-muted-foreground">Impactos diarios</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Lightbulb className="h-5 w-5 text-gray-400" />
+                <div>
+                  <div className="font-medium">{displayData.technicalSpecs.iluminacion}</div>
+                  <div className="text-sm text-muted-foreground">Iluminación</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Pricing */}
+          {/* Descripción */}
+          <div>
+            <h3 className="font-semibold text-lg mb-2">Descripción</h3>
+            <p className="text-muted-foreground">{displayData.description}</p>
+          </div>
+
+          {/* Pricing and Booking */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Reservar Espacio</span>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-primary">€{billboard.monthlyPrice.toLocaleString()}</div>
-                  <div className="text-sm text-muted-foreground">por mes</div>
-                </div>
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-2xl font-bold">
+                  Bs {displayData.monthlyPrice.toLocaleString()} / mes
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Month Selection */}
-              <div>
-                <Label className="text-sm font-medium mb-3 block">Seleccionar meses</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableMonthsData.map((monthData) => (
-                    <Button
-                      key={monthData.month}
-                      variant={selectedMonths.includes(monthData.month) ? "default" : "outline"}
-                      size="sm"
-                      disabled={!monthData.available}
-                      onClick={() => toggleMonth(monthData.month)}
-                      className="justify-start text-xs"
-                    >
-                      {monthData.name}
+            <CardContent className="space-y-6">
+
+              {/* Fecha de inicio */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Fecha de inicio</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedStartDate ? new Date(selectedStartDate).toLocaleDateString('es-ES') : "Seleccionar fecha"}
                     </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <input
+                      type="date"
+                      value={selectedStartDate}
+                      onChange={(e) => setSelectedStartDate(e.target.value)}
+                      className="p-3"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Meses de alquiler */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Meses de alquiler</Label>
+                <Select value={selectedMonths} onValueChange={setSelectedMonths}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 12].map(months => (
+                      <SelectItem key={months} value={months.toString()}>
+                        {months} mes{months > 1 ? 'es' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Resumen del período */}
+              {selectedStartDate && selectedMonths && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="h-4 w-4 text-gray-600" />
+                    <span className="font-medium">Resumen del período</span>
+                  </div>
+                  <div className="text-sm space-y-1">
+                    <div>Inicio: {new Date(selectedStartDate).toLocaleDateString('es-ES')}</div>
+                    <div>Duración: {selectedMonths} mes{parseInt(selectedMonths) > 1 ? 'es' : ''}</div>
+                    <div>Fin: {getEndDate()}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Servicios adicionales */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Servicios adicionales (se pagan al inicio)</Label>
+                <div className="space-y-2">
+                  {additionalServices.map((service) => (
+                    <div key={service.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={service.id}
+                        checked={selectedServices.includes(service.id)}
+                        onCheckedChange={() => handleServiceToggle(service.id)}
+                      />
+                      <Label htmlFor={service.id} className="flex-1 cursor-pointer">
+                        {service.name}
+                      </Label>
+                    </div>
                   ))}
                 </div>
               </div>
 
-              {selectedMonths.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>{selectedMonths.length} mes(es) seleccionado(s)</span>
-                      <span>€{totalPrice.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between font-semibold">
-                      <span>Total</span>
-                      <span className="text-primary">€{totalPrice.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </>
-              )}
+              {/* Total */}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-semibold">Total</span>
+                <span className="text-2xl font-bold text-[#D54644]">
+                  Bs {getTotalPrice().toLocaleString()}
+                </span>
+              </div>
 
-              <Button
-                className="w-full bg-primary hover:bg-primary/90"
-                size="lg"
-                disabled={selectedMonths.length === 0}
+              {/* Botón añadir a campaña */}
+              <Button 
+                variant="outline" 
+                className="w-full border-[#D54644] text-[#D54644] hover:bg-[#D54644] hover:text-white"
+                onClick={handleAddToCampaign}
+                data-campaign-button
               >
-                <Calendar className="mr-2 h-4 w-4" />
-                Reservar Ahora
+                <Megaphone className="mr-2 h-4 w-4" />
+                Añadir a campaña
+              </Button>
+
+              {/* Botón de cotización */}
+              <Button className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white">
+                <FileText className="mr-2 h-4 w-4" />
+                Solicitar cotización
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Technical Specifications */}
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6">Especificaciones Técnicas</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold mb-4">Especificaciones de Pantalla</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Resolución:</span>
-                  <span>{billboard.technicalSpecs.resolution}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Brillo:</span>
-                  <span>{billboard.technicalSpecs.brightness}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Ángulo de visión:</span>
-                  <span>{billboard.technicalSpecs.viewingAngle}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Frecuencia:</span>
-                  <span>{billboard.technicalSpecs.refreshRate}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold mb-4">Conectividad y Energía</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Conectividad:</span>
-                  <span>{billboard.technicalSpecs.connectivity}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Consumo:</span>
-                  <span>{billboard.technicalSpecs.powerConsumption}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Iluminación:</span>
-                  <span>{billboard.lighting}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold mb-4">Servicios Incluidos</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <span className="text-sm">Soporte técnico 24/7</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-primary" />
-                  <span className="text-sm">Instalación incluida</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-primary" />
-                  <span className="text-sm">Gestión de contenido</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
     </div>
   )
 }

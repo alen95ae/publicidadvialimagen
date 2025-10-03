@@ -11,18 +11,81 @@ import {
   Monitor,
   Building2,
   Smartphone,
+  MonitorPlay,
   Eye,
   Calendar,
   MapPin,
 } from "lucide-react"
+// import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 
+// Configuración de Supabase - DISABLED
+// const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+// const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// const supabase = createClient(supabaseUrl, supabaseKey)
+
 export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [formSubmitted, setFormSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    nombre: '',
+    email: '',
+    telefono: '',
+    empresa: '',
+    mensaje: ''
+  })
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    try {
+      const { error } = await supabase
+        .from('mensajes')
+        .insert([{
+          nombre: formData.nombre,
+          email: formData.email,
+          telefono: formData.telefono,
+          empresa: formData.empresa,
+          mensaje: formData.mensaje,
+          origen: 'home',
+          estado: 'NUEVO'
+        }])
+
+      if (error) {
+        console.error('Error sending message:', error)
+        alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
+        return
+      }
+
+      setFormSubmitted(true)
+      setFormData({
+        nombre: '',
+        email: '',
+        telefono: '',
+        empresa: '',
+        mensaje: ''
+      })
+    } catch (error) {
+      console.error('Error sending message:', error)
+      alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const advertisingCategories = [
     {
@@ -35,7 +98,7 @@ export default function HomePage() {
     {
       id: 2,
       name: "Pantallas LED",
-      icon: Smartphone,
+      icon: MonitorPlay,
       description: "",
       image: "/pantallas_publicitarias_imagen.png",
     },
@@ -189,10 +252,10 @@ export default function HomePage() {
               return (
                 <Link
                   key={category.id}
-                  href={`/billboards/${category.name.toLowerCase().replace(/\s+/g, "-")}`}
+                  href={`/billboards?tipo_soporte=${encodeURIComponent(category.name)}`}
                   className="group relative overflow-hidden rounded-lg bg-background shadow-md transition-all hover:shadow-lg hover:scale-105"
                 >
-                  <div className="aspect-square relative">
+                  <div className="aspect-[4/3] relative">
                     <Image
                       src={category.image || "/placeholder.svg"}
                       alt={category.name}
@@ -537,112 +600,117 @@ export default function HomePage() {
             </p>
           </div>
           
-          <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="nombre" className="block text-sm font-medium text-foreground mb-2">
-                  Nombre
-                </label>
-                <Input
-                  id="nombre"
-                  type="text"
-                  placeholder="Nombre"
-                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="telefono" className="block text-sm font-medium text-foreground mb-2">
-                  Teléfono <span className="text-primary">*</span>
-                </label>
-                <Input
-                  id="telefono"
-                  type="tel"
-                  placeholder="Teléfono"
-                  required
-                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="ciudad" className="block text-sm font-medium text-foreground mb-2">
-                  Ciudad
-                </label>
-                <Input
-                  id="ciudad"
-                  type="text"
-                  placeholder="Ciudad"
-                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Subir archivo
-                </label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full rounded-lg border-gray-300 hover:bg-gray-50 text-gray-700"
-                >
-                  Subir archivo +
-                </Button>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Subir archivo compatible (máximo 15 MB)
-                </p>
-              </div>
+          {formSubmitted ? (
+            <div className="bg-primary/10 text-primary p-4 rounded-lg mb-6">
+              <h3 className="font-semibold text-lg mb-2">¡Gracias!</h3>
+              <p>Tu mensaje ha sido enviado exitosamente. Te responderemos lo antes posible.</p>
             </div>
-            
-            {/* Right Column */}
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
-                  Email <span className="text-primary">*</span>
-                </label>
-              <Input
-                  id="email"
-                type="email"
-                  placeholder="Correo electrónico"
-                  required
-                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                />
+          ) : (
+            <form id="contact-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column */}
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="nombre" className="block text-sm font-medium text-foreground mb-2">
+                    Nombre
+                  </label>
+                  <Input
+                    id="nombre"
+                    name="nombre"
+                    type="text"
+                    placeholder="Nombre"
+                    value={formData.nombre}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="telefono" className="block text-sm font-medium text-foreground mb-2">
+                    Teléfono
+                  </label>
+                  <Input
+                    id="telefono"
+                    name="telefono"
+                    type="tel"
+                    placeholder="Teléfono"
+                    value={formData.telefono}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                  />
+                </div>
               </div>
               
-              <div>
-                <label htmlFor="empresa" className="block text-sm font-medium text-foreground mb-2">
-                  Empresa
-                </label>
-                <Input
-                  id="empresa"
-                  type="text"
-                  placeholder="Empresa"
-                  className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                />
+              {/* Right Column */}
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                    Email
+                  </label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="Correo electrónico"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="empresa" className="block text-sm font-medium text-foreground mb-2">
+                    Empresa
+                  </label>
+                  <Input
+                    id="empresa"
+                    name="empresa"
+                    type="text"
+                    placeholder="Empresa"
+                    value={formData.empresa}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                  />
+                </div>
               </div>
               
-              <div>
-                <label htmlFor="mensaje" className="block text-sm font-medium text-foreground mb-2">
-                  Tu mensaje
-                </label>
-                <textarea
-                  id="mensaje"
-                  rows={6}
-                  placeholder="Escribe aquí"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-primary resize-none"
-                />
+              {/* Full Width Message */}
+              <div className="col-span-1 md:col-span-2">
+                <div>
+                  <label htmlFor="mensaje" className="block text-sm font-medium text-foreground mb-2">
+                    Mensaje
+                  </label>
+                  <textarea
+                    id="mensaje"
+                    name="mensaje"
+                    rows={6}
+                    placeholder="Escribe tu mensaje aquí (máx. 500 caracteres)"
+                    maxLength={500}
+                    value={formData.mensaje}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-primary resize-none"
+                  />
+                </div>
               </div>
-            </div>
-          </form>
+            </form>
+          )}
           
-          <div className="flex justify-end mt-8">
-            <Button
-              type="submit"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-lg font-medium"
-            >
-              Enviar consulta
-            </Button>
-          </div>
+          {!formSubmitted && (
+            <div className="flex justify-end mt-8">
+              <Button
+                type="submit"
+                form="contact-form"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-lg font-medium"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Enviando...' : 'Enviar consulta'}
+              </Button>
+            </div>
+          )}
         </div>
       </section>
     </main>

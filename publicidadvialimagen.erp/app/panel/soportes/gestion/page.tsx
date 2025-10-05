@@ -20,12 +20,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner"
 import Sidebar from "@/components/sidebar"
 
-// Constantes para colores de estado
+// Constantes para colores de estado (formato Airtable)
 const STATUS_META = {
-  DISPONIBLE:   { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
-  RESERVADO:    { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
-  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
-  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
+  'Disponible':     { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
+  'Reservado':      { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
+  'Ocupado':        { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
+  'No disponible':  { label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
 } as const
 
 // Opciones de tipo
@@ -82,10 +82,6 @@ export default function SoportesPage() {
   const [importLoading, setImportLoading] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    fetchSupports(q, 1)
-  }, [q, statusFilter])
-
   const fetchSupports = async (query = "", page: number = currentPage) => {
     try {
       setLoading(true)
@@ -95,26 +91,40 @@ export default function SoportesPage() {
       params.set('page', page.toString())
       params.set('limit', '25')
       
+      console.log('🔍 Fetching supports with params:', params.toString())
       const response = await fetch(`/api/soportes?${params}`)
+      console.log('📡 Response status:', response.status)
+      
       if (response.ok) {
         const result = await response.json()
+        console.log('📊 Response data:', result)
+        console.log('📊 Data length:', result.data?.length)
+        
         // Asegurar que supports sea siempre un array
         const supportsData = result.data || result
+        console.log('📊 Supports data:', supportsData)
+        console.log('📊 Is array:', Array.isArray(supportsData))
+        
         setSupports(Array.isArray(supportsData) ? supportsData : [])
         setPagination(result.pagination || pagination)
         setCurrentPage(page)
       } else {
+        console.error('❌ Response not ok:', response.status, response.statusText)
         toast.error("Error al cargar los soportes")
         setSupports([]) // Establecer array vacío en caso de error
       }
     } catch (error) {
-      console.error("Error fetching supports:", error)
+      console.error("❌ Error fetching supports:", error)
       toast.error("Error de conexión")
       setSupports([]) // Establecer array vacío en caso de error
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchSupports(q, 1)
+  }, [q, statusFilter])
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return
@@ -143,6 +153,11 @@ export default function SoportesPage() {
   // Asegurar que supports sea un array antes de usar métodos de array
   const supportsArray = Array.isArray(supports) ? supports : []
   const ids = supportsArray.map(i => i.id)
+  
+  // Debug logs
+  console.log('🔍 Current supports state:', supports)
+  console.log('🔍 Supports array length:', supportsArray.length)
+  console.log('🔍 Loading state:', loading)
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) && !allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])

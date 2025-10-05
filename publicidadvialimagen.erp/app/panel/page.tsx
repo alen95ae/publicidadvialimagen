@@ -1,105 +1,174 @@
-"use client"
+import { redirect } from "next/navigation";
+import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import Sidebar from "@/components/sidebar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BarChart3, Users, Package, MessageSquare, Calendar, Handshake, Monitor, LineChart, Hammer, Wrench, Palette, Globe, Receipt, UserCog, Settings } from "lucide-react";
 
-import type React from "react"
-import Image from "next/image"
-import Link from "next/link"
-import {
-  Calendar,
-  Users,
-  UserCog,
-  Globe,
-  Wrench,
-  LineChart,
-  Receipt,
-  Handshake,
-  MessageSquare,
-  Palette,
-  Settings,
-  Power,
-  Monitor,
-  Hammer,
-  Package,
-} from "lucide-react"
+export default async function PanelPage() {
+  const { isAuthenticated, getUser } = getKindeServerSession();
+  const authed = await isAuthenticated();
+  if (!authed) redirect("/login");
 
-const modules = [
-  { key: "mensajes", title: "Mensajes", href: "/panel/mensajes", icon: MessageSquare },
-  { key: "calendario", title: "Calendario", href: "/panel/calendario", icon: Calendar },
-  { key: "clientes", title: "Clientes", href: "/panel/clientes", icon: Users },
-  { key: "ventas", title: "Ventas", href: "/panel/ventas", icon: Handshake },
-  { key: "soportes", title: "Soportes", href: "/panel/soportes/gestion", icon: Monitor },
-  { key: "metricas", title: "Métricas", href: "/panel/metricas", icon: LineChart },
-  { key: "inventario", title: "Inventario", href: "/panel/inventario", icon: Package },
-  { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
-  { key: "mantenimiento", title: "Mantenimiento", href: "/panel/mantenimiento", icon: Wrench },
-  { key: "diseno", title: "Diseño Gráfico", href: "/panel/diseno", icon: Palette },
-  { key: "sitio", title: "Sitio Web", href: "/panel/sitio", icon: Globe },
-  { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad", icon: Receipt },
-  { key: "empleados", title: "Empleados", href: "/panel/empleados", icon: UserCog },
-  { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },
-  { key: "salir", title: "Salir", href: "/api/auth/signout", icon: Power },
-]
+  const user = await getUser();
 
-interface ModuleCardProps {
-  title: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-}
-
-function ModuleCard({ title, href, icon: Icon }: ModuleCardProps) {
   return (
-    <Link
-      href={href}
-      className="group rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 p-6 flex flex-col items-center text-center focus:outline-none focus:ring-2 focus:ring-[#D54644] focus:ring-offset-2"
-      aria-label={`Abrir módulo ${title}`}
-    >
-      <div className="w-16 h-16 bg-[#D54644] rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200">
-        <Icon className="w-8 h-8 text-white" />
-      </div>
-      <h3 className="text-slate-800 font-medium text-sm">{title}</h3>
-    </Link>
-  )
-}
+    <Sidebar>
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Panel de Control</h1>
+          <p className="text-gray-600 mt-2">
+            Bienvenido, {user?.given_name || user?.email} - Gestiona tu empresa desde aquí
+          </p>
+        </div>
 
-export default function PanelPage() {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
+        {/* Dashboard Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Mensajes</CardTitle>
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">12</div>
+              <p className="text-xs text-muted-foreground">+2 nuevos hoy</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Clientes</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">1,234</div>
+              <p className="text-xs text-muted-foreground">+12 este mes</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Soportes Activos</CardTitle>
+              <Monitor className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">45</div>
+              <p className="text-xs text-muted-foreground">+3 esta semana</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ventas</CardTitle>
+              <Handshake className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">$45,231</div>
+              <p className="text-xs text-muted-foreground">+20.1% este mes</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Inventario</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">2,340</div>
+              <p className="text-xs text-muted-foreground">+180 unidades</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Producción</CardTitle>
+              <Hammer className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">89</div>
+              <p className="text-xs text-muted-foreground">Órdenes activas</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calendar className="mr-2 h-5 w-5" />
+                Próximas Actividades
+              </CardTitle>
+              <CardDescription>
+                Eventos y tareas programadas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Reunión con cliente ABC</span>
+                  <span className="text-xs text-gray-500">Hoy 14:00</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Entrega de soporte #123</span>
+                  <span className="text-xs text-gray-500">Mañana 10:00</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Revisión de inventario</span>
+                  <span className="text-xs text-gray-500">Viernes 16:00</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <LineChart className="mr-2 h-5 w-5" />
+                Métricas Rápidas
+              </CardTitle>
+              <CardDescription>
+                Resumen de rendimiento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Tasa de conversión</span>
+                  <span className="text-sm font-medium text-green-600">+12.5%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Satisfacción cliente</span>
+                  <span className="text-sm font-medium text-green-600">4.8/5</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Tiempo de respuesta</span>
+                  <span className="text-sm font-medium text-blue-600">2.3h</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Success Message */}
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/logo-publicidad-vial-imagen.svg"
-                alt="Publicidad Vial Imagen"
-                width={300}
-                height={78}
-                className="h-10 w-auto"
-                priority
-              />
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-green-800">
+                ✅ Sistema ERP funcionando correctamente
+              </h3>
+              <div className="mt-2 text-sm text-green-700">
+                <p>Autenticación con Kinde activa. Todos los módulos están disponibles en el menú lateral.</p>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">alen93ae</span>
-          </div>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        <h1 className="text-3xl font-bold text-slate-800 text-center mb-12">Panel de control</h1>
-
-        {/* Modules Grid */}
-        <nav
-          role="navigation"
-          aria-label="Módulos del panel de control"
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 max-w-7xl mx-auto"
-        >
-          {modules.map((module) => (
-            <ModuleCard key={module.key} title={module.title} href={module.href} icon={module.icon} />
-          ))}
-        </nav>
-      </main>
-    </div>
-  )
+      </div>
+    </Sidebar>
+  );
 }

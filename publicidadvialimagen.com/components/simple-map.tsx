@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
 import L from "leaflet"
 import { useMemo } from "react"
-import { createBuildingIcon } from "./building-icon"
+import { createBillboardIcon } from "./billboard-icon"
 
 type LatLngTuple = [number, number]
 
@@ -19,8 +19,8 @@ export interface SimpleMapProps {
 }
 
 export default function SimpleMap({ center, zoom = 16, heightClassName = "h-96", markerLabel, markerTitle, markerSubtitle, markerLinkUrl, markerLinkLabel = "Abrir en Google Maps" }: SimpleMapProps) {
-  // Basic red pin icon matching site brand
-  const icon = useMemo(() => createBuildingIcon(34), [])
+  // Billboard icon matching site brand
+  const icon = useMemo(() => createBillboardIcon(), [])
 
   return (
     <div className={`${heightClassName} rounded-lg overflow-hidden shadow-lg border`}> 

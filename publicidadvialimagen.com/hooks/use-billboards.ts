@@ -43,6 +43,7 @@ export interface Billboard {
   lighting: string
   resolution?: string
   material: string
+  status?: string
   available: boolean
   availableMonths: string[]
   features: string[]
@@ -54,6 +55,7 @@ export interface Billboard {
   width: number
   height: number
   impactos_diarios?: number
+  description?: string
 }
 
 export function useBillboards() {
@@ -98,11 +100,15 @@ export function useBillboards() {
           lighting: soporte.lighting,
           resolution: soporte.format === 'Pantallas LED' ? '1920x1080 Full HD' : undefined,
           material: soporte.format === 'Pantallas LED' ? 'Pantalla LED exterior' : 'Material exterior',
+          status: soporte.status || 'Disponible',
           available: soporte.available,
           availableMonths: soporte.availableMonths,
           features: soporte.features,
-          coordinates: soporte.coordinates ? { lat: soporte.coordinates[0], lng: soporte.coordinates[1] } : undefined,
+          coordinates: soporte.coordinates && soporte.coordinates.lat && soporte.coordinates.lng 
+            ? { lat: soporte.coordinates.lat, lng: soporte.coordinates.lng } 
+            : undefined,
           impactos_diarios: soporte.traffic ? parseInt(soporte.traffic.replace(/[^\d]/g, '')) : undefined,
+          description: soporte.description || '',
         }))
 
         setBillboards(transformedData)

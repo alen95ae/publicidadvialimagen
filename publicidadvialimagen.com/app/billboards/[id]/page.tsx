@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { Calendar, MapPin, Heart, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { useCampaignsContext } from "@/components/campaigns-provider"
 import { useBillboards } from "@/hooks/use-billboards"
+
+// Dynamic import para el mapa
+const SimpleMap = dynamic(
+  () => import("@/components/simple-map"),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center">
+        <p className="text-muted-foreground">Cargando mapa...</p>
+      </div>
+    )
+  }
+)
 
 interface BillboardDetailPageProps {
   params: {
@@ -73,7 +87,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   // Preparar datos para mostrar
   const displayData = {
     ...billboard,
-    description: billboard.location || "Espacio publicitario de alta visibilidad",
+    description: billboard.description || billboard.location || "Espacio publicitario de alta visibilidad",
     technicalSpecs: {
       dimension: billboard.dimensions,
       tipo: billboard.format,
@@ -195,21 +209,32 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             ))}
           </div>
           
-          {/* Mapa más pequeño */}
+          {/* Mapa con ubicación real */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">Ubicación</h3>
-            <div className="aspect-[4/3] rounded-lg overflow-hidden">
-              <iframe
-                src="https://www.openstreetmap.org/export/embed.html?bbox=-68.15%2C-16.55%2C-68.10%2C-16.50&layer=mapnik&marker=-16.525%2C-68.125"
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                title="Ubicación de la valla publicitaria"
+            {displayData.coordinates && displayData.coordinates.lat && displayData.coordinates.lng ? (
+              <SimpleMap
+                center={[displayData.coordinates.lat, displayData.coordinates.lng]}
+                zoom={16}
+                heightClassName="aspect-[4/3]"
+                markerTitle={displayData.name}
+                markerSubtitle={displayData.location}
+                markerLinkUrl={`https://www.google.com/maps?q=${displayData.coordinates.lat},${displayData.coordinates.lng}`}
+                markerLinkLabel="Abrir en Google Maps"
               />
-            </div>
+            ) : (
+              <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center border">
+                <div className="text-center p-4">
+                  <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Ubicación: {displayData.location}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    (Coordenadas no disponibles)
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -218,8 +243,16 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           {/* Header */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <Badge className={displayData.available ? "bg-green-100 text-green-800 border-green-200" : "bg-gray-100 text-gray-800 border-gray-200"}>
-                {displayData.available ? 'Disponible' : 'No disponible'}
+              <Badge className={`${
+                displayData.status === 'Disponible' 
+                  ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-100 hover:text-green-800" 
+                  : displayData.status === 'Reservado'
+                  ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                  : displayData.status === 'Ocupado'
+                  ? "bg-red-100 text-red-800 border-red-200"
+                  : "bg-gray-100 text-gray-800 border-gray-200"
+              } transition-none pointer-events-none`}>
+                {displayData.status || 'No disponible'}
               </Badge>
               <div className="flex items-center gap-2">
                 <Button

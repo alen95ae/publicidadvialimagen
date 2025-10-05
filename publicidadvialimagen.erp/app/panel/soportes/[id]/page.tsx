@@ -25,10 +25,10 @@ const TYPE_OPTIONS = [
 ] as const
 
 const STATUS_META = {
-  DISPONIBLE:   { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
-  RESERVADO:    { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
-  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
-  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
+  'Disponible':     { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
+  'Reservado':      { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
+  'Ocupado':        { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
+  'No disponible':  { label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
 } as const
 
 interface Support {
@@ -72,7 +72,7 @@ export default function SoporteDetailPage() {
     code: "",
     title: "",
     type: "",
-    status: "DISPONIBLE" as keyof typeof STATUS_META,
+    status: "Disponible" as keyof typeof STATUS_META,
     widthM: "",
     heightM: "",
     areaM2: "",
@@ -127,7 +127,7 @@ export default function SoporteDetailPage() {
           code: data.code || "",
           title: data.title || "",
           type: data.type || "",
-          status: data.status || "DISPONIBLE",
+          status: data.status || "Disponible",
           widthM: data.widthM?.toString() || "",
           heightM: data.heightM?.toString() || "",
           areaM2: data.areaM2?.toString() || "",
@@ -516,7 +516,7 @@ export default function SoporteDetailPage() {
                       code: support.code || "",
                       title: support.title || "",
                       type: support.type || "",
-                      status: support.status || "DISPONIBLE",
+                      status: support.status || "Disponible",
                       widthM: support.widthM?.toString() || "",
                       heightM: support.heightM?.toString() || "",
                       areaM2: support.areaM2?.toString() || "",

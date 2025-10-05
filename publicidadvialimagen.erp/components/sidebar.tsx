@@ -40,7 +40,7 @@ const modules = [
   { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad", icon: Receipt },
   { key: "empleados", title: "Empleados", href: "/panel/empleados", icon: UserCog },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },
-  { key: "salir", title: "Salir", href: "/api/auth/signout", icon: Power },
+  { key: "salir", title: "Salir", href: "/api/auth/logout", icon: Power },
 ]
 
 interface SidebarProps {

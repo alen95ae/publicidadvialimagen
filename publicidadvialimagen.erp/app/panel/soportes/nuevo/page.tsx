@@ -22,10 +22,10 @@ const TYPE_OPTIONS = [
 ] as const
 
 const STATUS_META = {
-  DISPONIBLE:   { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
-  RESERVADO:    { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
-  OCUPADO:      { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
-  NO_DISPONIBLE:{ label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
+  'Disponible':     { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
+  'Reservado':      { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
+  'Ocupado':        { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
+  'No disponible':  { label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
 } as const
 
 export default function NuevoSoportePage() {
@@ -35,7 +35,7 @@ export default function NuevoSoportePage() {
     code: "",
     title: "",
     type: "",
-    status: "DISPONIBLE",
+    status: "Disponible",
     widthM: "",
     heightM: "",
     areaM2: "",

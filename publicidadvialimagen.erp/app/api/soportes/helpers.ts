@@ -8,18 +8,15 @@ export const TIPOS_OFICIALES = [
 ] as const
 export type TipoOficial = typeof TIPOS_OFICIALES[number]
 
-const STATUS_TO_DB: Record<string,string> = {
-  DISPONIBLE:'disponible',
-  RESERVADO:'reservado',
-  OCUPADO:'ocupado',
-  NO_DISPONIBLE:'no_disponible',
-}
-const STATUS_FROM_DB: Record<string,string> = {
-  disponible:'DISPONIBLE',
-  reservado:'RESERVADO',
-  ocupado:'OCUPADO',
-  no_disponible:'NO_DISPONIBLE',
-}
+// Estados válidos en Airtable (con formato correcto)
+export const ESTADOS_VALIDOS = [
+  'Disponible',
+  'Reservado',
+  'Ocupado',
+  'No disponible'
+] as const
+
+export type EstadoValido = typeof ESTADOS_VALIDOS[number]
 
 export function normalizeTipo(raw?: string): TipoOficial {
   if (!raw) return 'Vallas Publicitarias'
@@ -42,41 +39,113 @@ const num = (val:any): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
-export function uiToDbStatus(ui?: string) {
-  if (!ui) return 'disponible'
-  return STATUS_TO_DB[(ui||'').toUpperCase()] || 'disponible'
-}
-export function dbToUiStatus(db?: string|null) {
-  if (!db) return 'DISPONIBLE'
-  return STATUS_FROM_DB[String(db).toLowerCase()] || 'DISPONIBLE'
+/** Normalizar estado al formato correcto de Airtable */
+export function normalizeEstado(raw?: string): EstadoValido {
+  if (!raw) return 'Disponible'
+  const v = String(raw).trim().toLowerCase()
+  
+  // Mapear variaciones comunes
+  if (['disponible', 'available', 'libre', 'free'].includes(v)) return 'Disponible'
+  if (['reservado', 'reserved', 'reserva'].includes(v)) return 'Reservado'
+  if (['ocupado', 'occupied', 'busy', 'en uso'].includes(v)) return 'Ocupado'
+  if (['no disponible', 'no_disponible', 'nodisponible', 'unavailable', 'bloqueado'].includes(v)) return 'No disponible'
+  
+  // Buscar coincidencia exacta (case-insensitive)
+  const exact = ESTADOS_VALIDOS.find(e => e.toLowerCase() === v)
+  return exact ?? 'Disponible'
 }
 
-export function mapStatusToSupabase(status: string): string {
-  return uiToDbStatus(status)
+/** Extraer coordenadas de un enlace de Google Maps */
+export function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude: number | null, longitude: number | null } {
+  if (!link) return { latitude: null, longitude: null }
+  
+  try {
+    // Patrón 1: /search/-16.498835,+-68.164877 o /search/-16.498835,-68.164877
+    const searchPattern = /\/search\/(-?\d+\.?\d*),\+?(-?\d+\.?\d*)/
+    const searchMatch = link.match(searchPattern)
+    if (searchMatch) {
+      return {
+        latitude: parseFloat(searchMatch[1]),
+        longitude: parseFloat(searchMatch[2])
+      }
+    }
+    
+    // Patrón 2: @-16.123,-68.456
+    const atPattern = /@(-?\d+\.?\d*),(-?\d+\.?\d*)/
+    const atMatch = link.match(atPattern)
+    if (atMatch) {
+      return {
+        latitude: parseFloat(atMatch[1]),
+        longitude: parseFloat(atMatch[2])
+      }
+    }
+    
+    // Patrón 3: ?q=-16.123,-68.456
+    const qPattern = /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/
+    const qMatch = link.match(qPattern)
+    if (qMatch) {
+      return {
+        latitude: parseFloat(qMatch[1]),
+        longitude: parseFloat(qMatch[2])
+      }
+    }
+    
+    // Patrón 4: ll=-16.123,-68.456
+    const llPattern = /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/
+    const llMatch = link.match(llPattern)
+    if (llMatch) {
+      return {
+        latitude: parseFloat(llMatch[1]),
+        longitude: parseFloat(llMatch[2])
+      }
+    }
+    
+    // Patrón 5: !3d-16.123!4d-68.456
+    const dPattern = /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/
+    const dMatch = link.match(dPattern)
+    if (dMatch) {
+      return {
+        latitude: parseFloat(dMatch[1]),
+        longitude: parseFloat(dMatch[2])
+      }
+    }
+    
+    return { latitude: null, longitude: null }
+  } catch (error) {
+    return { latitude: null, longitude: null }
+  }
 }
 
 /** DB -> UI (Airtable format with accents) */
 export function rowToSupport(row:any){
   // Manejar imágenes de Airtable (arrays de attachments)
-  console.log('🔍 Leyendo imágenes desde Airtable para soporte:', row['Código'])
-  console.log('  - Imagen principal:', row['Imagen principal'])
-  console.log('  - Imagen secundaria 1:', row['Imagen secundaria 1'])
-  console.log('  - Imagen secundaria 2:', row['Imagen secundaria 2'])
-  
   const images = [
     row['Imagen principal']?.[0]?.url,
     row['Imagen secundaria 1']?.[0]?.url,
     row['Imagen secundaria 2']?.[0]?.url
   ].filter(Boolean)
   
-  console.log('📸 URLs de imágenes extraídas:', images)
+  const estado = normalizeEstado(row['Estado'])
+  
+  // Extraer coordenadas del enlace de Google Maps si no están disponibles en los campos
+  let latitude = row['Latitud'] ?? null
+  let longitude = row['Longitud'] ?? null
+  
+  if (!latitude || !longitude) {
+    const googleMapsLink = row['Enlace Google Maps']
+    if (googleMapsLink) {
+      const coords = extractCoordinatesFromGoogleMapsLink(googleMapsLink)
+      latitude = latitude ?? coords.latitude
+      longitude = longitude ?? coords.longitude
+    }
+  }
   
   return {
     id: row.id,
     code: row['Código'] || '',
     title: row['Título'] || '',
     type: normalizeTipo(row['Tipo de soporte']),
-    status: (row['Estado'] || 'DISPONIBLE').toUpperCase(),
+    status: estado,
     widthM: num(row['Ancho']),
     heightM: num(row['Alto']),
     areaM2: num(row['Área total']),
@@ -85,14 +154,14 @@ export function rowToSupport(row:any){
     priceMonth: num(row['Precio por mes']),
     impactosDiarios: row['Impactos diarios'] ?? null,
     googleMapsLink: row['Enlace Google Maps'] ?? null,
-    latitude: row['Latitud'] ?? null,
-    longitude: row['Longitud'] ?? null,
+    latitude,
+    longitude,
     images,
     iluminacion: row['Iluminación'] ?? null,
     address: row['Dirección / Notas'] ?? null,
     owner: row['Propietario'] ?? null,
     ownerId: null, // Airtable no usa IDs de propietario de la misma forma
-    available: (row['Estado'] || '').toUpperCase() === 'DISPONIBLE',
+    available: estado === 'Disponible',
     createdAt: row['Fecha de creación'] || new Date().toISOString(),
     updatedAt: row['Última actualización'] || new Date().toISOString(),
   }
@@ -112,11 +181,11 @@ export function buildPayload(data:any, existing?:any){
   if (w !== null) payload['Ancho'] = w
   if (h !== null) payload['Alto'] = h
 
-  // Estado en mayúsculas para Airtable
+  // Estado normalizado al formato de Airtable
   if (data.status !== undefined) {
-    payload['Estado'] = String(data.status).toUpperCase()
+    payload['Estado'] = normalizeEstado(data.status)
   } else if (existing?.Estado) {
-    payload['Estado'] = existing.Estado
+    payload['Estado'] = normalizeEstado(existing.Estado)
   }
 
   if (data.city !== undefined)               payload['Ciudad'] = data.city || null
@@ -138,9 +207,6 @@ export function buildPayload(data:any, existing?:any){
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
     
-    console.log('🖼️ Procesando imágenes para Airtable:', data.images)
-    console.log('🌐 Base URL:', baseUrl)
-    
     const toAbsoluteUrl = (url: string) => {
       if (!url) return url
       if (url.startsWith('http://') || url.startsWith('https://')) return url
@@ -148,34 +214,22 @@ export function buildPayload(data:any, existing?:any){
     }
     
     if (data.images[0]) {
-      const absUrl = toAbsoluteUrl(data.images[0])
-      console.log('📸 Imagen principal:', absUrl)
-      payload['Imagen principal'] = [{ url: absUrl }]
+      payload['Imagen principal'] = [{ url: toAbsoluteUrl(data.images[0]) }]
     } else {
       payload['Imagen principal'] = []
     }
     
     if (data.images[1]) {
-      const absUrl = toAbsoluteUrl(data.images[1])
-      console.log('📸 Imagen secundaria 1:', absUrl)
-      payload['Imagen secundaria 1'] = [{ url: absUrl }]
+      payload['Imagen secundaria 1'] = [{ url: toAbsoluteUrl(data.images[1]) }]
     } else {
       payload['Imagen secundaria 1'] = []
     }
     
     if (data.images[2]) {
-      const absUrl = toAbsoluteUrl(data.images[2])
-      console.log('📸 Imagen secundaria 2:', absUrl)
-      payload['Imagen secundaria 2'] = [{ url: absUrl }]
+      payload['Imagen secundaria 2'] = [{ url: toAbsoluteUrl(data.images[2]) }]
     } else {
       payload['Imagen secundaria 2'] = []
     }
-    
-    console.log('✅ Payload de imágenes construido:', {
-      'Imagen principal': payload['Imagen principal'],
-      'Imagen secundaria 1': payload['Imagen secundaria 1'],
-      'Imagen secundaria 2': payload['Imagen secundaria 2']
-    })
   }
   
   return payload

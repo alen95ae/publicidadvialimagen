@@ -1,10 +1,9 @@
-import { withAuth } from "next-auth/middleware"
+import { withAuth } from "@kinde-oss/kinde-auth-nextjs/middleware";
 
 export default withAuth({
-  pages: { signIn: "/login" },
-  callbacks: {
-    authorized: ({ token }) => !!token
-  }
-})
+  loginPage: "/login",
+});
 
-export const config = { matcher: ["/panel/:path*"] }
+export const config = {
+  matcher: ["/panel/:path*"],
+};

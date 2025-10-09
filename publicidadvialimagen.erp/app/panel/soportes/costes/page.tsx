@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,101 +22,164 @@ import {
   Home,
   Calendar
 } from "lucide-react"
+import { toast } from "sonner"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import Sidebar from "@/components/sidebar"
 
-// Datos de ejemplo para los costes de soportes
-const soportesCostes = [
-  {
-    id: "1",
-    codigo: "SM-001",
-    titulo: "Valla Av. Pando",
-    propietario: "Imagen",
-    costeMensual: 500.00,
-    luz: 120.00,
-    patentes: 80.00,
-    comision: 50.00,
-    otros: 30.00,
-    costoTotal: 780.00,
-    precioVenta: 1200.00,
-    porcentajeBeneficio: 53.85
-  },
-  {
-    id: "2",
-    codigo: "SM-002", 
-    titulo: "Pantalla Centro",
-    propietario: "Externa",
-    costeMensual: 800.00,
-    luz: 200.00,
-    patentes: 120.00,
-    comision: 80.00,
-    otros: 50.00,
-    costoTotal: 1250.00,
-    precioVenta: 1800.00,
-    porcentajeBeneficio: 44.00
-  },
-  {
-    id: "3",
-    codigo: "SM-003",
-    titulo: "Totem Norte",
-    propietario: "Imagen",
-    costeMensual: 300.00,
-    luz: 80.00,
-    patentes: 60.00,
-    comision: 30.00,
-    otros: 20.00,
-    costoTotal: 490.00,
-    precioVenta: 750.00,
-    porcentajeBeneficio: 53.06
-  },
-  {
-    id: "4",
-    codigo: "SM-004",
-    titulo: "Mural Sur",
-    propietario: "Externa",
-    costeMensual: 400.00,
-    luz: 100.00,
-    patentes: 70.00,
-    comision: 40.00,
-    otros: 25.00,
-    costoTotal: 635.00,
-    precioVenta: 950.00,
-    porcentajeBeneficio: 49.61
-  },
-  {
-    id: "5",
-    codigo: "SM-005",
-    titulo: "Parada Bus Este",
-    propietario: "Imagen",
-    costeMensual: 200.00,
-    luz: 50.00,
-    patentes: 40.00,
-    comision: 20.00,
-    otros: 15.00,
-    costoTotal: 325.00,
-    precioVenta: 500.00,
-    porcentajeBeneficio: 53.85
-  }
-]
+// Interface para los datos de soportes desde la API
+interface Support {
+  id: string
+  code: string
+  title: string
+  type: string
+  status: string
+  widthM: number | null
+  heightM: number | null
+  city: string
+  country: string
+  priceMonth: number | null
+  available: boolean
+  areaM2: number | null
+  pricePerM2: number | null
+  productionCost: number | null
+  owner: string | null
+  imageUrl: string | null
+  coordinates: string | null
+  description: string | null
+  features: string | null
+  traffic: string | null
+  visibility: string | null
+  lighting: string | null
+  material: string | null
+  installationDate: string | null
+  lastMaintenance: string | null
+  nextMaintenance: string | null
+  notes: string | null
+}
+
+// Interface para los costes calculados
+interface SupportCosts {
+  id: string
+  codigo: string
+  titulo: string
+  propietario: string
+  costeMensual: number
+  luz: number
+  patentes: number
+  comision: number
+  otros: number
+  costoTotal: number
+  precioVenta: number
+  porcentajeBeneficio: number
+  tieneIluminacion: boolean
+}
 
 const getBeneficioColor = (porcentaje: number) => {
-  if (porcentaje >= 50) return "text-green-600"
-  if (porcentaje >= 30) return "text-yellow-600"
-  return "text-red-600"
+  if (porcentaje < 0) return "text-black"
+  if (porcentaje >= 0 && porcentaje < 15) return "text-red-600"
+  if (porcentaje >= 15 && porcentaje < 30) return "text-orange-600"
+  if (porcentaje >= 30 && porcentaje < 50) return "text-yellow-600"
+  return "text-green-600" // >= 50%
 }
 
 const getBeneficioIcon = (porcentaje: number) => {
-  if (porcentaje >= 50) return <TrendingUp className="w-4 h-4" />
-  if (porcentaje >= 30) return <TrendingUp className="w-4 h-4" />
-  return <TrendingDown className="w-4 h-4" />
+  if (porcentaje < 0) return <TrendingDown className="w-4 h-4" />
+  if (porcentaje < 30) return <TrendingDown className="w-4 h-4" />
+  return <TrendingUp className="w-4 h-4" />
 }
 
 export default function CostesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSoportes, setSelectedSoportes] = useState<string[]>([])
+  const [supports, setSupports] = useState<Support[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  })
+
+  // Función para calcular costes basados en datos reales
+  const calculateCosts = (support: Support): SupportCosts => {
+    const precioVenta = support.priceMonth || 0
+    const costeMensual = support.productionCost || (precioVenta * 0.4) // 40% del precio de venta como coste base
+    
+    // Debug: verificar qué valor tiene el campo lighting
+    console.log(`🔍 Soporte ${support.code}: lighting = "${support.lighting}" (tipo: ${typeof support.lighting})`)
+    console.log(`🔍 Soporte ${support.code}: todos los campos:`, support)
+    
+    const tieneIluminacion = support.lighting === 'Sí'
+    const luz = tieneIluminacion ? (precioVenta * 0.1) : 0 // 10% para luz solo si tiene iluminación
+    const patentes = precioVenta * 0.05 // 5% para patentes
+    const comision = precioVenta * 0.08 // 8% para comisión
+    const otros = precioVenta * 0.02 // 2% para otros gastos
+    const costoTotal = costeMensual + luz + patentes + comision + otros
+    
+    // Cálculo del % de beneficio: (Precio Venta - Coste Total) / Coste Total * 100
+    const beneficio = precioVenta - costoTotal
+    const porcentajeBeneficio = costoTotal > 0 ? (beneficio / costoTotal) * 100 : 0
+
+    console.log(`💰 Soporte ${support.code}: tieneIluminacion = ${tieneIluminacion}, luz = ${luz}`)
+
+    return {
+      id: support.id,
+      codigo: support.code,
+      titulo: support.title,
+      propietario: support.owner || "Imagen",
+      costeMensual,
+      luz,
+      patentes,
+      comision,
+      otros,
+      costoTotal,
+      precioVenta,
+      porcentajeBeneficio,
+      tieneIluminacion // Agregar campo para saber si tiene iluminación
+    }
+  }
+
+  // Cargar soportes desde la API
+  const fetchSupports = async (page: number = currentPage) => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      params.set('page', page.toString())
+      params.set('limit', '50')
+      if (searchTerm) params.set('q', searchTerm)
+      
+      const response = await fetch(`/api/soportes?${params}`)
+      
+      if (response.ok) {
+        const result = await response.json()
+        const supportsData = result.data || result
+        setSupports(Array.isArray(supportsData) ? supportsData : [])
+        setPagination(result.pagination || pagination)
+        setCurrentPage(page)
+        setError(null)
+      } else {
+        setError('Error al cargar los soportes')
+        toast.error('Error al cargar los soportes')
+      }
+    } catch (error) {
+      setError('Error de conexión')
+      toast.error('Error de conexión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSupports(1)
+  }, [searchTerm])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedSoportes(soportesCostes.map(s => s.id))
+      setSelectedSoportes(supports.map(s => s.id))
     } else {
       setSelectedSoportes([])
     }
@@ -130,16 +193,42 @@ export default function CostesPage() {
     }
   }
 
+  // Funciones de paginación
+  const handlePageChange = (page: number) => {
+    fetchSupports(page)
+  }
+
+  const handlePrevPage = () => {
+    if (pagination.hasPrev) {
+      handlePageChange(currentPage - 1)
+    }
+  }
+
+  const handleNextPage = () => {
+    if (pagination.hasNext) {
+      handlePageChange(currentPage + 1)
+    }
+  }
+
+  // Convertir soportes a costes y filtrar
+  const soportesCostes = supports.map(calculateCosts)
   const filteredSoportes = soportesCostes.filter(soporte =>
     soporte.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     soporte.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     soporte.propietario.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // Cálculos del panel superior
   const totalCostos = soportesCostes.reduce((sum, soporte) => sum + soporte.costoTotal, 0)
-  const totalVentas = soportesCostes.reduce((sum, soporte) => sum + soporte.precioVenta, 0)
-  const beneficioTotal = totalVentas - totalCostos
-  const porcentajeBeneficioTotal = (beneficioTotal / totalCostos) * 100
+  const potencialVentas = soportesCostes.reduce((sum, soporte) => sum + soporte.precioVenta, 0)
+  
+  // Ingresos solo de soportes ocupados
+  const soportesOcupados = supports.filter(s => s.status === 'Ocupado')
+  const ingresoTotal = soportesOcupados.reduce((sum, s) => sum + (s.priceMonth || 0), 0)
+  
+  // % Beneficio = (Ingresos Ocupados - Costes Totales) / Costes Totales * 100
+  const beneficioReal = ingresoTotal - totalCostos
+  const porcentajeBeneficioTotal = totalCostos > 0 ? (beneficioReal / totalCostos) * 100 : 0
 
   return (
     <Sidebar>
@@ -163,16 +252,28 @@ export default function CostesPage() {
                 Soportes
               </Link>
               <Link 
-                href="/panel/soportes/costes" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+                href="/panel/soportes/alquileres" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
-                Costes
+                Alquileres
               </Link>
               <Link 
                 href="/panel/soportes/planificacion" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
                 Planificación
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/mantenimiento" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Mantenimiento
               </Link>
             </div>
           </div>
@@ -196,9 +297,9 @@ export default function CostesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Costos</p>
+                  <p className="text-sm font-medium text-gray-600">Total Costes</p>
                   <p className="text-2xl font-bold text-red-600">
-                    €{totalCostos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                    Bs {totalCostos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <DollarSign className="w-8 h-8 text-red-500" />
@@ -210,12 +311,12 @@ export default function CostesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Ventas</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    €{totalVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  <p className="text-sm font-medium text-gray-600">Potencial de Ventas</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    Bs {potencialVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-green-500" />
+                <TrendingUp className="w-8 h-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -224,12 +325,12 @@ export default function CostesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Beneficio Total</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    €{beneficioTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  <p className="text-sm font-medium text-gray-600">Ingreso Total</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    Bs {ingresoTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-blue-500" />
+                <TrendingUp className="w-8 h-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
@@ -285,98 +386,202 @@ export default function CostesPage() {
           <CardHeader>
             <CardTitle>Costes por Soporte</CardTitle>
             <CardDescription>
-              {filteredSoportes.length} soportes encontrados
+              {loading ? 'Cargando...' : `${filteredSoportes.length} soportes encontrados`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4">
-                      <Checkbox
-                        checked={selectedSoportes.length === soportesCostes.length}
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Código</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Título</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Propietario</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Coste Mensual</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Luz</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Patentes</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Comisión</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Otros</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Costo Total</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Precio Venta</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">% Beneficio</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSoportes.map((soporte) => (
-                    <tr key={soporte.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644] mx-auto mb-4"></div>
+                  <p className="text-gray-600">Cargando soportes...</p>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <p className="text-red-600 mb-4">Error al cargar los soportes</p>
+                  <Button onClick={fetchSupports} variant="outline">
+                    Reintentar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-3">
                         <Checkbox
-                          checked={selectedSoportes.includes(soporte.id)}
-                          onCheckedChange={(checked) => handleSelectSoporte(soporte.id, checked as boolean)}
+                          checked={selectedSoportes.length === soportesCostes.length && soportesCostes.length > 0}
+                          onCheckedChange={handleSelectAll}
                         />
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-[#D54644]">{soporte.codigo}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium">{soporte.titulo}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge className={soporte.propietario === 'Imagen' ? 'bg-rose-900 text-white' : 'bg-sky-700 text-white'}>
-                          {soporte.propietario}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium">€{soporte.costeMensual.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span>€{soporte.luz.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span>€{soporte.patentes.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span>€{soporte.comision.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span>€{soporte.otros.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-red-600">€{soporte.costoTotal.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-green-600">€{soporte.precioVenta.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className={`flex items-center gap-1 ${getBeneficioColor(soporte.porcentajeBeneficio)}`}>
-                          {getBeneficioIcon(soporte.porcentajeBeneficio)}
-                          <span className="font-medium">{soporte.porcentajeBeneficio.toFixed(1)}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Código</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Título</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Propietario</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Coste Mensual</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Luz</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Patentes</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Comisión</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Otros</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Coste Total</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Precio Venta</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">% Beneficio</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredSoportes.length === 0 ? (
+                      <tr>
+                        <td colSpan={13} className="text-center py-8 text-gray-500">
+                          {searchTerm ? 'No se encontraron soportes con ese criterio de búsqueda' : 'No hay soportes disponibles'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSoportes.map((soporte) => (
+                        <tr key={soporte.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 px-3">
+                            <Checkbox
+                              checked={selectedSoportes.includes(soporte.id)}
+                              onCheckedChange={(checked) => handleSelectSoporte(soporte.id, checked as boolean)}
+                            />
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                              {soporte.codigo}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            {soporte.titulo?.length > 40 ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger className="text-left">
+                                    {soporte.titulo.slice(0, 40) + '…'}
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm">{soporte.titulo}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (soporte.titulo || '—')}
+                          </td>
+                          <td className="py-2 px-3">
+                            {soporte.propietario ? (
+                              <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${
+                                soporte.propietario.trim().toLowerCase() === 'imagen' ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {soporte.propietario}
+                              </span>
+                            ) : (
+                              <span className="text-gray-500">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className="font-medium">Bs {soporte.costeMensual.toFixed(2)}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            {soporte.tieneIluminacion ? (
+                              <span>Bs {soporte.luz.toFixed(2)}</span>
+                            ) : (
+                              <span className="text-gray-500">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span>Bs {soporte.patentes.toFixed(2)}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span>Bs {soporte.comision.toFixed(2)}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span>Bs {soporte.otros.toFixed(2)}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className="font-medium text-red-600">Bs {soporte.costoTotal.toFixed(2)}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className="font-medium text-green-600">Bs {soporte.precioVenta.toFixed(2)}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${getBeneficioColor(soporte.porcentajeBeneficio)}`}>
+                              {getBeneficioIcon(soporte.porcentajeBeneficio)}
+                              <span className="font-medium">{soporte.porcentajeBeneficio.toFixed(1)}%</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2">
+                              <Button variant="ghost" size="sm">
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Paginación */}
+        {pagination.totalPages > 1 && (
+          <div className="flex justify-center mt-8">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handlePrevPage}
+                disabled={!pagination.hasPrev || loading}
+              >
+                Anterior
+              </Button>
+              
+              {/* Mostrar páginas */}
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                let pageNum;
+                if (pagination.totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= pagination.totalPages - 2) {
+                  pageNum = pagination.totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(pageNum)}
+                    disabled={loading}
+                    className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleNextPage}
+                disabled={!pagination.hasNext || loading}
+              >
+                Siguiente
+              </Button>
+            </div>
+            
+            {/* Información de paginación */}
+            <div className="ml-4 text-sm text-gray-600">
+              Mostrando {((currentPage - 1) * 50) + 1} - {Math.min(currentPage * 50, pagination.total)} de {pagination.total} items
+            </div>
+          </div>
+        )}
       </main>
     </Sidebar>
   )

@@ -25,8 +25,9 @@ import {
   AlertCircle,
   Home,
   Eye,
-  Reply
+  Trash2
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Sidebar from "@/components/sidebar"
 
 // Tipos para los mensajes
@@ -38,74 +39,16 @@ interface Message {
   empresa: string
   mensaje: string
   fecha_recepcion: string
-  estado: "NUEVO" | "EN_PROCESO" | "CONTESTADO"
-  origen: "contacto" | "home"
+  estado: "NUEVO" | "LEÍDO" | "CONTESTADO"
 }
 
-// Datos de ejemplo para los mensajes
-const mensajes: Message[] = [
-  {
-    id: "MSG-001",
-    nombre: "Juan Pérez",
-    email: "juan.perez@empresa.com",
-    telefono: "+591 2 1234567",
-    empresa: "Empresa ABC S.A.",
-    mensaje: "Necesito información sobre vallas publicitarias en La Paz. ¿Podrían enviarme una cotización?",
-    fecha_recepcion: "2024-01-15T10:30:00Z",
-    estado: "NUEVO",
-    origen: "contacto"
-  },
-  {
-    id: "MSG-002",
-    nombre: "María García",
-    email: "maria.garcia@comercial.com",
-    telefono: "+591 2 2345678",
-    empresa: "Comercial XYZ Ltda.",
-    mensaje: "Estoy interesada en pantallas digitales para mi negocio. ¿Cuáles son las opciones disponibles?",
-    fecha_recepcion: "2024-01-14T15:45:00Z",
-    estado: "EN_PROCESO",
-    origen: "home"
-  },
-  {
-    id: "MSG-003",
-    nombre: "Carlos López",
-    email: "carlos.lopez@industrias.com",
-    telefono: "+591 2 3456789",
-    empresa: "Industrias DEF S.A.S.",
-    mensaje: "Necesitamos publicidad para nuestro nuevo producto. ¿Tienen espacios disponibles en Santa Cruz?",
-    fecha_recepcion: "2024-01-13T09:15:00Z",
-    estado: "CONTESTADO",
-    origen: "contacto"
-  },
-  {
-    id: "MSG-004",
-    nombre: "Ana Martínez",
-    email: "ana.martinez@servicios.com",
-    telefono: "+591 2 4567890",
-    empresa: "Servicios GHI S.A.",
-    mensaje: "Buenos días, me interesa conocer los precios de murales publicitarios. Gracias.",
-    fecha_recepcion: "2024-01-12T14:20:00Z",
-    estado: "NUEVO",
-    origen: "home"
-  },
-  {
-    id: "MSG-005",
-    nombre: "Pedro Rodríguez",
-    email: "pedro.rodriguez@distribuidora.com",
-    telefono: "+591 2 5678901",
-    empresa: "Distribuidora JKL Ltda.",
-    mensaje: "¿Ofrecen servicios de impresión digital? Necesito lonas para un evento.",
-    fecha_recepcion: "2024-01-11T11:30:00Z",
-    estado: "EN_PROCESO",
-    origen: "contacto"
-  }
-]
+// Los mensajes se cargan desde la API de Airtable
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
     case "CONTESTADO":
       return "bg-green-100 text-green-800"
-    case "EN_PROCESO":
+    case "LEÍDO":
       return "bg-blue-100 text-blue-800"
     case "NUEVO":
       return "bg-yellow-100 text-yellow-800"
@@ -118,7 +61,7 @@ const getEstadoIcon = (estado: string) => {
   switch (estado) {
     case "CONTESTADO":
       return <CheckCircle className="w-4 h-4" />
-    case "EN_PROCESO":
+    case "LEÍDO":
       return <Clock className="w-4 h-4" />
     case "NUEVO":
       return <AlertCircle className="w-4 h-4" />
@@ -127,21 +70,45 @@ const getEstadoIcon = (estado: string) => {
   }
 }
 
-const getOrigenColor = (origen: string) => {
-  switch (origen) {
-    case "contacto":
-      return "bg-purple-100 text-purple-800"
-    case "home":
-      return "bg-indigo-100 text-indigo-800"
-    default:
-      return "bg-gray-100 text-gray-800"
-  }
+
+// Estados para filtros
+const ESTADOS_META = {
+  NUEVO: { label: "Nuevo", className: "bg-yellow-100 text-yellow-800" },
+  LEÍDO: { label: "Leído", className: "bg-blue-100 text-blue-800" },
+  CONTESTADO: { label: "Contestado", className: "bg-green-100 text-green-800" }
 }
 
 export default function MensajesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMensajes, setSelectedMensajes] = useState<string[]>([])
-  const [mensajesList, setMensajesList] = useState<Message[]>(mensajes)
+  const [mensajesList, setMensajesList] = useState<Message[]>([])
+  const [estadoFilter, setEstadoFilter] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Cargar mensajes desde Airtable
+  const loadMensajes = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/messages')
+      if (response.ok) {
+        const data = await response.json()
+        setMensajesList(data)
+      } else {
+        const errorData = await response.json()
+        console.error('Error loading messages:', errorData)
+        alert(`Error al cargar mensajes: ${errorData.error || 'Error desconocido'}`)
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error)
+      alert('Error de conexión al cargar mensajes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadMensajes()
+  }, [])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -159,12 +126,58 @@ export default function MensajesPage() {
     }
   }
 
-  const filteredMensajes = mensajesList.filter(mensaje =>
-    mensaje.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mensaje.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mensaje.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mensaje.mensaje.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const handleEliminarMensaje = async (id: string) => {
+    if (confirm('¿Estás seguro de que quieres eliminar este mensaje?')) {
+      try {
+        const response = await fetch(`/api/messages/${id}`, {
+          method: 'DELETE'
+        })
+        if (response.ok) {
+          setMensajesList(mensajesList.filter(m => m.id !== id))
+          setSelectedMensajes(selectedMensajes.filter(m => m !== id))
+        } else {
+          alert('Error al eliminar el mensaje')
+        }
+      } catch (error) {
+        console.error('Error deleting message:', error)
+        alert('Error al eliminar el mensaje')
+      }
+    }
+  }
+
+  const handleMarcarComoLeido = async (id: string) => {
+    try {
+      const response = await fetch(`/api/messages/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ estado: 'LEÍDO' })
+      })
+      if (response.ok) {
+        setMensajesList(mensajesList.map(m => 
+          m.id === id ? { ...m, estado: "LEÍDO" as const } : m
+        ))
+      } else {
+        alert('Error al actualizar el estado')
+      }
+    } catch (error) {
+      console.error('Error updating message:', error)
+      alert('Error al actualizar el estado')
+    }
+  }
+
+
+  const filteredMensajes = mensajesList.filter(mensaje => {
+    const matchesSearch = mensaje.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mensaje.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mensaje.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mensaje.mensaje.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesEstado = estadoFilter.length === 0 || estadoFilter.includes(mensaje.estado)
+    
+    return matchesSearch && matchesEstado
+  })
 
   // Ordenar del más reciente al más antiguo
   const sortedMensajes = filteredMensajes.sort((a, b) => 
@@ -213,10 +226,26 @@ export default function MensajesPage() {
                   className="pl-10 w-64"
                 />
               </div>
-              <Button variant="outline" size="sm">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtros
-              </Button>
+              <Select
+                value={estadoFilter.length ? estadoFilter.join(',') : 'all'}
+                onValueChange={(value) => setEstadoFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
+              >
+                <SelectTrigger className="max-w-48">
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {Object.entries(ESTADOS_META).map(([key, meta]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                        {meta.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">
@@ -236,8 +265,16 @@ export default function MensajesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644] mx-auto mb-4"></div>
+                  <p className="text-gray-600">Cargando mensajes...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-3 px-4">
@@ -248,12 +285,11 @@ export default function MensajesPage() {
                     </th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Nombre</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Email</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Teléfono</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900 w-40">Teléfono</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Empresa</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Mensaje</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Fecha</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Estado</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Origen</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Acciones</th>
                   </tr>
                 </thead>
@@ -278,10 +314,12 @@ export default function MensajesPage() {
                           <span className="max-w-xs truncate">{mensaje.email}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          {mensaje.telefono}
+                      <td className="py-3 px-4 w-40">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+                            {mensaje.telefono}
+                          </span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -310,22 +348,20 @@ export default function MensajesPage() {
                         </Badge>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge className={`${getOrigenColor(mensaje.origen)} w-fit`}>
-                          {mensaje.origen === 'contacto' ? 'Contacto' : 'Home'}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
                         <div className="flex gap-1">
                           <Link href={`/panel/mensajes/${mensaje.id}`}>
                             <Button variant="ghost" size="sm" title="Ver detalles">
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
-                          <Button variant="ghost" size="sm" title="Responder">
-                            <Reply className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="w-4 h-4" />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title="Eliminar"
+                            onClick={() => handleEliminarMensaje(mensaje.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </td>
@@ -333,7 +369,8 @@ export default function MensajesPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

@@ -24,6 +24,9 @@ interface BillboardLocation {
   location: string
   city: string
   monthlyPrice: number
+  format?: string
+  dimensions?: string
+  images?: string[]
   coordinates?: {
     lat: number
     lng: number

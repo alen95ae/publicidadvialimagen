@@ -5,7 +5,6 @@ import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { 
   MessageSquare, 
@@ -20,9 +19,9 @@ import {
   XCircle,
   AlertCircle,
   Home,
-  Send,
-  Reply
+  ChevronDown
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Sidebar from "@/components/sidebar"
 
 // Tipos para los mensajes y respuestas
@@ -34,8 +33,7 @@ interface Message {
   empresa: string
   mensaje: string
   fecha_recepcion: string
-  estado: "NUEVO" | "EN_PROCESO" | "CONTESTADO"
-  origen: "contacto" | "home"
+  estado: "NUEVO" | "LEÍDO" | "CONTESTADO"
 }
 
 interface Respuesta {
@@ -46,34 +44,34 @@ interface Respuesta {
   admin_responsable: string
 }
 
-// Datos de ejemplo
-const mensaje: Message = {
-  id: "MSG-001",
-  nombre: "Juan Pérez",
-  email: "juan.perez@empresa.com",
-  telefono: "+591 2 1234567",
-  empresa: "Empresa ABC S.A.",
-  mensaje: "Buenos días, necesito información sobre vallas publicitarias en La Paz. Estoy interesado en espacios con alto tráfico vehicular. ¿Podrían enviarme una cotización con los precios y ubicaciones disponibles? También me gustaría conocer los tiempos de instalación y los materiales que utilizan. Gracias por su atención.",
-  fecha_recepcion: "2024-01-15T10:30:00Z",
-  estado: "EN_PROCESO",
-  origen: "contacto"
-}
-
-const respuestas: Respuesta[] = [
-  {
-    id: "RESP-001",
-    mensaje_id: "MSG-001",
-    respuesta: "Estimado Juan, gracias por contactarnos. Le hemos enviado por email nuestra propuesta comercial con los espacios disponibles en La Paz. Nuestro equipo comercial se pondrá en contacto con usted en las próximas 24 horas para coordinar una reunión.",
-    fecha_respuesta: "2024-01-15T14:30:00Z",
-    admin_responsable: "admin@publicidadvialimagen.com"
+// Función para cargar mensaje desde la API
+const loadMensaje = async (id: string): Promise<Message | null> => {
+  try {
+    const response = await fetch(`/api/messages/${id}`)
+    if (!response.ok) return null
+    
+    const data = await response.json()
+    return {
+      id: data.id,
+      nombre: data.nombre || "",
+      email: data.email || "",
+      telefono: data.telefono || "",
+      empresa: data.empresa || "",
+      mensaje: data.mensaje || "",
+      fecha_recepcion: data.fecha_recepcion || "",
+      estado: data.estado || "NUEVO"
+    }
+  } catch (error) {
+    console.error('Error loading message:', error)
+    return null
   }
-]
+}
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
     case "CONTESTADO":
       return "bg-green-100 text-green-800"
-    case "EN_PROCESO":
+    case "LEÍDO":
       return "bg-blue-100 text-blue-800"
     case "NUEVO":
       return "bg-yellow-100 text-yellow-800"
@@ -86,7 +84,7 @@ const getEstadoIcon = (estado: string) => {
   switch (estado) {
     case "CONTESTADO":
       return <CheckCircle className="w-4 h-4" />
-    case "EN_PROCESO":
+    case "LEÍDO":
       return <Clock className="w-4 h-4" />
     case "NUEVO":
       return <AlertCircle className="w-4 h-4" />
@@ -97,22 +95,94 @@ const getEstadoIcon = (estado: string) => {
 
 export default function MensajeDetailPage() {
   const params = useParams()
-  const [nuevaRespuesta, setNuevaRespuesta] = useState("")
-  const [isEnviando, setIsEnviando] = useState(false)
+  const [mensajeData, setMensajeData] = useState<Message | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isActualizando, setIsActualizando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleEnviarRespuesta = async () => {
-    if (!nuevaRespuesta.trim()) return
+  // Cargar mensaje al montar el componente
+  useEffect(() => {
+    const loadData = async () => {
+      if (params.id) {
+        setIsLoading(true)
+        setError(null)
+        
+        const mensaje = await loadMensaje(params.id as string)
+        if (mensaje) {
+          setMensajeData(mensaje)
+        } else {
+          setError('No se pudo cargar el mensaje')
+        }
+        
+        setIsLoading(false)
+      }
+    }
+    
+    loadData()
+  }, [params.id])
 
-    setIsEnviando(true)
+  const handleCambiarEstado = async (nuevoEstado: string) => {
+    if (!mensajeData) return
     
-    // Simular envío
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    setIsActualizando(true)
     
-    // Aquí se guardaría en Supabase
-    console.log("Guardando respuesta:", nuevaRespuesta)
-    
-    setNuevaRespuesta("")
-    setIsEnviando(false)
+    try {
+      const response = await fetch(`/api/messages/${mensajeData.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+      })
+      
+      if (response.ok) {
+        setMensajeData({ ...mensajeData, estado: nuevoEstado as "NUEVO" | "LEÍDO" | "CONTESTADO" })
+      } else {
+        const errorData = await response.json()
+        console.error('Error updating status:', errorData)
+        alert('Error al actualizar el estado')
+      }
+    } catch (error) {
+      console.error('Error updating status:', error)
+      alert('Error al actualizar el estado')
+    } finally {
+      setIsActualizando(false)
+    }
+  }
+
+  // Mostrar loading
+  if (isLoading) {
+    return (
+      <Sidebar>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644] mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando mensaje...</p>
+          </div>
+        </div>
+      </Sidebar>
+    )
+  }
+
+  // Mostrar error
+  if (error || !mensajeData) {
+    return (
+      <Sidebar>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Error</h2>
+            <p className="text-gray-600 mb-4">{error || 'No se pudo cargar el mensaje'}</p>
+            <Link href="/panel/mensajes">
+              <Button variant="outline">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver a Mensajes
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </Sidebar>
+    )
   }
 
   return (
@@ -152,15 +222,15 @@ export default function MensajeDetailPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <MessageSquare className="w-5 h-5" />
-                    Mensaje #{mensaje.id}
+                    Mensaje #{mensajeData.id}
                   </CardTitle>
                   <CardDescription>
-                    Recibido el {new Date(mensaje.fecha_recepcion).toLocaleString('es-ES')}
+                    Recibido el {new Date(mensajeData.fecha_recepcion).toLocaleString('es-ES')}
                   </CardDescription>
                 </div>
-                <Badge className={`${getEstadoColor(mensaje.estado)} flex items-center gap-1`}>
-                  {getEstadoIcon(mensaje.estado)}
-                  {mensaje.estado.replace('_', ' ')}
+                <Badge className={`${getEstadoColor(mensajeData.estado)} flex items-center gap-1`}>
+                  {getEstadoIcon(mensajeData.estado)}
+                  {mensajeData.estado.replace('_', ' ')}
                 </Badge>
               </div>
             </CardHeader>
@@ -171,114 +241,90 @@ export default function MensajeDetailPage() {
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-400" />
                     <span className="font-medium">Nombre:</span>
-                    <span>{mensaje.nombre}</span>
+                    <span>{mensajeData.nombre}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-gray-400" />
                     <span className="font-medium">Email:</span>
-                    <span>{mensaje.email}</span>
+                    <span>{mensajeData.email}</span>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-gray-400" />
                     <span className="font-medium">Teléfono:</span>
-                    <span>{mensaje.telefono}</span>
+                    <span>{mensajeData.telefono}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Building className="w-4 h-4 text-gray-400" />
                     <span className="font-medium">Empresa:</span>
-                    <span>{mensaje.empresa}</span>
+                    <span>{mensajeData.empresa}</span>
                   </div>
                 </div>
               </div>
 
               {/* Mensaje */}
               <div>
-                <h4 className="font-medium mb-2">Mensaje:</h4>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-gray-700 whitespace-pre-wrap">{mensaje.mensaje}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium">Mensaje:</h4>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-600">
+                      {new Date(mensajeData.fecha_recepcion).toLocaleString('es-ES')}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Historial de Respuestas */}
-          {respuestas.length > 0 && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Historial de Respuestas</CardTitle>
-                <CardDescription>
-                  {respuestas.length} respuesta{respuestas.length !== 1 ? 's' : ''} enviada{respuestas.length !== 1 ? 's' : ''}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {respuestas.map((respuesta) => (
-                    <div key={respuesta.id} className="border-l-4 border-blue-500 pl-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-medium text-gray-600">
-                          {respuesta.admin_responsable}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {new Date(respuesta.fecha_respuesta).toLocaleString('es-ES')}
-                        </span>
-                      </div>
-                      <p className="text-gray-700 bg-blue-50 p-3 rounded-lg">
-                        {respuesta.respuesta}
-                      </p>
-                    </div>
-                  ))}
+                <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                  <p className="text-gray-700 whitespace-pre-wrap">{mensajeData.mensaje}</p>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Formulario de Respuesta */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Reply className="w-5 h-5" />
-                Responder
-              </CardTitle>
-              <CardDescription>
-                Escribe tu respuesta al cliente
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <Textarea
-                  placeholder="Escribe tu respuesta aquí..."
-                  value={nuevaRespuesta}
-                  onChange={(e) => setNuevaRespuesta(e.target.value)}
-                  className="min-h-[120px]"
-                  maxLength={1000}
-                />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500">
-                    {nuevaRespuesta.length}/1000 caracteres
-                  </span>
-                  <Button 
-                    onClick={handleEnviarRespuesta}
-                    disabled={!nuevaRespuesta.trim() || isEnviando}
-                    className="bg-[#D54644] hover:bg-[#B03A38] text-white"
+                
+                {/* Selector de Estado */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-600">Estado:</span>
+                  <Select 
+                    value={mensajeData.estado} 
+                    onValueChange={handleCambiarEstado}
+                    disabled={isActualizando}
                   >
-                    {isEnviando ? (
-                      <>
-                        <Clock className="w-4 h-4 mr-2 animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Enviar Respuesta
-                      </>
-                    )}
-                  </Button>
+                    <SelectTrigger className="w-48">
+                      <div className="flex items-center gap-2">
+                        {getEstadoIcon(mensajeData.estado)}
+                        <span>{mensajeData.estado}</span>
+                        <ChevronDown className="w-4 h-4 ml-auto" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NUEVO">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-yellow-600" />
+                          <span>NUEVO</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="LEÍDO">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <span>LEÍDO</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="CONTESTADO">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span>CONTESTADO</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {isActualizando && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Clock className="w-4 h-4 animate-spin" />
+                      <span>Actualizando...</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
+
         </div>
       </main>
     </Sidebar>

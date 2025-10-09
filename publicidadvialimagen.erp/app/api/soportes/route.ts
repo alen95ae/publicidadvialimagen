@@ -1,39 +1,120 @@
 import { NextResponse } from "next/server"
 import { airtable } from "@/lib/airtable"
-import { extractCoordinatesFromGoogleMapsLink } from "./helpers"
+import { extractCoordinatesFromGoogleMapsLink, buildPayload, rowToSupport } from "./helpers"
 
-export async function GET() {
+// Función para normalizar nombres de ciudades (manejar acentos y variantes)
+function normalizeCityName(city: string): string[] {
+  const cityMap: Record<string, string[]> = {
+    'Potosí': ['Potosí', 'Potosi'],
+    'Beni': ['Beni', 'Trinidad'],
+    'Pando': ['Pando', 'Cobija']
+  }
+  
+  // Buscar si la ciudad coincide con alguna variante
+  for (const [normalized, variants] of Object.entries(cityMap)) {
+    if (variants.some(v => v.toLowerCase() === city.toLowerCase())) {
+      return variants // Devolver todas las variantes para buscar en Airtable
+    }
+  }
+  
+  return [city] // Si no tiene variantes, devolver como array de un elemento
+}
+
+export async function GET(request: Request) {
   try {
-    const records = await airtable("Soportes").select({}).all()
+    const { searchParams } = new URL(request.url)
+    const query = searchParams.get('q') || ''
+    const statusFilter = searchParams.get('status') || ''
+    const cityFilter = searchParams.get('city') || ''
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '25')
+
+    console.log('🔍 Search params:', { query, statusFilter, cityFilter, page, limit })
+
+    // Construir filtros para Airtable
+    let airtableFilter = ''
+    const filterParts = []
+
+    // Filtro de búsqueda por texto (código, título, ciudad, tipo)
+    if (query) {
+      const searchFilter = `OR(
+        SEARCH("${query}", LOWER({Código})) > 0,
+        SEARCH("${query}", LOWER({Título})) > 0,
+        SEARCH("${query}", LOWER({Ciudad})) > 0,
+        SEARCH("${query}", LOWER({Tipo de soporte})) > 0
+      )`
+      filterParts.push(searchFilter)
+    }
+
+    // Filtro de estado
+    if (statusFilter) {
+      const statuses = statusFilter.split(',').map(s => s.trim())
+      if (statuses.length === 1) {
+        filterParts.push(`{Estado} = "${statuses[0]}"`)
+      } else {
+        const statusFilterStr = statuses.map(status => `{Estado} = "${status}"`).join(', ')
+        filterParts.push(`OR(${statusFilterStr})`)
+      }
+    }
+
+    // Filtro de ciudad (con soporte para variantes y acentos)
+    if (cityFilter) {
+      const cityVariants = normalizeCityName(cityFilter)
+      if (cityVariants.length === 1) {
+        filterParts.push(`{Ciudad} = "${cityVariants[0]}"`)
+      } else {
+        // Si hay múltiples variantes, usar OR
+        const cityFilters = cityVariants.map(v => `{Ciudad} = "${v}"`).join(', ')
+        filterParts.push(`OR(${cityFilters})`)
+      }
+    }
+
+    // Combinar filtros
+    if (filterParts.length > 0) {
+      airtableFilter = filterParts.length === 1 ? filterParts[0] : `AND(${filterParts.join(', ')})`
+    }
+
+    console.log('🔍 Airtable filter:', airtableFilter)
+
+    // Obtener registros con filtros
+    const selectOptions: any = {}
+    if (airtableFilter) {
+      selectOptions.filterByFormula = airtableFilter
+    }
+
+    const records = await airtable("Soportes").select(selectOptions).all()
 
     const data = records.map((r) => {
-      // Extraer coordenadas del enlace de Google Maps si no están en los campos
-      const googleMapsLink = r.fields["Enlace Google Maps"] || ""
-      const coords = extractCoordinatesFromGoogleMapsLink(googleMapsLink)
-      
-      return {
+      // Usar la función rowToSupport() que mapea correctamente todos los campos incluido lighting
+      return rowToSupport({
         id: r.id,
-        code: r.fields["Código"] || "",
-        title: r.fields["Título"] || "",
-        type: r.fields["Tipo de soporte"] || "Vallas Publicitarias",
-        status: r.fields["Estado"] || "Disponible",
-        widthM: r.fields["Ancho"] || 0,
-        heightM: r.fields["Alto"] || 0,
-        city: r.fields["Ciudad"] || "",
-        priceMonth: r.fields["Precio por mes"] || 0,
-        impactosDiarios: r.fields["Impactos diarios"] || 0,
-        googleMapsLink,
-        latitude: r.fields["Latitud"] ?? coords.latitude,
-        longitude: r.fields["Longitud"] ?? coords.longitude,
-        address: r.fields["Dirección / Notas"] || "",
-        owner: r.fields["Propietario"] || "",
-        available: r.fields["Estado"] === "Disponible",
-        createdAt: r.createdTime,
-        updatedAt: r.fields["Última actualización"] || r.createdTime
-      }
+        ...r.fields
+      })
     })
 
-    return NextResponse.json({ data })
+    // Aplicar paginación
+    const total = data.length
+    const totalPages = Math.ceil(total / limit)
+    const startIndex = (page - 1) * limit
+    const endIndex = startIndex + limit
+    const paginatedData = data.slice(startIndex, endIndex)
+
+    const pagination = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
+    }
+
+    console.log('📊 Pagination:', pagination)
+    console.log('📊 Data length:', paginatedData.length)
+
+    return NextResponse.json({ 
+      data: paginatedData,
+      pagination 
+    })
   } catch (e: any) {
     console.error("Error leyendo soportes de Airtable:", e)
     return NextResponse.json({ error: "No se pudieron obtener los soportes" }, { status: 500 })

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Calendar, MapPin, Eye, Filter, X, Clock, Users, Zap, FileText } from "lucide-react"
+import { Calendar, MapPin, Eye, Filter, X, Clock, Users, Zap, FileText, Ruler } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -65,7 +65,7 @@ const FALLBACK_BILLBOARDS = [
     image: "/placeholder.svg?height=300&width=400",
     monthlyPrice: 800,
     location: "Centro Comercial Santa Cruz",
-    city: "Santa Cruz de la Sierra",
+    city: "Santa Cruz",
     format: "Murales",
     type: "Mobiliario Urbano",
     dimensions: "2x1.5 metros",
@@ -209,11 +209,14 @@ const FALLBACK_BILLBOARDS = [
 function normalizeCityName(city: string): string {
   const cityMap: Record<string, string> = {
     // Santa Cruz
-    'Santa Cruz': 'Santa Cruz de la Sierra',
-    'Santa Cruz de la Sierra': 'Santa Cruz de la Sierra',
+    'Santa Cruz': 'Santa Cruz',
+    'Santa Cruz de la Sierra': 'Santa Cruz',
     // Trinidad/Beni - Beni es el departamento, Trinidad es la capital
     'Beni': 'Trinidad',
     'Trinidad': 'Trinidad',
+    // Cobija/Pando - Pando es el departamento, Cobija es la capital
+    'Pando': 'Cobija',
+    'Cobija': 'Cobija',
     // Potosí - manejar con y sin acento
     'Potosi': 'Potosí',
     'Potosí': 'Potosí',
@@ -297,7 +300,7 @@ function FilterSidebar({
         <div className="space-y-3">
           <h3 className="text-sm font-medium">Ciudades</h3>
           <div className="space-y-2">
-            {["La Paz", "Santa Cruz de la Sierra", "Cochabamba", "El Alto", "Sucre", "Potosí", "Tarija", "Oruro", "Trinidad"].map((city) => (
+            {["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosí", "Tarija", "Oruro", "Trinidad", "Cobija"].map((city) => (
               <div key={city} className="flex items-center space-x-2">
                 <Checkbox
                   id={`city-${city}`}
@@ -312,7 +315,8 @@ function FilterSidebar({
           </div>
         </div>
 
-        {/* Precio Mensual */}
+        {/* Precio Mensual - OCULTO TEMPORALMENTE */}
+        {/* 
         <div className="space-y-3">
           <h3 className="text-sm font-medium">Precio Mensual (Bs)</h3>
           <div className="space-y-3">
@@ -353,6 +357,7 @@ function FilterSidebar({
             </div>
           </div>
         </div>
+        */}
 
         {/* Tipo de Soporte */}
         <div className="space-y-3">
@@ -423,6 +428,7 @@ export default function BillboardsPage() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [mapVisible, setMapVisible] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState("featured")
   const billboards = allBillboards && allBillboards.length > 0 ? allBillboards : FALLBACK_BILLBOARDS
 
   // Effect to handle URL parameters
@@ -475,7 +481,7 @@ export default function BillboardsPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
               <p className="text-gray-600">Cargando vallas publicitarias...</p>
             </div>
           </div>
@@ -618,6 +624,42 @@ export default function BillboardsPage() {
     return true
   })
 
+  // Función para ordenar los billboards
+  const sortBillboards = (billboards: any[]) => {
+    const sorted = [...billboards]
+    
+    switch (sortBy) {
+      case "traffic":
+        // Ordenar por mayor tráfico (extraer número de la cadena de tráfico)
+        return sorted.sort((a, b) => {
+          const getTrafficNumber = (traffic: string) => {
+            const match = traffic.match(/(\d+(?:,\d+)*)/)
+            return match ? parseInt(match[1].replace(/,/g, '')) : 0
+          }
+          const trafficA = getTrafficNumber(a.traffic || "0")
+          const trafficB = getTrafficNumber(b.traffic || "0")
+          return trafficB - trafficA
+        })
+      
+      case "name-az":
+        return sorted.sort((a, b) => a.name.localeCompare(b.name))
+      
+      case "name-za":
+        return sorted.sort((a, b) => b.name.localeCompare(a.name))
+      
+      case "featured":
+      default:
+        // Orden por defecto: disponibles primero, luego por precio
+        return sorted.sort((a, b) => {
+          if (a.available && !b.available) return -1
+          if (!a.available && b.available) return 1
+          return a.monthlyPrice - b.monthlyPrice
+        })
+    }
+  }
+
+  const sortedBillboards = sortBillboards(filteredBillboards)
+
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">
@@ -626,7 +668,7 @@ export default function BillboardsPage() {
         </h1>
         {searchQuery && (
           <p className="text-muted-foreground mb-2">
-            Se encontraron {filteredBillboards.length} espacios publicitarios
+            Se encontraron {sortedBillboards.length} espacios publicitarios
           </p>
         )}
         <div className="flex items-center text-sm text-muted-foreground">
@@ -684,7 +726,7 @@ export default function BillboardsPage() {
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Ubicación de Espacios Publicitarios</h2>
             <BillboardMap 
-              billboards={filteredBillboards} 
+              billboards={sortedBillboards} 
               selectedCity={selectedFilters.cities.length === 1 ? selectedFilters.cities[0] : undefined}
               isVisible={mapVisible}
               onToggle={() => setMapVisible(!mapVisible)}
@@ -733,24 +775,24 @@ export default function BillboardsPage() {
             </div>
 
             <div className="flex items-center gap-2 ml-auto">
-              <span className="text-sm text-muted-foreground hidden sm:inline">
-                {filteredBillboards.length} espacios
-              </span>
-              <Select defaultValue="featured">
+            <span className="text-sm text-muted-foreground hidden sm:inline">
+              {sortedBillboards.length} espacios
+            </span>
+              <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Ordenar por" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="featured">Destacados</SelectItem>
-                  <SelectItem value="price-low">Precio: Menor a Mayor</SelectItem>
-                  <SelectItem value="price-high">Precio: Mayor a Menor</SelectItem>
+                  <SelectItem value="featured">Populares</SelectItem>
                   <SelectItem value="traffic">Mayor Tráfico</SelectItem>
+                  <SelectItem value="name-az">Alfabético A-Z</SelectItem>
+                  <SelectItem value="name-za">Alfabético Z-A</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {filteredBillboards.length === 0 ? (
+          {sortedBillboards.length === 0 ? (
             <div className="text-center py-12">
               <h3 className="text-lg font-medium mb-2">No se encontraron espacios</h3>
               <p className="text-muted-foreground mb-4">Intenta ajustar tus filtros para encontrar lo que buscas.</p>
@@ -758,32 +800,31 @@ export default function BillboardsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredBillboards.map((billboard) => (
+              {sortedBillboards.map((billboard) => (
                 <Card key={billboard.id} className="overflow-hidden">
-                  <div className="w-full h-[147px] relative">
+                  <Link href={`/billboards/${billboard.id}`} className="w-full h-[147px] relative block">
                     <Image
                       src={billboard.images?.[0] || "/placeholder.svg"}
                       alt={billboard.name}
                       width={222}
                       height={147}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover hover:opacity-90 transition-opacity"
                     />
-                  </div>
+                  </Link>
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
                       <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-lg font-bold text-primary">
-                            Bs {billboard.monthlyPrice.toLocaleString()}
+                        <div className="flex items-center gap-2">
+                          <Ruler className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {billboard.dimensions || "Medidas no disponibles"}
                           </span>
-                          <span className="text-xs text-muted-foreground">/mes</span>
                         </div>
                         <Button
                           size="sm"
                           className="bg-primary hover:bg-primary/90 text-xs"
-                          disabled={!billboard.available}
-                          asChild={billboard.available}
+                          asChild
                         >
                           {billboard.available ? (
                             <Link href={`/billboards/${billboard.id}`}>
@@ -791,10 +832,10 @@ export default function BillboardsPage() {
                               Cotizar
                             </Link>
                           ) : (
-                            <>
-                              <Clock className="mr-1 h-3 w-3" />
-                              No disponible
-                            </>
+                            <Link href={`/billboards/${billboard.id}`}>
+                              <Eye className="mr-1 h-3 w-3" />
+                              Ver más
+                            </Link>
                           )}
                         </Button>
                       </div>

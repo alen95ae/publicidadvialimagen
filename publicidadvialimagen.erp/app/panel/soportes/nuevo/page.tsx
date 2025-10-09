@@ -280,7 +280,7 @@ export default function NuevoSoportePage() {
   const owner = formData.owner?.trim()
   const ownerIsImagen = owner?.toLowerCase() === 'imagen'
   const ownerClass = owner
-    ? ownerIsImagen ? 'bg-rose-900 text-white' : 'bg-sky-700 text-white'
+    ? ownerIsImagen ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
     : 'hidden'
 
   return (

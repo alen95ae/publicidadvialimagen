@@ -158,6 +158,11 @@ export function rowToSupport(row:any){
     longitude,
     images,
     iluminacion: row['Iluminación'] ?? null,
+    lighting: (() => {
+      const iluminacionValue = row['Iluminación']
+      console.log(`🔍 Airtable - Soporte ${row['Código']}: Iluminación = ${iluminacionValue} (tipo: ${typeof iluminacionValue})`)
+      return iluminacionValue === true ? 'Sí' : 'No'
+    })(), // Mapear checkbox de iluminación
     address: row['Dirección / Notas'] ?? null,
     owner: row['Propietario'] ?? null,
     ownerId: null, // Airtable no usa IDs de propietario de la misma forma

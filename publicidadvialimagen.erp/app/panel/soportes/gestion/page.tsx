@@ -56,11 +56,12 @@ export default function SoportesPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
   const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [cityFilter, setCityFilter] = useState<string>("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 25,
+    limit: 50,
     total: 0,
     totalPages: 0,
     hasNext: false,
@@ -88,8 +89,9 @@ export default function SoportesPage() {
       const params = new URLSearchParams()
       if (query) params.set('q', query)
       if (statusFilter.length) params.set('status', statusFilter.join(','))
+      if (cityFilter) params.set('city', cityFilter)
       params.set('page', page.toString())
-      params.set('limit', '25')
+      params.set('limit', '50')
       
       console.log('🔍 Fetching supports with params:', params.toString())
       const response = await fetch(`/api/soportes?${params}`)
@@ -124,7 +126,7 @@ export default function SoportesPage() {
 
   useEffect(() => {
     fetchSupports(q, 1)
-  }, [q, statusFilter])
+  }, [q, statusFilter, cityFilter])
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return
@@ -303,21 +305,41 @@ export default function SoportesPage() {
         body: formData
       })
 
+      // Verificar si la respuesta es JSON válido
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        console.error('Respuesta no es JSON:', text)
+        toast.error('Error: Respuesta del servidor no válida')
+        return
+      }
+
       const result = await response.json()
       
       if (response.ok && result.success) {
         toast.success(`Importación completada: ${result.created} creados, ${result.updated} actualizados${result.skipped > 0 ? `, ${result.skipped} saltados` : ''}${result.errors > 0 ? `, ${result.errors} errores` : ''}`)
         if (result.errorMessages && result.errorMessages.length > 0) {
           console.log('Errores:', result.errorMessages)
+          // Mostrar algunos errores en el toast si hay muchos
+          if (result.errorMessages.length > 3) {
+            toast.error(`Algunos errores: ${result.errorMessages.slice(0, 3).join(', ')}...`)
+          }
         }
         await fetchSupports(q, currentPage)
         setOpenImport(false)
       } else {
-        toast.error(`Error: ${result.error}`)
+        toast.error(`Error: ${result.error || 'Error desconocido'}`)
+        if (result.details) {
+          console.error('Detalles del error:', result.details)
+        }
       }
     } catch (error) {
       console.error('Error al importar:', error)
-      toast.error('Error al importar el archivo')
+      if (error instanceof SyntaxError && error.message.includes('JSON')) {
+        toast.error('Error: Respuesta del servidor no válida. Verifica que el archivo CSV tenga el formato correcto.')
+      } else {
+        toast.error('Error al importar el archivo')
+      }
     } finally {
       setImportLoading(false)
       // Limpiar el input
@@ -325,6 +347,48 @@ export default function SoportesPage() {
     }
   }
 
+  // Función para exportar a CSV
+  const handleCsvExport = () => {
+    try {
+      // Construir CSV con todos los soportes actuales
+      const headers = ['Código', 'Título', 'Tipo', 'Estado', 'Ciudad', 'Ancho', 'Alto', 'Precio/Mes', 'Propietario']
+      const rows = supportsArray.map(s => [
+        s.code || '',
+        s.title || '',
+        s.type || '',
+        s.status || '',
+        s.city || '',
+        s.widthM || '',
+        s.heightM || '',
+        s.priceMonth || '',
+        s.owner || ''
+      ])
+      
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n')
+      
+      // Crear blob y descargar
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `soportes_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast.success('CSV exportado correctamente')
+    } catch (error) {
+      console.error('Error al exportar CSV:', error)
+      toast.error('Error al exportar el archivo')
+    }
+  }
+
+  // Lista fija de ciudades (las mismas que en la web)
+  const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosí", "Tarija", "Oruro", "Beni", "Pando"]
 
   return (
     <Sidebar>
@@ -348,16 +412,28 @@ export default function SoportesPage() {
                 Soportes
               </Link>
               <Link 
-                href="/panel/soportes/costes" 
+                href="/panel/soportes/alquileres" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
-                Costes
+                Alquileres
               </Link>
               <Link 
                 href="/panel/soportes/planificacion" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
                 Planificación
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/mantenimiento" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Mantenimiento
               </Link>
             </div>
           </div>
@@ -378,86 +454,111 @@ export default function SoportesPage() {
         {/* Search and Actions */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex gap-4 items-end">
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Buscar soportes
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Buscar por código, título, ciudad, tipo o propietario..."
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    className="max-w-md"
-                  />
-                  
-                  {/* Filtros avanzados */}
-                  <Select
-                    value={statusFilter.length ? statusFilter.join(',') : 'all'}
-                    onValueChange={(value) => setStatusFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
-                  >
-                    <SelectTrigger className="max-w-48">
-                      <Filter className="w-4 h-4 mr-2" />
-                      <SelectValue placeholder="Disponibilidad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      {Object.entries(STATUS_META).map(([key, meta]) => (
-                        <SelectItem key={key} value={key}>
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
-                            {meta.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Buscador */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Buscar código, título, ciudad..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="pl-9 w-64"
+                />
               </div>
               
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={exportPDF}
-                  disabled={!someSelected}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Catálogo PDF
-                </Button>
-                
-                <Dialog open={openImport} onOpenChange={setOpenImport}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Upload className="h-4 w-4 mr-2" />
-                      Importar CSV
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Importar soportes (CSV)</DialogTitle>
-                      <DialogDescription>
-                        Columnas: Ciudad, Disponibilidad, Titulo, Precio por mes, Codigo, Ancho, Alto, Impactos dia, Ubicación, Tipo
-                        <br/>
-                        <a href="/api/soportes/import/template" className="underline">Descargar plantilla</a>
-                      </DialogDescription>
-                    </DialogHeader>
-                    <input 
-                      type="file" 
-                      accept=".csv,text/csv" 
-                      onChange={handleCsvImport}
-                      disabled={importLoading}
-                    />
-                    {importLoading && <p>Importando...</p>}
-                  </DialogContent>
-                </Dialog>
-                
-                <Link href="/panel/soportes/nuevo">
-                  <Button className="bg-[#D54644] hover:bg-[#B03A38]">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nuevo Soporte
+              {/* Filtro de disponibilidad */}
+              <Select
+                value={statusFilter.length ? statusFilter.join(',') : 'all'}
+                onValueChange={(value) => setStatusFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
+              >
+                <SelectTrigger className="w-40 [&>span]:text-black">
+                  <SelectValue placeholder="Disponibilidad" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Disponibilidad</SelectItem>
+                  {Object.entries(STATUS_META).map(([key, meta]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                        {meta.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Filtro de ciudad */}
+              <Select
+                value={cityFilter || "all"}
+                onValueChange={(value) => setCityFilter(value === 'all' ? '' : value)}
+              >
+                <SelectTrigger className="w-40 [&>span]:text-black">
+                  <SelectValue placeholder="Ciudad" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Ciudad</SelectItem>
+                  {ciudadesBolivia.map((city) => (
+                    <SelectItem key={city} value={city}>
+                      {city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex-1" />
+              
+              {/* Botones de acción */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportPDF}
+                disabled={!someSelected}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Catálogo PDF
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCsvExport}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Exportar CSV
+              </Button>
+              
+              <Dialog open={openImport} onOpenChange={setOpenImport}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importar
                   </Button>
-                </Link>
-              </div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Importar soportes (CSV)</DialogTitle>
+                    <DialogDescription>
+                      Columnas: Ciudad, Disponibilidad, Titulo, Precio por mes, Codigo, Ancho, Alto, Impactos dia, Ubicación, Tipo
+                      <br/>
+                      <a href="/api/soportes/import/template" className="underline">Descargar plantilla</a>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <input 
+                    type="file" 
+                    accept=".csv,text/csv" 
+                    onChange={handleCsvImport}
+                    disabled={importLoading}
+                  />
+                  {importLoading && <p>Importando...</p>}
+                </DialogContent>
+              </Dialog>
+              
+              <Link href="/panel/soportes/nuevo">
+                <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo Soporte
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -641,10 +742,9 @@ export default function SoportesPage() {
                     <TableHead>Título</TableHead>
                     <TableHead>Tipo de soporte</TableHead>
                     <TableHead>Ubicación</TableHead>
-                    <TableHead>Dimensiones (m)</TableHead>
+                    <TableHead className="text-center">Dimensiones (m)</TableHead>
                     <TableHead>Precio/Mes</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Propietario</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -683,10 +783,10 @@ export default function SoportesPage() {
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
                           <MapPin className="w-3 h-3" />
-                          {support.city}, {support.country}
+                          {support.city}{support.country ? `, ${support.country}` : ', BO'}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <div className="text-sm">
                           {support.widthM && support.heightM ? (
                             <span>{support.widthM} × {support.heightM}</span>
@@ -704,17 +804,6 @@ export default function SoportesPage() {
                         <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${STATUS_META[support.status]?.className || 'bg-gray-100 text-gray-800'}`}>
                           {STATUS_META[support.status]?.label || support.status}
                         </span>
-                      </TableCell>
-                      <TableCell>
-                        {support.owner ? (
-                          <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${
-                            support.owner.trim().toLowerCase() === 'imagen' ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {support.owner}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500">—</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
@@ -806,7 +895,7 @@ export default function SoportesPage() {
             
             {/* Información de paginación */}
             <div className="ml-4 text-sm text-gray-600">
-              Mostrando {((currentPage - 1) * 25) + 1} - {Math.min(currentPage * 25, pagination.total)} de {pagination.total} items
+              Mostrando {((currentPage - 1) * 50) + 1} - {Math.min(currentPage * 50, pagination.total)} de {pagination.total} items
             </div>
           </div>
         )}

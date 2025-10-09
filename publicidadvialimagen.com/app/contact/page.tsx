@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
+import { useMessages } from "@/hooks/use-messages"
 
 // Configuración de Supabase - DISABLED
 // const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -36,6 +37,7 @@ export default function ContactPage() {
     company: '',
     message: ''
   })
+  const { addMessage } = useMessages()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -50,23 +52,34 @@ export default function ContactPage() {
     setIsSubmitting(true)
 
     try {
-      const { error } = await supabase
-        .from('mensajes')
-        .insert([{
-          nombre: formData.name,
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
           email: formData.email,
-          telefono: formData.phone,
-          empresa: formData.company,
-          mensaje: formData.message,
-          origen: 'contacto',
-          estado: 'NUEVO'
-        }])
+          phone: formData.phone,
+          company: formData.company,
+          message: formData.message,
+          origin: 'Contacto'
+        })
+      })
 
-      if (error) {
-        console.error('Error sending message:', error)
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Error sending message:', errorData)
         alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
         return
       }
+
+      // Guardar mensaje en localStorage también
+      await addMessage({
+        asunto: `Mensaje de contacto - ${formData.name}`,
+        mensaje: formData.message,
+        email: formData.email
+      })
 
       setFormSubmitted(true)
       setFormData({
@@ -196,7 +209,7 @@ export default function ContactPage() {
               
               <div className="flex justify-center gap-8">
                 {/* LinkedIn */}
-                <div className="flex items-center gap-4">
+                <a href="https://www.linkedin.com/company/publicidad-vial-imagen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -219,10 +232,10 @@ export default function ContactPage() {
                     <h3 className="font-semibold">LinkedIn</h3>
                     <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
                   </div>
-                </div>
+                </a>
 
                 {/* Facebook */}
-                <div className="flex items-center gap-4">
+                <a href="https://www.facebook.com/PVISRL" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -243,10 +256,10 @@ export default function ContactPage() {
                     <h3 className="font-semibold">Facebook</h3>
                     <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
                   </div>
-                </div>
+                </a>
 
                 {/* Instagram */}
-                <div className="flex items-center gap-4">
+                <a href="https://www.instagram.com/imagenpublicidadbolivia/?hl=es-la" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -269,7 +282,7 @@ export default function ContactPage() {
                     <h3 className="font-semibold">Instagram</h3>
                     <p className="text-muted-foreground text-sm">@imagenpublicidadbolivia</p>
                   </div>
-                </div>
+                </a>
               </div>
             </CardContent>
           </Card>
@@ -321,14 +334,10 @@ export default function ContactPage() {
                     <div>
                       <h4 className="font-semibold mb-2">Teléfonos</h4>
                       <p className="text-muted-foreground">
-                        <a href="tel:+59122493155" className="hover:text-primary">
-                          (591-2) 2493155 – 2493156
-                        </a>
+                        (591-2) 2493155 – 2493156
                       </p>
                       <p className="text-muted-foreground">
-                        <a href="tel:+59176244800" className="hover:text-primary">
-                          76244800 – 77229109
-                        </a>
+                        76244800 – 77229109
                       </p>
                     </div>
                   </div>
@@ -403,14 +412,10 @@ export default function ContactPage() {
                     <div>
                       <h4 className="font-semibold mb-2">Teléfonos</h4>
                       <p className="text-muted-foreground">
-                        <a href="tel:+59133494677" className="hover:text-primary">
-                          (591-3) 3494677
-                        </a>
+                        (591-3) 3494677
                       </p>
                       <p className="text-muted-foreground">
-                        <a href="tel:+59176244800" className="hover:text-primary">
-                          76244800 - 78988344
-                        </a>
+                        76244800 - 78988344
                       </p>
                     </div>
                   </div>

@@ -1,5 +1,24 @@
 import { useState, useEffect } from 'react'
 
+// Función para normalizar nombres de ciudades (mapeo ERP → Web)
+function normalizeCityName(city: string): string {
+  const cityMap: Record<string, string> = {
+    // Santa Cruz
+    'Santa Cruz': 'Santa Cruz',
+    'Santa Cruz de la Sierra': 'Santa Cruz',
+    // Trinidad/Beni - Beni es el departamento, Trinidad es la capital
+    'Beni': 'Trinidad',
+    'Trinidad': 'Trinidad',
+    // Cobija/Pando - Pando es el departamento, Cobija es la capital
+    'Pando': 'Cobija',
+    'Cobija': 'Cobija',
+    // Potosí - manejar con y sin acento
+    'Potosi': 'Potosí',
+    'Potosí': 'Potosí',
+  }
+  return cityMap[city] || city
+}
+
 // Función para extraer coordenadas de Google Maps link
 function extractCoordinatesFromGoogleMaps(link: string | null): { lat: number, lng: number } | null {
   if (!link) return null
@@ -89,7 +108,7 @@ export function useBillboards() {
           images: soporte.images || [soporte.image], // Usar todas las imágenes disponibles
           monthlyPrice: soporte.monthlyPrice,
           location: soporte.location,
-          city: soporte.city,
+          city: normalizeCityName(soporte.city), // Normalizar ciudad (Pando → Cobija)
           format: soporte.format,
           type: soporte.type,
           dimensions: soporte.dimensions,

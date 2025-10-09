@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Save, Building2, User, Star } from "lucide-react"
+import { ArrowLeft, Save, Building2, User } from "lucide-react"
 import { toast } from "sonner"
+import Sidebar from "@/components/sidebar"
 
 interface SalesOwner {
   id: string
@@ -34,14 +34,10 @@ export default function NuevoContactoPage() {
     email: "",
     website: "",
     address1: "",
-    address2: "",
     city: "",
-    state: "",
-    postalCode: "",
     country: "",
     salesOwnerId: "none",
     notes: "",
-    favorite: false
   })
 
   useEffect(() => {
@@ -102,26 +98,27 @@ export default function NuevoContactoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/panel/contactos" className="text-gray-600 hover:text-gray-800 mr-4">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Contactos
-            </Link>
-            <div className="text-xl font-bold text-slate-800">Nuevo Contacto</div>
+    <Sidebar>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Link href="/panel/contactos" className="text-gray-600 hover:text-gray-800 mr-4">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Contactos
+              </Link>
+              <div className="text-xl font-bold text-slate-800">Nuevo Contacto</div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-gray-600">Buscar</span>
+              <span className="text-gray-800 font-medium">admin</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+        {/* Main Content */}
+        <main className="container mx-auto px-6 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800 mb-2">Crear Nuevo Contacto</h1>
           <p className="text-gray-600">Añade un nuevo contacto a tu base de datos</p>
@@ -165,17 +162,6 @@ export default function NuevoContactoPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="favorite"
-                    checked={formData.favorite}
-                    onCheckedChange={(checked) => handleChange("favorite", checked)}
-                  />
-                  <Label htmlFor="favorite" className="flex items-center gap-2">
-                    <Star className="w-4 h-4" />
-                    Favorito
-                  </Label>
-                </div>
               </div>
 
               <div className="space-y-4">
@@ -306,58 +292,25 @@ export default function NuevoContactoPage() {
                   />
                 </div>
                 
+                
                 <div>
-                  <Label htmlFor="address2">Dirección 2</Label>
+                  <Label htmlFor="city">Ciudad</Label>
                   <Input
-                    id="address2"
-                    value={formData.address2}
-                    onChange={(e) => handleChange("address2", e.target.value)}
-                    placeholder="Apartamento, suite, etc."
+                    id="city"
+                    value={formData.city}
+                    onChange={(e) => handleChange("city", e.target.value)}
+                    placeholder="Ciudad"
                   />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="city">Ciudad</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => handleChange("city", e.target.value)}
-                      placeholder="Ciudad"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="state">Estado/Provincia</Label>
-                    <Input
-                      id="state"
-                      value={formData.state}
-                      onChange={(e) => handleChange("state", e.target.value)}
-                      placeholder="Estado"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="postalCode">Código Postal</Label>
-                    <Input
-                      id="postalCode"
-                      value={formData.postalCode}
-                      onChange={(e) => handleChange("postalCode", e.target.value)}
-                      placeholder="CP"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="country">País</Label>
-                    <Input
-                      id="country"
-                      value={formData.country}
-                      onChange={(e) => handleChange("country", e.target.value)}
-                      placeholder="País"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="country">País</Label>
+                  <Input
+                    id="country"
+                    value={formData.country}
+                    onChange={(e) => handleChange("country", e.target.value)}
+                    placeholder="País"
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -394,7 +347,8 @@ export default function NuevoContactoPage() {
             </Button>
           </div>
         </form>
-      </main>
-    </div>
+        </main>
+      </div>
+    </Sidebar>
   )
 }

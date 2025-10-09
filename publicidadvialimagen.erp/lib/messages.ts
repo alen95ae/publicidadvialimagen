@@ -14,7 +14,7 @@ export interface Message {
   empresa: string
   mensaje: string
   fecha_recepcion: string
-  estado: "NUEVO" | "EN_PROCESO" | "CONTESTADO"
+  estado: "NUEVO" | "LEÍDO" | "CONTESTADO"
   origen: "contacto" | "home"
   created_at?: string
   updated_at?: string

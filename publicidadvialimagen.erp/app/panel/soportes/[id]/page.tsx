@@ -428,7 +428,7 @@ export default function SoporteDetailPage() {
   const owner = formData.owner?.trim()
   const ownerIsImagen = owner?.toLowerCase() === 'imagen'
   const ownerClass = owner
-    ? ownerIsImagen ? 'bg-rose-900 text-white' : 'bg-sky-700 text-white'
+    ? ownerIsImagen ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
     : 'hidden'
 
   return (
@@ -657,7 +657,7 @@ export default function SoporteDetailPage() {
                     <div>
                       <Label className="text-sm font-medium text-gray-700">Propietario</Label>
                       <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${
-                        support.owner.trim().toLowerCase() === 'imagen' ? 'bg-rose-900 text-white' : 'bg-sky-700 text-white'
+                        support.owner.trim().toLowerCase() === 'imagen' ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
                       }`}>
                         {support.owner}
                       </span>

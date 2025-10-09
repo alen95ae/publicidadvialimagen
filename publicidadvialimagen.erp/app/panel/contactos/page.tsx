@@ -18,19 +18,20 @@ import { toast } from "sonner"
 
 interface Contact {
   id: string
-  kind: "INDIVIDUAL" | "COMPANY"
-  relation: "CUSTOMER" | "SUPPLIER" | "BOTH"
   displayName: string
   legalName?: string
   taxId?: string
   phone?: string
   email?: string
-  website?: string
+  address?: string
   city?: string
+  postalCode?: string
   country?: string
-  favorite: boolean
-  salesOwner?: { name: string; email: string }
-  tags: Array<{ tag: { name: string; color: string } }>
+  relation: string
+  status: string
+  notes?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface ContactFilters {
@@ -38,8 +39,6 @@ interface ContactFilters {
   relation: string
   city: string
   country: string
-  owner: string
-  favorite: boolean
 }
 
 export default function ContactosPage() {
@@ -51,9 +50,7 @@ export default function ContactosPage() {
     q: "",
     relation: "ALL",
     city: "",
-    country: "",
-    owner: "ALL",
-    favorite: false
+    country: ""
   })
   const [groupBy, setGroupBy] = useState<string>("NONE")
   const [salesOwners, setSalesOwners] = useState<Array<{ id: string; name: string }>>([])
@@ -71,13 +68,11 @@ export default function ContactosPage() {
       if (filters.relation && filters.relation !== "ALL") params.append("relation", filters.relation)
       if (filters.city) params.append("city", filters.city)
       if (filters.country) params.append("country", filters.country)
-      if (filters.owner && filters.owner !== "ALL") params.append("owner", filters.owner)
-      if (filters.favorite) params.append("favorite", "true")
 
       const response = await fetch(`/api/contactos?${params}`)
       if (response.ok) {
         const data = await response.json()
-        setContacts(data.items)
+        setContacts(data.data || [])
       } else {
         toast.error("Error al cargar los contactos")
       }
@@ -89,15 +84,8 @@ export default function ContactosPage() {
   }
 
   const fetchSalesOwners = async () => {
-    try {
-      const response = await fetch("/api/users")
-      if (response.ok) {
-        const users = await response.json()
-        setSalesOwners(users.filter((user: any) => user.role !== "ADMIN"))
-      }
-    } catch (error) {
-      console.error("Error fetching sales owners:", error)
-    }
+    // Sales owners functionality removed for now
+    setSalesOwners([])
   }
 
   const handleExport = async () => {
@@ -130,28 +118,7 @@ export default function ContactosPage() {
     }
   }
 
-  const handleToggleFavorite = async (contactId: string, currentFavorite: boolean) => {
-    try {
-      const response = await fetch(`/api/contactos/${contactId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ favorite: !currentFavorite })
-      })
-
-      if (response.ok) {
-        setContacts(prev => prev.map(contact => 
-          contact.id === contactId 
-            ? { ...contact, favorite: !currentFavorite }
-            : contact
-        ))
-        toast.success(currentFavorite ? "Removido de favoritos" : "Añadido a favoritos")
-      } else {
-        toast.error("Error al actualizar favorito")
-      }
-    } catch (error) {
-      toast.error("Error de conexión")
-    }
-  }
+  // Favorite functionality removed for now
 
   const handleDeleteSelected = async () => {
     if (selectedContacts.size === 0) return
@@ -192,20 +159,21 @@ export default function ContactosPage() {
   }
 
   const groupedContacts = useMemo(() => {
+    if (!contacts || contacts.length === 0) return [{ key: "Todos", contacts: [], count: 0 }]
     if (!groupBy || groupBy === "NONE") return [{ key: "Todos", contacts, count: contacts.length }]
 
     const groups: { [key: string]: Contact[] } = {}
     contacts.forEach(contact => {
       let key = ""
       switch (groupBy) {
-        case "owner":
-          key = contact.salesOwner?.name || "Sin asignar"
-          break
         case "city":
           key = contact.city || "Sin ciudad"
           break
         case "country":
           key = contact.country || "Sin país"
+          break
+        case "relation":
+          key = contact.relation || "Sin relación"
           break
         default:
           key = "Sin agrupar"

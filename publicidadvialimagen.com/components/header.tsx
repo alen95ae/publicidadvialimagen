@@ -3,13 +3,26 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { ShoppingCart, Search, Globe, Menu, X, Megaphone } from "lucide-react"
+import { ShoppingCart, Search, Menu, X, Megaphone } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import UserMenu from "@/components/user-menu"
 import { useCampaignsContext } from "@/components/campaigns-provider"
+
+// Componente de la bandera de Bolivia
+const BoliviaFlag = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect width="24" height="8" fill="#D52B1E" />
+    <rect y="8" width="24" height="8" fill="#F9E300" />
+    <rect y="16" width="24" height="8" fill="#007A3D" />
+  </svg>
+)
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -146,7 +159,7 @@ export default function Header() {
             </form>
           </div>
           <Button variant="ghost" size="sm" className="gap-2 hidden md:flex">
-            <Globe className="h-4 w-4" />
+            <BoliviaFlag className="h-4 w-4" />
             <span className="text-sm">Español (Bolivia)</span>
           </Button>
           <UserMenu />

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Calendar, MapPin, Heart, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone } from "lucide-react"
+import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,8 +19,8 @@ import { useCampaignsContext } from "@/components/campaigns-provider"
 import { useBillboards } from "@/hooks/use-billboards"
 
 // Dynamic import para el mapa
-const SimpleMap = dynamic(
-  () => import("@/components/simple-map"),
+const DynamicMap = dynamic(
+  () => import("@/components/dynamic-map"),
   { 
     ssr: false,
     loading: () => (
@@ -41,7 +41,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   const [selectedStartDate, setSelectedStartDate] = useState("")
   const [selectedMonths, setSelectedMonths] = useState("1")
   const [selectedServices, setSelectedServices] = useState<string[]>([])
-  const [isFavorite, setIsFavorite] = useState(false)
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const { addToCampaign } = useCampaignsContext()
   const { billboards, loading } = useBillboards()
   
@@ -62,7 +62,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
       <div className="container px-4 py-8">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Cargando soporte...</p>
           </div>
         </div>
@@ -161,6 +161,11 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
     }
   }
 
+  const handleImageClick = (index: number) => {
+    setSelectedImageIndex(index)
+  }
+
+
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       {/* Breadcrumb */}
@@ -189,7 +194,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
         <div className="space-y-4">
           <div className="aspect-[4/3] relative rounded-lg overflow-hidden">
             <Image
-              src={displayData.images[0] || "/placeholder.svg"}
+              src={displayData.images[selectedImageIndex] || "/placeholder.svg"}
               alt={displayData.name}
               fill
               className="object-cover"
@@ -197,11 +202,17 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {displayData.images.slice(1).map((image, index) => (
-              <div key={index} className="aspect-[4/3] relative rounded-lg overflow-hidden">
+            {displayData.images.map((image, index) => (
+              <div 
+                key={index} 
+                className={`aspect-[4/3] relative rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:opacity-80 hover:scale-105 ${
+                  selectedImageIndex === index ? 'ring-2 ring-[#D54644] ring-offset-2' : ''
+                }`}
+                onClick={() => handleImageClick(index)}
+              >
                 <Image
                   src={image || "/placeholder.svg"}
-                  alt={`${displayData.name} - Vista ${index + 2}`}
+                  alt={`${displayData.name} - Vista ${index + 1}`}
                   fill
                   className="object-cover"
                 />
@@ -213,14 +224,10 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">Ubicación</h3>
             {displayData.coordinates && displayData.coordinates.lat && displayData.coordinates.lng ? (
-              <SimpleMap
-                center={[displayData.coordinates.lat, displayData.coordinates.lng]}
-                zoom={16}
-                heightClassName="aspect-[4/3]"
-                markerTitle={displayData.name}
-                markerSubtitle={displayData.location}
-                markerLinkUrl={`https://www.google.com/maps?q=${displayData.coordinates.lat},${displayData.coordinates.lng}`}
-                markerLinkLabel="Abrir en Google Maps"
+              <DynamicMap
+                billboards={[displayData]}
+                isFullscreen={false}
+                zoom={18}
               />
             ) : (
               <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center border">
@@ -254,19 +261,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
               } transition-none pointer-events-none`}>
                 {displayData.status || 'No disponible'}
               </Badge>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsFavorite(!isFavorite)}
-                  className={cn(
-                    "p-2",
-                    isFavorite ? "text-red-500" : "text-gray-400"
-                  )}
-                >
-                  <Heart className={cn("h-5 w-5", isFavorite && "fill-current")} />
-                </Button>
-              </div>
             </div>
             
             <h1 className="text-3xl font-bold mb-2">{displayData.name}</h1>
@@ -302,7 +296,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Lightbulb className="h-5 w-5 text-gray-400" />
+                <Lightbulb className={`h-5 w-5 ${displayData.technicalSpecs.iluminacion === 'Sí' ? 'text-yellow-500' : 'text-gray-400'}`} />
                 <div>
                   <div className="font-medium">{displayData.technicalSpecs.iluminacion}</div>
                   <div className="text-sm text-muted-foreground">Iluminación</div>
@@ -322,7 +316,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-2xl font-bold">
-                  Bs {displayData.monthlyPrice.toLocaleString()} / mes
+                  Reservar espacio
                 </CardTitle>
               </div>
             </CardHeader>
@@ -400,14 +394,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                 </div>
               </div>
 
-              {/* Total */}
-              <Separator />
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold">Total</span>
-                <span className="text-2xl font-bold text-[#D54644]">
-                  Bs {getTotalPrice().toLocaleString()}
-                </span>
-              </div>
 
               {/* Botón añadir a campaña */}
               <Button 

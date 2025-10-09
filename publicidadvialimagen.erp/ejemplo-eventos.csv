@@ -1,0 +1,10 @@
+Titulo,Descripcion,FechaInicio,FechaFin,AsignadoA,NombreAsignado,Estado,UserId
+Reunión con cliente ABC,Presentar propuesta de campaña publicitaria,2025-10-09T14:00:00,2025-10-09T15:30:00,EMP001,Juan Pérez,en_curso,user_123
+Instalación de valla en Av. Principal,Coordinar con equipo de instalación,2025-10-10T09:00:00,2025-10-10T12:00:00,EMP002,María González,pendiente,user_123
+Revisión de diseños,Aprobar diseños para campaña de Coca-Cola,2025-10-09T16:00:00,2025-10-09T17:00:00,EMP003,Carlos Mendoza,completado,user_123
+Mantenimiento de soportes Zona Sur,Inspección trimestral de estructuras,2025-10-11T08:00:00,2025-10-11T13:00:00,EMP004,Ana López,pendiente,user_123
+Seguimiento de cotización,Llamar a cliente para confirmar presupuesto,2025-10-09T11:00:00,2025-10-09T11:30:00,EMP001,Juan Pérez,completado,user_123
+Capacitación equipo producción,Nuevos procedimientos de seguridad,2025-10-12T10:00:00,2025-10-12T12:00:00,EMP005,Roberto Sánchez,pendiente,user_123
+Entrega de material impreso,Cliente: Supermercados La Estrella,2025-10-09T13:00:00,2025-10-09T14:00:00,EMP002,María González,en_curso,user_123
+Auditoría de inventario,Conteo de materiales en almacén,2025-10-15T09:00:00,2025-10-15T17:00:00,EMP006,Luis Ramírez,pendiente,user_123
+

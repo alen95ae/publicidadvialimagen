@@ -21,7 +21,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <LoginLink postLoginRedirectURL="/panel">
-            <Button className="w-full h-11 text-base font-medium" size="lg">
+            <Button className="w-full h-11 text-base font-medium bg-red-600 hover:bg-red-700 text-white" size="lg">
               <LogIn className="mr-2 h-5 w-5" />
               Iniciar sesión
             </Button>

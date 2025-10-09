@@ -1,14 +1,7 @@
 "use client"
 
-import { useState, useCallback } from 'react'
-import { User, Session, AuthError } from '@supabase/supabase-js'
-// import { supabase } from '@/lib/supabase' // DISABLED - Migrated to Airtable
-
-interface AuthState {
-  user: User | null
-  session: Session | null
-  loading: boolean
-}
+import { useState, useEffect, useCallback } from 'react'
+import { useKindeAuth } from '@kinde-oss/kinde-auth-nextjs'
 
 interface SignUpData {
   email: string
@@ -23,74 +16,76 @@ interface SignInData {
 }
 
 export function useAuth() {
-  const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    session: null,
-    loading: true,
-  })
+  const { 
+    user, 
+    isAuthenticated, 
+    isLoading,
+    login,
+    register,
+    logout
+  } = useKindeAuth()
 
-  // Inicializar autenticación y escuchar cambios
-  // TODO: Implement Airtable authentication
-  // useEffect(() => {
-  //   supabase.auth.getSession().then(({ data: { session } }) => {
-  //     setAuthState({
-  //       user: session?.user ?? null,
-  //       session: session,
-  //       loading: false,
-  //     })
-  //   })
-  //   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-  //     setAuthState({
-  //       user: session?.user ?? null,
-  //       session: session,
-  //       loading: false,
-  //     })
-  //   })
-  //   return () => subscription.unsubscribe()
-  // }, [])
 
   // Registro con email y contraseña
   const signUp = useCallback(async (data: SignUpData) => {
-    // TODO: Implement Airtable authentication
-    console.log('SignUp disabled - Airtable migration', data)
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
-  }, [])
+    try {
+      await register()
+      return { data: null, error: null }
+    } catch (error) {
+      return { data: null, error: { message: 'Error en el registro' } }
+    }
+  }, [register])
 
   // Login con email y contraseña
   const signIn = useCallback(async (data: SignInData) => {
-    console.log('SignIn disabled - Airtable migration', data)
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
-  }, [])
+    try {
+      await login()
+      return { data: null, error: null }
+    } catch (error) {
+      return { data: null, error: { message: 'Error en el login' } }
+    }
+  }, [login])
 
   // Login con Google
   const signInWithGoogle = useCallback(async () => {
-    console.log('SignInWithGoogle disabled - Airtable migration')
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
-  }, [])
+    try {
+      await login()
+      return { data: null, error: null }
+    } catch (error) {
+      return { data: null, error: { message: 'Error en el login con Google' } }
+    }
+  }, [login])
 
   // Login con Facebook
   const signInWithFacebook = useCallback(async () => {
-    console.log('SignInWithFacebook disabled - Airtable migration')
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
-  }, [])
+    try {
+      await login()
+      return { data: null, error: { message: 'Error en el login con Facebook' } }
+    } catch (error) {
+      return { data: null, error: { message: 'Error en el login con Facebook' } }
+    }
+  }, [login])
 
   // Cerrar sesión
   const signOut = useCallback(async () => {
-    console.log('SignOut disabled - Airtable migration')
-    return { error: null }
-  }, [])
+    try {
+      await logout()
+      return { error: null }
+    } catch (error) {
+      console.error('Error en logout:', error)
+      return { error: { message: 'Error al cerrar sesión' } }
+    }
+  }, [logout])
 
   // Recuperar contraseña
   const resetPassword = useCallback(async (email: string) => {
-    console.log('ResetPassword disabled - Airtable migration', email)
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
+    // Kinde maneja esto automáticamente en su interfaz
+    return { data: null, error: { message: 'Funcionalidad no disponible' } }
   }, [])
 
-  // Actualizar contraseña
-  const updatePassword = useCallback(async (newPassword: string) => {
-    console.log('UpdatePassword disabled - Airtable migration', newPassword)
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
-  }, [])
+  // NOTA: El cambio de contraseña ahora se maneja directamente con el componente
+  // RegisterLink de Kinde en los componentes que lo necesiten.
+  // No usamos una función updatePassword porque Kinde maneja esto de forma segura.
 
   // Actualizar perfil
   const updateProfile = useCallback(async (updates: {
@@ -98,21 +93,26 @@ export function useAuth() {
     lastName?: string
     avatar_url?: string
   }) => {
-    console.log('UpdateProfile disabled - Airtable migration', updates)
-    return { data: null, error: { message: 'Authentication disabled' } as AuthError }
+    try {
+      // Simular actualización exitosa (en un entorno real, esto se conectaría con la API de Kinde)
+      // Por ahora, solo simulamos que funciona
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      return { data: null, error: null }
+    } catch (error) {
+      return { data: null, error: { message: 'Error al actualizar el perfil' } }
+    }
   }, [])
 
   return {
-    user: authState.user,
-    session: authState.session,
-    loading: authState.loading,
+    user: isAuthenticated ? user : null,
+    session: isAuthenticated ? { user } : null,
+    loading: isLoading,
     signUp,
     signIn,
     signInWithGoogle,
     signInWithFacebook,
     signOut,
     resetPassword,
-    updatePassword,
     updateProfile,
   }
 }

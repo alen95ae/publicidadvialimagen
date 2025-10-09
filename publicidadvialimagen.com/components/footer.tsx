@@ -85,16 +85,16 @@ export default function Footer() {
                 <Link href="/privacy-policy" className="text-xs text-muted-foreground hover:text-primary">
                   Política de Privacidad
                 </Link>
-                <Link href="#" className="text-xs text-muted-foreground hover:text-primary">
+                <Link href="/terms-of-service" className="text-xs text-muted-foreground hover:text-primary">
                   Términos de Servicio
                 </Link>
-                <Link href="#" className="text-xs text-muted-foreground hover:text-primary">
+                <Link href="/cookie-policy" className="text-xs text-muted-foreground hover:text-primary">
                   Política de Cookies
                 </Link>
               </div>
               <div className="flex gap-4">
                 {/* LinkedIn */}
-                <Link href="#" className="text-muted-foreground hover:text-primary">
+                <Link href="https://www.linkedin.com/company/publicidad-vial-imagen" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="24"
@@ -114,7 +114,7 @@ export default function Footer() {
                   <span className="sr-only">LinkedIn</span>
                 </Link>
                 {/* Facebook */}
-                <Link href="#" className="text-muted-foreground hover:text-primary">
+                <Link href="https://www.facebook.com/PVISRL" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="24"
@@ -132,7 +132,7 @@ export default function Footer() {
                   <span className="sr-only">Facebook</span>
                 </Link>
                 {/* Instagram */}
-                <Link href="#" className="text-muted-foreground hover:text-primary">
+                <Link href="https://www.instagram.com/imagenpublicidadbolivia/?hl=es-la" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="24"

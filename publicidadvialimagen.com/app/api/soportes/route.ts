@@ -11,8 +11,8 @@ function normalizeCityName(ciudad: string | undefined): string {
   
   const cityMap: Record<string, string> = {
     // Santa Cruz
-    'Santa Cruz': 'Santa Cruz de la Sierra',
-    'Santa Cruz de la Sierra': 'Santa Cruz de la Sierra',
+    'Santa Cruz': 'Santa Cruz',
+    'Santa Cruz de la Sierra': 'Santa Cruz',
     // Trinidad/Beni - Beni es el departamento, Trinidad es la capital
     'Beni': 'Trinidad',
     'Trinidad': 'Trinidad',
@@ -328,7 +328,6 @@ function getCoordinatesFromCity(ciudad: string): [number, number] {
   const cityCoordinates: Record<string, [number, number]> = {
     'La Paz': [-16.5000, -68.1500],
     'Santa Cruz': [-17.7833, -63.1833],
-    'Santa Cruz de la Sierra': [-17.7833, -63.1833],
     'Cochabamba': [-17.3833, -66.1667],
     'El Alto': [-16.5167, -68.1833],
     'Sucre': [-19.0500, -65.2500],

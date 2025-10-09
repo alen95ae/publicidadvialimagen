@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import useEmblaCarousel from 'embla-carousel-react'
 import {
   TruckIcon,
   ShieldCheck,
@@ -15,6 +16,10 @@ import {
   Eye,
   Calendar,
   MapPin,
+  ChevronLeft,
+  ChevronRight,
+  Ruler,
+  FileText,
 } from "lucide-react"
 // import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
 
@@ -22,11 +27,175 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { useMessages } from "@/hooks/use-messages"
+import { useBillboards, type Billboard } from "@/hooks/use-billboards"
 
 // Configuración de Supabase - DISABLED
 // const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // const supabase = createClient(supabaseUrl, supabaseKey)
+
+const cities = [
+  { name: "La Paz", image: "/vallas_publicitarias_la_paz.png" },
+  { name: "Santa Cruz", image: "/vallas_publicitarias_santa_cruz_de_la_sierra.png" },
+  { name: "Cochabamba", image: "/vallas_publicitarias_cochabamba.png" },
+  { name: "El Alto", image: "/vallas_publicitarias_el_alto.png" },
+  { name: "Sucre", image: "/vallas_publicitarias_sucre.png" },
+  { name: "Potosí", image: "/vallas_publicitarias_potosi.png" },
+  { name: "Tarija", image: "/vallas_publicitarias_tarija.png" },
+  { name: "Oruro", image: "/vallas_publicitarias_oruro.png" },
+  { name: "Trinidad", image: "/vallas_publicitarias_trinidad.png" },
+  { name: "Cobija", image: "/vallas_publicitarias_cobija.png" },
+]
+
+function CitiesCarousel() {
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { 
+      loop: true,
+      align: 'start',
+      slidesToScroll: 1,
+      containScroll: 'trimSnaps',
+    }
+  )
+
+  const scrollPrev = useCallback(() => {
+    if (emblaApi) emblaApi.scrollPrev()
+  }, [emblaApi])
+
+  const scrollNext = useCallback(() => {
+    if (emblaApi) emblaApi.scrollNext()
+  }, [emblaApi])
+
+  return (
+    <div className="relative">
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="flex gap-3">
+          {cities.map((city, index) => (
+            <div key={index} className="flex-[0_0_auto] min-w-[140px]">
+              <Link href={`/billboards?city=${city.name}`} className="text-center group block">
+                <img 
+                  src={city.image} 
+                  alt={city.name} 
+                  className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" 
+                />
+                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                  {city.name}
+                </p>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Botones de navegación */}
+      <button
+        onClick={scrollPrev}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Ciudad anterior"
+      >
+        <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+      
+      <button
+        onClick={scrollNext}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Siguiente ciudad"
+      >
+        <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+    </div>
+  )
+}
+
+function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] }) {
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { 
+      loop: true,
+      align: 'start',
+      slidesToScroll: 1,
+      containScroll: 'trimSnaps',
+    }
+  )
+
+  const scrollPrev = useCallback(() => {
+    if (emblaApi) emblaApi.scrollPrev()
+  }, [emblaApi])
+
+  const scrollNext = useCallback(() => {
+    if (emblaApi) emblaApi.scrollNext()
+  }, [emblaApi])
+
+  return (
+    <div className="relative">
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="flex gap-4 pb-4">
+          {billboards.map((billboard) => (
+            <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
+              <Card className="overflow-hidden">
+                <Link href={`/billboards/${billboard.id}`} className="w-full h-[147px] relative block">
+                  <Image
+                    src={billboard.images?.[0] || "/placeholder.svg"}
+                    alt={billboard.name}
+                    width={280}
+                    height={147}
+                    className="h-full w-full object-cover hover:opacity-90 transition-opacity"
+                  />
+                </Link>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Ruler className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {billboard.dimensions || "Medidas no disponibles"}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 text-xs"
+                        asChild
+                      >
+                        {billboard.available ? (
+                          <Link href={`/billboards/${billboard.id}`}>
+                            <FileText className="mr-1 h-3 w-3" />
+                            Cotizar
+                          </Link>
+                        ) : (
+                          <Link href={`/billboards/${billboard.id}`}>
+                            <Eye className="mr-1 h-3 w-3" />
+                            Ver más
+                          </Link>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Botones de navegación */}
+      <button
+        onClick={scrollPrev}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Anterior"
+      >
+        <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+      
+      <button
+        onClick={scrollNext}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Siguiente"
+      >
+        <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+    </div>
+  )
+}
 
 export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -39,6 +208,12 @@ export default function HomePage() {
     empresa: '',
     mensaje: ''
   })
+  const { addMessage } = useMessages()
+  const { billboards, loading, error } = useBillboards()
+
+  // Debug: Verificar que el componente se está renderizando
+  console.log('HomePage component rendering')
+  console.log('Billboards loaded:', billboards.length)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -53,23 +228,34 @@ export default function HomePage() {
     setIsSubmitting(true)
 
     try {
-      const { error } = await supabase
-        .from('mensajes')
-        .insert([{
-          nombre: formData.nombre,
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.nombre,
           email: formData.email,
-          telefono: formData.telefono,
-          empresa: formData.empresa,
-          mensaje: formData.mensaje,
-          origen: 'home',
-          estado: 'NUEVO'
-        }])
+          phone: formData.telefono,
+          company: formData.empresa,
+          message: formData.mensaje,
+          origin: 'Home'
+        })
+      })
 
-      if (error) {
-        console.error('Error sending message:', error)
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Error sending message:', errorData)
         alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
         return
       }
+
+      // Guardar mensaje en localStorage también
+      await addMessage({
+        asunto: `Mensaje desde página principal - ${formData.nombre}`,
+        mensaje: formData.mensaje,
+        email: formData.email
+      })
 
       setFormSubmitted(true)
       setFormData({
@@ -118,78 +304,37 @@ export default function HomePage() {
     },
   ]
 
-  const featuredBillboards = [
-    {
-      id: 1,
-      name: "Pantalla LED Premium - Centro Madrid",
-      image: "/placeholder.svg?height=300&width=400",
-      monthlyPrice: 2500,
-      location: "Gran Vía, Madrid",
-      visibility: "Alto tráfico",
-      dimensions: "6x3 metros",
-      type: "LED Digital",
-    },
-    {
-      id: 2,
-      name: "Valla Tradicional - Autopista A-1",
-      image: "/placeholder.svg?height=300&width=400",
-      monthlyPrice: 1200,
-      location: "Autopista A-1, Km 15",
-      visibility: "Muy alto tráfico",
-      dimensions: "8x4 metros",
-      type: "Impresa",
-    },
-    {
-      id: 3,
-      name: "Parada de Autobús - Zona Comercial",
-      image: "/placeholder.svg?height=300&width=400",
-      monthlyPrice: 800,
-      location: "Centro Comercial Xanadú",
-      visibility: "Medio-alto tráfico",
-      dimensions: "2x1.5 metros",
-      type: "Backlight",
-    },
-    {
-      id: 4,
-      name: "Pantalla LED Móvil - Eventos",
-      image: "/placeholder.svg?height=300&width=400",
-      monthlyPrice: 1800,
-      location: "Servicio móvil Madrid",
-      visibility: "Eventos y zonas específicas",
-      dimensions: "4x2 metros",
-      type: "LED Móvil",
-    },
-  ]
+  // Seleccionar los primeros 7 soportes disponibles como destacados
+  const featuredBillboards = billboards.filter(b => b.available).slice(0, 7)
 
 
   return (
     <main className="flex-1">
-      <section className="relative bg-gradient-to-br from-background via-card to-muted">
-        <div className="container px-4 py-12 md:px-6 md:py-24 lg:py-32">
-          <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
-            <div className="space-y-6">
-              <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl text-balance">
-                Vallas Publicitarias en Bolivia
-              </h1>
-              <p className="max-w-[600px] text-muted-foreground md:text-xl text-pretty">
-                Conectamos tu marca con audiencias masivas a través de espacios publicitarios estratégicamente ubicados y
-                servicios de impresión de alta calidad.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" className="font-medium bg-primary hover:bg-primary/90" asChild>
-                  <Link href="/billboards">Explorar Vallas</Link>
-                </Button>
-              </div>
-            </div>
-            <div className="relative h-[300px] sm:h-[400px] lg:h-[500px] rounded-xl overflow-hidden">
-              <Image
-                src="/vallas_publicitarias_en_bolivia.png"
-                alt="Vallas publicitarias en Bolivia"
-                fill
-                className="object-cover"
-                priority
-              />
-            </div>
+      {/* Hero Section */}
+      <section className="relative min-h-[70vh] flex items-center overflow-hidden">
+        <div className="container mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          {/* Texto a la izquierda */}
+          <div className="text-left text-black z-10">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+              Vallas Publicitarias en Bolivia
+            </h1>
+            <p className="text-muted-foreground md:text-lg text-pretty mb-8">
+              Conectamos tu marca con audiencias masivas a través de espacios publicitarios estratégicamente ubicados.
+            </p>
+            <Button size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8 py-4" asChild>
+              <Link href="/billboards">Explorar Vallas</Link>
+            </Button>
+          </div>
+          
+          {/* Imagen a la derecha */}
+          <div className="relative h-[300px] sm:h-[400px] rounded-2xl overflow-hidden">
+            <Image
+              src="/vallas_publicitarias_en_bolivia.png"
+              alt="Vallas Publicitarias en Bolivia"
+              fill
+              className="object-cover rounded-2xl"
+              priority
+            />
           </div>
         </div>
       </section>
@@ -200,44 +345,7 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
             Compara soportes disponibles en tu ciudad
           </h2>
-          <div className="flex justify-center items-center gap-8 pb-4 flex-wrap">
-            <Link href="/billboards?city=La Paz" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_la_paz.png" alt="La Paz" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">La Paz</p>
-            </Link>
-            <Link href="/billboards?city=Santa Cruz" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_santa_cruz_de_la_sierra.png" alt="Santa Cruz" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Santa Cruz</p>
-            </Link>
-            <Link href="/billboards?city=Cochabamba" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_cochabamba.png" alt="Cochabamba" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Cochabamba</p>
-            </Link>
-            <Link href="/billboards?city=El Alto" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_el_alto.png" alt="El Alto" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">El Alto</p>
-            </Link>
-            <Link href="/billboards?city=Sucre" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_sucre.png" alt="Sucre" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Sucre</p>
-            </Link>
-            <Link href="/billboards?city=Potosí" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_potosi.png" alt="Potosí" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Potosí</p>
-            </Link>
-            <Link href="/billboards?city=Tarija" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_tarija.png" alt="Tarija" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Tarija</p>
-            </Link>
-            <Link href="/billboards?city=Oruro" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_oruro.png" alt="Oruro" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Oruro</p>
-            </Link>
-            <Link href="/billboards?city=Trinidad" className="flex-shrink-0 text-center group">
-              <img src="/vallas_publicitarias_trinidad.png" alt="Trinidad" className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" />
-              <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Trinidad</p>
-            </Link>
-          </div>
+          <CitiesCarousel />
         </div>
       </section>
 
@@ -286,61 +394,33 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
             Espacios Publicitarios Destacados
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredBillboards.map((billboard) => (
-              <div key={billboard.id} className="group relative">
-                <div className="aspect-[4/3] overflow-hidden rounded-lg bg-background border">
-                  <Image
-                    src={billboard.image || "/placeholder.svg"}
-                    alt={billboard.name}
-                    width={400}
-                    height={300}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  <div className="absolute top-4 right-4 flex flex-col gap-2">
-                    <Badge variant="secondary" className="bg-primary text-primary-foreground">
-                      {billboard.type}
-                    </Badge>
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 bg-black/50">
-                    <Button className="mx-auto bg-primary hover:bg-primary/90">
-                      <Eye className="mr-2 h-4 w-4" />
-                      Ver Detalles
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  <h3 className="font-medium text-sm text-balance">{billboard.name}</h3>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" />
-                    {billboard.location}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {billboard.dimensions} • {billboard.visibility}
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-primary text-lg">
-                      €{billboard.monthlyPrice.toLocaleString()}/mes
-                    </span>
-                    <Button size="sm" variant="outline" className="text-xs bg-transparent">
-                      <Calendar className="mr-1 h-3 w-3" />
-                      Reservar
-                    </Button>
-                  </div>
-                </div>
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Cargando espacios publicitarios...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Error al cargar los espacios. Por favor, intenta más tarde.</p>
+            </div>
+          ) : featuredBillboards.length > 0 ? (
+            <>
+              <FeaturedBillboardsCarousel billboards={featuredBillboards} />
+              <div className="mt-10 text-center">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="border-primary text-primary hover:bg-primary hover:text-primary-foreground bg-transparent"
+                  asChild
+                >
+                  <Link href="/billboards">Ver Todos los Espacios</Link>
+                </Button>
               </div>
-            ))}
-          </div>
-          <div className="mt-10 text-center">
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-primary text-primary hover:bg-primary hover:text-primary-foreground bg-transparent"
-              asChild
-            >
-              <Link href="/billboards">Ver Todos los Espacios</Link>
-            </Button>
-          </div>
+            </>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No hay espacios publicitarios disponibles en este momento.</p>
+            </div>
+          )}
         </div>
       </section>
 

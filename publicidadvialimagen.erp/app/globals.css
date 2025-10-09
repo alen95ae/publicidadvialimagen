@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Estilos del calendario */
+@import '../styles/calendar.css';
+
 /* Forzar clases de colores suaves */
 .bg-green-100 { background-color: #dcfce7 !important; }
 .text-green-800 { color: #166534 !important; }

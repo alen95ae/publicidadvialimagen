@@ -1,8 +1,9 @@
 "use client"
 
-import { User, Heart, FileText, Settings, LogOut, TrendingUp, MessageSquare } from "lucide-react"
+import { User, FileText, Settings, LogOut, TrendingUp, MessageSquare } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -15,43 +16,24 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/hooks/use-auth"
-import { useToast } from "@/hooks/use-toast"
 
 export default function UserMenu() {
-  const { user, signOut, loading } = useAuth()
+  const { user, loading } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
-
-  const handleLogout = async () => {
-    try {
-      await signOut()
-      toast({
-        title: "Sesión cerrada",
-        description: "Has cerrado sesión correctamente",
-      })
-      router.push("/")
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo cerrar la sesión",
-      })
-    }
-  }
 
   const getInitials = () => {
-    if (user?.user_metadata?.first_name) {
-      return `${user.user_metadata.first_name[0]}${user.user_metadata.last_name?.[0] || ''}`.toUpperCase()
+    if (user?.given_name) {
+      return `${user.given_name[0]}${user.family_name?.[0] || ''}`.toUpperCase()
     }
     return user?.email?.[0]?.toUpperCase() || 'U'
   }
 
   const getUserName = () => {
-    if (user?.user_metadata?.full_name) {
-      return user.user_metadata.full_name
+    if (user?.given_name && user?.family_name) {
+      return `${user.given_name} ${user.family_name}`
     }
-    if (user?.user_metadata?.first_name) {
-      return `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
+    if (user?.given_name) {
+      return user.given_name
     }
     return user?.email || 'Usuario'
   }
@@ -78,11 +60,10 @@ export default function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={user.user_metadata?.avatar_url} alt={getUserName()} />
-            <AvatarFallback>{getInitials()}</AvatarFallback>
-          </Avatar>
+        <Button variant="ghost" size="icon" className="relative">
+          <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
+            {getInitials()}
+          </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -105,17 +86,6 @@ export default function UserMenu() {
         >
           <User className="mr-2 h-4 w-4" />
           <span>Perfil</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            window.location.href = "/account#favorites"
-          }} 
-          className="cursor-pointer"
-        >
-          <Heart className="mr-2 h-4 w-4" />
-          <span>Favoritos</span>
         </DropdownMenuItem>
         <DropdownMenuItem 
           onClick={(e) => {
@@ -151,10 +121,12 @@ export default function UserMenu() {
           <span>Mensajes</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Cerrar Sesión</span>
-        </DropdownMenuItem>
+        <LogoutLink postLogoutRedirectURL="/login">
+          <DropdownMenuItem className="cursor-pointer text-destructive">
+            <LogOut className="mr-2 h-4 w-4" />
+            <span>Cerrar Sesión</span>
+          </DropdownMenuItem>
+        </LogoutLink>
       </DropdownMenuContent>
     </DropdownMenu>
   )

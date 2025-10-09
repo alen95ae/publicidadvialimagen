@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageSquare, Loader2, Calendar, Mail } from "lucide-react"
+import { MessageSquare, Loader2, Calendar, Mail, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-// import { supabase } from "@/lib/supabase" // DISABLED - Migrated to Airtable
+import { useMessages, Message } from "@/hooks/use-messages"
 import {
   Dialog,
   DialogContent,
@@ -19,71 +19,31 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 
-interface Message {
-  id: string
-  created_at: string
-  asunto: string
-  mensaje: string
-  email: string
-  leido: boolean
-  respondido: boolean
-  respuesta?: string
-  fecha_respuesta?: string
-}
-
 interface MessagesTabProps {
   userId: string
 }
 
 export default function MessagesTab({ userId }: MessagesTabProps) {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(true)
+  const [removing, setRemoving] = useState<string | null>(null)
   const { toast } = useToast()
+  const { messages, loading, markAsRead, deleteMessage } = useMessages()
 
-  useEffect(() => {
-    loadMessages()
-  }, [userId])
-
-  const loadMessages = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('mensajes')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      
-      setMessages(data || [])
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error al cargar mensajes",
-        description: error.message,
-      })
-    } finally {
-      setLoading(false)
-    }
+  const handleMarkAsRead = async (messageId: string) => {
+    await markAsRead(messageId)
   }
 
-  const markAsRead = async (messageId: string) => {
+  const handleDeleteMessage = async (messageId: string) => {
+    setRemoving(messageId)
     try {
-      const { error } = await supabase
-        .from('mensajes')
-        .update({ leido: true })
-        .eq('id', messageId)
-
-      if (error) throw error
-
-      setMessages(messages.map(m => 
-        m.id === messageId ? { ...m, leido: true } : m
-      ))
+      await deleteMessage(messageId)
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: "No se pudo eliminar el mensaje",
       })
+    } finally {
+      setRemoving(null)
     }
   }
 
@@ -96,7 +56,7 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-red-600" />
           </div>
         </CardContent>
       </Card>
@@ -152,6 +112,19 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
                         </span>
                       </div>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteMessage(message.id)}
+                      disabled={removing === message.id}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {removing === message.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
 
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
@@ -169,7 +142,7 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
                         variant="outline" 
                         size="sm" 
                         className="w-full"
-                        onClick={() => !message.leido && markAsRead(message.id)}
+                        onClick={() => !message.leido && handleMarkAsRead(message.id)}
                       >
                         Ver Mensaje Completo
                       </Button>

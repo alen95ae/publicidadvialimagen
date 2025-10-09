@@ -8,10 +8,12 @@
     "dev:3001": "next dev -p 3001",
     "lint": "next lint",
     "start": "next start",
-    "start:3001": "next start -p 3001"
+    "start:3001": "next start -p 3001",
+    "vercel-build": "npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
+    "@kinde-oss/kinde-auth-nextjs": "^2.9.2",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
     "@radix-ui/react-aspect-ratio": "1.1.1",
@@ -75,5 +77,9 @@
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
-  }
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "packageManager": "npm@10"
 }

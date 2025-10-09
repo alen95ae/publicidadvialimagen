@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd publicidadvialimagen.com && npm install && npm run build",
+  "outputDirectory": "publicidadvialimagen.com/.next",
+  "installCommand": "cd publicidadvialimagen.com && npm install"
+}
+

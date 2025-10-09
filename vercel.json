@@ -1,6 +1,20 @@
 {
-  "buildCommand": "cd publicidadvialimagen.com && npm install && npm run build",
-  "outputDirectory": "publicidadvialimagen.com/.next",
-  "installCommand": "cd publicidadvialimagen.com && npm install"
+  "version": 2,
+  "builds": [
+    {
+      "src": "publicidadvialimagen.com/next.config.js",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "publicidadvialimagen.com/$1"
+    }
+  ],
+  "framework": "nextjs",
+  "installCommand": "cd publicidadvialimagen.com && npm install",
+  "buildCommand": "cd publicidadvialimagen.com && npm run build",
+  "outputDirectory": "publicidadvialimagen.com/.next"
 }
 

@@ -9,11 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Toggle } from "@/components/ui/toggle"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Search, Filter, Download, Star, Building2, User, MoreHorizontal, Eye, Edit, Trash2, Star as StarIcon, Home } from "lucide-react"
+import { Plus, Search, Filter, Download, Building2, User, Eye, Edit, Trash2, Home } from "lucide-react"
 import { toast } from "sonner"
 import Sidebar from "@/components/sidebar"
 
@@ -34,8 +32,6 @@ interface Contact {
   createdAt?: string
   updatedAt?: string
   kind?: string
-  salesOwner?: { name: string }
-  favorite?: boolean
 }
 
 interface ContactFilters {
@@ -43,8 +39,6 @@ interface ContactFilters {
   relation: string
   city: string
   country: string
-  owner?: string
-  favorite?: boolean
 }
 
 export default function ContactosPage() {
@@ -59,11 +53,9 @@ export default function ContactosPage() {
     country: ""
   })
   const [groupBy, setGroupBy] = useState<string>("NONE")
-  const [salesOwners, setSalesOwners] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => {
     fetchContacts()
-    fetchSalesOwners()
   }, [filters])
 
   const fetchContacts = async () => {
@@ -89,11 +81,6 @@ export default function ContactosPage() {
     }
   }
 
-  const fetchSalesOwners = async () => {
-    // Sales owners functionality removed for now
-    setSalesOwners([])
-  }
-
   const handleExport = async () => {
     try {
       const params = new URLSearchParams()
@@ -101,8 +88,6 @@ export default function ContactosPage() {
       if (filters.relation && filters.relation !== "ALL") params.append("relation", filters.relation)
       if (filters.city) params.append("city", filters.city)
       if (filters.country) params.append("country", filters.country)
-      if (filters.owner && filters.owner !== "ALL") params.append("owner", filters.owner)
-      if (filters.favorite) params.append("favorite", "true")
 
       const response = await fetch(`/api/contactos/export?${params}`)
       if (response.ok) {
@@ -118,26 +103,6 @@ export default function ContactosPage() {
         toast.success("Exportación completada")
       } else {
         toast.error("Error al exportar")
-      }
-    } catch (error) {
-      toast.error("Error de conexión")
-    }
-  }
-
-  // Favorite functionality
-  const handleToggleFavorite = async (id: string, currentFavorite?: boolean) => {
-    try {
-      const response = await fetch(`/api/contactos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ favorite: !currentFavorite })
-      })
-
-      if (response.ok) {
-        fetchContacts()
-        toast.success(!currentFavorite ? "Agregado a favoritos" : "Eliminado de favoritos")
-      } else {
-        toast.error("Error al actualizar favorito")
       }
     } catch (error) {
       toast.error("Error de conexión")
@@ -302,25 +267,6 @@ export default function ContactosPage() {
                   </SelectContent>
                 </Select>
 
-              <Select value={filters.owner} onValueChange={(value) => setFilters(prev => ({ ...prev, owner: value }))}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Comercial" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Todos</SelectItem>
-                  {salesOwners.map(owner => (
-                    <SelectItem key={owner.id} value={owner.id}>{owner.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Toggle
-                pressed={filters.favorite}
-                onPressedChange={(pressed) => setFilters(prev => ({ ...prev, favorite: pressed }))}
-                className="data-[state=on]:bg-yellow-100 data-[state=on]:text-yellow-800"
-              >
-                <Star className="w-4 h-4" />
-              </Toggle>
             </div>
           </div>
 
@@ -334,7 +280,6 @@ export default function ContactosPage() {
               <SelectContent>
                 <SelectItem value="NONE">Sin agrupar</SelectItem>
                 <SelectItem value="relation">Relación</SelectItem>
-                <SelectItem value="owner">Comercial</SelectItem>
                 <SelectItem value="city">Ciudad</SelectItem>
                 <SelectItem value="country">País</SelectItem>
               </SelectContent>
@@ -430,11 +375,10 @@ export default function ContactosPage() {
                     <TableHead>NIT</TableHead>
                     <TableHead>Teléfono</TableHead>
                     <TableHead>Correo</TableHead>
-                    <TableHead>Comercial</TableHead>
+                    <TableHead>Relación</TableHead>
                     <TableHead>Ciudad</TableHead>
                     <TableHead>País</TableHead>
-                    <TableHead className="w-12">Favorito</TableHead>
-                    <TableHead className="w-12">Acciones</TableHead>
+                    <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -442,7 +386,7 @@ export default function ContactosPage() {
                     groupBy && groupBy !== "NONE" ? (
                       // Grupo con header
                       <TableRow key={group.key} className="bg-gray-50">
-                        <TableCell colSpan={10} className="font-medium text-gray-700">
+                        <TableCell colSpan={9} className="font-medium text-gray-700">
                           {group.key} ({group.count})
                         </TableCell>
                       </TableRow>
@@ -484,46 +428,31 @@ export default function ContactosPage() {
                         <TableCell>{contact.phone || "-"}</TableCell>
                         <TableCell>{contact.email || "-"}</TableCell>
                         <TableCell>
-                          {contact.salesOwner?.name || "-"}
+                          <Badge className={getRelationColor(contact.relation)}>
+                            {getRelationLabel(contact.relation)}
+                          </Badge>
                         </TableCell>
                         <TableCell>{contact.city || "-"}</TableCell>
                         <TableCell>{contact.country || "-"}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleFavorite(contact.id, contact.favorite)}
-                            className={contact.favorite ? "text-yellow-500" : "text-gray-400"}
-                          >
-                            <StarIcon className="w-4 h-4" fill={contact.favorite ? "currentColor" : "none"} />
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => router.push(`/panel/contactos/${contact.id}`)}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                Ver
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => router.push(`/panel/contactos/${contact.id}`)}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                className="text-red-600"
-                                onClick={() => handleToggleFavorite(contact.id, contact.favorite)}
-                              >
-                                <Star className="w-4 h-4 mr-2" />
-                                {contact.favorite ? "Quitar favorito" : "Marcar favorito"}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push(`/panel/contactos/${contact.id}`)}
+                              title="Ver contacto"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push(`/panel/contactos/${contact.id}`)}
+                              title="Editar contacto"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

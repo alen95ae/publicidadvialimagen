@@ -13,8 +13,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Toggle } from "@/components/ui/toggle"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Search, Filter, Download, Star, Building2, User, MoreHorizontal, Eye, Edit, Trash2, Star as StarIcon } from "lucide-react"
+import { Plus, Search, Filter, Download, Star, Building2, User, MoreHorizontal, Eye, Edit, Trash2, Star as StarIcon, Home } from "lucide-react"
 import { toast } from "sonner"
+import Sidebar from "@/components/sidebar"
 
 interface Contact {
   id: string
@@ -32,6 +33,9 @@ interface Contact {
   notes?: string
   createdAt?: string
   updatedAt?: string
+  kind?: string
+  salesOwner?: { name: string }
+  favorite?: boolean
 }
 
 interface ContactFilters {
@@ -39,6 +43,8 @@ interface ContactFilters {
   relation: string
   city: string
   country: string
+  owner?: string
+  favorite?: boolean
 }
 
 export default function ContactosPage() {
@@ -118,7 +124,25 @@ export default function ContactosPage() {
     }
   }
 
-  // Favorite functionality removed for now
+  // Favorite functionality
+  const handleToggleFavorite = async (id: string, currentFavorite?: boolean) => {
+    try {
+      const response = await fetch(`/api/contactos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ favorite: !currentFavorite })
+      })
+
+      if (response.ok) {
+        fetchContacts()
+        toast.success(!currentFavorite ? "Agregado a favoritos" : "Eliminado de favoritos")
+      } else {
+        toast.error("Error al actualizar favorito")
+      }
+    } catch (error) {
+      toast.error("Error de conexión")
+    }
+  }
 
   const handleDeleteSelected = async () => {
     if (selectedContacts.size === 0) return
@@ -209,13 +233,17 @@ export default function ContactosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Sidebar>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/panel" className="text-gray-600 hover:text-gray-800 mr-4">
-              ← Panel
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/panel" 
+              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
+              title="Ir al panel principal"
+            >
+              <Home className="w-5 h-5" />
             </Link>
             <div className="text-xl font-bold text-slate-800">Contactos</div>
           </div>
@@ -305,6 +333,7 @@ export default function ContactosPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="NONE">Sin agrupar</SelectItem>
+                <SelectItem value="relation">Relación</SelectItem>
                 <SelectItem value="owner">Comercial</SelectItem>
                 <SelectItem value="city">Ciudad</SelectItem>
                 <SelectItem value="country">País</SelectItem>
@@ -505,6 +534,6 @@ export default function ContactosPage() {
           </CardContent>
         </Card>
       </main>
-    </div>
+    </Sidebar>
   )
 }

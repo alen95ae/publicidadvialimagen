@@ -1,0 +1,20 @@
+# Archivos de desarrollo
+*.log
+*.md
+!README.md
+!DEPLOYMENT.md
+
+# Archivos de ejemplo y tests
+ejemplo-*.csv
+test-*.csv
+tmp-*.ts
+
+# Scripts de desarrollo
+scripts/
+setup-kinde.sh
+
+# Archivos de configuración local
+.env
+.env.local
+.env*.local
+

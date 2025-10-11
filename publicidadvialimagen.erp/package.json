@@ -1,14 +1,14 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "publicidadvialimagen-erp",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "dev:3001": "next dev -p 3001",
     "lint": "next lint",
     "start": "next start",
-    "start:3001": "next start -p 3001"
+    "verify": "node verify-deployment-ready.js",
+    "preinstall": "echo '📦 Instalando dependencias del ERP...'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -62,12 +62,12 @@
     "next-themes": "^0.4.6",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
-    "react": "^19",
+    "react": "^18.2.0",
     "react-big-calendar": "^1.19.4",
     "react-day-picker": "9.8.0",
-    "react-dom": "^19",
+    "react-dom": "^18.2.0",
     "react-hook-form": "^7.60.0",
-    "react-leaflet": "^5.0.0",
+    "react-leaflet": "^4.2.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
     "sharp": "^0.34.3",
@@ -79,8 +79,8 @@
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",

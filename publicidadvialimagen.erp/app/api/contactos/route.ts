@@ -15,24 +15,18 @@ export async function GET(request: Request) {
     let airtableFilter = ''
     const filterParts = []
 
-    // Filtro de búsqueda por texto
+    // Filtro de búsqueda por ID
     if (query) {
-      const searchFilter = `OR(
-        SEARCH("${query}", LOWER({Nombre Comercial})) > 0,
-        SEARCH("${query}", LOWER({Nombre Contacto})) > 0,
-        SEARCH("${query}", LOWER({Email})) > 0,
-        SEARCH("${query}", LOWER({Ciudad})) > 0
-      )`
-      filterParts.push(searchFilter)
+      filterParts.push(`SEARCH("${query}", {ID} & '') > 0`)
     }
 
     // Filtro de relación
     if (relationFilter) {
       const relations = relationFilter.split(',').map(r => r.trim())
       if (relations.length === 1) {
-        filterParts.push(`{Tipo Cliente} = "${relations[0]}"`)
+        filterParts.push(`{Relación} = "${relations[0]}"`)
       } else {
-        const relationFilterStr = relations.map(rel => `{Tipo Cliente} = "${rel}"`).join(', ')
+        const relationFilterStr = relations.map(rel => `{Relación} = "${rel}"`).join(', ')
         filterParts.push(`OR(${relationFilterStr})`)
       }
     }
@@ -60,21 +54,21 @@ export async function GET(request: Request) {
 
     const data = records.map((r) => ({
       id: r.id,
-      displayName: r.fields['Nombre Comercial'] || r.fields['Nombre'] || '',
-      legalName: r.fields['Nombre Contacto'] || '',
+      displayName: `Contacto #${r.fields['ID'] || 'Sin ID'}`,
+      legalName: r.fields['ID'] ? `ID: ${r.fields['ID']}` : 'Sin nombre',
       kind: r.fields['Tipo de Contacto'] === 'Individual' ? 'PERSON' : 'COMPANY',
-      email: r.fields['Email'] || '',
-      phone: r.fields['Teléfono'] || '',
-      taxId: r.fields['CIF NIF'] || '',
-      address: r.fields['Dirección'] || '',
-      city: r.fields['Ciudad'] || '',
-      postalCode: r.fields['Código Postal'] || '',
-      country: r.fields['País'] || 'Bolivia',
-      relation: r.fields['Tipo Cliente'] || r.fields['Relación'] || 'CUSTOMER',
-      status: r.fields['Estado'] || 'activo',
-      notes: r.fields['Notas'] || '',
+      email: '',
+      phone: '',
+      taxId: '',
+      address: '',
+      city: '',
+      postalCode: '',
+      country: 'Bolivia',
+      relation: r.fields['Relación'] || 'Cliente',
+      status: 'activo',
+      notes: '',
       createdAt: r.createdTime,
-      updatedAt: r.fields['Última actualización'] || r.createdTime
+      updatedAt: r.createdTime
     }))
 
     // Aplicar paginación
@@ -110,37 +104,30 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     
-    if (!body.displayName) {
-      return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 })
-    }
-    
-    // Construir payload para Airtable usando campos existentes
+    // Construir payload para Airtable usando solo campos existentes
     const payload: any = {
-      'Tipo de Contacto': body.kind === 'COMPANY' ? 'Individual' : 'Individual', // Usar solo valores existentes
-      'Relación': body.relation === 'CUSTOMER' ? 'Ambos' : 
-                  body.relation === 'SUPPLIER' ? 'Ambos' : 'Ambos'
+      'Tipo de Contacto': body.kind === 'PERSON' ? 'Individual' : 'Empresa',
+      'Relación': body.relation || 'Cliente'
     }
-    
-    // Solo agregar campos que sabemos que existen
-    // Los campos adicionales se pueden agregar después de verificar que existen en Airtable
 
     // Crear nuevo contacto en Airtable
     const record = await airtable("Contactos").create([{ fields: payload }])
 
     return NextResponse.json({
       id: record[0].id,
-      displayName: record[0].fields['Nombre Comercial'],
-      legalName: record[0].fields['Nombre Contacto'],
-      email: record[0].fields['Email'],
-      phone: record[0].fields['Teléfono'],
-      taxId: record[0].fields['CIF NIF'],
-      address: record[0].fields['Dirección'],
-      city: record[0].fields['Ciudad'],
-      postalCode: record[0].fields['Código Postal'],
-      country: record[0].fields['País'],
-      relation: record[0].fields['Tipo Cliente'],
-      status: record[0].fields['Estado'],
-      notes: record[0].fields['Notas'],
+      displayName: `Contacto #${record[0].fields['ID'] || 'Nuevo'}`,
+      legalName: record[0].fields['ID'] ? `ID: ${record[0].fields['ID']}` : '',
+      kind: record[0].fields['Tipo de Contacto'] === 'Individual' ? 'PERSON' : 'COMPANY',
+      email: '',
+      phone: '',
+      taxId: '',
+      address: '',
+      city: '',
+      postalCode: '',
+      country: 'Bolivia',
+      relation: record[0].fields['Relación'] || 'Cliente',
+      status: 'activo',
+      notes: '',
       createdAt: record[0].createdTime,
       updatedAt: record[0].createdTime
     }, { status: 201 })

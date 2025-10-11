@@ -67,14 +67,21 @@ export default function ContactosPage() {
       if (filters.city) params.append("city", filters.city)
       if (filters.country) params.append("country", filters.country)
 
+      console.log('🔍 Fetching contacts with params:', params.toString())
       const response = await fetch(`/api/contactos?${params}`)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log('✅ Contacts loaded:', data.data?.length || 0, 'contacts')
+        console.log('📊 Sample contact:', data.data?.[0])
         setContacts(data.data || [])
       } else {
+        const errorText = await response.text()
+        console.error('❌ Error response:', errorText)
         toast.error("Error al cargar los contactos")
       }
     } catch (error) {
+      console.error('❌ Error fetching contacts:', error)
       toast.error("Error de conexión")
     } finally {
       setLoading(false)
@@ -103,6 +110,22 @@ export default function ContactosPage() {
         toast.success("Exportación completada")
       } else {
         toast.error("Error al exportar")
+      }
+    } catch (error) {
+      toast.error("Error de conexión")
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Estás seguro de eliminar este contacto?")) return
+
+    try {
+      const response = await fetch(`/api/contactos/${id}`, { method: "DELETE" })
+      if (response.ok) {
+        fetchContacts()
+        toast.success("Contacto eliminado correctamente")
+      } else {
+        toast.error("Error al eliminar el contacto")
       }
     } catch (error) {
       toast.error("Error de conexión")
@@ -451,6 +474,15 @@ export default function ContactosPage() {
                               title="Editar contacto"
                             >
                               <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(contact.id)}
+                              title="Eliminar contacto"
+                              className="text-red-600 hover:text-red-700 hover:border-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </TableCell>

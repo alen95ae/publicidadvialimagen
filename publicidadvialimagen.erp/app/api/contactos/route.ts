@@ -52,6 +52,12 @@ export async function GET(request: Request) {
 
     const records = await airtable("Contactos").select(selectOptions).all()
 
+    // Debug: mostrar campos disponibles del primer registro
+    if (records.length > 0) {
+      console.log('📋 Campos disponibles en Airtable:', Object.keys(records[0].fields))
+      console.log('📋 Primer registro completo:', records[0].fields)
+    }
+
     const data = records.map((r) => ({
       id: r.id,
       displayName: r.fields['Nombre Comercial'] || r.fields['Nombre'] || '',

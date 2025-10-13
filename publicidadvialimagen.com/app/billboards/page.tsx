@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card, CardContent } from "@/components/ui/card"
 import { useBillboards } from "@/hooks/use-billboards"
-import dynamic from "next/dynamic"
+import dynamicImport from "next/dynamic"
 import LeafletHybridMap from "@/components/maps/LeafletHybridMap"
 
 // Configuración para evitar prerender

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mapa Test</title>
+    <style>
+      html, body, #map {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #f0f0f0;
+      }
+      #map {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map">
+      <div style="text-align: center;">
+        <h3>🧪 Mapa de Prueba</h3>
+        <p>Este es un iframe de prueba</p>
+        <p>Si ves esto, el iframe funciona correctamente</p>
+      </div>
+    </div>
+    <script>
+      console.log('Mapa de prueba cargado');
+      
+      window.addEventListener("message", (event) => {
+        console.log('Mensaje recibido en iframe de prueba:', event.data);
+        if (event.data && event.data.type === "INIT_MAP") {
+          const { center, points } = event.data.payload;
+          document.getElementById('map').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <h3>✅ Mensaje recibido correctamente</h3>
+              <p><strong>Centro:</strong> ${center.lat}, ${center.lng}</p>
+              <p><strong>Puntos:</strong> ${points.length}</p>
+              <div style="margin-top: 10px;">
+                ${points.map(p => `<div>📍 ${p.title || 'Sin título'} (${p.lat}, ${p.lng})</div>`).join('')}
+              </div>
+            </div>
+          `;
+        }
+      });
+    </script>
+  </body>
+</html>

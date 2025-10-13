@@ -1,13 +1,11 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
-import { useKindeAuth } from '@kinde-oss/kinde-auth-nextjs'
 
 interface SignUpData {
   email: string
   password: string
-  firstName?: string
-  lastName?: string
+  name?: string
 }
 
 interface SignInData {
@@ -15,87 +13,95 @@ interface SignInData {
   password: string
 }
 
-export function useAuth() {
-  const { 
-    user, 
-    isAuthenticated, 
-    isLoading,
-    login,
-    register,
-    logout
-  } = useKindeAuth()
+interface User {
+  id: string
+  email: string
+  name?: string
+  role?: string
+}
 
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Cargar usuario actual
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me')
+        const data = await res.json()
+        setUser(data.user)
+      } catch (error) {
+        console.error('Error loading user:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadUser()
+  }, [])
 
   // Registro con email y contraseña
   const signUp = useCallback(async (data: SignUpData) => {
     try {
-      await register()
-      return { data: null, error: null }
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      const result = await res.json()
+      if (res.ok) {
+        setUser(result.user)
+        return { data: result.user, error: null }
+      }
+      return { data: null, error: { message: result.error } }
     } catch (error) {
       return { data: null, error: { message: 'Error en el registro' } }
     }
-  }, [register])
+  }, [])
 
   // Login con email y contraseña
   const signIn = useCallback(async (data: SignInData) => {
     try {
-      await login()
-      return { data: null, error: null }
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      const result = await res.json()
+      if (res.ok) {
+        setUser(result.user)
+        return { data: result.user, error: null }
+      }
+      return { data: null, error: { message: result.error } }
     } catch (error) {
       return { data: null, error: { message: 'Error en el login' } }
     }
-  }, [login])
-
-  // Login con Google
-  const signInWithGoogle = useCallback(async () => {
-    try {
-      await login()
-      return { data: null, error: null }
-    } catch (error) {
-      return { data: null, error: { message: 'Error en el login con Google' } }
-    }
-  }, [login])
-
-  // Login con Facebook
-  const signInWithFacebook = useCallback(async () => {
-    try {
-      await login()
-      return { data: null, error: { message: 'Error en el login con Facebook' } }
-    } catch (error) {
-      return { data: null, error: { message: 'Error en el login con Facebook' } }
-    }
-  }, [login])
+  }, [])
 
   // Cerrar sesión
   const signOut = useCallback(async () => {
     try {
-      await logout()
+      await fetch('/api/auth/logout', { method: 'POST' })
+      setUser(null)
+      window.location.href = '/login'
       return { error: null }
     } catch (error) {
       console.error('Error en logout:', error)
       return { error: { message: 'Error al cerrar sesión' } }
     }
-  }, [logout])
+  }, [])
 
   // Recuperar contraseña
   const resetPassword = useCallback(async (email: string) => {
-    // Kinde maneja esto automáticamente en su interfaz
     return { data: null, error: { message: 'Funcionalidad no disponible' } }
   }, [])
 
-  // NOTA: El cambio de contraseña ahora se maneja directamente con el componente
-  // RegisterLink de Kinde en los componentes que lo necesiten.
-  // No usamos una función updatePassword porque Kinde maneja esto de forma segura.
-
   // Actualizar perfil
   const updateProfile = useCallback(async (updates: {
-    firstName?: string
-    lastName?: string
-    avatar_url?: string
+    name?: string
   }) => {
     try {
-      // Simular actualización exitosa (en un entorno real, esto se conectaría con la API de Kinde)
-      // Por ahora, solo simulamos que funciona
+      // Simular actualización exitosa
       await new Promise(resolve => setTimeout(resolve, 1000))
       return { data: null, error: null }
     } catch (error) {
@@ -104,13 +110,11 @@ export function useAuth() {
   }, [])
 
   return {
-    user: isAuthenticated ? user : null,
-    session: isAuthenticated ? { user } : null,
-    loading: isLoading,
+    user,
+    session: user ? { user } : null,
+    loading,
     signUp,
     signIn,
-    signInWithGoogle,
-    signInWithFacebook,
     signOut,
     resetPassword,
     updateProfile,

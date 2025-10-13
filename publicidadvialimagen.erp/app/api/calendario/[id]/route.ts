@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server"
+import { cookies } from "next/headers"
+import { verifySession } from "@/lib/auth"
 import { updateEvent, deleteEvent } from "@/lib/calendar-api"
 
 // PUT - Actualizar un evento
@@ -8,10 +9,16 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { isAuthenticated } = getKindeServerSession()
-    const authed = await isAuthenticated()
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
     
-    if (!authed) {
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    try {
+      await verifySession(token)
+    } catch {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -35,10 +42,16 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { isAuthenticated } = getKindeServerSession()
-    const authed = await isAuthenticated()
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
     
-    if (!authed) {
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    try {
+      await verifySession(token)
+    } catch {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

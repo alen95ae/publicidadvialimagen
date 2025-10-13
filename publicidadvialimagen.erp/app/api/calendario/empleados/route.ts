@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server"
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server"
+import { cookies } from "next/headers"
+import { verifySession } from "@/lib/auth"
 import { getEmployees } from "@/lib/calendar-api"
 
 // GET - Obtener todos los empleados
 export async function GET() {
   try {
-    const { isAuthenticated } = getKindeServerSession()
-    const authed = await isAuthenticated()
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
     
-    if (!authed) {
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    try {
+      await verifySession(token)
+    } catch {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

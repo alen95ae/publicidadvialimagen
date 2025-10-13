@@ -17,8 +17,8 @@ import { useMessages } from "@/hooks/use-messages"
 // const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Dynamic OSM map (Leaflet) to avoid SSR issues
-const SimpleMap = dynamic(() => import("@/components/simple-map"), {
+// Dynamic Google Maps to avoid SSR issues
+const BranchMap = dynamic(() => import("@/components/maps/BranchMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center">
@@ -450,26 +450,22 @@ export default function ContactPage() {
           </div>
         </div>
 
-        {/* Mapas de Sucursales (OpenStreetMap) */}
+        {/* Mapas de Sucursales (Google Maps) */}
         <div className="grid md:grid-cols-2 gap-8 mt-8">
           {/* Mapa de La Paz */}
-          <SimpleMap
-            center={[-16.506308, -68.139439]}
-            heightClassName="h-96"
-            markerTitle="La Paz"
-            markerSubtitle="Publicidad Vial Imagen"
-            markerLinkUrl="https://maps.app.goo.gl/joMzm79QcDd1Tp5VA"
-            markerLinkLabel="Abrir en Google Maps"
+          <BranchMap
+            lat={-16.506308}
+            lng={-68.139439}
+            label="La Paz - Publicidad Vial Imagen"
+            height={260}
           />
 
           {/* Mapa de Santa Cruz */}
-          <SimpleMap
-            center={[-17.751314, -63.153452]}
-            heightClassName="h-96"
-            markerTitle="Santa Cruz"
-            markerSubtitle="Publicidad Vial Imagen"
-            markerLinkUrl="https://maps.app.goo.gl/nX8e3qsa2E3rfXQA6"
-            markerLinkLabel="Abrir en Google Maps"
+          <BranchMap
+            lat={-17.751314}
+            lng={-63.153452}
+            label="Santa Cruz - Publicidad Vial Imagen"
+            height={260}
           />
         </div>
       </div>

@@ -1,15 +1,24 @@
 import { redirect } from "next/navigation";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { cookies } from "next/headers";
+import { verifySession } from "@/lib/auth";
 import Sidebar from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, Users, Package, MessageSquare, Calendar, Handshake, Monitor, LineChart, Hammer, Wrench, Palette, Globe, Receipt, UserCog, Settings } from "lucide-react";
 
 export default async function PanelPage() {
-  const { isAuthenticated, getUser } = getKindeServerSession();
-  const authed = await isAuthenticated();
-  if (!authed) redirect("/login");
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+  
+  if (!token) {
+    redirect("/login");
+  }
 
-  const user = await getUser();
+  let user;
+  try {
+    user = await verifySession(token);
+  } catch {
+    redirect("/login");
+  }
 
   return (
     <Sidebar>
@@ -18,7 +27,7 @@ export default async function PanelPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Panel de Control</h1>
           <p className="text-gray-600 mt-2">
-            Bienvenido, {user?.given_name || user?.email} - Gestiona tu empresa desde aquí
+            Bienvenido, {user?.name || user?.email} - Gestiona tu empresa desde aquí
           </p>
         </div>
 
@@ -163,7 +172,7 @@ export default async function PanelPage() {
                 ✅ Sistema ERP funcionando correctamente
               </h3>
               <div className="mt-2 text-sm text-green-700">
-                <p>Autenticación con Kinde activa. Todos los módulos están disponibles en el menú lateral.</p>
+                <p>Autenticación personalizada activa. Todos los módulos están disponibles en el menú lateral.</p>
               </div>
             </div>
           </div>

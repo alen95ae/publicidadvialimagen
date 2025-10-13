@@ -151,16 +151,28 @@ export default function PlanificacionPage() {
                 Soportes
               </Link>
               <Link 
-                href="/panel/soportes/costes" 
+                href="/panel/soportes/alquileres" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
-                Costes
+                Alquileres
               </Link>
               <Link 
                 href="/panel/soportes/planificacion" 
                 className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
               >
                 Planificación
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/mantenimiento" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Mantenimiento
               </Link>
             </div>
           </div>

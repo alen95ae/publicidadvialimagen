@@ -26,6 +26,12 @@ export interface EventFormData {
  */
 export async function getEvents(): Promise<CalendarEvent[]> {
   try {
+    // Verificar que las variables de entorno estén configuradas
+    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
+      console.warn("Airtable credentials not configured, returning empty events")
+      return []
+    }
+
     const records = await airtable("Eventos")
       .select({
         view: "Grid view",
@@ -43,8 +49,14 @@ export async function getEvents(): Promise<CalendarEvent[]> {
       status: (record.get("Estado") as string || "pendiente") as CalendarEvent["status"],
       userId: record.get("UserId") as string,
     }))
-  } catch (error) {
+  } catch (error: any) {
+    // Manejar específicamente el caso donde la tabla no existe o no tenemos permisos
+    if (error.message?.includes("not authorized") || error.message?.includes("not found")) {
+      console.warn("Calendar table 'Eventos' not available or not authorized, returning empty events")
+      return []
+    }
     console.error("Error fetching events:", error)
+    // Retornar array vacío en lugar de lanzar error
     return []
   }
 }
@@ -54,6 +66,12 @@ export async function getEvents(): Promise<CalendarEvent[]> {
  */
 export async function getEventsByUser(userId: string): Promise<CalendarEvent[]> {
   try {
+    // Verificar que las variables de entorno estén configuradas
+    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
+      console.warn("Airtable credentials not configured, returning empty events")
+      return []
+    }
+
     const records = await airtable("Eventos")
       .select({
         view: "Grid view",
@@ -72,8 +90,14 @@ export async function getEventsByUser(userId: string): Promise<CalendarEvent[]> 
       status: (record.get("Estado") as string || "pendiente") as CalendarEvent["status"],
       userId: record.get("UserId") as string,
     }))
-  } catch (error) {
+  } catch (error: any) {
+    // Manejar específicamente el caso donde la tabla no existe o no tenemos permisos
+    if (error.message?.includes("not authorized") || error.message?.includes("not found")) {
+      console.warn("Calendar table 'Eventos' not available or not authorized, returning empty events")
+      return []
+    }
     console.error("Error fetching user events:", error)
+    // Retornar array vacío en lugar de lanzar error
     return []
   }
 }
@@ -97,6 +121,7 @@ export async function getEventsByDate(date: Date, userId?: string): Promise<Cale
     })
   } catch (error) {
     console.error("Error fetching events by date:", error)
+    // Retornar array vacío en lugar de lanzar error
     return []
   }
 }
@@ -198,6 +223,12 @@ export async function deleteEvent(eventId: string): Promise<boolean> {
  */
 export async function getEmployees(): Promise<Array<{ id: string; name: string; email?: string }>> {
   try {
+    // Verificar que las variables de entorno estén configuradas
+    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
+      console.warn("Airtable credentials not configured, returning empty employees")
+      return []
+    }
+
     const records = await airtable("Empleados")
       .select({
         view: "Grid view",
@@ -209,7 +240,12 @@ export async function getEmployees(): Promise<Array<{ id: string; name: string; 
       name: record.get("Nombre") as string || "Sin nombre",
       email: record.get("Email") as string,
     }))
-  } catch (error) {
+  } catch (error: any) {
+    // Manejar específicamente el caso donde la tabla no existe o no tenemos permisos
+    if (error.message?.includes("not authorized") || error.message?.includes("not found")) {
+      console.warn("Employees table 'Empleados' not available or not authorized, returning empty employees")
+      return []
+    }
     console.error("Error fetching employees:", error)
     // Retornar lista vacía si falla o si la tabla no existe
     return []

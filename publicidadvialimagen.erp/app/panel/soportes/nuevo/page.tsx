@@ -306,16 +306,28 @@ export default function NuevoSoportePage() {
                 Soportes
               </Link>
               <Link 
-                href="/panel/soportes/costes" 
+                href="/panel/soportes/alquileres" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
-                Costes
+                Alquileres
               </Link>
               <Link 
                 href="/panel/soportes/planificacion" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
                 Planificación
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/mantenimiento" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Mantenimiento
               </Link>
             </div>
           </div>
@@ -570,12 +582,9 @@ export default function NuevoSoportePage() {
                 <div className="space-y-2">
                   <Label>Ubicación en el mapa</Label>
                   <InteractiveMap
-                    latitude={formData.latitude}
-                    longitude={formData.longitude}
-                    onLocationChange={handleLocationChange}
-                    title={formData.title}
-                    code={formData.code}
-                    className="w-full"
+                    lat={formData.latitude || -16.5000}
+                    lng={formData.longitude || -68.1500}
+                    editable={true}
                   />
                 </div>
               </CardContent>

@@ -198,44 +198,57 @@ export function buildPayload(data:any, existing?:any){
   if (data.priceMonth !== undefined)         payload['Precio por mes'] = num(data.priceMonth)
   if (data.impactosDiarios !== undefined)    payload['Impactos diarios'] = data.impactosDiarios ?? null
   if (data.googleMapsLink !== undefined)     payload['Enlace Google Maps'] = data.googleMapsLink || null
-  if (data.latitude !== undefined)           payload['Latitud'] = data.latitude
-  if (data.longitude !== undefined)          payload['Longitud'] = data.longitude
-  if (data.iluminacion !== undefined)        payload['Iluminación'] = data.iluminacion
-  if (data.address !== undefined)            payload['Dirección / Notas'] = data.address || null
+  
+  // Validar y manejar coordenadas correctamente
+  if (data.latitude !== undefined) {
+    const lat = typeof data.latitude === 'number' && !isNaN(data.latitude) ? data.latitude : null
+    if (lat !== null) payload['Latitud'] = lat
+  }
+  if (data.longitude !== undefined) {
+    const lng = typeof data.longitude === 'number' && !isNaN(data.longitude) ? data.longitude : null
+    if (lng !== null) payload['Longitud'] = lng
+  }
+  
+  // Nota: Iluminación no existe en Airtable, se omite
+  // if (data.iluminacion !== undefined)        payload['Iluminación'] = data.iluminacion
+  
+  // Nota: Dirección/Notas no existe en Airtable, se omite
+  // if (data.address !== undefined)            payload['Dirección / Notas'] = data.address || null
+  
   if (data.owner !== undefined)              payload['Propietario'] = data.owner || null
 
   // Nota: Área total se calcula automáticamente en Airtable
-  // Las imágenes en Airtable son attachments y requieren manejo especial
-  if (data.images !== undefined && Array.isArray(data.images)) {
-    // Airtable requiere attachments en formato: [{ url: 'https://...' }]
-    // Convertir URLs relativas a absolutas
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-    
-    const toAbsoluteUrl = (url: string) => {
-      if (!url) return url
-      if (url.startsWith('http://') || url.startsWith('https://')) return url
-      return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`
-    }
-    
-    if (data.images[0]) {
-      payload['Imagen principal'] = [{ url: toAbsoluteUrl(data.images[0]) }]
-    } else {
-      payload['Imagen principal'] = []
-    }
-    
-    if (data.images[1]) {
-      payload['Imagen secundaria 1'] = [{ url: toAbsoluteUrl(data.images[1]) }]
-    } else {
-      payload['Imagen secundaria 1'] = []
-    }
-    
-    if (data.images[2]) {
-      payload['Imagen secundaria 2'] = [{ url: toAbsoluteUrl(data.images[2]) }]
-    } else {
-      payload['Imagen secundaria 2'] = []
-    }
-  }
+  // Nota: Los campos de imágenes no existen en Airtable, se omiten
+  // if (data.images !== undefined && Array.isArray(data.images)) {
+  //   // Airtable requiere attachments en formato: [{ url: 'https://...' }]
+  //   // Convertir URLs relativas a absolutas
+  //   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+  //     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  //   
+  //   const toAbsoluteUrl = (url: string) => {
+  //     if (!url) return url
+  //     if (url.startsWith('http://') || url.startsWith('https://')) return url
+  //     return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`
+  //   }
+  //   
+  //   if (data.images[0]) {
+  //     payload['Imagen principal'] = [{ url: toAbsoluteUrl(data.images[0]) }]
+  //   } else {
+  //     payload['Imagen principal'] = []
+  //   }
+  //   
+  //   if (data.images[1]) {
+  //     payload['Imagen secundaria 1'] = [{ url: toAbsoluteUrl(data.images[1]) }]
+  //   } else {
+  //     payload['Imagen secundaria 1'] = []
+  //   }
+  //   
+  //   if (data.images[2]) {
+  //     payload['Imagen secundaria 2'] = [{ url: toAbsoluteUrl(data.images[2]) }]
+  //   } else {
+  //     payload['Imagen secundaria 2'] = []
+  //   }
+  // }
   
   return payload
 }

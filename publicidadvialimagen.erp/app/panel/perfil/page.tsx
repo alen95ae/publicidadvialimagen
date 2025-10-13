@@ -1,25 +1,31 @@
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server"
 import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
+import { verifySession } from "@/lib/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, User, Calendar } from "lucide-react"
-import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components"
 import { Button } from "@/components/ui/button"
 
 export default async function ProfilePage() {
-  const { getUser, isAuthenticated } = getKindeServerSession()
+  const cookieStore = await cookies()
+  const token = cookieStore.get("session")?.value
   
-  if (!(await isAuthenticated())) {
-    redirect("/api/auth/login")
+  if (!token) {
+    redirect("/login")
   }
 
-  const user = await getUser()
+  let user
+  try {
+    user = await verifySession(token)
+  } catch {
+    redirect("/login")
+  }
 
   if (!user) {
-    redirect("/api/auth/login")
+    redirect("/login")
   }
 
-  const initials = (user.given_name?.[0] || "") + (user.family_name?.[0] || "")
+  const initials = (user.name?.[0] || "") + (user.name?.[1] || "")
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -37,12 +43,12 @@ export default async function ProfilePage() {
           <CardContent className="space-y-6">
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={user.picture || undefined} alt={user.given_name || user.email || "Usuario"} />
+                <AvatarImage src="" alt={user.name || user.email || "Usuario"} />
                 <AvatarFallback className="text-xl">{initials}</AvatarFallback>
               </Avatar>
               <div>
                 <p className="text-lg font-semibold">
-                  {user.given_name} {user.family_name}
+                  {user.name}
                 </p>
                 <p className="text-sm text-gray-600">{user.email}</p>
               </div>
@@ -52,7 +58,7 @@ export default async function ProfilePage() {
               <div className="flex items-center gap-3 text-sm">
                 <User className="h-4 w-4 text-gray-500" />
                 <span className="font-medium">Nombre:</span>
-                <span>{user.given_name} {user.family_name}</span>
+                <span>{user.name}</span>
               </div>
 
               <div className="flex items-center gap-3 text-sm">
@@ -64,7 +70,7 @@ export default async function ProfilePage() {
               <div className="flex items-center gap-3 text-sm">
                 <Calendar className="h-4 w-4 text-gray-500" />
                 <span className="font-medium">ID:</span>
-                <span className="font-mono text-xs">{user.id}</span>
+                <span className="font-mono text-xs">{user.sub}</span>
               </div>
             </div>
           </CardContent>
@@ -84,11 +90,11 @@ export default async function ProfilePage() {
       </div>
 
       <div className="mt-6">
-        <LogoutLink>
+        <a href="/api/auth/logout">
           <Button variant="destructive" className="w-full md:w-auto">
             Cerrar Sesión
           </Button>
-        </LogoutLink>
+        </a>
       </div>
     </div>
   )

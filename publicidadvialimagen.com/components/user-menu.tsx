@@ -3,7 +3,6 @@
 import { User, FileText, Settings, LogOut, TrendingUp, MessageSquare } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -22,18 +21,15 @@ export default function UserMenu() {
   const router = useRouter()
 
   const getInitials = () => {
-    if (user?.given_name) {
-      return `${user.given_name[0]}${user.family_name?.[0] || ''}`.toUpperCase()
+    if (user?.name) {
+      return user.name.split(' ').map(n => n[0]).join('').toUpperCase()
     }
     return user?.email?.[0]?.toUpperCase() || 'U'
   }
 
   const getUserName = () => {
-    if (user?.given_name && user?.family_name) {
-      return `${user.given_name} ${user.family_name}`
-    }
-    if (user?.given_name) {
-      return user.given_name
+    if (user?.name) {
+      return user.name
     }
     return user?.email || 'Usuario'
   }
@@ -121,12 +117,16 @@ export default function UserMenu() {
           <span>Mensajes</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <LogoutLink postLogoutRedirectURL="/login">
-          <DropdownMenuItem className="cursor-pointer text-destructive">
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Cerrar Sesión</span>
-          </DropdownMenuItem>
-        </LogoutLink>
+        <DropdownMenuItem 
+          onClick={async () => {
+            await fetch('/api/auth/logout', { method: 'POST' })
+            window.location.href = '/login'
+          }}
+          className="cursor-pointer text-destructive"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Cerrar Sesión</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

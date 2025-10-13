@@ -17,7 +17,10 @@ import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, Home } from "lu
 import { toast } from "sonner"
 import Sidebar from "@/components/sidebar"
 import SupportMap from "@/components/support-map"
-import InteractiveMap from "@/components/interactive-map"
+import dynamic from "next/dynamic";
+
+const EditableSupportMap = dynamic(() => import("@/components/maps/EditableSupportMap"), { ssr: false });
+const GmapsLinkPaste = dynamic(() => import("@/components/maps/GmapsLinkPaste"), { ssr: false });
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [
@@ -111,17 +114,20 @@ export default function SoporteDetailPage() {
         console.log('📥 Soporte recibido del API:', data)
         console.log('🖼️ Imágenes en el soporte:', data.images)
         setSupport(data)
-        // Generar Google Maps link si hay coordenadas pero no link
-        let googleMapsLink = data.googleMapsLink || ""
-        if (!googleMapsLink && data.latitude && data.longitude) {
-          googleMapsLink = generateGoogleMapsLink(data.latitude, data.longitude)
-        }
-
         // Si no hay coordenadas, establecer por defecto La Paz para mostrar chincheta
         const defaultLat = -16.5000
         const defaultLng = -68.1500
         const latitude = data.latitude || defaultLat
         const longitude = data.longitude || defaultLng
+        
+        // Generar Google Maps link si hay coordenadas pero no link
+        let googleMapsLink = data.googleMapsLink || ""
+        if (!googleMapsLink && (data.latitude && data.longitude)) {
+          googleMapsLink = generateGoogleMapsLink(data.latitude, data.longitude)
+        } else if (!googleMapsLink) {
+          // Si no hay coordenadas ni link, generar link con coordenadas por defecto
+          googleMapsLink = generateGoogleMapsLink(defaultLat, defaultLng)
+        }
 
         setFormData({
           code: data.code || "",
@@ -167,101 +173,6 @@ export default function SoporteDetailPage() {
     }
   }, [areaM2, editing])
 
-  // Función para expandir enlaces cortos usando una API externa
-  const expandShortUrl = async (shortUrl: string): Promise<string | null> => {
-    try {
-      console.log('Expanding short URL:', shortUrl)
-      
-      // Usar la API de unshorten.me que no tiene restricciones CORS
-      const response = await fetch(`https://unshorten.me/json/${encodeURIComponent(shortUrl)}`)
-      const data = await response.json()
-      
-      if (data.success && data.resolved_url) {
-        console.log('URL expanded successfully:', data.resolved_url)
-        return data.resolved_url
-      }
-      
-      // Fallback: usar longurl.org
-      const fallbackResponse = await fetch(`https://api.longurl.org/v2/expand?url=${encodeURIComponent(shortUrl)}&format=json`)
-      const fallbackData = await fallbackResponse.json()
-      
-      if (fallbackData['long-url']) {
-        console.log('URL expanded with fallback:', fallbackData['long-url'])
-        return fallbackData['long-url']
-      }
-      
-      return null
-    } catch (error) {
-      console.error('Error expanding URL:', error)
-      return null
-    }
-  }
-
-  // Función para extraer coordenadas de Google Maps link
-  const extractCoordinatesFromGoogleMaps = async (link: string): Promise<{ lat: number, lng: number } | null> => {
-    if (!link || typeof link !== 'string') return null
-    
-    try {
-      console.log('Extracting coordinates from:', link)
-      let urlToProcess = link
-      
-      // Si es un enlace corto, expandirlo primero
-      if (link.includes('goo.gl') || link.includes('maps.app.goo.gl')) {
-        console.log('Short link detected, expanding...')
-        const expandedUrl = await expandShortUrl(link)
-        if (expandedUrl) {
-          urlToProcess = expandedUrl
-          console.log('Using expanded URL:', urlToProcess)
-        } else {
-          console.log('Could not expand short URL')
-          return null
-        }
-      }
-      
-      // Patrones mejorados para diferentes formatos de Google Maps
-      const patterns = [
-        // Formato: @lat,lng,zoom (más común)
-        /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Formato: !3dlat!4dlng
-        /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/,
-        // Formato: ll=lat,lng
-        /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Formato: center=lat,lng
-        /[?&]center=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Formato: q=lat,lng
-        /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Formato directo: lat,lng en la URL
-        /maps.*?(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/,
-        // Formato place: place/lat,lng
-        /place\/.*?@(-?\d+\.?\d*),(-?\d+\.?\d*)/
-      ]
-
-      for (let i = 0; i < patterns.length; i++) {
-        const pattern = patterns[i]
-        const match = urlToProcess.match(pattern)
-        if (match) {
-          const lat = parseFloat(match[1])
-          const lng = parseFloat(match[2])
-          console.log(`Pattern ${i} matched:`, { lat, lng })
-          
-          // Validar que las coordenadas estén en rangos válidos
-          if (!isNaN(lat) && !isNaN(lng) && 
-              lat >= -90 && lat <= 90 && 
-              lng >= -180 && lng <= 180) {
-            console.log('Valid coordinates extracted:', { lat, lng })
-            return { lat, lng }
-          }
-        }
-      }
-      
-      console.log('No coordinates found in link')
-      return null
-    } catch (error) {
-      console.error('Error extracting coordinates:', error)
-      return null
-    }
-  }
-
   // Función para generar Google Maps link desde coordenadas
   const generateGoogleMapsLink = (lat: number, lng: number): string => {
     return `https://www.google.com/maps?q=${lat},${lng}&z=15`
@@ -275,57 +186,11 @@ export default function SoporteDetailPage() {
       console.log('Previous formData:', prev)
       const newData = { ...prev, [field]: value }
       
-      // Si se cambia el Google Maps link, extraer coordenadas automáticamente
-      if (field === 'googleMapsLink' && typeof value === 'string') {
-        console.log('Google Maps link changed:', value)
-        
-        if (value.trim()) {
-          // Mostrar mensaje de carga para enlaces cortos
-          if (value.includes('goo.gl') || value.includes('maps.app.goo.gl')) {
-            toast.info('Expandiendo enlace corto de Google Maps...')
-          }
-          
-          extractCoordinatesFromGoogleMaps(value.trim()).then(coords => {
-            if (coords) {
-              console.log('Coordinates extracted successfully:', coords)
-              setFormData(prev => ({
-                ...prev,
-                latitude: coords.lat,
-                longitude: coords.lng
-              }))
-              
-              // Mostrar mensaje de éxito
-              toast.success(`¡Ubicación encontrada! ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`)
-            } else {
-              console.log('No coordinates found, showing warning')
-              toast.warning('No se pudieron extraer coordenadas del enlace.')
-            }
-          }).catch(error => {
-            console.error('Error extracting coordinates:', error)
-            toast.error('Error al procesar el enlace de Google Maps.')
-          })
-        } else {
-          // Si se borra el link, mantener coordenadas por defecto para que aparezca la chincheta
-          console.log('Link cleared, using default coordinates')
-          newData.latitude = -16.5000
-          newData.longitude = -68.1500
-        }
-      }
-      
       console.log('Final newData:', newData)
       return newData
     })
   }
 
-  // Función para manejar cambios de coordenadas desde el mapa
-  const handleLocationChange = (lat: number, lng: number) => {
-    setFormData(prev => ({
-      ...prev,
-      latitude: lat,
-      longitude: lng,
-      googleMapsLink: generateGoogleMapsLink(lat, lng)
-    }))
-  }
 
   const handleSave = async () => {
     if (!formData.code || !formData.title) {
@@ -353,6 +218,13 @@ export default function SoporteDetailPage() {
         owner: formData.owner || null,
       }
 
+      console.log('💾 Saving support with data:', {
+        googleMapsLink: dataToSend.googleMapsLink,
+        latitude: dataToSend.latitude,
+        longitude: dataToSend.longitude,
+        fullData: dataToSend
+      });
+
       const response = await fetch(`/api/soportes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -363,11 +235,34 @@ export default function SoporteDetailPage() {
         const updated = await response.json()
         setSupport(updated)
         setEditing(false)
-        toast.success("Soporte actualizado correctamente")
+        console.log('✅ Soporte guardado exitosamente:', {
+          googleMapsLink: updated.googleMapsLink,
+          latitude: updated.latitude,
+          longitude: updated.longitude
+        });
+        toast.success(`Soporte actualizado correctamente${dataToSend.googleMapsLink ? ' con enlace de Google Maps' : ''}`)
         fetchSupport() // Recargar datos
       } else {
-        const error = await response.json()
-        toast.error(error.error || "Error al actualizar el soporte")
+        console.error('❌ Error response status:', response.status);
+        console.error('❌ Error response headers:', response.headers);
+        
+        let errorMessage = "Error al actualizar el soporte";
+        let errorDetails = "";
+        
+        try {
+          const error = await response.json()
+          console.error('❌ Error al guardar soporte:', error);
+          errorMessage = error.error || error.message || `Error ${response.status}: ${response.statusText}`;
+          errorDetails = error.details || "";
+        } catch (parseError) {
+          console.error('❌ Error parsing response:', parseError);
+          errorMessage = `Error ${response.status}: ${response.statusText}`;
+        }
+        
+        // Mostrar error más específico
+        const fullErrorMessage = errorDetails ? `${errorMessage} - ${errorDetails}` : errorMessage;
+        console.error('❌ Error completo:', fullErrorMessage);
+        toast.error(fullErrorMessage);
       }
     } catch (error) {
       console.error("Error saving support:", error)
@@ -454,16 +349,28 @@ export default function SoporteDetailPage() {
                 Soportes
               </Link>
               <Link 
-                href="/panel/soportes/costes" 
+                href="/panel/soportes/alquileres" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
-                Costes
+                Alquileres
               </Link>
               <Link 
                 href="/panel/soportes/planificacion" 
                 className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
               >
                 Planificación
+              </Link>
+              <Link 
+                href="/panel/soportes/costes" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Costes
+              </Link>
+              <Link 
+                href="/panel/soportes/mantenimiento" 
+                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+              >
+                Mantenimiento
               </Link>
             </div>
           </div>
@@ -840,28 +747,71 @@ export default function SoporteDetailPage() {
                   
                   <div className="space-y-2">
                     <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
-                    <Input
-                      id="googleMapsLink"
-                      type="url"
-                      value={formData.googleMapsLink}
-                      onChange={(e) => handleChange("googleMapsLink", e.target.value)}
-                      placeholder="Pega aquí el enlace de Google Maps..."
+                    <GmapsLinkPaste 
+                      onCoords={(coords) => {
+                        console.log('🎯 Coordinates received from URL paste:', coords);
+                        const newGoogleMapsLink = `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15`;
+                        console.log('🔗 Generated new Google Maps link from paste:', newGoogleMapsLink);
+                        
+                        setFormData(prev => ({
+                          ...prev,
+                          latitude: coords.lat,
+                          longitude: coords.lng,
+                          googleMapsLink: newGoogleMapsLink
+                        }));
+                        toast.success(`¡Ubicación encontrada! ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+                      }}
                     />
                     <p className="text-xs text-gray-500">
-                      💡 Pega cualquier enlace de Google Maps y las coordenadas se extraerán automáticamente
+                      💡 Pega cualquier enlace de Google Maps y la chincheta se moverá automáticamente
                     </p>
                   </div>
                   
                   <div className="space-y-2">
                     <Label>Ubicación en el mapa</Label>
-                    <InteractiveMap
-                      latitude={formData.latitude}
-                      longitude={formData.longitude}
-                      onLocationChange={handleLocationChange}
-                      title={formData.title}
-                      code={formData.code}
-                      className="w-full"
+                    <EditableSupportMap
+                      lat={formData.latitude || -16.5000}
+                      lng={formData.longitude || -68.1500}
+                      onChange={(coords) => {
+                        console.log('🎯 Map coordinates changed:', coords);
+                        const newGoogleMapsLink = `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15`;
+                        console.log('🔗 Generated new Google Maps link:', newGoogleMapsLink);
+                        
+                        setFormData(prev => {
+                          const newData = {
+                            ...prev,
+                            latitude: coords.lat,
+                            longitude: coords.lng,
+                            googleMapsLink: newGoogleMapsLink
+                          };
+                          console.log('📝 Updated formData:', {
+                            latitude: newData.latitude,
+                            longitude: newData.longitude,
+                            googleMapsLink: newData.googleMapsLink
+                          });
+                          return newData;
+                        });
+                        
+                        toast.success(`Ubicación actualizada: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+                      }}
+                      height={420}
                     />
+                    <div className="text-sm mt-2 text-gray-600">
+                      <div>Lat: {(formData.latitude || -16.5000).toFixed(6)} | Lng: {(formData.longitude || -68.1500).toFixed(6)}</div>
+                      {formData.googleMapsLink && (
+                        <div className="mt-1">
+                          <span className="text-xs text-gray-500">Enlace generado:</span>
+                          <a 
+                            href={formData.googleMapsLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 underline ml-1"
+                          >
+                            {formData.googleMapsLink.substring(0, 50)}...
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               ) : (
@@ -911,15 +861,16 @@ export default function SoporteDetailPage() {
               )}
               
               {/* Mapa de ubicación */}
-              {!editing && (support.latitude && support.longitude) && (
-                <InteractiveMap
-                  latitude={support.latitude}
-                  longitude={support.longitude}
-                  title={support.title}
-                  code={support.code}
-                  className="w-full"
-                  readOnly={true}
-                />
+              {!editing && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700">Ubicación</Label>
+                  <EditableSupportMap
+                    lat={support.latitude || -16.5000}
+                    lng={support.longitude || -68.1500}
+                    onChange={() => {}} // No editable en modo visualización
+                    height={300}
+                  />
+                </div>
               )}
             </CardContent>
           </Card>

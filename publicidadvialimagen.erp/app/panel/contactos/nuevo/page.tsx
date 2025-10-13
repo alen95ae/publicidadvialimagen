@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Save, Building2, User } from "lucide-react"
+import { ArrowLeft, Save, Building2, User, Home } from "lucide-react"
 import { toast } from "sonner"
 import Sidebar from "@/components/sidebar"
 
@@ -29,6 +29,7 @@ export default function NuevoContactoPage() {
     relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH",
     displayName: "",
     legalName: "",
+    company: "",
     taxId: "",
     phone: "",
     email: "",
@@ -83,9 +84,8 @@ export default function NuevoContactoPage() {
       })
 
       if (response.ok) {
-        const created = await response.json()
         toast.success("Contacto creado correctamente")
-        router.push(`/panel/contactos/${created.id}`)
+        router.push("/panel/contactos")
       } else {
         const error = await response.json()
         toast.error(error.error || "Error al crear el contacto")
@@ -103,12 +103,23 @@ export default function NuevoContactoPage() {
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Link href="/panel/contactos" className="text-gray-600 hover:text-gray-800 mr-4">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Contactos
+            <div className="flex items-center gap-4">
+              <Link 
+                href="/panel" 
+                className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
+                title="Ir al panel principal"
+              >
+                <Home className="w-5 h-5" />
               </Link>
-              <div className="text-xl font-bold text-slate-800">Nuevo Contacto</div>
+              <div className="text-xl font-bold text-slate-800">Contactos</div>
+              <div className="flex items-center gap-6 ml-4">
+                <Link 
+                  href="/panel/contactos" 
+                  className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
+                >
+                  Contactos
+                </Link>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <span className="text-gray-600">Buscar</span>
@@ -125,11 +136,16 @@ export default function NuevoContactoPage() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Encabezado */}
+          {/* Información Básica */}
           <Card className="mb-6">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="flex gap-4">
+            <CardHeader>
+              <CardTitle>Información Básica</CardTitle>
+              <CardDescription>Datos principales del contacto</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Tipo de contacto */}
+                <div className="flex gap-4 mb-4">
                   <div className="flex items-center space-x-2">
                     <input
                       type="radio"
@@ -140,7 +156,7 @@ export default function NuevoContactoPage() {
                       onChange={(e) => handleChange("kind", e.target.value)}
                       className="w-4 h-4 text-[#D54644]"
                     />
-                    <Label htmlFor="kind-company" className="flex items-center gap-2">
+                    <Label htmlFor="kind-company" className="flex items-center gap-2 cursor-pointer">
                       <Building2 className="w-4 h-4" />
                       Compañía
                     </Label>
@@ -155,42 +171,50 @@ export default function NuevoContactoPage() {
                       onChange={(e) => handleChange("kind", e.target.value)}
                       className="w-4 h-4 text-[#D54644]"
                     />
-                    <Label htmlFor="kind-individual" className="flex items-center gap-2">
+                    <Label htmlFor="kind-individual" className="flex items-center gap-2 cursor-pointer">
                       <User className="w-4 h-4" />
                       Individual
                     </Label>
                   </div>
                 </div>
 
-              </div>
-
-              <div className="space-y-4">
+                {/* Nombre del contacto */}
                 <div>
-                  <Label htmlFor="displayName" className="text-lg font-medium">
-                    Nombre del Contacto *
-                  </Label>
+                  <Label htmlFor="displayName">Nombre del Contacto *</Label>
                   <Input
                     id="displayName"
                     value={formData.displayName}
                     onChange={(e) => handleChange("displayName", e.target.value)}
                     placeholder={formData.kind === "COMPANY" ? "Nombre de la empresa" : "Nombre completo"}
-                    className="text-lg mt-2"
                     required
                   />
                 </div>
 
+                {/* Empresa - solo para empresas */}
                 {formData.kind === "COMPANY" && (
                   <div>
-                    <Label htmlFor="legalName">Razón Social</Label>
+                    <Label htmlFor="legalName">Empresa</Label>
                     <Input
                       id="legalName"
                       value={formData.legalName}
                       onChange={(e) => handleChange("legalName", e.target.value)}
-                      placeholder="Razón social completa"
+                      placeholder="Nombre de la empresa"
                     />
                   </div>
                 )}
 
+                {/* Empresa */}
+                <div>
+                  <Label htmlFor="company">Empresa</Label>
+                  <Input
+                    id="company"
+                    value={formData.company}
+                    onChange={(e) => handleChange("company", e.target.value)}
+                    placeholder="Nombre de la empresa"
+                  />
+                </div>
+
+                {/* NIT y Relación */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="taxId">NIT</Label>
@@ -238,7 +262,7 @@ export default function NuevoContactoPage() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="email">Correo Electrónico</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
@@ -283,7 +307,7 @@ export default function NuevoContactoPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="address1">Dirección 1</Label>
+                  <Label htmlFor="address1">Dirección</Label>
                   <Input
                     id="address1"
                     value={formData.address1}

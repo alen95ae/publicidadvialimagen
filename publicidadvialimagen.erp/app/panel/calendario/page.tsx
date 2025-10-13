@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server"
+import { cookies } from "next/headers"
+import { verifySession } from "@/lib/auth"
 import Sidebar from "@/components/sidebar"
 import CalendarClient from "./CalendarClient"
 import { getEvents, getEventsByDate } from "@/lib/calendar-api"
@@ -7,12 +8,21 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Calendar, CheckCircle, Circle, Loader } from "lucide-react"
 
 export default async function CalendarioPage() {
-  const { isAuthenticated, getUser } = getKindeServerSession()
-  const authed = await isAuthenticated()
-  if (!authed) redirect("/login")
+  const cookieStore = await cookies()
+  const token = cookieStore.get("session")?.value
+  
+  if (!token) {
+    redirect("/login")
+  }
 
-  const user = await getUser()
-  const userId = user?.id
+  let user
+  try {
+    user = await verifySession(token)
+  } catch {
+    redirect("/login")
+  }
+
+  const userId = user?.sub
 
   // Obtener eventos
   const events = await getEvents()

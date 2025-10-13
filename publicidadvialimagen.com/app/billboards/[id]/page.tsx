@@ -19,8 +19,8 @@ import { useCampaignsContext } from "@/components/campaigns-provider"
 import { useBillboards } from "@/hooks/use-billboards"
 
 // Dynamic import para el mapa
-const DynamicMap = dynamic(
-  () => import("@/components/dynamic-map"),
+const SingleSupportMap = dynamic(
+  () => import("@/components/maps/SingleSupportMap"),
   { 
     ssr: false,
     loading: () => (
@@ -224,10 +224,10 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">Ubicación</h3>
             {displayData.coordinates && displayData.coordinates.lat && displayData.coordinates.lng ? (
-              <DynamicMap
-                billboards={[displayData]}
-                isFullscreen={false}
-                zoom={18}
+              <SingleSupportMap
+                lat={displayData.coordinates.lat}
+                lng={displayData.coordinates.lng}
+                height={320}
               />
             ) : (
               <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center border">

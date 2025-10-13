@@ -13,7 +13,12 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 
 interface ProfileTabProps {
-  user: any // Kinde user object
+  user: {
+    id: string
+    email: string
+    name?: string
+    role?: string
+  }
 }
 
 export default function ProfileTab({ user }: ProfileTabProps) {
@@ -21,8 +26,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   const { updateProfile } = useAuth()
   const [loading, setLoading] = useState(false)
   
-  const [firstName, setFirstName] = useState(user?.given_name || "")
-  const [lastName, setLastName] = useState(user?.family_name || "")
+  const [name, setName] = useState(user?.name || "")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,8 +34,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
 
     try {
       const { error } = await updateProfile({
-        firstName,
-        lastName,
+        name,
       })
 
       if (error) {
@@ -53,9 +56,10 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   }
 
   const getInitials = () => {
-    const first = firstName || user?.given_name?.[0] || user?.email?.[0] || ""
-    const last = lastName?.[0] || user?.family_name?.[0] || ""
-    return `${first}${last}`.toUpperCase()
+    if (user?.name) {
+      return user.name.split(' ').map(n => n[0]).join('').toUpperCase()
+    }
+    return user?.email?.[0]?.toUpperCase() || 'U'
   }
 
   return (
@@ -69,7 +73,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
       <CardContent className="space-y-6">
         <div className="flex items-center gap-6">
           <Avatar className="h-24 w-24">
-            <AvatarImage src={user?.picture} alt={firstName} />
+            <AvatarImage src="" alt={name} />
             <AvatarFallback className="text-2xl">{getInitials()}</AvatarFallback>
           </Avatar>
           <div className="flex-1">
@@ -84,27 +88,15 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="first-name">Nombre</Label>
-              <Input
-                id="first-name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Tu nombre"
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="last-name">Apellido</Label>
-              <Input
-                id="last-name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Tu apellido"
-                disabled={loading}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="name">Nombre completo</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Tu nombre completo"
+              disabled={loading}
+            />
           </div>
 
           <div className="space-y-2">

@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { User, TrendingUp, FileText, MessageSquare, LogOut, Loader2 } from "lucide-react"
-import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -85,12 +84,17 @@ export default function AccountPage() {
               Gestiona tu perfil, campañas y solicitudes
             </p>
           </div>
-          <LogoutLink postLogoutRedirectURL="/login">
-            <Button variant="outline" className="mt-4 md:mt-0">
-              <LogOut className="mr-2 h-4 w-4" />
-              Cerrar Sesión
-            </Button>
-          </LogoutLink>
+          <Button 
+            variant="outline" 
+            className="mt-4 md:mt-0"
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' })
+              window.location.href = '/login'
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Cerrar Sesión
+          </Button>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

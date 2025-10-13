@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -14,8 +14,9 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card, CardContent } from "@/components/ui/card"
-import BillboardMap from "@/components/billboard-map"
 import { useBillboards } from "@/hooks/use-billboards"
+import dynamic from "next/dynamic"
+import LeafletHybridMap from "@/components/maps/LeafletHybridMap"
 
 // ⚠️ IMPORTANTE: usar los 4 valores oficiales en 'format'
 const FALLBACK_BILLBOARDS = [
@@ -426,10 +427,20 @@ export default function BillboardsPage() {
     availability: [],
   })
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
-  const [mapVisible, setMapVisible] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("featured")
   const billboards = allBillboards && allBillboards.length > 0 ? allBillboards : FALLBACK_BILLBOARDS
+  const supportPoints = useMemo<{id: string; lat: number; lng: number; title?: string; icon?: string}[]>(() => {
+    return billboards
+      .filter((b) => b.coordinates && b.coordinates.lat && b.coordinates.lng)
+      .map((b) => ({
+        id: b.id.toString(),
+        lat: b.coordinates!.lat,
+        lng: b.coordinates!.lng,
+        title: b.name,
+        icon: "/icons/billboard.svg",
+      }));
+  }, [billboards]);
 
   // Effect to handle URL parameters
   useEffect(() => {
@@ -725,11 +736,9 @@ export default function BillboardsPage() {
           {/* Map Section */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4">Ubicación de Espacios Publicitarios</h2>
-            <BillboardMap 
-              billboards={sortedBillboards} 
-              selectedCity={selectedFilters.cities.length === 1 ? selectedFilters.cities[0] : undefined}
-              isVisible={mapVisible}
-              onToggle={() => setMapVisible(!mapVisible)}
+            <LeafletHybridMap 
+              points={supportPoints} 
+              height={520}
             />
           </div>
 

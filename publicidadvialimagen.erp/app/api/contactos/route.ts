@@ -6,8 +6,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || ''
     const relationFilter = searchParams.get('relation') || ''
+    const kindFilter = searchParams.get('kind') || ''
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '25')
+    const limit = parseInt(searchParams.get('limit') || '100')
 
     console.log('🔍 Contact search params:', { query, relationFilter, page, limit })
 
@@ -15,9 +16,15 @@ export async function GET(request: Request) {
     let airtableFilter = ''
     const filterParts = []
 
-    // Filtro de búsqueda por ID
+    // Filtro de búsqueda por Nombre, Empresa o Email (case-insensitive y exacto para email)
     if (query) {
-      filterParts.push(`SEARCH("${query}", {ID} & '') > 0`)
+      const q = query.replace(/"/g, '\\"')
+      const qLower = query.trim().toLowerCase().replace(/"/g, '\\"')
+      const nameSearch = `SEARCH("${q}", {Nombre} & '') > 0`
+      const empresaSearch = `SEARCH("${q}", {Empresa} & '') > 0`
+      const emailEq = `LOWER(TRIM({Email} & '')) = "${qLower}"`
+      const emailContains = `FIND("${qLower}", LOWER({Email} & '')) > 0`
+      filterParts.push(`OR(${nameSearch}, ${empresaSearch}, ${emailEq}, ${emailContains})`)
     }
 
     // Filtro de relación
@@ -29,6 +36,12 @@ export async function GET(request: Request) {
         const relationFilterStr = relations.map(rel => `{Relación} = "${rel}"`).join(', ')
         filterParts.push(`OR(${relationFilterStr})`)
       }
+    }
+
+    // Filtro por tipo (kind)
+    if (kindFilter && kindFilter !== 'ALL') {
+      const mapped = kindFilter === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
+      filterParts.push(`{Tipo de Contacto} = "${mapped}"`)
     }
 
     // Combinar filtros
@@ -54,22 +67,45 @@ export async function GET(request: Request) {
 
     const data = records.map((r) => ({
       id: r.id,
-      displayName: `Contacto #${r.fields['ID'] || 'Sin ID'}`,
-      legalName: r.fields['ID'] ? `ID: ${r.fields['ID']}` : 'Sin nombre',
-      kind: r.fields['Tipo de Contacto'] === 'Individual' ? 'PERSON' : 'COMPANY',
-      email: '',
-      phone: '',
-      taxId: '',
-      address: '',
-      city: '',
-      postalCode: '',
-      country: 'Bolivia',
+      displayName: r.fields['Nombre'] || r.fields['Nombre Comercial'] || r.fields['Nombre Contacto'] || '',
+      legalName: r.fields['Empresa'] || r.fields['Nombre Legal'] || '',
+      kind: r.fields['Tipo de Contacto'] === 'Individual' ? 'INDIVIDUAL' : 'COMPANY',
+      email: r.fields['Email'] || '',
+      phone: r.fields['Teléfono'] || r.fields['Telefono'] || '',
+      taxId: r.fields['NIT'] || r.fields['CIF'] || '',
+      address: r.fields['Dirección'] || r.fields['Direccion'] || '',
+      city: r.fields['Ciudad'] || '',
+      postalCode: r.fields['Código Postal'] || '',
+      country: r.fields['País'] || 'Bolivia',
       relation: r.fields['Relación'] || 'Cliente',
       status: 'activo',
-      notes: '',
+      notes: r.fields['Notas'] || '',
       createdAt: r.createdTime,
       updatedAt: r.createdTime
     }))
+
+    // Ordenamiento personalizado: números primero, luego letras A-Z, sin nombre al final
+    data.sort((a, b) => {
+      const nameA = (a.displayName || '').trim()
+      const nameB = (b.displayName || '').trim()
+
+      // Si uno está vacío y el otro no, el vacío va al final
+      if (!nameA && nameB) return 1
+      if (nameA && !nameB) return -1
+      if (!nameA && !nameB) return 0
+
+      const firstCharA = nameA.charAt(0)
+      const firstCharB = nameB.charAt(0)
+      const isNumberA = /\d/.test(firstCharA)
+      const isNumberB = /\d/.test(firstCharB)
+
+      // Números antes que letras
+      if (isNumberA && !isNumberB) return -1
+      if (!isNumberA && isNumberB) return 1
+
+      // Ambos del mismo tipo, ordenar alfabéticamente
+      return nameA.localeCompare(nameB, 'es', { numeric: true, sensitivity: 'base' })
+    })
 
     // Aplicar paginación
     const total = data.length
@@ -104,35 +140,107 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     
-    // Construir payload para Airtable usando solo campos existentes
-    const payload: any = {
-      'Tipo de Contacto': body.kind === 'PERSON' ? 'Individual' : 'Empresa',
-      'Relación': body.relation || 'Cliente'
+    console.log('📥 Datos recibidos:', body)
+    
+    // Validar campos requeridos
+    if (!body.displayName || body.displayName.trim() === '') {
+      return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 })
     }
+    
+    // Construir payload para Airtable con validación de campos
+    // Campos disponibles en Airtable: ID, Tipo de Contacto, Nombre, Relación, Email, 
+    // Teléfono, NIT, Dirección, Ciudad, País, Empresa, Sitio Web
+    const payload: any = {
+      'Nombre': body.displayName.trim(),
+    }
+    
+    // Solo agregar campos que tengan valor para evitar errores de validación
+    // Valores válidos en Airtable: "Individual" y "Compañía"
+    if (body.kind) {
+      payload['Tipo de Contacto'] = body.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
+    }
+    
+    if (body.relation) {
+      // Mapear valores de relación - valores válidos: Cliente, Proveedor, Ambos
+      const relationMap: { [key: string]: string } = {
+        'CUSTOMER': 'Cliente',
+        'SUPPLIER': 'Proveedor', 
+        'BOTH': 'Ambos'
+      }
+      payload['Relación'] = relationMap[body.relation] || 'Cliente'
+    }
+    
+    if (body.email && body.email.trim()) {
+      payload['Email'] = body.email.trim()
+    }
+    
+    if (body.phone && body.phone.trim()) {
+      payload['Teléfono'] = body.phone.trim()
+    }
+    
+    if (body.taxId && body.taxId.trim()) {
+      payload['NIT'] = body.taxId.trim()
+    }
+    
+    if (body.address1 && body.address1.trim()) {
+      payload['Dirección'] = body.address1.trim()
+    }
+    
+    if (body.city && body.city.trim()) {
+      payload['Ciudad'] = body.city.trim()
+    }
+    
+    if (body.country && body.country.trim()) {
+      payload['País'] = body.country.trim()
+    }
+    
+    if (body.website && body.website.trim()) {
+      payload['Sitio Web'] = body.website.trim()
+    }
+    
+    // El campo legalName se mapea a Empresa en Airtable
+    if (body.legalName && body.legalName.trim()) {
+      payload['Empresa'] = body.legalName.trim()
+    }
+    
+    // También guardar el campo company si viene
+    if (body.company && body.company.trim()) {
+      payload['Empresa'] = body.company.trim()
+    }
+
+    console.log('🆕 Creando contacto con payload validado:', payload)
 
     // Crear nuevo contacto en Airtable
     const record = await airtable("Contactos").create([{ fields: payload }])
 
+    console.log('✅ Contacto creado exitosamente:', record[0].id)
+
     return NextResponse.json({
       id: record[0].id,
-      displayName: `Contacto #${record[0].fields['ID'] || 'Nuevo'}`,
-      legalName: record[0].fields['ID'] ? `ID: ${record[0].fields['ID']}` : '',
-      kind: record[0].fields['Tipo de Contacto'] === 'Individual' ? 'PERSON' : 'COMPANY',
-      email: '',
-      phone: '',
-      taxId: '',
-      address: '',
-      city: '',
+      displayName: record[0].fields['Nombre'] || '',
+      legalName: record[0].fields['Empresa'] || '',
+      company: record[0].fields['Empresa'] || '',
+      kind: record[0].fields['Tipo de Contacto'] === 'Individual' ? 'INDIVIDUAL' : 'COMPANY',
+      email: record[0].fields['Email'] || '',
+      phone: record[0].fields['Teléfono'] || '',
+      taxId: record[0].fields['NIT'] || '',
+      address: record[0].fields['Dirección'] || '',
+      city: record[0].fields['Ciudad'] || '',
       postalCode: '',
-      country: 'Bolivia',
-      relation: record[0].fields['Relación'] || 'Cliente',
+      country: record[0].fields['País'] || '',
+      website: record[0].fields['Sitio Web'] || '',
+      relation: body.relation || 'CUSTOMER',
       status: 'activo',
       notes: '',
       createdAt: record[0].createdTime,
       updatedAt: record[0].createdTime
     }, { status: 201 })
   } catch (e: any) {
-    console.error("Error creando contacto en Airtable:", e)
-    return NextResponse.json({ error: "No se pudo crear el contacto" }, { status: 500 })
+    console.error("❌ Error creando contacto en Airtable:", e)
+    console.error("❌ Detalles del error:", e.message)
+    return NextResponse.json({ 
+      error: "No se pudo crear el contacto", 
+      details: e.message 
+    }, { status: 500 })
   }
 }

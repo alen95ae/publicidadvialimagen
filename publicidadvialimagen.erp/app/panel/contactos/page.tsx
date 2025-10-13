@@ -11,7 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Search, Filter, Download, Building2, User, Eye, Edit, Trash2, Home } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Home, Upload, Users, Merge, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import Sidebar from "@/components/sidebar"
 
@@ -37,8 +40,7 @@ interface Contact {
 interface ContactFilters {
   q: string
   relation: string
-  city: string
-  country: string
+  kind: string
 }
 
 export default function ContactosPage() {
@@ -46,26 +48,44 @@ export default function ContactosPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set())
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allContactIds, setAllContactIds] = useState<string[]>([])
+  const [editedContacts, setEditedContacts] = useState<Record<string, Partial<Contact>>>({})
+  const [savingChanges, setSavingChanges] = useState(false)
+  const [openImport, setOpenImport] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
+  const [duplicates, setDuplicates] = useState<any[]>([])
+  const [showDuplicates, setShowDuplicates] = useState(false)
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false)
+  const [selectedPrimary, setSelectedPrimary] = useState<Record<number, string>>({})
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 100,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  })
   const [filters, setFilters] = useState<ContactFilters>({
     q: "",
     relation: "ALL",
-    city: "",
-    country: ""
+    kind: "ALL"
   })
-  const [groupBy, setGroupBy] = useState<string>("NONE")
 
   useEffect(() => {
-    fetchContacts()
+    fetchContacts(1)
   }, [filters])
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (page: number = currentPage) => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
       if (filters.q) params.append("q", filters.q)
       if (filters.relation && filters.relation !== "ALL") params.append("relation", filters.relation)
-      if (filters.city) params.append("city", filters.city)
-      if (filters.country) params.append("country", filters.country)
+      if (filters.kind && filters.kind !== "ALL") params.append("kind", filters.kind)
+      params.set('page', page.toString())
+      params.set('limit', '100')
 
       console.log('🔍 Fetching contacts with params:', params.toString())
       const response = await fetch(`/api/contactos?${params}`)
@@ -75,6 +95,10 @@ export default function ContactosPage() {
         console.log('✅ Contacts loaded:', data.data?.length || 0, 'contacts')
         console.log('📊 Sample contact:', data.data?.[0])
         setContacts(data.data || [])
+        if (data.pagination) {
+          setPagination(data.pagination)
+          setCurrentPage(data.pagination.page)
+        }
       } else {
         const errorText = await response.text()
         console.error('❌ Error response:', errorText)
@@ -88,21 +112,57 @@ export default function ContactosPage() {
     }
   }
 
-  const handleExport = async () => {
+  // Obtener todos los IDs de contactos
+  const fetchAllContactIds = async () => {
     try {
       const params = new URLSearchParams()
       if (filters.q) params.append("q", filters.q)
       if (filters.relation && filters.relation !== "ALL") params.append("relation", filters.relation)
-      if (filters.city) params.append("city", filters.city)
-      if (filters.country) params.append("country", filters.country)
+      if (filters.kind && filters.kind !== "ALL") params.append("kind", filters.kind)
+      params.set('allIds', 'true')
 
-      const response = await fetch(`/api/contactos/export?${params}`)
+      const response = await fetch(`/api/contactos/all-ids?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAllContactIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (error) {
+      console.error('Error fetching all contact IDs:', error)
+      return []
+    }
+  }
+
+  // Paginación
+  const handlePageChange = (page: number) => {
+    fetchContacts(page)
+    setSelectAllMode('none')
+    setSelectedContacts(new Set())
+  }
+
+  const handleFirstPage = () => {
+    if (currentPage !== 1) {
+      handlePageChange(1)
+    }
+  }
+
+  const handleLastPage = () => {
+    if (pagination.totalPages > 0 && currentPage !== pagination.totalPages) {
+      handlePageChange(pagination.totalPages)
+    }
+  }
+
+  const handleExport = async () => {
+    try {
+      // Exportar TODOS los contactos sin filtros
+      const response = await fetch(`/api/contactos/export`)
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `contactos_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `contactos_todos_${new Date().toISOString().split('T')[0]}.csv`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -110,6 +170,31 @@ export default function ContactosPage() {
         toast.success("Exportación completada")
       } else {
         toast.error("Error al exportar")
+      }
+    } catch (error) {
+      toast.error("Error de conexión")
+    }
+  }
+
+  const handleExportSelected = async () => {
+    if (selectedContacts.size === 0) return
+    
+    try {
+      const ids = Array.from(selectedContacts).join(',')
+      const response = await fetch(`/api/contactos/export?ids=${encodeURIComponent(ids)}`)
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `contactos_seleccionados_${new Date().toISOString().split('T')[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success(`${selectedContacts.size} contacto(s) exportado(s)`)
+      } else {
+        toast.error("Error al exportar selección")
       }
     } catch (error) {
       toast.error("Error de conexión")
@@ -136,14 +221,16 @@ export default function ContactosPage() {
     if (selectedContacts.size === 0) return
 
     try {
+      const count = selectedContacts.size
       const promises = Array.from(selectedContacts).map(id =>
         fetch(`/api/contactos/${id}`, { method: "DELETE" })
       )
 
       await Promise.all(promises)
       setSelectedContacts(new Set())
+      setSelectAllMode('none')
       fetchContacts()
-      toast.success(`${selectedContacts.size} contacto(s) eliminado(s)`)
+      toast.success(`${count} contacto(s) eliminado(s)`)
     } catch (error) {
       toast.error("Error al eliminar contactos")
     }
@@ -153,6 +240,7 @@ export default function ContactosPage() {
     if (selectedContacts.size === 0) return
 
     try {
+      const count = selectedContacts.size
       const promises = Array.from(selectedContacts).map(id =>
         fetch(`/api/contactos/${id}`, {
           method: "PATCH",
@@ -163,44 +251,231 @@ export default function ContactosPage() {
 
       await Promise.all(promises)
       setSelectedContacts(new Set())
+      setSelectAllMode('none')
       fetchContacts()
-      toast.success(`Relación actualizada para ${selectedContacts.size} contacto(s)`)
+      toast.success(`Relación actualizada para ${count} contacto(s)`)
     } catch (error) {
       toast.error("Error al actualizar relaciones")
     }
   }
 
-  const groupedContacts = useMemo(() => {
-    if (!contacts || contacts.length === 0) return [{ key: "Todos", contacts: [], count: 0 }]
-    if (!groupBy || groupBy === "NONE") return [{ key: "Todos", contacts, count: contacts.length }]
-
-    const groups: { [key: string]: Contact[] } = {}
-    contacts.forEach(contact => {
-      let key = ""
-      switch (groupBy) {
-        case "city":
-          key = contact.city || "Sin ciudad"
-          break
-        case "country":
-          key = contact.country || "Sin país"
-          break
-        case "relation":
-          key = contact.relation || "Sin relación"
-          break
-        default:
-          key = "Sin agrupar"
+  // Edición inline: actualizar campo de un contacto
+  const handleFieldChange = (contactId: string, field: keyof Contact, value: any) => {
+    setEditedContacts(prev => ({
+      ...prev,
+      [contactId]: {
+        ...prev[contactId],
+        [field]: value
       }
-      
-      if (!groups[key]) groups[key] = []
-      groups[key].push(contact)
-    })
-
-    return Object.entries(groups).map(([key, contacts]) => ({
-      key,
-      contacts,
-      count: contacts.length
     }))
-  }, [contacts, groupBy])
+  }
+
+  // Guardar cambios editados
+  const handleSaveChanges = async () => {
+    if (Object.keys(editedContacts).length === 0) return
+
+    setSavingChanges(true)
+    try {
+      const count = Object.keys(editedContacts).length
+      const promises = Object.entries(editedContacts).map(([id, changes]) =>
+        fetch(`/api/contactos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(changes)
+        })
+      )
+
+      await Promise.all(promises)
+      setEditedContacts({})
+      setSelectAllMode('none')
+      setSelectedContacts(new Set())
+      fetchContacts()
+      toast.success(`${count} contacto(s) actualizado(s)`)
+    } catch (error) {
+      toast.error("Error al guardar cambios")
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  // Descartar cambios
+  const handleDiscardChanges = () => {
+    setEditedContacts({})
+    toast.info("Cambios descartados")
+  }
+
+  // Aplicar cambio masivo a seleccionados
+  const handleBulkFieldChange = (field: keyof Contact, value: any) => {
+    const updates: Record<string, Partial<Contact>> = {}
+    selectedContacts.forEach(id => {
+      updates[id] = {
+        ...(editedContacts[id] || {}),
+        [field]: value
+      }
+    })
+    setEditedContacts(prev => ({ ...prev, ...updates }))
+    toast.info(`Campo ${field} actualizado para ${selectedContacts.size} contacto(s)`)
+  }
+
+  // Función para manejar la importación de CSV
+  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setImportLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/contactos/import', {
+        method: 'POST',
+        body: formData
+      })
+
+      // Verificar si la respuesta es JSON válido
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        console.error('Respuesta no es JSON:', text)
+        toast.error('Error: Respuesta del servidor no válida')
+        return
+      }
+
+      const result = await response.json()
+      
+      if (response.ok && result.success) {
+        toast.success(`Importación completada: ${result.created} creados, ${result.updated} actualizados${result.skipped > 0 ? `, ${result.skipped} saltados` : ''}${result.errors > 0 ? `, ${result.errors} errores` : ''}`)
+        if (result.errorMessages && result.errorMessages.length > 0) {
+          console.log('Errores:', result.errorMessages)
+          // Mostrar algunos errores en el toast si hay muchos
+          if (result.errorMessages.length > 3) {
+            toast.error(`Algunos errores: ${result.errorMessages.slice(0, 3).join(', ')}...`)
+          }
+        }
+        fetchContacts()
+        setOpenImport(false)
+      } else {
+        toast.error(`Error: ${result.error || 'Error desconocido'}`)
+        if (result.details) {
+          console.error('Detalles del error:', result.details)
+        }
+      }
+    } catch (error) {
+      console.error('Error al importar:', error)
+      if (error instanceof SyntaxError && error.message.includes('JSON')) {
+        toast.error('Error: Respuesta del servidor no válida. Verifica que el archivo CSV tenga el formato correcto.')
+      } else {
+        toast.error('Error al importar el archivo')
+      }
+    } finally {
+      setImportLoading(false)
+      // Limpiar el input
+      event.target.value = ''
+    }
+  }
+
+  
+
+  // Duplicados: detectar
+  const detectDuplicates = async () => {
+    setDuplicatesLoading(true)
+    try {
+      const response = await fetch('/api/contactos/duplicates')
+      if (!response.ok) {
+        toast.error('Error al detectar duplicados')
+        return
+      }
+      const data = await response.json()
+      setDuplicates(data.duplicates || [])
+      const mapping: Record<number, string> = {}
+      ;(data.duplicates || []).forEach((g: any, i: number) => { mapping[i] = g.primary?.id })
+      setSelectedPrimary(mapping)
+      setShowDuplicates(true)
+      toast.success(`Se encontraron ${data.duplicates?.length || 0} grupos de duplicados`)
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setDuplicatesLoading(false)
+    }
+  }
+
+  // Duplicados: fusionar
+  const mergeContacts = async (primaryId: string, duplicateIds: string[], groupIndex: number) => {
+    console.log('🔄 Frontend merge request:', { primaryId, duplicateIds, groupIndex })
+    
+    try {
+      // Para enviar mergedFields al backend REST, construimos campos fusionados en el front
+      const group = duplicates[groupIndex]
+      const allContacts = [group.primary, ...(group.duplicates || [])]
+      const primary = allContacts.find((c: any) => c.id === primaryId) || group.primary
+
+      // Sencillo merge superficial: prioriza campos del seleccionado si están presentes
+      const mergedFields: any = {}
+      const fields = ['Nombre','Empresa','Email','Teléfono','Telefono','NIT','CIF','Dirección','Direccion','Ciudad','Código Postal','País','Relación','Sitio Web','Notas','Tipo de Contacto']
+      for (const f of fields) mergedFields[f] = undefined
+
+      // Nota: El front no tiene todos los campos internos; el backend debería aceptar los que existan
+      // Enviamos solo Email, Teléfono, NIT, Nombre si disponibles desde el modal (summary)
+      mergedFields['Nombre'] = primary.displayName || undefined
+      mergedFields['Email'] = primary.email || undefined
+      mergedFields['Teléfono'] = primary.phone || undefined
+      mergedFields['NIT'] = primary.taxId || undefined
+
+      const response = await fetch('/api/contactos/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mainId: primaryId, duplicates: duplicateIds, mergedFields })
+      })
+      
+      console.log('📡 Response status:', response.status)
+      const result = await response.json().catch(() => ({}))
+      console.log('📡 Response data:', result)
+      
+      if (response.ok) {
+        toast.success(`Fusión completada: ${result.merged || duplicateIds.length + 1} fusionados, ${result.deleted || duplicateIds.length} eliminados`)
+        
+        // Remover solo el grupo fusionado de la lista
+        setDuplicates(prev => prev.filter((_, index) => index !== groupIndex))
+        
+        // Limpiar selección del grupo eliminado
+        setSelectedPrimary(prev => {
+          const newSelected = { ...prev }
+          delete newSelected[groupIndex]
+          // Reindexar las claves para los grupos restantes
+          const reindexed: Record<number, string> = {}
+          Object.entries(newSelected).forEach(([key, value]) => {
+            const oldIndex = parseInt(key)
+            if (oldIndex > groupIndex) {
+              reindexed[oldIndex - 1] = value
+            } else if (oldIndex < groupIndex) {
+              reindexed[oldIndex] = value
+            }
+          })
+          return reindexed
+        })
+        
+        fetchContacts()
+      } else {
+        console.error('❌ Merge failed:', result)
+        toast.error(`Error: ${result.error || 'No se pudo fusionar'}`)
+      }
+    } catch (e) {
+      console.error('❌ Network error:', e)
+      toast.error('Error de conexión')
+    }
+  }
+
+  const filteredContacts = useMemo(() => {
+    if (!contacts || contacts.length === 0) return []
+    
+    // Filtrar por tipo (kind)
+    let filtered = contacts
+    if (filters.kind && filters.kind !== "ALL") {
+      filtered = filtered.filter(contact => contact.kind === filters.kind)
+    }
+    
+    return filtered
+  }, [contacts, filters.kind])
 
   const getRelationLabel = (relation: string) => {
     switch (relation) {
@@ -213,10 +488,17 @@ export default function ContactosPage() {
 
   const getRelationColor = (relation: string) => {
     switch (relation) {
-      case "CUSTOMER": return "bg-blue-100 text-blue-800"
-      case "SUPPLIER": return "bg-green-100 text-green-800"
-      case "BOTH": return "bg-purple-100 text-purple-800"
-      default: return "bg-gray-100 text-gray-800"
+      case "CUSTOMER": 
+      case "Cliente": 
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "SUPPLIER": 
+      case "Proveedor": 
+        return "bg-purple-100 text-purple-800 border-purple-200"
+      case "BOTH": 
+      case "Ambos": 
+        return "bg-green-100 text-green-800 border-green-200"
+      default: 
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
@@ -234,6 +516,14 @@ export default function ContactosPage() {
               <Home className="w-5 h-5" />
             </Link>
             <div className="text-xl font-bold text-slate-800">Contactos</div>
+            <div className="flex items-center gap-6 ml-4">
+              <Link 
+                href="/panel/contactos" 
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+              >
+                Contactos
+              </Link>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-gray-600">Buscar</span>
@@ -251,23 +541,9 @@ export default function ContactosPage() {
 
         {/* Barra superior sticky */}
         <div className="sticky top-0 z-10 bg-white border border-gray-200 rounded-lg p-4 mb-6 shadow-sm">
-          <div className="flex flex-wrap gap-4 items-center justify-between">
-            {/* Botones principales */}
-            <div className="flex gap-2">
-              <Link href="/panel/contactos/nuevo">
-                <Button className="bg-[#D54644] hover:bg-[#B03A38]">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nuevo
-                </Button>
-              </Link>
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-            </div>
-
-            {/* Búsqueda */}
-            <div className="flex-1 max-w-md">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Búsqueda - Izquierda */}
+            <div className="flex-1 min-w-[200px] max-w-md">
               <Input
                 placeholder="Buscar contactos..."
                 value={filters.q}
@@ -276,58 +552,129 @@ export default function ContactosPage() {
               />
             </div>
 
-            {/* Filtros */}
-            <div className="flex gap-2">
-                              <Select value={filters.relation} onValueChange={(value) => setFilters(prev => ({ ...prev, relation: value }))}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="Relación" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todas</SelectItem>
-                    <SelectItem value="CUSTOMER">Cliente</SelectItem>
-                    <SelectItem value="SUPPLIER">Proveedor</SelectItem>
-                    <SelectItem value="BOTH">Ambos</SelectItem>
-                  </SelectContent>
-                </Select>
-
-            </div>
-          </div>
-
-          {/* Agrupar por */}
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-sm text-gray-600">Agrupar por:</span>
-            <Select value={groupBy} onValueChange={setGroupBy}>
+            {/* Filtro Relación */}
+            <Select value={filters.relation} onValueChange={(value) => setFilters(prev => ({ ...prev, relation: value }))}>
               <SelectTrigger className="w-32">
-                <SelectValue placeholder="Sin agrupar" />
+                <SelectValue placeholder="Relación" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="NONE">Sin agrupar</SelectItem>
-                <SelectItem value="relation">Relación</SelectItem>
-                <SelectItem value="city">Ciudad</SelectItem>
-                <SelectItem value="country">País</SelectItem>
+                <SelectItem value="ALL">Relación</SelectItem>
+                <SelectItem value="Cliente">Cliente</SelectItem>
+                <SelectItem value="Proveedor">Proveedor</SelectItem>
+                <SelectItem value="Ambos">Ambos</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Filtro Tipo */}
+            <Select value={filters.kind} onValueChange={(value) => setFilters(prev => ({ ...prev, kind: value }))}>
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tipo</SelectItem>
+                <SelectItem value="INDIVIDUAL">Individual</SelectItem>
+                <SelectItem value="COMPANY">Compañía</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Espacio flexible */}
+            <div className="flex-1"></div>
+
+            {/* Botones - Derecha */}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={detectDuplicates} disabled={duplicatesLoading}>
+                <Users className="w-4 h-4 mr-2" />
+                {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
+              </Button>
+              <Dialog open={openImport} onOpenChange={setOpenImport}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Importar
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Importar contactos (CSV)</DialogTitle>
+                    <DialogDescription>
+                      Columnas: Nombre, Tipo de Contacto, Empresa, Email, Teléfono, NIT, Dirección, Ciudad, Código Postal, País, Relación, Sitio Web, Notas
+                      <br/>
+                      <a href="/api/contactos/import/template" className="underline">Descargar plantilla</a>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <input 
+                    type="file" 
+                    accept=".csv,text/csv" 
+                    onChange={handleCsvImport}
+                    disabled={importLoading}
+                  />
+                  {importLoading && <p>Importando...</p>}
+                </DialogContent>
+              </Dialog>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="w-4 h-4 mr-2" />
+                Exportar
+              </Button>
+              <Link href="/panel/contactos/nuevo">
+                <Button className="bg-[#D54644] hover:bg-[#B03A38]">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Acciones masivas */}
           {selectedContacts.size > 0 && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-800">
-                  {selectedContacts.size} contacto(s) seleccionado(s)
-                </span>
-                <div className="flex gap-2">
-                  <Select onValueChange={handleBulkRelationChange}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Cambiar relación" />
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-blue-800">
+                    {selectAllMode === 'all' 
+                      ? `${allContactIds.length} contacto(s) seleccionado(s) (todos)` 
+                      : `${selectedContacts.size} contacto(s) seleccionado(s)`
+                    }
+                  </span>
+                  <Select onValueChange={(value) => handleBulkFieldChange('relation', value)}>
+                    <SelectTrigger className="h-8 w-40">
+                      <SelectValue placeholder="Relación" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CUSTOMER">Cliente</SelectItem>
-                      <SelectItem value="SUPPLIER">Proveedor</SelectItem>
-                      <SelectItem value="BOTH">Ambos</SelectItem>
+                      <SelectItem value="Cliente">Cliente</SelectItem>
+                      <SelectItem value="Proveedor">Proveedor</SelectItem>
+                      <SelectItem value="Ambos">Ambos</SelectItem>
                     </SelectContent>
                   </Select>
-
+                </div>
+                <div className="flex gap-2">
+                  {Object.keys(editedContacts).length > 0 && (
+                    <>
+                      <Button 
+                        size="sm" 
+                        onClick={handleSaveChanges}
+                        disabled={savingChanges}
+                        className="bg-[#D54644] hover:bg-[#B73E3A] text-white"
+                      >
+                        {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedContacts).length})`}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleDiscardChanges}
+                      >
+                        Descartar
+                      </Button>
+                    </>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleExportSelected}
+                    className="text-green-600 hover:text-green-700"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Exportar selección
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
@@ -355,9 +702,59 @@ export default function ContactosPage() {
               </div>
             </div>
           )}
+
+          {/* Banner de selección total */}
+          {contacts.length > 0 && 
+           contacts.every(c => selectedContacts.has(c.id)) && 
+           selectAllMode !== 'all' &&
+           allContactIds.length > contacts.length && (
+            <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-cyan-900">
+                  Los {contacts.length} contactos de esta página están seleccionados.
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                  onClick={() => {
+                    setSelectedContacts(new Set(allContactIds))
+                    setSelectAllMode('all')
+                    toast.success(`${allContactIds.length} contactos seleccionados`)
+                  }}
+                >
+                  Seleccionar los {allContactIds.length} contactos
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {selectAllMode === 'all' && (
+            <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-cyan-900">
+                  Los {allContactIds.length} contactos están seleccionados.
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-cyan-700 hover:text-cyan-900 underline"
+                  onClick={() => {
+                    setSelectedContacts(new Set())
+                    setSelectAllMode('none')
+                  }}
+                >
+                  Limpiar selección
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tabla de contactos */}
+        <div className="mb-3 text-sm text-slate-700">
+          Contactos ({pagination.total || contacts.length})
+        </div>
         <Card>
           <CardContent className="p-0">
             {loading ? (
@@ -365,7 +762,7 @@ export default function ContactosPage() {
             ) : contacts.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 mb-4">
-                  {filters.q || filters.relation || filters.owner ? (
+                  {filters.q || filters.relation !== "ALL" || filters.kind !== "ALL" ? (
                     "No se encontraron contactos con los filtros aplicados"
                   ) : (
                     "No hay contactos registrados"
@@ -384,12 +781,19 @@ export default function ContactosPage() {
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedContacts.size === contacts.length}
-                        onCheckedChange={(checked) => {
+                        checked={
+                          contacts.length > 0 && 
+                          contacts.every(c => selectedContacts.has(c.id))
+                        }
+                        onCheckedChange={async (checked) => {
                           if (checked) {
-                            setSelectedContacts(new Set(contacts.map(c => c.id)))
+                            const pageIds = new Set(contacts.map(c => c.id))
+                            setSelectedContacts(pageIds)
+                            setSelectAllMode('page')
+                            await fetchAllContactIds()
                           } else {
                             setSelectedContacts(new Set())
+                            setSelectAllMode('none')
                           }
                         }}
                       />
@@ -397,24 +801,14 @@ export default function ContactosPage() {
                     <TableHead>Nombre</TableHead>
                     <TableHead>NIT</TableHead>
                     <TableHead>Teléfono</TableHead>
-                    <TableHead>Correo</TableHead>
-                    <TableHead>Relación</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Ciudad</TableHead>
-                    <TableHead>País</TableHead>
+                    <TableHead>Relación</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupedContacts.map((group) => (
-                    groupBy && groupBy !== "NONE" ? (
-                      // Grupo con header
-                      <TableRow key={group.key} className="bg-gray-50">
-                        <TableCell colSpan={9} className="font-medium text-gray-700">
-                          {group.key} ({group.count})
-                        </TableCell>
-                      </TableRow>
-                    ) : null,
-                    group.contacts?.map((contact) => (
+                  {filteredContacts.map((contact) => (
                       <TableRow key={contact.id} className="hover:bg-gray-50">
                         <TableCell>
                           <Checkbox
@@ -425,48 +819,128 @@ export default function ContactosPage() {
                                 newSelected.add(contact.id)
                               } else {
                                 newSelected.delete(contact.id)
+                                // Si deselecciona uno, salir del modo "all"
+                                if (selectAllMode === 'all') {
+                                  setSelectAllMode('page')
+                                }
                               }
                               setSelectedContacts(newSelected)
                             }}
                           />
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            {contact.kind === "COMPANY" ? (
-                              <Building2 className="w-4 h-4 text-gray-500" />
-                            ) : (
-                              <User className="w-4 h-4 text-gray-500" />
-                            )}
-                            <div>
-                              <div className="font-medium">{contact.displayName}</div>
-                              {contact.legalName && (
-                                <div className="text-sm text-gray-500">{contact.legalName}</div>
+                          {selectedContacts.has(contact.id) ? (
+                            <Input
+                              value={editedContacts[contact.id]?.displayName ?? contact.displayName}
+                              onChange={(e) => handleFieldChange(contact.id, 'displayName', e.target.value)}
+                              className="h-8"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              {contact.kind === "COMPANY" ? (
+                                <Building2 className="w-4 h-4 text-gray-500" />
+                              ) : (
+                                <User className="w-4 h-4 text-gray-500" />
                               )}
+                              <div>
+                                {contact.displayName && contact.displayName.length > 25 ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger className="text-left font-medium">
+                                        {contact.displayName.slice(0, 25) + '…'}
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-sm">{contact.displayName}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  <div className="font-medium">{contact.displayName || "-"}</div>
+                                )}
+                                {contact.kind === "INDIVIDUAL" && contact.legalName && (
+                                  contact.legalName.length > 25 ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger className="text-left text-sm text-gray-500">
+                                          {contact.legalName.slice(0, 25) + '…'}
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-sm">{contact.legalName}</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    <div className="text-sm text-gray-500">{contact.legalName}</div>
+                                  )
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {contact.taxId || "-"}
+                          {selectedContacts.has(contact.id) ? (
+                            <Input
+                              value={editedContacts[contact.id]?.taxId ?? contact.taxId ?? ''}
+                              onChange={(e) => handleFieldChange(contact.id, 'taxId', e.target.value)}
+                              className="h-8 font-mono"
+                            />
+                          ) : (
+                            contact.taxId || "-"
+                          )}
                         </TableCell>
-                        <TableCell>{contact.phone || "-"}</TableCell>
-                        <TableCell>{contact.email || "-"}</TableCell>
                         <TableCell>
-                          <Badge className={getRelationColor(contact.relation)}>
-                            {getRelationLabel(contact.relation)}
-                          </Badge>
+                          {selectedContacts.has(contact.id) ? (
+                            <Input
+                              value={editedContacts[contact.id]?.phone ?? contact.phone ?? ''}
+                              onChange={(e) => handleFieldChange(contact.id, 'phone', e.target.value)}
+                              className="h-8"
+                            />
+                          ) : (
+                            contact.phone || "-"
+                          )}
                         </TableCell>
-                        <TableCell>{contact.city || "-"}</TableCell>
-                        <TableCell>{contact.country || "-"}</TableCell>
+                        <TableCell>
+                          {selectedContacts.has(contact.id) ? (
+                            <Input
+                              value={editedContacts[contact.id]?.email ?? contact.email ?? ''}
+                              onChange={(e) => handleFieldChange(contact.id, 'email', e.target.value)}
+                              className="h-8"
+                            />
+                          ) : (
+                            contact.email || "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {selectedContacts.has(contact.id) ? (
+                            <Input
+                              value={editedContacts[contact.id]?.city ?? contact.city ?? ''}
+                              onChange={(e) => handleFieldChange(contact.id, 'city', e.target.value)}
+                              className="h-8"
+                              placeholder="Ciudad"
+                            />
+                          ) : (
+                            contact.city || "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {selectedContacts.has(contact.id) ? (
+                            <Select 
+                              value={editedContacts[contact.id]?.relation ?? contact.relation}
+                              onValueChange={(value) => handleFieldChange(contact.id, 'relation', value)}
+                            >
+                              <SelectTrigger className="h-8 w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Cliente">Cliente</SelectItem>
+                                <SelectItem value="Proveedor">Proveedor</SelectItem>
+                                <SelectItem value="Ambos">Ambos</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge className={getRelationColor(contact.relation)}>
+                              {getRelationLabel(contact.relation)}
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/panel/contactos/${contact.id}`)}
-                              title="Ver contacto"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -487,13 +961,135 @@ export default function ContactosPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
                   ))}
                 </TableBody>
               </Table>
             )}
           </CardContent>
         </Card>
+        {/* Paginación */}
+        {pagination.totalPages > 1 && (
+          <div className="flex justify-center mt-8">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleFirstPage}
+                disabled={loading || currentPage === 1}
+              >
+                Primera
+              </Button>
+
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                let pageNum;
+                if (pagination.totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= pagination.totalPages - 2) {
+                  pageNum = pagination.totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(pageNum)}
+                    disabled={loading}
+                    className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLastPage}
+                disabled={loading || currentPage === pagination.totalPages}
+              >
+                Última
+              </Button>
+            </div>
+          </div>
+        )}
+        {/* Modal de duplicados */}
+        <Dialog open={showDuplicates} onOpenChange={setShowDuplicates}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                Contactos duplicados detectados ({duplicates.length} grupos)
+              </DialogTitle>
+              <DialogDescription>
+                Se encontraron grupos de contactos con similitudes en Nombre, NIT, Teléfono o Email.
++                Elige el principal de cada grupo y fusiona los demás.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {duplicates.length === 0 && (
+                <div className="text-sm text-gray-500">No se detectaron duplicados.</div>
+              )}
+
+              {duplicates.map((group: any, index: number) => {
+                const allContacts = [group.primary, ...(group.duplicates || [])]
+                const value = selectedPrimary[index] || group.primary?.id
+                return (
+                  <Card key={index} className="border-yellow-200 bg-yellow-50">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="font-medium text-sm text-yellow-800">
+                          Grupo {index + 1} - Contactos similares (elige el principal)
+                        </div>
+
+                        <RadioGroup
+                          value={value}
+                          onValueChange={(v) => setSelectedPrimary(prev => ({ ...prev, [index]: v }))}
+                          className="gap-2"
+                        >
+                          {allContacts.map((c: any, idx: number) => (
+                            <div key={c.id} className="bg-white p-3 rounded border flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <RadioGroupItem value={c.id} id={`g${index}-c${idx}`} />
+                                <label htmlFor={`g${index}-c${idx}`} className="cursor-pointer">
+                                  <div className="font-medium">{c.displayName || '-'}</div>
+                                  <div className="text-sm text-gray-600">
+                                    {c.email && `Email: ${c.email}`}
+                                    {c.phone && ` | Tel: ${c.phone}`}
+                                    {c.taxId && ` | NIT: ${c.taxId}`}
+                                  </div>
+                                </label>
+                              </div>
+                              <Badge className={value === c.id ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-red-50 text-red-700 border-red-200"}>
+                                {value === c.id ? 'Principal' : 'Duplicado'}
+                              </Badge>
+                            </div>
+                          ))}
+                        </RadioGroup>
+
+                        <Button
+                          onClick={() => {
+                            const primaryId = selectedPrimary[index] || group.primary?.id
+                            const duplicateIds = allContacts.map((c: any) => c.id).filter((id: string) => id !== primaryId)
+                            mergeContacts(primaryId, duplicateIds, index)
+                          }}
+                          className="w-full bg-yellow-600 hover:bg-yellow-700"
+                        >
+                          <Merge className="w-4 h-4 mr-2" />
+                          Fusionar (mantener seleccionado)
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </Sidebar>
   )

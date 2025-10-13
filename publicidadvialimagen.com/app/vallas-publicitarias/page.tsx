@@ -1,6 +1,9 @@
 import dynamic from "next/dynamic";
 import { listSupportsPoints } from "@/lib/data/supports";
 
+// Configuración para evitar prerender
+export const dynamic = 'force-dynamic'
+
 const LeafletHybridMap = dynamic(
   () => import("@/components/maps/LeafletHybridMap"),
   { ssr: false }

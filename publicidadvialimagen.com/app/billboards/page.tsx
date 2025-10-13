@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
+
+// Configuración para evitar prerender
+export const dynamic = 'force-dynamic'
 import Image from "next/image"
 import Link from "next/link"
 import { Calendar, MapPin, Eye, Filter, X, Clock, Users, Zap, FileText, Ruler } from "lucide-react"
@@ -453,7 +456,9 @@ export default function BillboardsPage() {
     
     // Hacer scroll al inicio cuando se accede con parámetros desde otra página
     if (cityParam || tipoSoporteParam || formatParam || searchParam) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     }
     
     if (cityParam) {

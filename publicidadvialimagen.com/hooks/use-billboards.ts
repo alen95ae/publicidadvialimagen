@@ -169,5 +169,5 @@ export function useBillboards() {
     fetchBillboards()
   }, [])
 
-  return { billboards, loading, error, refetch: () => window.location.reload() }
+  return { billboards, loading, error, refetch: () => typeof window !== 'undefined' ? window.location.reload() : undefined }
 }

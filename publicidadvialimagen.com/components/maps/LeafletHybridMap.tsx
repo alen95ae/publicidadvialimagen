@@ -64,8 +64,10 @@ export default function LeafletHybridMap({
   };
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    
     // recuperar posición guardada
-    const saved = localStorage.getItem("map_state");
+    const saved = typeof window !== 'undefined' ? localStorage.getItem("map_state") : null;
     const defaultCenter = saved
       ? JSON.parse(saved).center
       : points.length
@@ -179,15 +181,17 @@ export default function LeafletHybridMap({
 
     // guardar vista actual al mover o hacer zoom
     map.on("moveend zoomend", () => {
-      const center = map.getCenter();
-      const zoom = map.getZoom();
-      localStorage.setItem(
-        "map_state",
-        JSON.stringify({
-          center: [center.lat, center.lng],
-          zoom,
-        })
-      );
+      if (typeof window !== 'undefined') {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        localStorage.setItem(
+          "map_state",
+          JSON.stringify({
+            center: [center.lat, center.lng],
+            zoom,
+          })
+        );
+      }
     });
 
     // listener para la tecla Escape

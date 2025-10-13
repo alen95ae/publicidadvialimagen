@@ -2,9 +2,6 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
-
-// Configuración para evitar prerender
-export const dynamic = 'force-dynamic'
 import Image from "next/image"
 import Link from "next/link"
 import { Calendar, MapPin, Eye, Filter, X, Clock, Users, Zap, FileText, Ruler } from "lucide-react"
@@ -20,6 +17,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useBillboards } from "@/hooks/use-billboards"
 import dynamic from "next/dynamic"
 import LeafletHybridMap from "@/components/maps/LeafletHybridMap"
+
+// Configuración para evitar prerender
+export const dynamic = 'force-dynamic'
 
 // ⚠️ IMPORTANTE: usar los 4 valores oficiales en 'format'
 const FALLBACK_BILLBOARDS = [

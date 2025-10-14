@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone } from "lucide-react"
+import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone, Monitor } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,12 +19,12 @@ import { useCampaignsContext } from "@/components/campaigns-provider"
 import { useBillboards } from "@/hooks/use-billboards"
 
 // Dynamic import para el mapa
-const SingleSupportMap = dynamic(
-  () => import("@/components/maps/SingleSupportMap"),
+const LeafletHybridMap = dynamic(
+  () => import("@/components/maps/LeafletHybridMap"),
   { 
     ssr: false,
     loading: () => (
-      <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center">
+      <div className="h-80 rounded-lg bg-muted flex items-center justify-center">
         <p className="text-muted-foreground">Cargando mapa...</p>
       </div>
     )
@@ -77,7 +77,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Soporte no encontrado</h2>
           <Button asChild>
-            <Link href="/billboards">Volver a espacios publicitarios</Link>
+            <Link href="/vallas-publicitarias">Volver a espacios publicitarios</Link>
           </Button>
         </div>
       </div>
@@ -175,14 +175,14 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             Inicio
           </Link>
           <span className="mx-2">/</span>
-          <Link href="/billboards" className="hover:text-primary">
+          <Link href="/vallas-publicitarias" className="hover:text-primary">
             Vallas Publicitarias
           </Link>
           <span className="mx-2">/</span>
           <span>{displayData.name}</span>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/billboards">
+          <Link href="/vallas-publicitarias">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Volver a espacios
           </Link>
@@ -224,13 +224,23 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">Ubicación</h3>
             {displayData.coordinates && displayData.coordinates.lat && displayData.coordinates.lng ? (
-              <SingleSupportMap
-                lat={displayData.coordinates.lat}
-                lng={displayData.coordinates.lng}
+              <LeafletHybridMap
+                points={[{
+                  id: displayData.id,
+                  lat: displayData.coordinates.lat,
+                  lng: displayData.coordinates.lng,
+                  title: displayData.name,
+                  type: "billboard",
+                  dimensions: displayData.dimensions,
+                  format: displayData.format,
+                  image: displayData.images && displayData.images.length > 0 ? displayData.images[0] : undefined
+                }]}
                 height={320}
+                center={[displayData.coordinates.lat, displayData.coordinates.lng]}
+                zoom={16}
               />
             ) : (
-              <div className="aspect-[4/3] rounded-lg bg-muted flex items-center justify-center border">
+              <div className="h-80 rounded-lg bg-muted flex items-center justify-center border">
                 <div className="text-center p-4">
                   <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
@@ -282,7 +292,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Building className="h-5 w-5 text-gray-400" />
+                <Monitor className="h-5 w-5 text-gray-400" />
                 <div>
                   <div className="font-medium">{displayData.technicalSpecs.tipo}</div>
                   <div className="text-sm text-muted-foreground">Tipo de soporte</div>

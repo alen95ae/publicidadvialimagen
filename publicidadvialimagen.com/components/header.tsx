@@ -59,7 +59,7 @@ export default function Header() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
-      router.push(`/billboards?search=${encodeURIComponent(searchQuery.trim())}`)
+      router.push(`/vallas-publicitarias?search=${encodeURIComponent(searchQuery.trim())}`)
       setShowSuggestions(false)
       setMobileMenuOpen(false)
     }
@@ -67,7 +67,7 @@ export default function Header() {
 
   const handleSuggestionClick = (suggestion: string) => {
     setSearchQuery(suggestion)
-    router.push(`/billboards?search=${encodeURIComponent(suggestion)}`)
+    router.push(`/vallas-publicitarias?search=${encodeURIComponent(suggestion)}`)
     setShowSuggestions(false)
     setMobileMenuOpen(false)
   }
@@ -115,7 +115,7 @@ export default function Header() {
             <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">
               Inicio
             </Link>
-            <Link href="/billboards" className="text-sm font-medium transition-colors hover:text-primary">
+            <Link href="/vallas-publicitarias" className="text-sm font-medium transition-colors hover:text-primary">
               Vallas Publicitarias
             </Link>
             <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
@@ -222,7 +222,7 @@ export default function Header() {
             <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">
               Inicio
             </Link>
-            <Link href="/billboards" className="text-sm font-medium transition-colors hover:text-primary">
+            <Link href="/vallas-publicitarias" className="text-sm font-medium transition-colors hover:text-primary">
               Vallas Publicitarias
             </Link>
             <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">

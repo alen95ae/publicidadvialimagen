@@ -109,7 +109,7 @@ export default function DynamicMap({ billboards, selectedCity, isFullscreen = fa
               <Popup>
                 <div className="p-2 min-w-[250px]">
                   <Link 
-                    href={`/billboards/${billboard.id}`}
+                    href={`/vallas-publicitarias/${billboard.id}`}
                     className="font-semibold text-sm mb-2 text-primary hover:underline block"
                   >
                     {billboard.name}

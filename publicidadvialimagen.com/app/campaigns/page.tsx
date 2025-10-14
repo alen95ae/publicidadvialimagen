@@ -49,7 +49,7 @@ export default function CampaignsPage() {
             <span>Mi Campaña</span>
           </div>
           <Button variant="outline" size="sm" asChild>
-            <Link href="/billboards">
+            <Link href="/vallas-publicitarias">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Volver a espacios
             </Link>
@@ -63,7 +63,7 @@ export default function CampaignsPage() {
             Agrega soportes publicitarios a tu campaña para solicitar una cotización
           </p>
           <Button asChild>
-            <Link href="/billboards">
+            <Link href="/vallas-publicitarias">
               Explorar soportes
             </Link>
           </Button>
@@ -84,7 +84,7 @@ export default function CampaignsPage() {
           <span>Mi Campaña</span>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/billboards">
+          <Link href="/vallas-publicitarias">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Volver a espacios
           </Link>

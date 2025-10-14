@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import dynamic from "next/dynamic"
-import { MapPin, Phone, Mail, Clock } from "lucide-react"
+import { MapPin, Phone, Mail, Clock, Building2 } from "lucide-react"
 // import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
 
 import { Button } from "@/components/ui/button"
@@ -17,8 +17,8 @@ import { useMessages } from "@/hooks/use-messages"
 // const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Dynamic Google Maps to avoid SSR issues
-const BranchMap = dynamic(() => import("@/components/maps/BranchMap"), {
+// Dynamic ContactMap to avoid SSR issues
+const ContactMap = dynamic(() => import("@/components/maps/ContactMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center">
@@ -450,23 +450,33 @@ export default function ContactPage() {
           </div>
         </div>
 
-        {/* Mapas de Sucursales (Google Maps) */}
-        <div className="grid md:grid-cols-2 gap-8 mt-8">
-          {/* Mapa de La Paz */}
-          <BranchMap
-            lat={-16.506308}
-            lng={-68.139439}
-            label="La Paz - Publicidad Vial Imagen"
-            height={260}
-          />
+        {/* Mapas de Sucursales (Leaflet Hybrid Maps) */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold tracking-tight mb-6 text-center">Ubicación de Nuestras Sucursales</h2>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Mapa de La Paz */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-center">Sucursal La Paz</h3>
+              <ContactMap 
+                lat={-16.506308}
+                lng={-68.139439}
+                title="Sucursal La Paz<br/>C. Nicolás Acosta Esq. Pedro Blanco<br/><a href='https://maps.app.goo.gl/mGtyd2gxh4B7a7T97' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver en Google Maps</a>"
+                height={300}
+              />
+            </div>
 
-          {/* Mapa de Santa Cruz */}
-          <BranchMap
-            lat={-17.751314}
-            lng={-63.153452}
-            label="Santa Cruz - Publicidad Vial Imagen"
-            height={260}
-          />
+            {/* Mapa de Santa Cruz */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-center">Sucursal Santa Cruz</h3>
+              <ContactMap 
+                lat={-17.751314}
+                lng={-63.153452}
+                title="Sucursal Santa Cruz<br/>Avenida 2 de Agosto, Calle 6<br/><a href='https://maps.app.goo.gl/Ead7Bnyu5EG5jdQE9' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver en Google Maps</a>"
+                height={300}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

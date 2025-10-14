@@ -20,16 +20,16 @@ export default function Footer() {
           <div className="space-y-4">
             <h3 className="text-sm font-medium">Servicios</h3>
             <nav className="flex flex-col space-y-2">
-              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
+              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
                 Vallas Publicitarias
               </Link>
-              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
+              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
                 Pantallas LED
               </Link>
-              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
+              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
                 Murales
               </Link>
-              <Link href="/billboards" className="text-sm text-muted-foreground hover:text-primary">
+              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
                 Publicidad Móvil
               </Link>
             </nav>

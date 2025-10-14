@@ -71,7 +71,7 @@ function CitiesCarousel() {
         <div className="flex gap-3">
           {cities.map((city, index) => (
             <div key={index} className="flex-[0_0_auto] min-w-[140px]">
-              <Link href={`/billboards?city=${city.name}`} className="text-center group block">
+              <Link href={`/vallas-publicitarias?city=${city.name}`} className="text-center group block">
                 <img 
                   src={city.image} 
                   alt={city.name} 
@@ -131,7 +131,7 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: any[] }) {
           {billboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={`/billboards/${billboard.id}`} className="w-full h-[147px] relative block">
+                <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
@@ -156,12 +156,12 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: any[] }) {
                         asChild
                       >
                         {billboard.available ? (
-                          <Link href={`/billboards/${billboard.id}`}>
+                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <FileText className="mr-1 h-3 w-3" />
                             Cotizar
                           </Link>
                         ) : (
-                          <Link href={`/billboards/${billboard.id}`}>
+                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <Eye className="mr-1 h-3 w-3" />
                             Ver más
                           </Link>
@@ -465,7 +465,7 @@ export default function HomePage() {
         <h1 className="text-3xl font-bold mb-4">Vallas Publicitarias en Bolivia</h1>
         <p className="text-lg mb-6">Conectamos tu marca con audiencias masivas a través de espacios publicitarios estratégicamente ubicados.</p>
         <Button size="lg" className="bg-primary hover:bg-primary/90" asChild>
-          <Link href="/billboards">Explorar Vallas</Link>
+          <Link href="/vallas-publicitarias">Explorar Vallas</Link>
         </Button>
       </div>
 
@@ -490,7 +490,7 @@ export default function HomePage() {
               return (
                 <Link
                   key={category.id}
-                  href={`/billboards?tipo_soporte=${encodeURIComponent(category.name)}`}
+                  href={`/vallas-publicitarias?tipo_soporte=${encodeURIComponent(category.name)}`}
                   className="group relative overflow-hidden rounded-lg bg-background shadow-md transition-all hover:shadow-lg hover:scale-105"
                 >
                   <div className="aspect-[4/3] relative">
@@ -532,7 +532,7 @@ export default function HomePage() {
               className="border-primary text-primary hover:bg-primary hover:text-primary-foreground bg-transparent"
               asChild
             >
-              <Link href="/billboards">Ver Todos los Espacios</Link>
+              <Link href="/vallas-publicitarias">Ver Todos los Espacios</Link>
             </Button>
           </div>
         </div>

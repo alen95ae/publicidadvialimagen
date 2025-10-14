@@ -282,7 +282,7 @@ export default function CartPage() {
             <div className="flex items-center justify-between bg-muted p-4 rounded-lg">
               <div className="flex gap-2">
                 <Button variant="outline" asChild>
-                  <Link href="/billboards">Más Vallas</Link>
+                  <Link href="/vallas-publicitarias">Más Vallas</Link>
                 </Button>
                 <Button variant="outline" asChild>
                   <Link href="/print-shop">Más Productos</Link>

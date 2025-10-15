@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { MapPin, Phone, Mail, Clock, Building2 } from "lucide-react"
 // import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
@@ -37,7 +37,14 @@ export default function ContactPage() {
     company: '',
     message: ''
   })
+  // Anti-spam fields (honeypot + JS/time validation)
+  const [antiSpam, setAntiSpam] = useState({ website: '', ts: '', js: '0' })
   const { addMessage } = useMessages()
+
+  // Initialize anti-spam fields on mount
+  useEffect(() => {
+    setAntiSpam({ website: '', ts: String(Date.now()), js: '1' })
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -63,7 +70,11 @@ export default function ContactPage() {
           phone: formData.phone,
           company: formData.company,
           message: formData.message,
-          origin: 'Contacto'
+          origin: 'Contacto',
+          // Anti-spam metadata
+          website: antiSpam.website,
+          ts: Number(antiSpam.ts),
+          js: antiSpam.js
         })
       })
 
@@ -120,6 +131,21 @@ export default function ContactPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
+                  {/* Anti-spam hidden fields: do not alter layout */}
+                  {/* Honeypot: visible to bots, offscreen for users */}
+                  <input
+                    type="text"
+                    name="website"
+                    value={antiSpam.website}
+                    onChange={(e) => setAntiSpam(s => ({ ...s, website: e.target.value }))}
+                    autoComplete="off"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    style={{ position: 'absolute', left: '-9999px' }}
+                  />
+                  {/* Timestamp and JS execution markers */}
+                  <input type="hidden" name="ts" value={antiSpam.ts} readOnly />
+                  <input type="hidden" name="js" value={antiSpam.js} readOnly />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Nombre</Label>

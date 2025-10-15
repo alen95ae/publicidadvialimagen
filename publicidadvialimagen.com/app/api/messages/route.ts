@@ -94,6 +94,25 @@ export async function POST(req: Request) {
     const empresa = (body?.company ?? body?.empresa ?? "").toString();
     const mensaje = (body?.message ?? body?.mensaje ?? "").toString();
 
+    // === Anti-spam lightweight validation ===
+    // Fields expected from client: website (honeypot), ts (timestamp), js (flag)
+    const website = (body?.website ?? "").toString();
+    const js = (body?.js ?? "0").toString();
+    const tsRaw = body?.ts;
+    const ts = typeof tsRaw === 'number' ? tsRaw : Number(tsRaw);
+    const now = Date.now();
+    const elapsedMs = Number.isFinite(ts) ? now - ts : 0;
+
+    // Reject if honeypot filled, JS not executed, or submission too fast (< 3000ms)
+    // Adjust MIN_SUBMIT_DELAY_MS to tweak the time threshold
+    const MIN_SUBMIT_DELAY_MS = 3000;
+    if (website.trim() !== "" || js !== "1" || elapsedMs < MIN_SUBMIT_DELAY_MS) {
+      return NextResponse.json(
+        { error: "Solicitud rechazada" },
+        { status: 400 }
+      );
+    }
+
     if (!email) {
       return NextResponse.json({ error: "Email es obligatorio" }, { status: 400 });
     }

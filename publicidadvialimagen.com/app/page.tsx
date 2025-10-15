@@ -208,6 +208,13 @@ export default function HomePage() {
     empresa: '',
     mensaje: ''
   })
+  // Anti-spam fields (honeypot + JS/time validation)
+  const [antiSpam, setAntiSpam] = useState({ website: '', ts: '', js: '0' })
+
+  // Initialize anti-spam fields on mount
+  useEffect(() => {
+    setAntiSpam({ website: '', ts: String(Date.now()), js: '1' })
+  }, [])
   const { addMessage } = useMessages()
   const { billboards, loading, error } = useBillboards()
 
@@ -239,7 +246,11 @@ export default function HomePage() {
           phone: formData.telefono,
           company: formData.empresa,
           message: formData.mensaje,
-          origin: 'Home'
+          origin: 'Home',
+          // Anti-spam metadata
+          website: antiSpam.website,
+          ts: Number(antiSpam.ts),
+          js: antiSpam.js
         })
       })
 
@@ -687,6 +698,21 @@ export default function HomePage() {
             </div>
           ) : (
             <form id="contact-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Anti-spam hidden fields: do not alter layout */}
+              {/* Honeypot: visible to bots, offscreen for users */}
+              <input
+                type="text"
+                name="website"
+                value={antiSpam.website}
+                onChange={(e) => setAntiSpam(s => ({ ...s, website: e.target.value }))}
+                autoComplete="off"
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-9999px' }}
+              />
+              {/* Timestamp and JS execution markers */}
+              <input type="hidden" name="ts" value={antiSpam.ts} readOnly />
+              <input type="hidden" name="js" value={antiSpam.js} readOnly />
               {/* Left Column */}
               <div className="space-y-6">
                 <div>

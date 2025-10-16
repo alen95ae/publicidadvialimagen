@@ -87,11 +87,22 @@ export default function LeafletHybridMap({
         return;
       }
       
+      // Verificar que el contenedor tenga dimensiones
+      if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+        console.log(`Map container has no dimensions, retrying...`);
+        setTimeout(initMap, 100);
+        return;
+      }
+      
       console.log(`Initializing map with ID: ${mapId}, points:`, points);
       
       // Limpiar mapa anterior si existe
       if ((window as any).mapInstance) {
-        (window as any).mapInstance.remove();
+        try {
+          (window as any).mapInstance.remove();
+        } catch (error) {
+          console.log('Error removing previous map:', error);
+        }
         (window as any).mapInstance = null;
       }
       

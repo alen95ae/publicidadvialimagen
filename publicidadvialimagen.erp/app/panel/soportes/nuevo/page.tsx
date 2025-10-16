@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, MapPin, Calculator, Home } from "lucide-react"
 import { toast } from "sonner"
 import Sidebar from "@/components/sidebar"
-import InteractiveMap from "@/components/interactive-map"
+import dynamic from 'next/dynamic'
+
+const InteractiveMap = dynamic(() => import('@/components/interactive-map'), { ssr: false })
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [

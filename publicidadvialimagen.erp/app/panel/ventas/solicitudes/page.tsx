@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,56 +24,83 @@ import {
   XCircle,
   AlertCircle,
   Home,
-  FileText
+  FileText,
+  Eye,
+  Trash2
 } from "lucide-react"
 import Sidebar from "@/components/sidebar"
 
 // Datos de ejemplo para las solicitudes de cotización
 const solicitudes = [
   {
-    id: "SOL-001",
-    fechaCreacion: "2024-01-15",
-    cliente: "Empresa ABC S.A.",
+    codigo: "S-001",
+    fechaCreacion: "15/01/2024 09:30",
+    empresa: "Empresa ABC S.A.",
     contacto: "Juan Pérez",
-    sucursal: "Centro",
-    descripcion: "Solicitud de cotización para vallas publicitarias",
-    estado: "Nueva"
+    telefono: "+591 2 1234567",
+    email: "juan.perez@empresaabc.com",
+    comentarios: "Solicitud de cotización para vallas publicitarias en zona centro",
+    estado: "Pendiente",
+    fechaInicio: "01/02/2024",
+    mesesAlquiler: 6,
+    soporte: "V-001",
+    serviciosAdicionales: ["Diseño gráfico", "Impresión de lona", "Instalación en valla"]
   },
   {
-    id: "SOL-002", 
-    fechaCreacion: "2024-01-14",
-    cliente: "Comercial XYZ Ltda.",
+    codigo: "S-002", 
+    fechaCreacion: "14/01/2024 14:15",
+    empresa: "Comercial XYZ Ltda.",
     contacto: "María García",
-    sucursal: "Norte",
-    descripcion: "Cotización para pantallas digitales",
-    estado: "En Revisión"
+    telefono: "+591 2 7654321",
+    email: "maria.garcia@comercialxyz.com",
+    comentarios: "Cotización para pantallas digitales en zona norte",
+    estado: "Nueva",
+    fechaInicio: "15/02/2024",
+    mesesAlquiler: 12,
+    soporte: "PD-002",
+    serviciosAdicionales: ["Diseño gráfico"]
   },
   {
-    id: "SOL-003",
-    fechaCreacion: "2024-01-13", 
-    cliente: "Industrias DEF S.A.S.",
+    codigo: "S-003",
+    fechaCreacion: "13/01/2024 11:45", 
+    empresa: "Industrias DEF S.A.S.",
     contacto: "Carlos López",
-    sucursal: "Sur",
-    descripcion: "Propuesta para murales publicitarios",
-    estado: "Cotizada"
+    telefono: "+591 2 9876543",
+    email: "carlos.lopez@industriasdef.com",
+    comentarios: "Propuesta para murales publicitarios en zona sur",
+    estado: "Cotizada",
+    fechaInicio: "01/03/2024",
+    mesesAlquiler: 8,
+    soporte: "M-003",
+    serviciosAdicionales: ["Diseño gráfico", "Instalación en valla"]
   },
   {
-    id: "SOL-004",
-    fechaCreacion: "2024-01-12",
-    cliente: "Servicios GHI S.A.",
+    codigo: "S-004",
+    fechaCreacion: "12/01/2024 16:20",
+    empresa: "Servicios GHI S.A.",
     contacto: "Ana Martínez",
-    sucursal: "Centro", 
-    descripcion: "Solicitud de presupuesto para publicidad móvil",
-    estado: "Nueva"
+    telefono: "+591 2 4567890",
+    email: "ana.martinez@serviciosghi.com",
+    comentarios: "Solicitud de presupuesto para publicidad móvil",
+    estado: "Pendiente",
+    fechaInicio: "20/02/2024",
+    mesesAlquiler: 3,
+    soporte: "VM-004",
+    serviciosAdicionales: ["Impresión de lona", "Instalación en valla"]
   },
   {
-    id: "SOL-005",
-    fechaCreacion: "2024-01-11",
-    cliente: "Distribuidora JKL Ltda.",
+    codigo: "S-005",
+    fechaCreacion: "11/01/2024 10:00",
+    empresa: "Distribuidora JKL Ltda.",
     contacto: "Pedro Rodríguez",
-    sucursal: "Norte",
-    descripcion: "Cotización para impresión digital",
-    estado: "En Revisión"
+    telefono: "+591 2 3210987",
+    email: "pedro.rodriguez@distribuidorajkl.com",
+    comentarios: "Cotización para impresión digital en zona norte",
+    estado: "Nueva",
+    fechaInicio: "05/03/2024",
+    mesesAlquiler: 4,
+    soporte: "BD-005",
+    serviciosAdicionales: []
   }
 ]
 
@@ -80,11 +108,9 @@ const getEstadoColor = (estado: string) => {
   switch (estado) {
     case "Cotizada":
       return "bg-green-100 text-green-800"
-    case "Rechazada":
-      return "bg-red-100 text-red-800"
-    case "En Revisión":
-      return "bg-blue-100 text-blue-800"
     case "Nueva":
+      return "bg-blue-100 text-blue-800"
+    case "Pendiente":
       return "bg-yellow-100 text-yellow-800"
     default:
       return "bg-gray-100 text-gray-800"
@@ -95,24 +121,66 @@ const getEstadoIcon = (estado: string) => {
   switch (estado) {
     case "Cotizada":
       return <CheckCircle className="w-4 h-4" />
-    case "Rechazada":
-      return <XCircle className="w-4 h-4" />
-    case "En Revisión":
-      return <Clock className="w-4 h-4" />
     case "Nueva":
       return <AlertCircle className="w-4 h-4" />
+    case "Pendiente":
+      return <Clock className="w-4 h-4" />
     default:
       return <AlertCircle className="w-4 h-4" />
   }
 }
 
 export default function SolicitudesPage() {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSolicitudes, setSelectedSolicitudes] = useState<string[]>([])
+  const [solicitudesList, setSolicitudesList] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Cargar solicitudes desde la API
+  const loadSolicitudes = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/solicitudes')
+      if (response.ok) {
+        const data = await response.json()
+        // Filtrar registros con datos faltantes o vacíos
+        const solicitudesValidas = data.filter((solicitud: any) => 
+          solicitud.codigo && 
+          solicitud.codigo.trim() !== '' && 
+          solicitud.empresa && 
+          solicitud.empresa.trim() !== ''
+        )
+        setSolicitudesList(solicitudesValidas)
+        console.log(`✅ Cargadas ${solicitudesValidas.length} solicitudes válidas (${data.length - solicitudesValidas.length} filtradas)`)
+      } else {
+        console.error('Error loading solicitudes:', await response.text())
+      }
+    } catch (error) {
+      console.error('Error loading solicitudes:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSolicitudes()
+  }, [])
+
+  // Recargar datos cuando el usuario regrese a la página
+  useEffect(() => {
+    const handleFocus = () => {
+      loadSolicitudes()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [])
+
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedSolicitudes(solicitudes.map(s => s.id))
+      setSelectedSolicitudes(solicitudesList.map(s => s.codigo))
     } else {
       setSelectedSolicitudes([])
     }
@@ -126,10 +194,104 @@ export default function SolicitudesPage() {
     }
   }
 
-  const filteredSolicitudes = solicitudes.filter(solicitud =>
-    solicitud.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    solicitud.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    solicitud.contacto.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleEliminarSolicitud = async (id: string) => {
+    // Verificar que el ID no esté vacío
+    if (!id || id.trim() === '') {
+      console.log('⚠️ Intentando eliminar solicitud con ID vacío, saltando...')
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      const response = await fetch(`/api/solicitudes/delete?id=${id}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        // Eliminar de la lista local directamente
+        setSolicitudesList(prev => prev.filter(s => s.codigo !== id))
+        console.log('✅ Solicitud eliminada exitosamente')
+      } else if (response.status === 400) {
+        // Si es error 400 (datos faltantes), eliminar de la lista local sin mostrar error
+        console.log('⚠️ Solicitud con datos faltantes, eliminando de la lista local')
+        setSolicitudesList(prev => prev.filter(s => s.codigo !== id))
+      } else {
+        console.error('Error eliminando solicitud:', response.status)
+        alert('Error al eliminar la solicitud')
+      }
+    } catch (error) {
+      console.error('Error eliminando solicitud:', error)
+      // Solo mostrar alerta si no es un error de datos faltantes
+      if (!error.message?.includes('400')) {
+        alert('Error al eliminar la solicitud. Por favor, inténtalo de nuevo.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEliminarSeleccionadas = async () => {
+    if (selectedSolicitudes.length === 0) {
+      alert('Por favor, selecciona al menos una solicitud para eliminar')
+      return
+    }
+
+    // Filtrar solicitudes con ID válido
+    const solicitudesValidas = selectedSolicitudes.filter(id => id && id.trim() !== '')
+    
+    if (solicitudesValidas.length === 0) {
+      console.log('⚠️ No hay solicitudes válidas para eliminar')
+      setSelectedSolicitudes([])
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      // Eliminar cada solicitud seleccionada válida
+      const promises = solicitudesValidas.map(async id => {
+        try {
+          const response = await fetch(`/api/solicitudes/delete?id=${id}`, { method: 'DELETE' })
+          return { id, response, success: response.ok || response.status === 400 }
+        } catch (error) {
+          console.log(`⚠️ Error eliminando ${id}:`, error)
+          return { id, response: null, success: false }
+        }
+      })
+      
+      const results = await Promise.all(promises)
+      const exitosas = results.filter(r => r.success)
+      const fallidas = results.filter(r => !r.success)
+      
+      // Recargar datos desde Airtable para asegurar sincronización
+      await loadSolicitudes()
+      setSelectedSolicitudes([])
+      
+      if (exitosas.length > 0) {
+        console.log(`✅ ${exitosas.length} solicitud(es) eliminada(s) exitosamente`)
+      }
+      
+      if (fallidas.length > 0) {
+        console.log(`⚠️ ${fallidas.length} solicitud(es) tuvieron problemas`)
+      }
+      
+    } catch (error) {
+      console.error('Error eliminando solicitudes:', error)
+      // Recargar datos para asegurar sincronización
+      await loadSolicitudes()
+      setSelectedSolicitudes([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredSolicitudes = solicitudesList.filter(solicitud =>
+    solicitud.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    solicitud.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    solicitud.contacto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    solicitud.comentarios.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    solicitud.soporte.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
@@ -200,6 +362,17 @@ export default function SolicitudesPage() {
               </Button>
             </div>
             <div className="flex gap-2">
+              {selectedSolicitudes.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleEliminarSeleccionadas}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar ({selectedSolicitudes.length})
+                </Button>
+              )}
               <Button variant="outline" size="sm">
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
@@ -217,70 +390,67 @@ export default function SolicitudesPage() {
           <CardHeader>
             <CardTitle>Listado de Solicitudes</CardTitle>
             <CardDescription>
-              {filteredSolicitudes.length} solicitudes encontradas
+              {loading ? 'Cargando...' : `${filteredSolicitudes.length} solicitudes encontradas`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644]"></div>
+                <span className="ml-2 text-gray-600">Cargando solicitudes...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-3 px-4">
                       <Checkbox
-                        checked={selectedSolicitudes.length === solicitudes.length}
+                        checked={selectedSolicitudes.length === solicitudesList.length}
                         onCheckedChange={handleSelectAll}
                       />
                     </th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Código</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Fecha Creación</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Cliente</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Contacto</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Sucursal</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Descripción</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Empresa</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Comentarios</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Estado</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Fecha Inicio</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Meses Alquiler</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-900">Soporte</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-900">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredSolicitudes.map((solicitud) => (
-                    <tr key={solicitud.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={solicitud.codigo} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-4">
                         <Checkbox
-                          checked={selectedSolicitudes.includes(solicitud.id)}
-                          onCheckedChange={(checked) => handleSelectSolicitud(solicitud.id, checked as boolean)}
+                          checked={selectedSolicitudes.includes(solicitud.codigo)}
+                          onCheckedChange={(checked) => handleSelectSolicitud(solicitud.codigo, checked as boolean)}
                         />
                       </td>
                       <td className="py-3 px-4">
-                        <span className="font-medium text-[#D54644]">{solicitud.id}</span>
+                        <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200 whitespace-nowrap">
+                          {solicitud.codigo}
+                        </span>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-400" />
-                          {new Date(solicitud.fechaCreacion).toLocaleDateString('es-ES')}
+                          {solicitud.fechaCreacion}
                         </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Building className="w-4 h-4 text-gray-400" />
-                          {solicitud.cliente}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          {solicitud.contacto}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-gray-400" />
-                          {solicitud.sucursal}
+                          {solicitud.empresa}
                         </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-gray-400" />
-                          <span className="max-w-xs truncate">{solicitud.descripcion}</span>
+                          <span className="max-w-xs truncate">{solicitud.comentarios}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -290,15 +460,45 @@ export default function SolicitudesPage() {
                         </Badge>
                       </td>
                       <td className="py-3 px-4">
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          {solicitud.fechaInicio}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium whitespace-nowrap">{solicitud.mesesAlquiler} meses</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200 whitespace-nowrap">
+                          {solicitud.soporte}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-1">
+                          <Link href={`/panel/ventas/solicitudes/${solicitud.codigo}`}>
+                            <Button variant="ghost" size="sm" title="Ver detalles">
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title="Eliminar"
+                            onClick={() => handleEliminarSolicitud(solicitud.codigo)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

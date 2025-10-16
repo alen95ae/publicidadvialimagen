@@ -217,6 +217,11 @@ export default function HomePage() {
   }, [])
   const { addMessage } = useMessages()
   const { billboards, loading, error } = useBillboards()
+  
+  // Debug logs
+  useEffect(() => {
+    console.log('🏠 HomePage - billboards:', billboards.length, 'loading:', loading, 'error:', error)
+  }, [billboards, loading, error])
 
   // Debug: Verificar que el componente se está renderizando
   console.log('HomePage component rendering')

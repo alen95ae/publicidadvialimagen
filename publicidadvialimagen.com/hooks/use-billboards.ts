@@ -96,12 +96,24 @@ export function useBillboards() {
 
         const result = await response.json()
         
+        console.log('🔍 Respuesta del API soportes:', result)
+        
         if (result.error) {
           throw new Error(result.error)
         }
 
         // Transformar datos de la API al formato esperado
-        const transformedData: Billboard[] = (result.data || []).map((soporte: any) => ({
+        console.log('🔄 Transformando datos...', result.data?.length, 'soportes')
+        const transformedData: Billboard[] = (result.data || []).map((soporte: any, index: number) => {
+          if (index < 3) {
+            console.log(`📋 Soporte ${index}:`, {
+              id: soporte.id,
+              name: soporte.name,
+              coordinates: soporte.coordinates,
+              monthlyPrice: soporte.monthlyPrice
+            })
+          }
+          return {
           id: soporte.id,
           code: soporte.id, // Usar ID como código temporal
           name: soporte.name,
@@ -128,8 +140,10 @@ export function useBillboards() {
             : undefined,
           impactos_diarios: soporte.traffic ? parseInt(soporte.traffic.replace(/[^\d]/g, '')) : undefined,
           description: soporte.description || '',
-        }))
+        }
+        })
 
+        console.log('✅ Datos transformados:', transformedData.length, 'soportes')
         setBillboards(transformedData)
       } catch (err: any) {
         console.error('Error fetching billboards:', err)

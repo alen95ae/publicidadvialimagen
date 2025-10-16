@@ -10,6 +10,8 @@ AIRTABLE_BASE_ID=appXXXXXXXXXXXXXX
 AIRTABLE_API_KEY=keyXXXXXXXXXXXXXX
 AIRTABLE_TABLE_CONTACTOS=tblXXXXXXXXXXXXXX
 AIRTABLE_TABLE_MENSAJES=tblXXXXXXXXXXXXXX
+AIRTABLE_TABLE_SOLICITUDES=tblXXXXXXXXXXXXXX
+AIRTABLE_TABLE_SOPORTES=tblXXXXXXXXXXXXXX
 ```
 
 ## Cómo obtener estos valores:
@@ -24,7 +26,7 @@ AIRTABLE_TABLE_MENSAJES=tblXXXXXXXXXXXXXX
 - En la sección "API" genera una nueva API Key
 - Copia la key que empieza con `key`
 
-### 3. AIRTABLE_TABLE_CONTACTOS y AIRTABLE_TABLE_MENSAJES
+### 3. AIRTABLE_TABLE_CONTACTOS, AIRTABLE_TABLE_MENSAJES, AIRTABLE_TABLE_SOLICITUDES y AIRTABLE_TABLE_SOPORTES
 - En tu base de datos, haz clic derecho en cada tabla
 - Selecciona "Copy table ID"
 - O ve a la URL de la tabla y copia el ID que aparece después de `/tbl`
@@ -47,6 +49,26 @@ AIRTABLE_TABLE_MENSAJES=tblXXXXXXXXXXXXXX
 - Mensaje (Long text)
 - Fecha (Date)
 - Estado (Single select: NUEVO, LEÍDO, CONTESTADO)
+
+### Tabla "Solicitudes" (AIRTABLE_TABLE_SOLICITUDES):
+- Código (Single line text)
+- Empresa (Single line text)
+- Contacto (Single line text)
+- Email (Email)
+- Teléfono (Phone number)
+- Comentarios (Long text)
+- Estado (Single select: Nueva, Pendiente, Cotizada)
+- Fecha Inicio (Date)
+- Meses alquiler (Number)
+- Soporte (Single line text)
+- Servicios adicionales (Multiple select: Diseño gráfico, Impresión de lona, Instalación en valla)
+
+### Tabla "Soportes" (AIRTABLE_TABLE_SOPORTES):
+- ID (Single line text)
+- Código (Single line text)
+- Ubicación (Single line text)
+- Ciudad (Single line text)
+- Coordenadas (Single line text)
 
 ## Después de configurar:
 

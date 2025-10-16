@@ -417,7 +417,31 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
               </Button>
 
               {/* Botón de cotización */}
-              <Button className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white">
+              <Button 
+                className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
+                onClick={() => {
+                  // Validar que se hayan seleccionado los campos requeridos
+                  if (!selectedStartDate) {
+                    alert('Por favor, selecciona una fecha de inicio')
+                    return
+                  }
+                  if (!selectedMonths) {
+                    alert('Por favor, selecciona los meses de alquiler')
+                    return
+                  }
+                  
+                  // Construir URL con los datos seleccionados
+                  const params = new URLSearchParams({
+                    fechaInicio: selectedStartDate,
+                    mesesAlquiler: selectedMonths,
+                    serviciosAdicionales: selectedServices.join(','),
+                    soporte: billboard.code // Usar el código real del soporte
+                  })
+                  
+                  // Redirigir al formulario de solicitud
+                  window.location.href = `/solicitar-cotizacion?${params.toString()}`
+                }}
+              >
                 <FileText className="mr-2 h-4 w-4" />
                 Solicitar cotización
               </Button>

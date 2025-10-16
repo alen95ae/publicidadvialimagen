@@ -13,6 +13,12 @@ const protectedRoutes = [
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  
+  // Excluir rutas de API del middleware
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+  
   const match = protectedRoutes.find((r) => pathname.startsWith(r.path));
   if (!match) return NextResponse.next();
 

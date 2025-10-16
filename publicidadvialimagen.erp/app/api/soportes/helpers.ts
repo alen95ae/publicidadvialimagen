@@ -297,3 +297,17 @@ export function processCsvRow(row: any): any {
     owner: row.Propietario || row.propietario,
   }
 }
+
+/** Mapea estado en español a código en inglés para Supabase */
+export function mapStatusToSupabase(status: string): string {
+  const statusMap: Record<string, string> = {
+    'Disponible': 'available',
+    'Reservado': 'reserved',
+    'Ocupado': 'occupied',
+    'No disponible': 'unavailable',
+    'En mantenimiento': 'maintenance',
+    'Mantenimiento': 'maintenance'
+  }
+  
+  return statusMap[status] || 'unknown'
+}

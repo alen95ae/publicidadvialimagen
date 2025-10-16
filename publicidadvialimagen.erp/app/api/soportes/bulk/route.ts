@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ensureDefaultOwnerId, mapStatusToSupabase } from '../helpers'
-import { getSoportes, createSoporte, updateSoporte, deleteSoporte } from '@/lib/airtable'
+import { getSoportes, createSoporte, updateSoporte, deleteSoporte } from '@/lib/airtableSoportes'
 
 interface BulkRequest {
   ids: string[]

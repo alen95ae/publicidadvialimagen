@@ -19,6 +19,9 @@ const KNOWN_MODULES = [
   "/panel/reservas",
   "/panel/clientes",
   "/panel/empleados",
+  "/panel/diseno",
+  "/panel/sitio",
+  "/panel/ajustes",
   "/panel/perfil",
   "/panel/__wip",
 ];

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
   Calendar,
@@ -40,7 +40,7 @@ const modules = [
   { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad", icon: Receipt },
   { key: "empleados", title: "Empleados", href: "/panel/empleados", icon: UserCog },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },
-  { key: "salir", title: "Salir", href: "/api/auth/logout", icon: Power },
+  { key: "salir", title: "Salir", href: null, icon: Power, isLogout: true },
 ]
 
 interface SidebarProps {
@@ -50,6 +50,7 @@ interface SidebarProps {
 export default function Sidebar({ children }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
 
   // Persistir el estado del sidebar en localStorage
   useEffect(() => {
@@ -69,6 +70,16 @@ export default function Sidebar({ children }: SidebarProps) {
     const newState = !isCollapsed
     setIsCollapsed(newState)
     localStorage.setItem('sidebar-collapsed', JSON.stringify(newState))
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      router.replace('/login');
+    }
   }
 
   return (
@@ -98,6 +109,30 @@ export default function Sidebar({ children }: SidebarProps) {
             {modules.map((module) => {
               const Icon = module.icon
               const isActive = pathname === module.href
+              
+              // Manejar logout como botón especial
+              if (module.isLogout) {
+                return (
+                  <li key={module.key}>
+                    <button
+                      onClick={handleLogout}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group w-full text-left ${
+                        'text-gray-700 hover:bg-red-50 hover:text-red-600'
+                      } ${isCollapsed ? 'justify-center' : ''}`}
+                      title={isCollapsed ? module.title : undefined}
+                    >
+                      <Icon className={`w-6 h-6 flex-shrink-0 ${
+                        'text-gray-600 group-hover:text-red-600'
+                      }`} />
+                      {!isCollapsed && (
+                        <span className="text-sm font-medium truncate">
+                          {module.title}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              }
               
               return (
                 <li key={module.key}>

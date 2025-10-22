@@ -8,8 +8,7 @@ export async function POST() {
   return response;
 }
 
+// ❌ NO permitir GET: evita logout por prefetch / _rsc
 export async function GET() {
-  const response = NextResponse.redirect(new URL("/login", process.env.PUBLIC_SITE_URL || "http://localhost:3000"));
-  response.headers.append('Set-Cookie', clearAuthCookie("session"));
-  return response;
+  return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
 }

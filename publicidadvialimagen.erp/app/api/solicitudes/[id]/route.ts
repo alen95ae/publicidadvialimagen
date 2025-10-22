@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { airtableList } from '@/lib/airtable-rest'
+import { airtableList, getAllRecords } from '@/lib/airtable-rest'
 
 // Interface para las solicitudes de cotización
 interface SolicitudCotizacion {
@@ -34,7 +34,7 @@ export async function GET(
 
     // Buscar la solicitud en Airtable
     try {
-      const airtableData = await airtableList('Solicitudes')
+      const airtableData = await getAllRecords('Solicitudes')
       const record = airtableData.records.find((record: any) => 
         record.fields['Código'] === id || record.id === id
       )
@@ -46,17 +46,26 @@ export async function GET(
         )
       }
 
-      // Obtener código del soporte
+      // Obtener código del soporte usando mapeo completo
       let soporteCodigo = ''
       try {
-        const soporteId = record.fields['Soporte'] ? 
-          (Array.isArray(record.fields['Soporte']) ? record.fields['Soporte'][0] : record.fields['Soporte']) : ''
+        // 1) Trae TODOS los Soportes y construye map ID -> Código
+        const soportesData = await getAllRecords('Soportes')
+        const soportesMap: Record<string, string> = soportesData.records.reduce((acc, rec) => {
+          const id = rec.id
+          const codigo = (rec.fields as any)['Código']
+          if (id && codigo) acc[id] = String(codigo)
+          return acc
+        }, {} as Record<string, string>)
         
-        if (soporteId) {
-          const soportesData = await airtableList('Soportes')
-          const soporteRecord = soportesData.records.find((s: any) => s.id === soporteId)
-          soporteCodigo = soporteRecord ? (soporteRecord.fields['Código'] || soporteRecord.fields['ID'] || soporteId) : soporteId
+        // 2) Mapea Soporte ID -> Código de forma robusta
+        const mapSoporte = (raw: any) => {
+          if (!raw) return ""
+          const id = Array.isArray(raw) ? raw[0] : raw
+          return soportesMap[id] ?? id // si no está en el map, devuelve el ID como fallback
         }
+        
+        soporteCodigo = mapSoporte(record.fields['Soporte'])
       } catch (error) {
         console.log('⚠️ Error obteniendo código del soporte:', error)
         soporteCodigo = record.fields['Soporte'] ? 

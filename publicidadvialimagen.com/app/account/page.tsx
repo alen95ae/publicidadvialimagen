@@ -127,7 +127,7 @@ export default function AccountPage() {
           </TabsContent>
 
           <TabsContent value="quotes">
-            <QuotesTab userId={user.id} />
+            <QuotesTab userId={user.email} />
           </TabsContent>
 
           <TabsContent value="messages">

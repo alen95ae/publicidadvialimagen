@@ -20,6 +20,18 @@ export async function GET() {
     
     console.log('🔄 Conectando con Airtable...')
     
+    // Primero cargar los soportes para hacer el mapeo de IDs a códigos
+    console.log('📋 Cargando soportes para mapeo...')
+    const soportesResult = await airtableList('Soportes', {})
+    const soportesMap: Record<string, string> = {}
+    
+    if (soportesResult?.records) {
+      soportesResult.records.forEach((record: any) => {
+        soportesMap[record.id] = record.fields['Código'] || ''
+      })
+      console.log('📋 Mapa de soportes creado:', Object.keys(soportesMap).length, 'soportes')
+    }
+    
     // Obtener todas las solicitudes de cotización desde Airtable
     const result = await airtableList(TABLE_SOLICITUDES, {})
 
@@ -38,8 +50,20 @@ export async function GET() {
     // Transformar los datos de forma más segura
     const cotizaciones = result.records.map((record: any) => {
       const fields = record.fields || {}
+      
+      // Obtener el código del soporte desde el mapa (convertir ID de Airtable a código)
+      let codigoSoporte = ''
+      if (Array.isArray(fields['Soporte']) && fields['Soporte'].length > 0) {
+        const soporteId = fields['Soporte'][0]
+        codigoSoporte = soportesMap[soporteId] || ''
+        console.log(`🔍 Mapeo soporte: ${soporteId} → ${codigoSoporte}`)
+      } else if (typeof fields['Soporte'] === 'string') {
+        codigoSoporte = soportesMap[fields['Soporte']] || ''
+        console.log(`🔍 Mapeo soporte: ${fields['Soporte']} → ${codigoSoporte}`)
+      }
+      
       return {
-        id: record.id || '',
+        id: fields['Código'] || record.id || '',
         created_at: fields['Fecha Creación'] || new Date().toISOString(),
         empresa: fields['Empresa'] || '',
         email: fields['Email'] || '',
@@ -48,7 +72,7 @@ export async function GET() {
         estado: fields['Estado'] || 'Nueva',
         respuesta: fields['Respuesta'] || '',
         fecha_respuesta: fields['Fecha Respuesta'] || '',
-        soporte: Array.isArray(fields['Soporte']) ? fields['Soporte'][0] : (fields['Soporte'] || ''),
+        soporte: codigoSoporte,
         fecha_inicio: fields['Fecha Inicio'] || '',
         meses_alquiler: fields['Meses alquiler'] || 0,
         servicios_adicionales: fields['Servicios adicionales'] || []

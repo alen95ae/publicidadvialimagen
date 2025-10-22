@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { airtableCreate, airtableList } from '@/lib/airtable-rest'
+import { airtableCreate, airtableList, getAllRecords } from '@/lib/airtable-rest'
 
 // Interface para las solicitudes de cotización
 interface SolicitudCotizacion {
@@ -201,30 +201,29 @@ export async function GET(request: NextRequest) {
       const airtableData = await airtableList('Solicitudes')
       console.log('📊 Records raw de Airtable:', airtableData.records.length)
       
-      // Obtener códigos de soportes para mapear IDs a códigos
-      let soportesMap: { [key: string]: string } = {}
-      try {
-        const soportesData = await airtableList('Soportes')
-        soportesMap = soportesData.records.reduce((acc: { [key: string]: string }, record: any) => {
-          acc[record.id] = record.fields['Código'] || record.fields['ID'] || record.id
-          return acc
-        }, {})
-        console.log('📋 Mapa de soportes creado:', Object.keys(soportesMap).length, 'soportes')
-      } catch (error) {
-        console.log('⚠️ Error obteniendo soportes, usando IDs directamente:', error)
-      }
+      // 1) Trae TODOS los Soportes (304 reg) y construye map ID -> Código
+      const soportesData = await getAllRecords('Soportes')
+      const soportesMap: Record<string, string> = soportesData.records.reduce((acc, rec) => {
+        const id = rec.id // ID Airtable (recXXXX)
+        const codigo = (rec.fields as any)['Código']
+        if (id && codigo) acc[id] = String(codigo)
+        return acc
+      }, {} as Record<string, string>)
+      
+      console.log('[DBG] soportesMap size:', Object.keys(soportesMap).length)
 
       solicitudes = airtableData.records.map((record: any) => {
         const soporteId = record.fields['Soporte'] ? 
           (Array.isArray(record.fields['Soporte']) ? record.fields['Soporte'][0] : record.fields['Soporte']) : ''
         
-        console.log(`🔍 Procesando solicitud ${record.fields['Código']}:`)
-        console.log(`  - Soporte ID: ${soporteId}`)
-        console.log(`  - Mapa de soportes:`, soportesMap)
+        // 3) Mapea Soporte ID -> Código de forma robusta
+        const mapSoporte = (raw: any) => {
+          if (!raw) return ""
+          const id = Array.isArray(raw) ? raw[0] : raw
+          return soportesMap[id] ?? id // si no está en el map, devuelve el ID como fallback
+        }
         
-        const soporteCodigo = soporteId ? (soportesMap[soporteId] || soporteId) : ''
-        
-        console.log(`  - Código de soporte resultante: ${soporteCodigo}`)
+        const soporteCodigo = mapSoporte(record.fields['Soporte'])
         
         return {
           codigo: record.fields['Código'] || '',
@@ -245,6 +244,25 @@ export async function GET(request: NextRequest) {
               record.fields['Servicios adicionales'] : 
               record.fields['Servicios adicionales'].split(',').map((s: string) => s.trim()).filter((s: string) => s)) : []
         }
+      })
+      
+      // Ordenar por fecha de creación (más recientes primero)
+      solicitudes.sort((a, b) => {
+        // Usar el campo original de Airtable para ordenar por fecha real
+        const getFechaOriginal = (solicitud: any) => {
+          // Buscar el record original en airtableData para obtener la fecha real
+          const record = airtableData.records.find((r: any) => r.fields['Código'] === solicitud.codigo)
+          if (record && record.fields['Fecha Creación']) {
+            return new Date(record.fields['Fecha Creación']).getTime()
+          }
+          // Fallback: usar la fecha formateada
+          const fechaNormalizada = solicitud.fechaCreacion.replace(/p\. m\./g, 'PM').replace(/a\. m\./g, 'AM')
+          return new Date(fechaNormalizada).getTime()
+        }
+        
+        const fechaA = getFechaOriginal(a)
+        const fechaB = getFechaOriginal(b)
+        return fechaB - fechaA // Más recientes primero
       })
       
       console.log('✅ Solicitudes cargadas desde Airtable (tabla Solicitudes):', solicitudes.length)

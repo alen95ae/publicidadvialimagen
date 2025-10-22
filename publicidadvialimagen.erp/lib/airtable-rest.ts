@@ -73,3 +73,34 @@ export async function airtableDelete(table: string, id: string) {
   if (!res.ok) throw new Error(`Delete ${table} failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
+
+// ✅ Trae TODOS los registros de una tabla (itera páginas de 100)
+export async function getAllRecords(tableName: string, view?: string) {
+  const allRecords: any[] = [];
+  let offset: string | undefined;
+  
+  do {
+    const params: Record<string, string> = { pageSize: "100" };
+    if (offset) params.offset = offset;
+    if (view) params.view = view;
+    
+    const response = await airtableList(tableName, params);
+    allRecords.push(...response.records);
+    offset = response.offset;
+  } while (offset);
+  
+  return { records: allRecords };
+}
+
+// ✅ Trae una página concreta (para endpoints paginados)
+export async function getRecordsPage(
+  tableName: string,
+  opts: { pageSize?: number; offset?: string; view?: string } = {}
+) {
+  const { pageSize = 50, offset, view } = opts;
+  const params: Record<string, string> = { pageSize: pageSize.toString() };
+  if (offset) params.offset = offset;
+  if (view) params.view = view;
+  
+  return await airtableList(tableName, params);
+}

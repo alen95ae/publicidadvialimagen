@@ -18,6 +18,7 @@ const KNOWN_MODULES = [
   "/panel/contabilidad",
   "/panel/reservas",
   "/panel/clientes",
+  "/panel/empleados",
   "/panel/perfil",
   "/panel/__wip",
 ];
@@ -64,8 +65,19 @@ export async function middleware(req: NextRequest) {
         loginUrl.search = "";
         return NextResponse.redirect(loginUrl);
       }
-    } catch (error) {
-      console.log("🔒 Token verification failed:", error);
+      
+      // Verificar que el token no haya expirado
+      if (payload.exp && payload.exp < Date.now() / 1000) {
+        console.log("🔒 Token expired, redirecting to login");
+        const loginUrl = req.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        return NextResponse.redirect(loginUrl);
+      }
+      
+      console.log("✅ Token valid for user:", payload.email);
+    } catch (error: any) {
+      console.log("🔒 Token verification failed:", error.message);
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.search = "";

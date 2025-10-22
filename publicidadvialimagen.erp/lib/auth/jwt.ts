@@ -13,7 +13,8 @@ export async function verify<T = any>(token: string): Promise<T | null> {
   try { 
     const { payload } = await jwtVerify(token, JWT_SECRET);
     return payload as T; 
-  } catch { 
+  } catch (error: any) {
+    console.error("JWT verification failed:", error.message);
     return null; 
   }
 }

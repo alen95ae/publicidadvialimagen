@@ -1,66 +1,70 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verify } from "@/lib/auth/jwt";
 
-const protectedRoutes = [
-  { path: "/panel", roles: ["usuario", "admin", "invitado"] },
-  { path: "/erp", roles: ["usuario", "admin"] },
-  { path: "/dashboard", roles: ["admin"] },
-  { path: "/admin", roles: ["admin"] },
+const PROTECTED_PREFIX = "/panel";
+
+// 🔹 Lista blanca de módulos que sí existen hoy.
+//    Añade aquí los que tienes operativos.
+const KNOWN_MODULES = [
+  "/panel",
+  "/panel/soportes",
+  "/panel/contactos",
+  "/panel/mensajes",
+  "/panel/inventario",
+  "/panel/calendario",
+  "/panel/produccion",
+  "/panel/ventas",
+  "/panel/contabilidad",
+  "/panel/reservas",
+  "/panel/clientes",
+  "/panel/perfil",
+  "/panel/__wip",
 ];
 
-export async function middleware(req: NextRequest) {
+function startsWithAny(pathname: string, list: string[]) {
+  return list.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  
-  // Excluir rutas de API del middleware
-  if (pathname.startsWith('/api/')) {
+
+  // Rutas públicas (no forzar auth ni tocar)
+  if (
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/static") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".")
+  ) {
     return NextResponse.next();
   }
-  
-  const match = protectedRoutes.find((r) => pathname.startsWith(r.path));
-  if (!match) return NextResponse.next();
 
-  const token = req.cookies.get("session")?.value;
-  console.log("Middleware - Path:", pathname);
-  console.log("Middleware - Token exists:", !!token);
-  console.log("Middleware - Token value:", token ? "present" : "missing");
-  
-  if (!token) {
-    console.log("Middleware - No token, redirecting to login");
-    const url = new URL("/login", req.url);
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+  // Solo protegemos /panel/*
+  if (pathname.startsWith(PROTECTED_PREFIX)) {
+    const token = req.cookies.get("session")?.value;
+
+    // Si NO hay cookie, entonces sí → login
+    if (!token) {
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.search = "";
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // 🔒 Hay cookie: NO mandes al login por rutas inexistentes.
+    // Si la ruta no es conocida, reescribimos a una página WIP
+    if (!startsWithAny(pathname, KNOWN_MODULES)) {
+      const wipUrl = req.nextUrl.clone();
+      wipUrl.pathname = "/panel/__wip";
+      wipUrl.search = "";
+      return NextResponse.rewrite(wipUrl);
+    }
   }
 
-  try {
-    const payload = await verify(token);
-    if (!payload) {
-      console.log("Middleware - Token verification failed: invalid token");
-      const url = new URL("/login", req.url);
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
-    }
-    
-    const role = payload.role as string || "invitado";
-    console.log("Middleware - Token verified, role:", role);
-    console.log("Middleware - Required roles:", match.roles);
-    console.log("Middleware - Role allowed:", match.roles.includes(role));
-    
-    if (!match.roles.includes(role)) {
-      console.log("Middleware - Role not allowed, redirecting to home");
-      const url = new URL("/", req.url);
-      return NextResponse.redirect(url);
-    }
-    console.log("Middleware - Access granted");
-    return NextResponse.next();
-  } catch (error) {
-    console.log("Middleware - Token verification failed:", error);
-    const url = new URL("/login", req.url);
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/panel/:path*", "/erp/:path*", "/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/panel/:path*", "/api/erp/:path*"],
 };

@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/server-auth";
 import { airtableCreate } from "@/lib/airtable-rest";
 
 const TABLE = process.env.AIRTABLE_TABLE_INVITACIONES || "Invitaciones";
-const SITE = process.env.PUBLIC_SITE_URL || "http://localhost:3001";
+const SITE = process.env.PUBLIC_SITE_URL || "http://localhost:3000";
 
 function nowPlusDays(days: number) {
   const d = new Date();

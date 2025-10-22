@@ -94,7 +94,9 @@ export default function SoportesPage() {
       params.set('limit', '50')
       
       console.log('🔍 Fetching supports with params:', params.toString())
-      const response = await fetch(`/api/soportes?${params}`)
+      const response = await fetch(`/api/soportes?${params}`, {
+        credentials: 'include'
+      })
       console.log('📡 Response status:', response.status)
       
       if (response.ok) {

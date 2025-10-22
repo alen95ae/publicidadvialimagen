@@ -108,7 +108,9 @@ export default function SoporteDetailPage() {
   const fetchSupport = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/soportes/${id}`)
+      const response = await fetch(`/api/soportes/${id}`, {
+        credentials: 'include'
+      })
       if (response.ok) {
         const data = await response.json()
         console.log('📥 Soporte recibido del API:', data)

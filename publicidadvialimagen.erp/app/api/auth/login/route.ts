@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { findUserByEmail, signSession, setSessionCookie } from "@/lib/auth";
+import { findUserByEmail, signSession } from "@/lib/auth";
+import { createAuthCookie } from "@/lib/auth/cookies";
 
 export async function POST(req: Request) {
   try {
@@ -25,16 +26,21 @@ export async function POST(req: Request) {
     if (!ok) return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
 
     const token = await signSession({ id: user.id, email: user.fields.Email, role: user.fields.Rol, name: user.fields.Nombre });
-    await setSessionCookie(token);
-
+    
     const role = user.fields.Rol || "invitado";
     const redirect = (role === "usuario" || role === "admin") ? "/panel" : "/panel";
 
-    return NextResponse.json({
+    const maxAge = 7 * 24 * 60 * 60; // 7 días
+    const cookie = createAuthCookie("session", token, maxAge);
+    
+    const response = NextResponse.json({
       success: true,
       user: { id: user.id, email: user.fields.Email, name: user.fields.Nombre, role: role },
       redirect
     });
+    
+    response.headers.append('Set-Cookie', cookie);
+    return response;
   } catch (e: any) {
     console.error("login error:", e);
     return NextResponse.json({ error: "Error en login" }, { status: 500 });

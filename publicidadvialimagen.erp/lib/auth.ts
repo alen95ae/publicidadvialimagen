@@ -1,10 +1,10 @@
-import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { airtableList, airtableCreate } from "./airtable-rest";
+import { sign, verify } from "./auth/jwt";
+import { createAuthCookie, clearAuthCookie } from "./auth/cookies";
 
 const USERS = process.env.AIRTABLE_TABLE_USERS || "Users";
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
 
 export type UserRecord = {
@@ -43,33 +43,35 @@ export async function createUser(email: string, password: string, name?: string)
 }
 
 export async function signSession(user: { id: string; email: string; role?: string; name?: string }) {
-  const token = await new SignJWT({
+  return await sign({
     sub: user.id,
     email: user.email,
     role: user.role || "invitado",
     name: user.name || ""
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("7d")
-    .sign(JWT_SECRET);
-  return token;
+  }, JWT_EXPIRES);
 }
 
 export async function verifySession(token: string) {
-  const { payload } = await jwtVerify(token, JWT_SECRET);
-  return payload as { sub: string; email: string; role?: string; name?: string; iat: number; exp: number };
+  return await verify<{ sub: string; email: string; role?: string; name?: string; iat: number; exp: number }>(token);
 }
 
 export async function setSessionCookie(token: string) {
   const cookieStore = await cookies();
   console.log("Setting session cookie with token:", token.substring(0, 20) + "...");
-  cookieStore.set("session", token, {
+  
+  const maxAge = 7 * 24 * 60 * 60; // 7 días
+  const cookie = createAuthCookie("session", token, maxAge);
+  
+  // Parse the cookie string and set it
+  const [nameValue, ...options] = cookie.split(';');
+  const [name, value] = nameValue.split('=');
+  
+  cookieStore.set(name.trim(), value, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    // 7 días
-    maxAge: 7 * 24 * 60 * 60,
+    maxAge,
   });
   console.log("Session cookie set successfully");
 }

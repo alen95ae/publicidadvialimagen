@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
+import { verify } from "@/lib/auth/jwt";
 
 const protectedRoutes = [
   { path: "/panel", roles: ["usuario", "admin", "invitado"] },
@@ -35,7 +33,14 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const payload = await verify(token);
+    if (!payload) {
+      console.log("Middleware - Token verification failed: invalid token");
+      const url = new URL("/login", req.url);
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+    
     const role = payload.role as string || "invitado";
     console.log("Middleware - Token verified, role:", role);
     console.log("Middleware - Required roles:", match.roles);

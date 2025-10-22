@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { api } from "@/lib/fetcher";
 
 export default function LoginForm({ next }: { next?: string }) {
   const [email, setEmail] = useState(""); 
@@ -10,16 +11,21 @@ export default function LoginForm({ next }: { next?: string }) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setErr(null);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) return setErr(data.error || "Error");
-    const target = next || data.redirect || "/";
-    window.location.href = target;
+    
+    try {
+      const res = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) return setErr(data.error || "Error");
+      const target = next || data.redirect || "/";
+      window.location.href = target;
+    } catch (error) {
+      setLoading(false);
+      setErr("Error de conexión");
+    }
   }
 
   return (

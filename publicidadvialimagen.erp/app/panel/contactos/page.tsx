@@ -88,7 +88,9 @@ export default function ContactosPage() {
       params.set('limit', '100')
 
       console.log('🔍 Fetching contacts with params:', params.toString())
-      const response = await fetch(`/api/contactos?${params}`)
+      const response = await fetch(`/api/contactos?${params}`, {
+        credentials: 'include'
+      })
       
       if (response.ok) {
         const data = await response.json()

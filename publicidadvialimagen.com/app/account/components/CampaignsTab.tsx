@@ -29,7 +29,7 @@ export default function CampaignsTab({ userId }: CampaignsTabProps) {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Aquí cargarías las campañas desde Supabase
+    // TODO: Implementar carga de campañas desde Airtable
     // Por ahora, mostramos datos de ejemplo
     const mockCampaigns: Campaign[] = []
     

@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
 
   if (code) {
-    // El código se maneja automáticamente por Supabase en el cliente
+    // El código se maneja automáticamente por Kinde en el cliente
     // Redirigir a la home
     return NextResponse.redirect(new URL('/', request.url))
   }

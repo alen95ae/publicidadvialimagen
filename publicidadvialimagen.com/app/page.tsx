@@ -21,7 +21,6 @@ import {
   Ruler,
   FileText,
 } from "lucide-react"
-// import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,10 +29,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useMessages } from "@/hooks/use-messages"
 import { useBillboards, type Billboard } from "@/hooks/use-billboards"
 
-// Configuración de Supabase - DISABLED
-// const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-// const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-// const supabase = createClient(supabaseUrl, supabaseKey)
 
 const cities = [
   { name: "La Paz", image: "/vallas_publicitarias_la_paz.png" },

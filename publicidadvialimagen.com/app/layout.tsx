@@ -45,12 +45,6 @@ export default function RootLayout({
           `}
         </Script>
         
-        <script
-          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`}
-          async
-          defer
-        ></script>
-        <script src="/map-viewer.js" async defer></script>
       </head>
       <body className={inter.className}>
         <Providers>

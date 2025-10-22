@@ -59,7 +59,7 @@ const createBuildingIcon = () => {
   })
 }
 
-export default function SimpleMap({ center, zoom = 16, heightClassName = "h-96", markerLabel, markerTitle, markerSubtitle, markerLinkUrl, markerLinkLabel = "Abrir en Google Maps" }: SimpleMapProps) {
+export default function SimpleMap({ center, zoom = 16, heightClassName = "h-96", markerLabel, markerTitle, markerSubtitle, markerLinkUrl, markerLinkLabel = "Abrir en OpenStreetMap" }: SimpleMapProps) {
   // Usar icono de edificio para sucursales, icono de valla para otros casos
   const icon = useMemo(() => {
     // Si tiene markerTitle y markerSubtitle, es una sucursal

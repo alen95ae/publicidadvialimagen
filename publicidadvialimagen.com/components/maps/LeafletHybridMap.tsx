@@ -128,7 +128,7 @@ export default function LeafletHybridMap({
         zoom: defaultZoom,
         zoomControl: true,
         scrollWheelZoom: true,
-        attributionControl: false,
+        attributionControl: true,
       });
 
       console.log(`Map created successfully for ID: ${mapId}`);
@@ -137,27 +137,25 @@ export default function LeafletHybridMap({
       (window as any).mapInstance = map;
 
       // capas base
-      const googleMap = L.tileLayer(
-        "https://mt1.google.com/vt/lyrs=r&x={x}&y={y}&z={z}",
-        { maxZoom: 20, attribution: "© Google" }
-      );
-      const googleSat = L.tileLayer(
-        "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-        { maxZoom: 20, attribution: "© Google Sat" }
-      );
       const osm = L.tileLayer(
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        { maxZoom: 19, attribution: "© OpenStreetMap" }
+        { 
+          maxZoom: 19, 
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+        }
+      );
+      const esriSatellite = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 19, attribution: "© Esri" }
       );
 
       // capa por defecto
-      googleMap.addTo(map);
+      osm.addTo(map);
 
       // selector de capas
       const baseLayers = {
-        "🗺️ Mapa": googleMap,
-        "🌍 Satélite": googleSat,
         "📖 OSM": osm,
+        "🌍 Satélite": esriSatellite,
       };
       L.control.layers(baseLayers).addTo(map);
 

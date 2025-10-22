@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-// import { User } from "@supabase/supabase-js" // Replaced with Kinde
 import { Loader2, Upload } from "lucide-react"
 
 import { Button } from "@/components/ui/button"

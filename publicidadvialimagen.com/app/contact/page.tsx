@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { MapPin, Phone, Mail, Clock, Building2 } from "lucide-react"
-// import { createClient } from '@supabase/supabase-js' // DISABLED - Migrated to Airtable
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,10 +11,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useMessages } from "@/hooks/use-messages"
 
-// Configuración de Supabase - DISABLED
-// const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-// const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-// const supabase = createClient(supabaseUrl, supabaseKey)
 
 // Dynamic ContactMap to avoid SSR issues
 const ContactMap = dynamic(() => import("@/components/maps/ContactMap"), {
@@ -487,7 +482,7 @@ export default function ContactPage() {
               <ContactMap 
                 lat={-16.506308}
                 lng={-68.139439}
-                title="Sucursal La Paz<br/>C. Nicolás Acosta Esq. Pedro Blanco<br/><a href='https://maps.app.goo.gl/mGtyd2gxh4B7a7T97' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver en Google Maps</a>"
+                title="Sucursal La Paz<br/>C. Nicolás Acosta Esq. Pedro Blanco<br/><a href='https://maps.app.goo.gl/mGtyd2gxh4B7a7T97' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver ubicación</a>"
                 height={300}
               />
             </div>
@@ -498,7 +493,7 @@ export default function ContactPage() {
               <ContactMap 
                 lat={-17.751314}
                 lng={-63.153452}
-                title="Sucursal Santa Cruz<br/>Avenida 2 de Agosto, Calle 6<br/><a href='https://maps.app.goo.gl/Ead7Bnyu5EG5jdQE9' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver en Google Maps</a>"
+                title="Sucursal Santa Cruz<br/>Avenida 2 de Agosto, Calle 6<br/><a href='https://maps.app.goo.gl/Ead7Bnyu5EG5jdQE9' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver ubicación</a>"
                 height={300}
               />
             </div>

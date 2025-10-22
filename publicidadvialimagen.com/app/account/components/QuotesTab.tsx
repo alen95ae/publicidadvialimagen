@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-// import { supabase } from "@/lib/supabase" // DISABLED - Migrated to Airtable
 import {
   Dialog,
   DialogContent,
@@ -26,9 +25,13 @@ interface Quote {
   email: string
   telefono: string
   mensaje: string
-  estado: 'pendiente' | 'respondida' | 'cerrada'
+  estado: 'Nueva' | 'En Proceso' | 'Respondida' | 'Cerrada' | 'pendiente' | 'respondida' | 'cerrada'
   respuesta?: string
   fecha_respuesta?: string
+  soporte?: string
+  fecha_inicio?: string
+  meses_alquiler?: number
+  servicios_adicionales?: string[]
 }
 
 interface QuotesTabProps {
@@ -47,21 +50,53 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
 
   const loadQuotes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('cotizaciones')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      console.log('🔄 Cargando cotizaciones para usuario:', userId)
       
-      setQuotes(data || [])
+      // Cargar cotizaciones desde Airtable
+      const response = await fetch('/api/cotizaciones', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      console.log('📡 Respuesta del API:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ Error del API:', errorData)
+        throw new Error(`Error ${response.status}: ${errorData.message || 'Error al cargar cotizaciones'}`)
+      }
+
+      const data = await response.json()
+      console.log('📊 Datos recibidos:', data)
+      
+      // Filtrar solo las cotizaciones del usuario actual
+      // El userId puede ser el email del usuario o un ID de usuario
+      const userQuotes = data.filter((quote: any) => 
+        quote.email === userId || 
+        quote.user_id === userId ||
+        quote.email?.toLowerCase() === userId?.toLowerCase()
+      )
+      
+      console.log('👤 UserId recibido:', userId)
+      console.log('📊 Total cotizaciones:', data.length)
+      console.log('👤 Cotizaciones del usuario:', userQuotes.length)
+      setQuotes(userQuotes)
     } catch (error: any) {
+      console.error('❌ Error cargando cotizaciones:', error)
+      
+      // Mostrar mensaje de error más específico
+      const errorMessage = error.message || "No se pudieron cargar las cotizaciones"
+      
       toast({
         variant: "destructive",
         title: "Error al cargar cotizaciones",
-        description: error.message,
+        description: errorMessage,
       })
+      
+      // En caso de error, mostrar lista vacía
+      setQuotes([])
     } finally {
       setLoading(false)
     }
@@ -69,10 +104,15 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
 
   const getStatusBadge = (estado: string) => {
     switch (estado) {
+      case 'Nueva':
       case 'pendiente':
-        return <Badge variant="secondary">Pendiente</Badge>
+        return <Badge variant="secondary">Nueva</Badge>
+      case 'En Proceso':
+        return <Badge variant="default" className="bg-blue-500">En Proceso</Badge>
+      case 'Respondida':
       case 'respondida':
         return <Badge variant="default" className="bg-green-500">Respondida</Badge>
+      case 'Cerrada':
       case 'cerrada':
         return <Badge variant="outline">Cerrada</Badge>
       default:
@@ -110,10 +150,10 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No tienes cotizaciones</h3>
             <p className="text-muted-foreground mb-4">
-              Solicita una cotización desde la página de soportes
+              Explora nuestros soportes publicitarios disponibles
             </p>
             <Button asChild>
-              <a href="/contact">Solicitar Cotización</a>
+              <a href="/vallas-publicitarias">Ver Soportes</a>
             </Button>
           </div>
         ) : (
@@ -149,6 +189,24 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-muted-foreground" />
                         <span>{quote.telefono}</span>
+                      </div>
+                    )}
+                    {quote.soporte && (
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span>Soporte: {quote.soporte}</span>
+                      </div>
+                    )}
+                    {quote.fecha_inicio && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>Inicio: {new Date(quote.fecha_inicio).toLocaleDateString('es-ES')}</span>
+                      </div>
+                    )}
+                    {quote.meses_alquiler && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>Duración: {quote.meses_alquiler} meses</span>
                       </div>
                     )}
                   </div>

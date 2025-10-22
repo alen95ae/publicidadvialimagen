@@ -326,7 +326,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-2xl font-bold">
-                  Reservar espacio
+                  Cotizar espacio
                 </CardTitle>
               </div>
             </CardHeader>

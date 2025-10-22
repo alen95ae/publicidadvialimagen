@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { api } from "@/lib/fetcher";
 
 export default function RegisterForm({ invite, presetEmail }: { invite?: string; presetEmail?: string }) {
   const [name, setName] = useState("");
@@ -23,9 +24,8 @@ export default function RegisterForm({ invite, presetEmail }: { invite?: string;
       return setErr("Las contraseñas no coinciden");
     }
     
-    const res = await fetch("/api/auth/register", {
+    const res = await api("/api/auth/register", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, password, inviteToken: invite }),
     });
     const data = await res.json();

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { api } from "@/lib/fetcher";
 
 type Rec = { id: string; fields: any };
 
@@ -12,7 +13,7 @@ export default function InvitationsManager() {
   const [err, setErr] = useState<string | null>(null);
 
   async function loadList() {
-    const res = await fetch("/api/admin/invitations/list");
+    const res = await api("/api/admin/invitations/list");
     const data = await res.json();
     if (res.ok) setList(data.records || []);
     else setErr(data.error || "Error listando invitaciones");
@@ -24,9 +25,8 @@ export default function InvitationsManager() {
     e.preventDefault(); setErr(null); setLinks([]);
     const arr = emails.split(/[,;\n]+/).map(s=>s.trim()).filter(Boolean);
     if (arr.length === 0) return setErr("Añade al menos un email");
-    const res = await fetch("/api/admin/invitations/create", {
+    const res = await api("/api/admin/invitations/create", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ emails: arr, role, expiresDays: days }),
     });
     const data = await res.json();
@@ -37,9 +37,8 @@ export default function InvitationsManager() {
   }
 
   async function revoke(id: string) {
-    const res = await fetch("/api/admin/invitations/revoke", {
+    const res = await api("/api/admin/invitations/revoke", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
     if (res.ok) loadList();

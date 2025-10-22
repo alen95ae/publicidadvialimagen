@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { api } from "@/lib/fetcher"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -94,9 +95,7 @@ export default function SoportesPage() {
       params.set('limit', '50')
       
       console.log('🔍 Fetching supports with params:', params.toString())
-      const response = await fetch(`/api/soportes?${params}`, {
-        credentials: 'include'
-      })
+      const response = await api(`/api/soportes?${params}`)
       console.log('📡 Response status:', response.status)
       
       if (response.ok) {
@@ -134,7 +133,7 @@ export default function SoportesPage() {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return
     
     try {
-      const response = await fetch(`/api/soportes/${id}`, { method: "DELETE" })
+      const response = await api(`/api/soportes/${id}`, { method: "DELETE" })
       if (response.ok) {
         toast.success("Soporte eliminado correctamente")
         fetchSupports()
@@ -195,9 +194,8 @@ export default function SoportesPage() {
     const ids = Object.keys(selected).filter(id => selected[id])
     
     try {
-      const response = await fetch('/api/soportes/bulk', {
+      const response = await api('/api/soportes/bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'update', data: patch })
       })
       
@@ -220,9 +218,8 @@ export default function SoportesPage() {
     const ids = Object.keys(selected).filter(id => selected[id])
     if (!confirm(`¿Eliminar ${ids.length} soportes?`)) return
     
-    await fetch('/api/soportes/bulk', {
+    await api('/api/soportes/bulk', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids, action: 'delete' })
     })
     fetchSupports()
@@ -234,9 +231,8 @@ export default function SoportesPage() {
     const ids = Object.keys(selected).filter(id => selected[id])
     
     try {
-      const response = await fetch('/api/soportes/bulk', {
+      const response = await api('/api/soportes/bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'duplicate' })
       })
       
@@ -265,9 +261,8 @@ export default function SoportesPage() {
   // Kanban helpers
   async function changeStatus(id: string, newStatus: keyof typeof STATUS_META) {
     try {
-      await fetch('/api/soportes/bulk', {
+      await api('/api/soportes/bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [id], action: 'update', data: { status: newStatus } })
       })
       await fetchSupports()
@@ -302,7 +297,7 @@ export default function SoportesPage() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/soportes/import', {
+      const response = await api('/api/soportes/import', {
         method: 'POST',
         body: formData
       })

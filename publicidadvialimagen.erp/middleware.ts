@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verify } from "./lib/auth/jwt";
 
 const PROTECTED_PREFIX = "/panel";
 
@@ -25,7 +26,7 @@ function startsWithAny(pathname: string, list: string[]) {
   return list.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Rutas públicas (no forzar auth ni tocar)
@@ -46,6 +47,25 @@ export function middleware(req: NextRequest) {
 
     // Si NO hay cookie, entonces sí → login
     if (!token) {
+      console.log("🔒 No token found, redirecting to login");
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.search = "";
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Verificar que el token sea válido
+    try {
+      const payload = await verify(token);
+      if (!payload) {
+        console.log("🔒 Invalid token, redirecting to login");
+        const loginUrl = req.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        return NextResponse.redirect(loginUrl);
+      }
+    } catch (error) {
+      console.log("🔒 Token verification failed:", error);
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.search = "";

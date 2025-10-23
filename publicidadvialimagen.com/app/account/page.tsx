@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { User, TrendingUp, FileText, MessageSquare, LogOut, Loader2 } from "lucide-react"
+import { User, FileText, MessageSquare, LogOut, Loader2 } from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 
 import ProfileTab from "./components/ProfileTab"
-import CampaignsTab from "./components/CampaignsTab"
 import QuotesTab from "./components/QuotesTab"
 import MessagesTab from "./components/MessagesTab"
 
@@ -81,7 +80,7 @@ export default function AccountPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Mi Cuenta</h1>
             <p className="text-muted-foreground mt-2">
-              Gestiona tu perfil, campañas y solicitudes
+              Gestiona tu perfil y solicitudes
             </p>
           </div>
           <Button 
@@ -98,14 +97,10 @@ export default function AccountPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
             <TabsTrigger value="profile" className="flex items-center gap-2 py-3">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Perfil</span>
-            </TabsTrigger>
-            <TabsTrigger value="campaigns" className="flex items-center gap-2 py-3">
-              <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Campañas</span>
             </TabsTrigger>
             <TabsTrigger value="quotes" className="flex items-center gap-2 py-3">
               <FileText className="h-4 w-4" />
@@ -122,9 +117,6 @@ export default function AccountPage() {
           </TabsContent>
 
 
-          <TabsContent value="campaigns">
-            <CampaignsTab userId={user.id} />
-          </TabsContent>
 
           <TabsContent value="quotes">
             <QuotesTab userId={user.email} />

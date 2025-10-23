@@ -228,7 +228,7 @@ export default function ContactPage() {
             <CardContent className="p-8">
               <h2 className="text-xl font-semibold mb-6 text-center">Síguenos en Redes Sociales</h2>
               
-              <div className="flex justify-center gap-8">
+              <div className="flex flex-col sm:flex-row justify-center gap-8">
                 {/* LinkedIn */}
                 <a href="https://www.linkedin.com/company/publicidad-vial-imagen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">

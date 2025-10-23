@@ -7,7 +7,6 @@ import "leaflet/dist/leaflet.css"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 import { Toaster } from "@/components/ui/toaster"
-import { CampaignsProvider } from "@/components/campaigns-provider"
 import { Providers } from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -48,14 +47,12 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Providers>
-          <CampaignsProvider>
-            <div className="flex min-h-screen flex-col">
-              <Header />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-            <Toaster />
-          </CampaignsProvider>
+          <div className="flex min-h-screen flex-col">
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
+          <Toaster />
         </Providers>
       </body>
     </html>

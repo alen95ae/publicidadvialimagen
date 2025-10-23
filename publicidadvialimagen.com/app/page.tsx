@@ -324,8 +324,19 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="relative min-h-[70vh] flex items-center overflow-hidden">
         <div className="container mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-          {/* Texto a la izquierda */}
-          <div className="text-left text-black z-10">
+          {/* Imagen a la izquierda */}
+          <div className="relative h-[300px] sm:h-[400px] rounded-2xl overflow-hidden order-1 lg:order-1">
+            <Image
+              src="/vallas_publicitarias_en_bolivia.png"
+              alt="Vallas Publicitarias en Bolivia"
+              fill
+              className="object-cover rounded-2xl"
+              priority
+            />
+          </div>
+          
+          {/* Texto a la derecha */}
+          <div className="text-left text-black z-10 order-2 lg:order-2">
             <h1 className="text-4xl md:text-6xl font-bold mb-6">
               Vallas Publicitarias en Bolivia
             </h1>
@@ -335,17 +346,6 @@ export default function HomePage() {
             <Button size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8 py-4" asChild>
               <Link href="/vallas-publicitarias">Explorar Vallas</Link>
             </Button>
-          </div>
-          
-          {/* Imagen a la derecha */}
-          <div className="relative h-[300px] sm:h-[400px] rounded-2xl overflow-hidden">
-            <Image
-              src="/vallas_publicitarias_en_bolivia.png"
-              alt="Vallas Publicitarias en Bolivia"
-              fill
-              className="object-cover rounded-2xl"
-              priority
-            />
           </div>
         </div>
       </section>

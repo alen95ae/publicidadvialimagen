@@ -432,7 +432,7 @@ export default function VallasPublicitariasPage() {
   }>({
     cities: [],
     formats: [],
-    availability: [],
+    availability: ["available"], // Por defecto mostrar solo "Disponible"
   })
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -478,11 +478,34 @@ export default function VallasPublicitariasPage() {
       }
     }
 
+    // Lógica de filtrado de disponibilidad según los nuevos requerimientos
     if (selectedFilters.availability.length > 0) {
-      if (selectedFilters.availability.includes("available") && !billboard.available) {
-        return false
+      // Si está marcado "Disponible ahora" - mostrar solo los disponibles
+      if (selectedFilters.availability.includes("available") && !selectedFilters.availability.includes("coming-soon")) {
+        if (!billboard.available) {
+          return false
+        }
       }
-      if (selectedFilters.availability.includes("coming-soon") && billboard.available) {
+      // Si está marcado "Próximamente" - mostrar solo ocupados y reservados
+      else if (selectedFilters.availability.includes("coming-soon") && !selectedFilters.availability.includes("available")) {
+        if (billboard.available) {
+          return false
+        }
+        // Solo mostrar si el estado es "Ocupado" o "Reservado"
+        if (billboard.status !== 'Ocupado' && billboard.status !== 'Reservado') {
+          return false
+        }
+      }
+      // Si están marcados ambos - mostrar disponibles, ocupados y reservados
+      else if (selectedFilters.availability.includes("available") && selectedFilters.availability.includes("coming-soon")) {
+        // Mostrar todos excepto "No disponible"
+        if (billboard.status === 'No disponible') {
+          return false
+        }
+      }
+    } else {
+      // Si no hay filtros de disponibilidad - mostrar todos excepto "No disponible"
+      if (billboard.status === 'No disponible') {
         return false
       }
     }
@@ -665,7 +688,7 @@ export default function VallasPublicitariasPage() {
     setSelectedFilters({
       cities: [],
       formats: [],
-      availability: [],
+      availability: ["available"], // Mantener "Disponible" por defecto
     })
     setMinPrice("")
     setMaxPrice("")

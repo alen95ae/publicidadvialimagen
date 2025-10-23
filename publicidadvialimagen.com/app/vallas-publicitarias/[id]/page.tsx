@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Megaphone, Monitor } from "lucide-react"
+import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Monitor } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { useCampaignsContext } from "@/components/campaigns-provider"
 import { useBillboards } from "@/hooks/use-billboards"
 
 // Dynamic import para el mapa
@@ -42,7 +41,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   const [selectedMonths, setSelectedMonths] = useState("1")
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const { addToCampaign } = useCampaignsContext()
   const { billboards, loading } = useBillboards()
   
   // Buscar el billboard por ID
@@ -123,43 +121,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
     return endDate.toLocaleDateString('es-ES')
   }
 
-  const handleAddToCampaign = () => {
-    if (!selectedStartDate) {
-      alert("Por favor selecciona una fecha de inicio")
-      return
-    }
-
-    const campaignItem = {
-      id: `${displayData.id}-${Date.now()}`,
-      billboardId: displayData.id,
-      name: displayData.name,
-      city: displayData.city,
-      dimensions: displayData.technicalSpecs.dimension,
-      impacts: displayData.technicalSpecs.impactos,
-      type: displayData.technicalSpecs.tipo,
-      startDate: selectedStartDate,
-      months: parseInt(selectedMonths),
-      image: displayData.images[0] || "/placeholder.svg"
-    }
-
-    console.log('Intentando añadir a campaña:', campaignItem)
-    addToCampaign(campaignItem)
-    
-    // Mostrar mensaje de confirmación
-    const button = document.querySelector('[data-campaign-button]') as HTMLButtonElement
-    if (button) {
-      const originalText = button.textContent
-      button.textContent = "✓ Añadido a campaña"
-      button.disabled = true
-      button.className = button.className.replace('border-[#D54644] text-[#D54644]', 'border-green-500 text-green-500')
-      
-      setTimeout(() => {
-        button.textContent = originalText
-        button.disabled = false
-        button.className = button.className.replace('border-green-500 text-green-500', 'border-[#D54644] text-[#D54644]')
-      }, 2000)
-    }
-  }
 
   const handleImageClick = (index: number) => {
     setSelectedImageIndex(index)
@@ -405,16 +366,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
               </div>
 
 
-              {/* Botón añadir a campaña */}
-              <Button 
-                variant="outline" 
-                className="w-full border-[#D54644] text-[#D54644] hover:bg-[#D54644] hover:text-white"
-                onClick={handleAddToCampaign}
-                data-campaign-button
-              >
-                <Megaphone className="mr-2 h-4 w-4" />
-                Añadir a campaña
-              </Button>
 
               {/* Botón de cotización */}
               <Button 

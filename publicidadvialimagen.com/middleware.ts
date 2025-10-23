@@ -17,8 +17,15 @@ export function middleware(req: NextRequest) {
   // Redirección 301 desde URLs antiguas /product-page/ hacia /vallas-publicitarias/
   if (pathname.startsWith("/product-page/")) {
     const slug = pathname.replace("/product-page/", "");
-    const url = new URL(`/vallas-publicitarias/${slug}`, req.url);
-    return NextResponse.redirect(url, { status: 301 });
+    // Si hay un slug específico, intentar redirigir a la página individual
+    if (slug) {
+      const url = new URL(`/vallas-publicitarias/${slug}`, req.url);
+      return NextResponse.redirect(url, { status: 301 });
+    } else {
+      // Si no hay slug, redirigir a la página principal de vallas
+      const url = new URL("/vallas-publicitarias", req.url);
+      return NextResponse.redirect(url, { status: 301 });
+    }
   }
   
   const match = protectedRoutes.find((r) => pathname.startsWith(r.path));

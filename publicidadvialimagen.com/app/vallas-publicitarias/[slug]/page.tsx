@@ -88,15 +88,18 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
     )
   }
 
-  // Mostrar error si no se encuentra
+  // Redirigir a la página principal si no se encuentra el soporte
   if (!billboard) {
+    // Redirección automática a la página principal de vallas publicitarias
+    useEffect(() => {
+      window.location.href = "/vallas-publicitarias";
+    }, []);
+    
     return (
       <div className="container px-4 py-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Soporte no encontrado</h2>
-          <Button asChild>
-            <Link href="/vallas-publicitarias">Volver a espacios publicitarios</Link>
-          </Button>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirigiendo a espacios publicitarios...</p>
         </div>
       </div>
     )

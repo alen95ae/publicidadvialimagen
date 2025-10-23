@@ -18,6 +18,23 @@ import { useBillboards } from "@/hooks/use-billboards"
 import { CITY_COORDINATES } from "@/lib/city-coordinates"
 import dynamic from "next/dynamic"
 
+// Función para crear slug SEO-friendly
+function createSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[áàäâã]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöôõ]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n')
+    .replace(/[ç]/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 const LeafletHybridMap = dynamic(() => import("@/components/maps/LeafletHybridMap"), {
   ssr: false,
   loading: () => <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">Cargando mapa...</div>
@@ -908,7 +925,7 @@ export default function VallasPublicitariasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {sortedBillboards.map((billboard) => (
                 <Card key={billboard.id} className="overflow-hidden">
-                  <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
+                  <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
                     <Image
                       src={billboard.images?.[0] || "/placeholder.svg"}
                       alt={billboard.name}
@@ -933,12 +950,12 @@ export default function VallasPublicitariasPage() {
                           asChild
                         >
                           {billboard.available ? (
-                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                            <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                               <FileText className="mr-1 h-3 w-3" />
                               Cotizar
                             </Link>
                           ) : (
-                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                            <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                               <Eye className="mr-1 h-3 w-3" />
                               Ver más
                             </Link>

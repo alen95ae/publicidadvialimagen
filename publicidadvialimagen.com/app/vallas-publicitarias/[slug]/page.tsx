@@ -30,9 +30,26 @@ const LeafletHybridMap = dynamic(
   }
 )
 
+// Función para crear slug SEO-friendly (misma que en la página principal)
+function createSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[áàäâã]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöôõ]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n')
+    .replace(/[ç]/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 interface BillboardDetailPageProps {
   params: {
-    id: string
+    slug: string
   }
 }
 
@@ -43,8 +60,11 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const { billboards, loading } = useBillboards()
   
-  // Buscar el billboard por ID
-  const billboard = billboards.find(b => b.id === params.id)
+  // Buscar el billboard por slug
+  const billboard = billboards.find(b => {
+    const expectedSlug = createSlug(b.name)
+    return expectedSlug === params.slug
+  })
   
   // Log para depuración
   useEffect(() => {
@@ -121,11 +141,9 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
     return endDate.toLocaleDateString('es-ES')
   }
 
-
   const handleImageClick = (index: number) => {
     setSelectedImageIndex(index)
   }
-
 
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
@@ -365,8 +383,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                 </div>
               </div>
 
-
-
               {/* Botón de cotización */}
               <Button 
                 className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
@@ -400,7 +416,6 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           </Card>
         </div>
       </div>
-
     </div>
   )
 }

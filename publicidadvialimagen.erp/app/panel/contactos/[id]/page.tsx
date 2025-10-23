@@ -9,9 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Building2, User, Home } from "lucide-react"
+import { ArrowLeft, Save, Building2, User } from "lucide-react"
 import { toast } from "sonner"
-import Sidebar from "@/components/sidebar"
 
 interface SalesOwner {
   id: string
@@ -138,28 +137,21 @@ export default function EditarContactoPage() {
 
   if (loading) {
     return (
-      <Sidebar>
+      <div className="p-6">
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center text-gray-500">Cargando...</div>
         </div>
-      </Sidebar>
+      </div>
     )
   }
 
   return (
-    <Sidebar>
+    <div className="p-6">
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link 
-                href="/panel" 
-                className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
-                title="Ir al panel principal"
-              >
-                <Home className="w-5 h-5" />
-              </Link>
               <div className="text-xl font-bold text-slate-800">Contactos</div>
               <div className="flex items-center gap-6 ml-4">
                 <Link 
@@ -422,6 +414,6 @@ export default function EditarContactoPage() {
         </form>
         </main>
       </div>
-    </Sidebar>
+    </div>
   )
 }

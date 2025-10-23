@@ -1,8 +1,29 @@
+import ConstructionPage from "@/components/construction-page"
+
 export default function SitioPage() {
+  const features = [
+    {
+      iconName: "globe",
+      title: "Gestión Web",
+      description: "Control completo del contenido del sitio web"
+    },
+    {
+      iconName: "edit",
+      title: "Editor",
+      description: "Editor visual para modificar páginas y contenido"
+    },
+    {
+      iconName: "settings",
+      title: "Configuración",
+      description: "Ajustes SEO, dominio y configuraciones técnicas"
+    }
+  ]
+
   return (
-    <div className="p-8 text-center text-gray-600">
-      <h1 className="text-2xl font-semibold mb-3">🚧 Módulo en construcción</h1>
-      <p>Esta sección aún no existe. Usa Soportes, Contactos u otro módulo activo.</p>
-    </div>
-  );
+    <ConstructionPage
+      title="Sitio Web"
+      description="Desarrollando un módulo de gestión web completo que te permitirá administrar todo el contenido de tu sitio web, desde páginas hasta configuraciones SEO y técnicas."
+      features={features}
+    />
+  )
 }

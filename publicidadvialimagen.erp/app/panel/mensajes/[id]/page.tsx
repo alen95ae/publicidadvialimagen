@@ -18,11 +18,9 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Home,
   ChevronDown
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Sidebar from "@/components/sidebar"
 
 // Tipos para los mensajes y respuestas
 interface Message {
@@ -153,21 +151,21 @@ export default function MensajeDetailPage() {
   // Mostrar loading
   if (isLoading) {
     return (
-      <Sidebar>
+      <div className="p-6">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644] mx-auto mb-4"></div>
             <p className="text-gray-600">Cargando mensaje...</p>
           </div>
         </div>
-      </Sidebar>
+      </div>
     )
   }
 
   // Mostrar error
   if (error || !mensajeData) {
     return (
-      <Sidebar>
+      <div className="p-6">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
@@ -181,23 +179,16 @@ export default function MensajeDetailPage() {
             </Link>
           </div>
         </div>
-      </Sidebar>
+      </div>
     )
   }
 
   return (
-    <Sidebar>
+    <div className="p-6">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/panel" 
-              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
-              title="Ir al panel principal"
-            >
-              <Home className="w-5 h-5" />
-            </Link>
             <div className="text-xl font-bold text-slate-800">Mensajes</div>
           </div>
           <div className="flex items-center gap-4">
@@ -327,6 +318,6 @@ export default function MensajeDetailPage() {
 
         </div>
       </main>
-    </Sidebar>
+    </div>
   )
 }

@@ -1,8 +1,29 @@
+import ConstructionPage from "@/components/construction-page"
+
 export default function AjustesPage() {
+  const features = [
+    {
+      iconName: "settings",
+      title: "Configuración",
+      description: "Ajustes generales del sistema y preferencias"
+    },
+    {
+      iconName: "shield",
+      title: "Seguridad",
+      description: "Configuración de permisos y seguridad"
+    },
+    {
+      iconName: "database",
+      title: "Respaldo",
+      description: "Gestión de respaldos y restauración de datos"
+    }
+  ]
+
   return (
-    <div className="p-8 text-center text-gray-600">
-      <h1 className="text-2xl font-semibold mb-3">🚧 Módulo en construcción</h1>
-      <p>Esta sección aún no existe. Usa Soportes, Contactos u otro módulo activo.</p>
-    </div>
-  );
+    <ConstructionPage
+      title="Ajustes"
+      description="Desarrollando un módulo de configuración completo que te permitirá personalizar el sistema, gestionar usuarios, configurar seguridad y administrar todas las opciones del ERP."
+      features={features}
+    />
+  )
 }

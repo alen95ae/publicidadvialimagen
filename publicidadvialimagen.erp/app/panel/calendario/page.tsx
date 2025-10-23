@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
 import { verifySession } from "@/lib/auth"
-import Sidebar from "@/components/sidebar"
 import CalendarClient from "./CalendarClient"
 import { getEvents, getEventsByDate } from "@/lib/calendar-api"
 import { Card, CardContent } from "@/components/ui/card"
@@ -37,7 +36,7 @@ export default async function CalendarioPage() {
   const completedCount = todayEvents.filter((e) => e.status === "completado").length
 
   return (
-    <Sidebar>
+    <div className="p-6">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -111,7 +110,7 @@ export default async function CalendarioPage() {
         {/* Calendario */}
         <CalendarClient initialEvents={events} userId={userId} />
       </div>
-    </Sidebar>
+    </div>
   )
 }
 

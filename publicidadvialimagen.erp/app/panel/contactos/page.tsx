@@ -14,9 +14,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Home, Upload, Users, Merge, AlertTriangle } from "lucide-react"
+import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Upload, Users, Merge, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
-import Sidebar from "@/components/sidebar"
 
 interface Contact {
   id: string
@@ -505,18 +504,11 @@ export default function ContactosPage() {
   }
 
   return (
-    <Sidebar>
+    <div className="p-6">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/panel" 
-              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
-              title="Ir al panel principal"
-            >
-              <Home className="w-5 h-5" />
-            </Link>
             <div className="text-xl font-bold text-slate-800">Contactos</div>
             <div className="flex items-center gap-6 ml-4">
               <Link 
@@ -1093,6 +1085,6 @@ export default function ContactosPage() {
           </DialogContent>
         </Dialog>
       </main>
-    </Sidebar>
+    </div>
   )
 }

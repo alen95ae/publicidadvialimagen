@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
-import Sidebar from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, Users, Package, MessageSquare, Calendar, Handshake, Monitor, LineChart, Hammer, Wrench, Palette, Globe, Receipt, UserCog, Settings } from "lucide-react";
 
@@ -9,10 +8,6 @@ export default async function PanelPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get("session")?.value;
   
-  if (!token) {
-    redirect("/login");
-  }
-
   let user;
   try {
     user = await verifySession(token);
@@ -21,7 +16,6 @@ export default async function PanelPage() {
   }
 
   return (
-    <Sidebar>
       <div className="p-6">
         {/* Header */}
         <div className="mb-8">
@@ -178,6 +172,5 @@ export default async function PanelPage() {
           </div>
         </div>
       </div>
-    </Sidebar>
   );
 }

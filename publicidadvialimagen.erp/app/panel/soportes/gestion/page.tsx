@@ -15,11 +15,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Home, Monitor, DollarSign, Calendar, Copy, Upload } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Copy, Upload } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
-import Sidebar from "@/components/sidebar"
 
 // Constantes para colores de estado (formato Airtable)
 const STATUS_META = {
@@ -388,18 +387,11 @@ export default function SoportesPage() {
   const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosí", "Tarija", "Oruro", "Beni", "Pando"]
 
   return (
-    <Sidebar>
+    <div className="p-6">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/panel" 
-              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
-              title="Ir al panel principal"
-            >
-              <Home className="w-5 h-5" />
-            </Link>
             <div className="text-xl font-bold text-slate-800">Soportes</div>
             <div className="flex items-center gap-6 ml-4">
               <Link 
@@ -897,6 +889,6 @@ export default function SoportesPage() {
           </div>
         )}
       </main>
-    </Sidebar>
+    </div>
   )
 }

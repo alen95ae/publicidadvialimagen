@@ -11,9 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, MapPin, Calculator, Home } from "lucide-react"
+import { ArrowLeft, Save, MapPin, Calculator } from "lucide-react"
 import { toast } from "sonner"
-import Sidebar from "@/components/sidebar"
 import dynamic from 'next/dynamic'
 
 const InteractiveMap = dynamic(() => import('@/components/interactive-map'), { ssr: false })
@@ -286,19 +285,12 @@ export default function NuevoSoportePage() {
     : 'hidden'
 
   return (
-    <Sidebar>
+    <div className="p-6">
       <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/panel" 
-              className="bg-[#D54644] hover:bg-[#D54644]/90 text-white p-2 rounded-lg transition-colors"
-              title="Ir al panel principal"
-            >
-              <Home className="w-5 h-5" />
-            </Link>
             <div className="text-xl font-bold text-slate-800">Soportes</div>
             <div className="flex items-center gap-6 ml-4">
               <Link 
@@ -642,6 +634,6 @@ export default function NuevoSoportePage() {
         </form>
       </main>
       </div>
-    </Sidebar>
+    </div>
   )
 }

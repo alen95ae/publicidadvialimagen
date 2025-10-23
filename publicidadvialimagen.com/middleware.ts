@@ -13,6 +13,14 @@ const protectedRoutes = [
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  
+  // Redirección 301 desde URLs antiguas /product-page/ hacia /vallas-publicitarias/
+  if (pathname.startsWith("/product-page/")) {
+    const slug = pathname.replace("/product-page/", "");
+    const url = new URL(`/vallas-publicitarias/${slug}`, req.url);
+    return NextResponse.redirect(url, { status: 301 });
+  }
+  
   const match = protectedRoutes.find((r) => pathname.startsWith(r.path));
   if (!match) return NextResponse.next();
 
@@ -39,5 +47,11 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/panel/:path*", "/erp/:path*", "/dashboard/:path*", "/admin/:path*"],
+  matcher: [
+    "/panel/:path*", 
+    "/erp/:path*", 
+    "/dashboard/:path*", 
+    "/admin/:path*",
+    "/product-page/:path*"
+  ],
 };

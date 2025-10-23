@@ -42,6 +42,20 @@ export async function createUser(email: string, password: string, name?: string)
   return { id: rec.id, fields: rec.fields };
 }
 
+export async function createUserWithRole(email: string, password: string, name?: string, role: string = "usuario") {
+  const hash = await bcrypt.hash(password, 10);
+  const payload = {
+    Email: email.trim(),
+    PasswordHash: hash,
+    Nombre: name || "",
+    Rol: role,
+    Activo: true,
+  };
+  const res = await airtableCreate(USERS, [{ fields: payload }]);
+  const rec = res?.records?.[0];
+  return { id: rec.id, fields: rec.fields };
+}
+
 export async function signSession(user: { id: string; email: string; role?: string; name?: string }) {
   return await sign({
     sub: user.id,

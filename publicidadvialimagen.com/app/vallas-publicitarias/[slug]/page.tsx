@@ -32,7 +32,8 @@ const LeafletHybridMap = dynamic(
 )
 
 // Función para crear slug SEO-friendly (misma que en la página principal)
-function createSlug(text: string): string {
+function createSlug(text: string | undefined | null): string {
+  if (!text) return ''
   return text
     .toLowerCase()
     .trim()

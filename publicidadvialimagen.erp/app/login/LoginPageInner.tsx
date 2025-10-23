@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogIn, UserPlus } from "lucide-react";
+import { LogIn } from "lucide-react";
 import LoginForm from "@/components/auth/LoginForm";
 import { useSearchParams } from "next/navigation";
 
@@ -26,15 +26,6 @@ export default function LoginPageInner() {
         <CardContent className="space-y-3">
           <LoginForm next={next} />
           
-          <div className="text-center">
-            <p className="text-sm text-gray-600">¿No tienes cuenta?</p>
-            <Button variant="outline" className="w-full h-11 text-base font-medium mt-2" size="lg" asChild>
-              <a href="/register">
-                <UserPlus className="mr-2 h-5 w-5" />
-                Registrarse
-              </a>
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

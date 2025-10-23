@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Obtener el código real del soporte desde Airtable
-    let codigoSoporte = soporte; // Por defecto usar el ID
+    // Obtener el código del soporte desde Airtable
+    let codigoSoporte = soporte; // Por defecto usar el ID recibido
     try {
       console.log('🔍 Buscando código del soporte:', soporte);
       const soporteData = await airtableList(TABLE_SOPORTES, { filterByFormula: `{ID} = "${soporte}"` });
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         codigoSoporte = soporteData.records[0].fields['Código'] || soporte;
         console.log('✅ Código del soporte encontrado:', codigoSoporte);
       } else {
-        console.log('⚠️ No se encontró el código del soporte, usando ID:', soporte);
+        console.log('⚠️ No se encontró el código del soporte, usando ID recibido:', soporte);
       }
     } catch (error) {
       console.log('⚠️ Error obteniendo código del soporte:', error);
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         'Contacto': solicitud.contacto,
         'Email': solicitud.email,
         'Teléfono': solicitud.telefono,
-        'Soporte': solicitud.soporte,
+        'Soporte': solicitud.soporte, // Código del soporte como texto
         'Meses Alquiler': solicitud.mesesAlquiler
       })
       
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         'Estado': 'Nueva',
         'Fecha Inicio': solicitud.fechaInicio,
         'Meses alquiler': parseInt(solicitud.mesesAlquiler), // Asegurar que sea número
-        'Soporte': [solicitud.soporte] // Convertir a array de record IDs
+        'Soporte': solicitud.soporte // Código del soporte como texto
       }
       
       console.log('🔢 Valor de mesesAlquiler:', solicitud.mesesAlquiler, 'tipo:', typeof solicitud.mesesAlquiler)

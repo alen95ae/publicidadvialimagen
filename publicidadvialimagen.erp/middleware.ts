@@ -45,6 +45,24 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Proteger la página de registro - solo accesible con token válido
+  if (pathname === "/register") {
+    const token = req.nextUrl.searchParams.get("token");
+    const email = req.nextUrl.searchParams.get("email");
+    
+    if (!token || !email) {
+      console.log("🔒 Register access denied - no token or email");
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.search = "";
+      return NextResponse.redirect(loginUrl);
+    }
+    
+    // Permitir acceso - la validación se hará en el componente
+    console.log("✅ Register access allowed with token");
+    return NextResponse.next();
+  }
+
   // Solo protegemos /panel/*
   if (pathname.startsWith(PROTECTED_PREFIX)) {
     const token = req.cookies.get("session")?.value;
@@ -78,6 +96,27 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(loginUrl);
       }
       
+      // 🔒 Verificación especial para módulo de ajustes - solo administradores
+      if (pathname.startsWith("/panel/ajustes") || pathname.startsWith("/api/ajustes")) {
+        if (payload.role !== "admin") {
+          console.log("🔒 Access denied to ajustes - user role:", payload.role);
+          console.log("🔒 Available roles for ajustes: admin");
+          console.log("🔒 Current user role:", payload.role);
+          
+          // Si está intentando acceder a la página principal de ajustes, redirigir a access-denied
+          if (pathname === "/panel/ajustes") {
+            const deniedUrl = req.nextUrl.clone();
+            deniedUrl.pathname = "/panel/ajustes/access-denied";
+            deniedUrl.search = "";
+            return NextResponse.redirect(deniedUrl);
+          }
+          
+          // Para APIs, devolver error 403
+          return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+        }
+        console.log("✅ Admin access granted to ajustes for user:", payload.email);
+      }
+      
       console.log("✅ Token valid for user:", payload.email);
     } catch (error: any) {
       console.log("🔒 Token verification failed:", error.message);
@@ -101,5 +140,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/panel/:path*", "/api/erp/:path*"],
+  matcher: ["/panel/:path*", "/api/erp/:path*", "/register", "/api/ajustes/:path*"],
 };

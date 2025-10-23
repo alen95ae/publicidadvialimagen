@@ -262,6 +262,11 @@ export default function SolicitarCotizacionPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Campos ocultos para confundir al autocompletado */}
+                <div style={{ display: 'none' }}>
+                  <input type="email" name="fake-email" autoComplete="off" />
+                  <input type="text" name="fake-field" autoComplete="off" />
+                </div>
                 <div>
                   <Label htmlFor="empresa">Empresa *</Label>
                   <Input
@@ -301,6 +306,8 @@ export default function SolicitarCotizacionPage() {
 
                 <div>
                   <Label htmlFor="email">Email *</Label>
+                  {/* Campo oculto para confundir al autocompletado */}
+                  <input type="text" style={{ display: 'none' }} autoComplete="off" />
                   <Input
                     id="email"
                     name="email"
@@ -309,6 +316,9 @@ export default function SolicitarCotizacionPage() {
                     onChange={handleInputChange}
                     placeholder="tu@empresa.com"
                     required
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-form-type="other"
                   />
                 </div>
 

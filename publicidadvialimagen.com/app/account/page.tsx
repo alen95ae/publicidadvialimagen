@@ -56,7 +56,7 @@ export default function AccountPage() {
   // Redirigir si no está logueado
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login")
+      router.push("/login?next=/account")
     }
   }, [user, loading, router])
 

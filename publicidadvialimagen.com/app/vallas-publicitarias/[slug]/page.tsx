@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Monitor } from "lucide-react"
 
@@ -58,7 +59,9 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   const [selectedMonths, setSelectedMonths] = useState("1")
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+  const [shouldRedirect, setShouldRedirect] = useState(false)
   const { billboards, loading } = useBillboards()
+  const router = useRouter()
   
   // Buscar el billboard por slug
   const billboard = billboards.find(b => {
@@ -73,6 +76,14 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
       console.log('🖼️ Imágenes del billboard:', billboard.images)
     }
   }, [billboard])
+
+  // Redirección cuando no se encuentra el soporte
+  useEffect(() => {
+    if (!loading && !billboard) {
+      setShouldRedirect(true)
+      router.push("/vallas-publicitarias")
+    }
+  }, [loading, billboard, router])
 
   // Mostrar loading
   if (loading) {
@@ -89,12 +100,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   }
 
   // Redirigir a la página principal si no se encuentra el soporte
-  if (!billboard) {
-    // Redirección automática a la página principal de vallas publicitarias
-    useEffect(() => {
-      window.location.href = "/vallas-publicitarias";
-    }, []);
-    
+  if (!billboard || shouldRedirect) {
     return (
       <div className="container px-4 py-8">
         <div className="text-center">

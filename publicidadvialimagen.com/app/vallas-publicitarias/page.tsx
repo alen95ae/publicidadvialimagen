@@ -18,6 +18,23 @@ import { useBillboards } from "@/hooks/use-billboards"
 import { CITY_COORDINATES } from "@/lib/city-coordinates"
 import dynamic from "next/dynamic"
 
+// Función para crear slug SEO-friendly
+function createSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[áàäâã]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöôõ]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n')
+    .replace(/[ç]/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 const LeafletHybridMap = dynamic(() => import("@/components/maps/LeafletHybridMap"), {
   ssr: false,
   loading: () => <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">Cargando mapa...</div>
@@ -432,7 +449,7 @@ export default function VallasPublicitariasPage() {
   }>({
     cities: [],
     formats: [],
-    availability: [],
+    availability: ["available"], // Por defecto mostrar solo "Disponible"
   })
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -478,11 +495,34 @@ export default function VallasPublicitariasPage() {
       }
     }
 
+    // Lógica de filtrado de disponibilidad según los nuevos requerimientos
     if (selectedFilters.availability.length > 0) {
-      if (selectedFilters.availability.includes("available") && !billboard.available) {
-        return false
+      // Si está marcado "Disponible ahora" - mostrar solo los disponibles
+      if (selectedFilters.availability.includes("available") && !selectedFilters.availability.includes("coming-soon")) {
+        if (!billboard.available) {
+          return false
+        }
       }
-      if (selectedFilters.availability.includes("coming-soon") && billboard.available) {
+      // Si está marcado "Próximamente" - mostrar solo ocupados y reservados
+      else if (selectedFilters.availability.includes("coming-soon") && !selectedFilters.availability.includes("available")) {
+        if (billboard.available) {
+          return false
+        }
+        // Solo mostrar si el estado es "Ocupado" o "Reservado"
+        if (billboard.status !== 'Ocupado' && billboard.status !== 'Reservado') {
+          return false
+        }
+      }
+      // Si están marcados ambos - mostrar disponibles, ocupados y reservados
+      else if (selectedFilters.availability.includes("available") && selectedFilters.availability.includes("coming-soon")) {
+        // Mostrar todos excepto "No disponible"
+        if (billboard.status === 'No disponible') {
+          return false
+        }
+      }
+    } else {
+      // Si no hay filtros de disponibilidad - mostrar todos excepto "No disponible"
+      if (billboard.status === 'No disponible') {
         return false
       }
     }
@@ -665,7 +705,7 @@ export default function VallasPublicitariasPage() {
     setSelectedFilters({
       cities: [],
       formats: [],
-      availability: [],
+      availability: ["available"], // Mantener "Disponible" por defecto
     })
     setMinPrice("")
     setMaxPrice("")
@@ -885,7 +925,7 @@ export default function VallasPublicitariasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {sortedBillboards.map((billboard) => (
                 <Card key={billboard.id} className="overflow-hidden">
-                  <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
+                  <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
                     <Image
                       src={billboard.images?.[0] || "/placeholder.svg"}
                       alt={billboard.name}
@@ -910,12 +950,12 @@ export default function VallasPublicitariasPage() {
                           asChild
                         >
                           {billboard.available ? (
-                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                            <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                               <FileText className="mr-1 h-3 w-3" />
                               Cotizar
                             </Link>
                           ) : (
-                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                            <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                               <Eye className="mr-1 h-3 w-3" />
                               Ver más
                             </Link>

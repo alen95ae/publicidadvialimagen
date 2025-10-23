@@ -3,13 +3,12 @@
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { ShoppingCart, Search, Menu, X, Megaphone } from "lucide-react"
+import { ShoppingCart, Search, Menu, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import UserMenu from "@/components/user-menu"
-import { useCampaignsContext } from "@/components/campaigns-provider"
 
 // Componente de la bandera de Bolivia
 const BoliviaFlag = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -32,7 +31,6 @@ export default function Header() {
   const router = useRouter()
   const pathname = usePathname()
   const searchRef = useRef<HTMLDivElement>(null)
-  const { getCampaignCount } = useCampaignsContext()
 
   // Sugerencias predefinidas
   const allSuggestions = [
@@ -163,15 +161,6 @@ export default function Header() {
             <span className="text-sm">Español (Bolivia)</span>
           </Button>
           <UserMenu />
-          <Button variant="ghost" size="icon" className="relative" asChild>
-            <Link href="/campaigns">
-              <Megaphone className="h-5 w-5" />
-              <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-primary">
-                {getCampaignCount()}
-              </Badge>
-              <span className="sr-only">Mi Campaña</span>
-            </Link>
-          </Button>
           <Button variant="ghost" size="icon" className="relative" asChild>
             <Link href="/cart">
               <ShoppingCart className="h-5 w-5" />

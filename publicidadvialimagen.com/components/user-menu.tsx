@@ -1,6 +1,6 @@
 "use client"
 
-import { User, FileText, Settings, LogOut, TrendingUp, MessageSquare } from "lucide-react"
+import { User, FileText, Settings, LogOut, MessageSquare } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -82,17 +82,6 @@ export default function UserMenu() {
         >
           <User className="mr-2 h-4 w-4" />
           <span>Perfil</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            window.location.href = "/account#campaigns"
-          }} 
-          className="cursor-pointer"
-        >
-          <TrendingUp className="mr-2 h-4 w-4" />
-          <span>Campañas</span>
         </DropdownMenuItem>
         <DropdownMenuItem 
           onClick={(e) => {

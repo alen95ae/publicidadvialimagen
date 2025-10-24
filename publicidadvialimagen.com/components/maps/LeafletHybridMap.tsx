@@ -251,11 +251,29 @@ export default function LeafletHybridMap({
       points.forEach((p, index) => {
         console.log(`Adding marker ${index + 1}:`, p);
         
+        // Función para crear slug SEO-friendly
+        const createSlug = (text) => {
+          if (!text) return '';
+          return text
+            .toLowerCase()
+            .trim()
+            .replace(/[áàäâã]/g, 'a')
+            .replace(/[éèëê]/g, 'e')
+            .replace(/[íìïî]/g, 'i')
+            .replace(/[óòöôõ]/g, 'o')
+            .replace(/[úùüû]/g, 'u')
+            .replace(/[ñ]/g, 'n')
+            .replace(/[ç]/g, 'c')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/[\s-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        };
+
         // Crear popup con información completa
         const popupContent = `
           <div style="min-width: 160px; max-width: 180px;">
             <div style="margin-bottom: 4px;">
-              <a href="/vallas-publicitarias/${p.id}" 
+              <a href="/vallas-publicitarias/${createSlug(p.title)}" 
                  style="color: #dc2626; text-decoration: none; font-size: 12px; font-weight: 600; display: block;"
                  onmouseover="this.style.textDecoration='underline'" 
                  onmouseout="this.style.textDecoration='none'">

@@ -43,6 +43,58 @@ const cities = [
   { name: "Cobija", image: "/vallas_publicitarias_cobija.png" },
 ]
 
+const advertisingCategories = [
+  {
+    id: 1,
+    name: "Unipolar",
+    icon: Monitor,
+    description: "",
+    image: "/Unipolares-en-bolivia.png",
+  },
+  {
+    id: 2,
+    name: "Bipolar",
+    icon: MonitorPlay,
+    description: "",
+    image: "/Bipolares-en-bolivia.png",
+  },
+  {
+    id: 3,
+    name: "Tripolar",
+    icon: Building2,
+    description: "",
+    image: "/Tripolares-en-bolivia.png",
+  },
+  {
+    id: 4,
+    name: "Mural",
+    icon: TruckIcon,
+    description: "",
+    image: "/mural-en-bolivia.png",
+  },
+  {
+    id: 5,
+    name: "Mega Valla",
+    icon: Monitor,
+    description: "",
+    image: "/megavalla-en-bolivia.png",
+  },
+  {
+    id: 6,
+    name: "Cartelera",
+    icon: MonitorPlay,
+    description: "",
+    image: "/cartelera-en-bolivia.png",
+  },
+  {
+    id: 7,
+    name: "Paleta",
+    icon: Building2,
+    description: "",
+    image: "/paleta-en-bolivia.png",
+  },
+]
+
 function CitiesCarousel() {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { 
@@ -95,6 +147,72 @@ function CitiesCarousel() {
         onClick={scrollNext}
         className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         aria-label="Siguiente ciudad"
+      >
+        <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+    </div>
+  )
+}
+
+function ServicesCarousel() {
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { 
+      loop: true,
+      align: 'center',
+      slidesToScroll: 1,
+      containScroll: 'trimSnaps',
+    }
+  )
+
+  const scrollPrev = useCallback(() => {
+    if (emblaApi) emblaApi.scrollPrev()
+  }, [emblaApi])
+
+  const scrollNext = useCallback(() => {
+    if (emblaApi) emblaApi.scrollNext()
+  }, [emblaApi])
+
+  return (
+    <div className="relative">
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="flex gap-4">
+          {advertisingCategories.map((category) => (
+            <div key={category.id} className="flex-[0_0_auto] min-w-[180px]">
+              <Link 
+                href={`/vallas-publicitarias?formats=${encodeURIComponent(category.name)}`} 
+                className="text-center group block"
+              >
+                <div className="relative w-40 h-40 mx-auto mb-3 rounded-lg overflow-hidden shadow-md group-hover:shadow-lg transition-all">
+                  <Image
+                    src={category.image || "/placeholder.svg"}
+                    alt={category.name}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground group-hover:text-red-600 transition-colors">
+                  {category.name}
+                </p>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Botones de navegación */}
+      <button
+        onClick={scrollPrev}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Servicio anterior"
+      >
+        <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+      
+      <button
+        onClick={scrollNext}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Siguiente servicio"
       >
         <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -284,36 +402,6 @@ export default function HomePage() {
     }
   }
 
-  const advertisingCategories = [
-    {
-      id: 1,
-      name: "Vallas Publicitarias",
-      icon: Monitor,
-      description: "",
-      image: "/vallas_publicitarias_imagen.png",
-    },
-    {
-      id: 2,
-      name: "Pantallas LED",
-      icon: MonitorPlay,
-      description: "",
-      image: "/pantallas_publicitarias_imagen.png",
-    },
-    {
-      id: 3,
-      name: "Murales",
-      icon: Building2,
-      description: "",
-      image: "/murales_publicitarios_imagen.png",
-    },
-    {
-      id: 4,
-      name: "Publicidad Móvil",
-      icon: TruckIcon,
-      description: "",
-      image: "/publicidad_movil_imagen.png",
-    },
-  ]
 
   // Seleccionar los primeros 7 soportes disponibles como destacados
   const featuredBillboards = billboards.filter(b => b.available).slice(0, 7)
@@ -365,38 +453,7 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
             Nuestros Servicios de Publicidad Exterior
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {advertisingCategories.map((category) => {
-              const IconComponent = category.icon
-              return (
-                <Link
-                  key={category.id}
-                  href={`/vallas-publicitarias?tipo_soporte=${encodeURIComponent(category.name)}`}
-                  className="group relative overflow-hidden rounded-lg bg-background shadow-md transition-all hover:shadow-lg hover:scale-105"
-                >
-                  <div className="aspect-[4/3] relative">
-                    <Image
-                      src={category.image || "/placeholder.svg"}
-                      alt={category.name}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-110"
-                    />
-                    {category.name !== "Pantallas LED" && (
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                    )}
-                    <div className="absolute top-4 left-4">
-                      <div className="w-12 h-12 bg-primary/90 rounded-lg flex items-center justify-center">
-                        <IconComponent className="h-6 w-6 text-primary-foreground" />
-                      </div>
-                    </div>
-                    <div className="absolute bottom-0 w-full p-4">
-                      <h3 className="text-lg font-semibold text-white mb-1">{category.name}</h3>
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
+          <ServicesCarousel />
         </div>
       </section>
 

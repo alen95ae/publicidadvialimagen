@@ -20,17 +20,26 @@ export default function Footer() {
           <div className="space-y-4">
             <h3 className="text-sm font-medium">Servicios</h3>
             <nav className="flex flex-col space-y-2">
-              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
-                Vallas Publicitarias
+              <Link href="/vallas-publicitarias?formats=Unipolar" className="text-sm text-muted-foreground hover:text-primary">
+                Unipolar
               </Link>
-              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
-                Pantallas LED
+              <Link href="/vallas-publicitarias?formats=Bipolar" className="text-sm text-muted-foreground hover:text-primary">
+                Bipolar
               </Link>
-              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
-                Murales
+              <Link href="/vallas-publicitarias?formats=Tripolar" className="text-sm text-muted-foreground hover:text-primary">
+                Tripolar
               </Link>
-              <Link href="/vallas-publicitarias" className="text-sm text-muted-foreground hover:text-primary">
-                Publicidad Móvil
+              <Link href="/vallas-publicitarias?formats=Mural" className="text-sm text-muted-foreground hover:text-primary">
+                Mural
+              </Link>
+              <Link href="/vallas-publicitarias?formats=Mega Valla" className="text-sm text-muted-foreground hover:text-primary">
+                Mega Valla
+              </Link>
+              <Link href="/vallas-publicitarias?formats=Cartelera" className="text-sm text-muted-foreground hover:text-primary">
+                Cartelera
+              </Link>
+              <Link href="/vallas-publicitarias?formats=Paleta" className="text-sm text-muted-foreground hover:text-primary">
+                Paleta
               </Link>
             </nav>
           </div>

@@ -19,7 +19,8 @@ import { CITY_COORDINATES } from "@/lib/city-coordinates"
 import dynamic from "next/dynamic"
 
 // Función para crear slug SEO-friendly
-function createSlug(text: string): string {
+function createSlug(text: string | undefined | null): string {
+  if (!text) return ''
   return text
     .toLowerCase()
     .trim()
@@ -254,20 +255,21 @@ function normalizeCityName(city: string): string {
 function normalizeFormatName(format: string): string {
   const formatMap: Record<string, string> = {
     // Mapear variantes a los nombres estándar
-    'Vallas Publicitarias': 'Vallas Publicitarias',
-    'vallas publicitarias': 'Vallas Publicitarias',
-    'Valla': 'Vallas Publicitarias',
-    'valla': 'Vallas Publicitarias',
-    'Pantallas LED': 'Pantallas LED',
-    'pantallas led': 'Pantallas LED',
-    'pantalla led': 'Pantallas LED',
-    'Murales': 'Murales',
-    'murales': 'Murales',
-    'Mural': 'Murales',              // Singular desde Airtable
-    'mural': 'Murales',              // Singular desde Airtable
-    'Publicidad Móvil': 'Publicidad Móvil',
-    'publicidad móvil': 'Publicidad Móvil',
-    'publicidad movil': 'Publicidad Móvil',
+    'Unipolar': 'Unipolar',
+    'unipolar': 'Unipolar',
+    'Bipolar': 'Bipolar',
+    'bipolar': 'Bipolar',
+    'Tripolar': 'Tripolar',
+    'tripolar': 'Tripolar',
+    'Mural': 'Mural',
+    'mural': 'Mural',
+    'Mega Valla': 'Mega Valla',
+    'mega valla': 'Mega Valla',
+    'megavalla': 'Mega Valla',
+    'Cartelera': 'Cartelera',
+    'cartelera': 'Cartelera',
+    'Paleta': 'Paleta',
+    'paleta': 'Paleta',
   }
   return formatMap[format] || format
 }
@@ -389,7 +391,7 @@ function FilterSidebar({
         <div className="space-y-3">
           <h3 className="text-sm font-medium">Tipo de Soporte</h3>
           <div className="space-y-2">
-            {["Vallas Publicitarias", "Pantallas LED", "Murales", "Publicidad Móvil"].map((format) => (
+            {["Unipolar", "Bipolar", "Tripolar", "Mural", "Mega Valla", "Cartelera", "Paleta"].map((format) => (
               <div key={format} className="flex items-center space-x-2">
                 <Checkbox
                   id={`format-${format}`}
@@ -599,10 +601,8 @@ export default function VallasPublicitariasPage() {
   useEffect(() => {
     const cityParam = searchParams.get('city')
     const searchParam = searchParams.get('search')
-    // ✅ Leer tipo_soporte de la URL (nueva única fuente de verdad)
-    const tipoSoporteParam = searchParams.get('tipo_soporte')
-    // Mantener compatibilidad con "format" antiguo
-    const formatParam = searchParams.get('format')
+    // Leer formatos de la URL (igual que city)
+    const formatsParam = searchParams.get('formats')
     
     
     if (cityParam) {
@@ -622,15 +622,9 @@ export default function VallasPublicitariasPage() {
       }
     }
     
-    // Priorizar tipo_soporte sobre format
-    if (tipoSoporteParam) {
-      const normalizedFormat = normalizeFormatName(tipoSoporteParam)
-      setSelectedFilters(prev => ({
-        ...prev,
-        formats: [normalizedFormat]
-      }))
-    } else if (formatParam) {
-      const normalizedFormat = normalizeFormatName(formatParam)
+    // Procesar formatos igual que city
+    if (formatsParam) {
+      const normalizedFormat = normalizeFormatName(formatsParam)
       setSelectedFilters(prev => ({
         ...prev,
         formats: [normalizedFormat]

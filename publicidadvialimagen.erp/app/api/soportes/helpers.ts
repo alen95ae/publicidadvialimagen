@@ -1,10 +1,13 @@
 import { airtable } from '@/lib/airtable'
 
 export const TIPOS_OFICIALES = [
-  'Vallas Publicitarias',
-  'Pantallas LED',
-  'Murales',
-  'Publicidad Móvil',
+  'Unipolar',
+  'Bipolar',
+  'Tripolar',
+  'Mural',
+  'Mega Valla',
+  'Cartelera',
+  'Paleta',
 ] as const
 export type TipoOficial = typeof TIPOS_OFICIALES[number]
 
@@ -19,14 +22,17 @@ export const ESTADOS_VALIDOS = [
 export type EstadoValido = typeof ESTADOS_VALIDOS[number]
 
 export function normalizeTipo(raw?: string): TipoOficial {
-  if (!raw) return 'Vallas Publicitarias'
+  if (!raw) return 'Unipolar'
   const v = String(raw).trim().toLowerCase()
-  if (['valla','vallas','vallas publicitarias','bipolar','unipolar','tripular','mega valla','caminera'].includes(v)) return 'Vallas Publicitarias'
-  if (['pantalla','pantalla led','pantallas led','pantalla_led','led'].includes(v)) return 'Pantallas LED'
-  if (['mural','murales','marquesina'].includes(v)) return 'Murales'
-  if (['publicidad movil','publicidad móvil','movil','móvil','mobile','pasacalles','otro'].includes(v)) return 'Publicidad Móvil'
+  if (['unipolar','unipolares'].includes(v)) return 'Unipolar'
+  if (['bipolar','bipolares'].includes(v)) return 'Bipolar'
+  if (['tripolar','tripolares'].includes(v)) return 'Tripolar'
+  if (['mural','murales'].includes(v)) return 'Mural'
+  if (['mega valla','mega vallas','megavalla','megavallas'].includes(v)) return 'Mega Valla'
+  if (['cartelera','carteleras'].includes(v)) return 'Cartelera'
+  if (['paleta','paletas'].includes(v)) return 'Paleta'
   const eq = TIPOS_OFICIALES.find(t => t.toLowerCase() === v)
-  return eq ?? 'Vallas Publicitarias'
+  return eq ?? 'Unipolar'
 }
 
 const num = (val:any): number | null => {

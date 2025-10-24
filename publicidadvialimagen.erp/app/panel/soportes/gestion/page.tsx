@@ -29,7 +29,7 @@ const STATUS_META = {
 } as const
 
 // Opciones de tipo
-const TYPE_OPTIONS = ['Vallas Publicitarias','Pantallas LED','Murales','Publicidad Móvil'] as const
+const TYPE_OPTIONS = ['Unipolar','Bipolar','Tripolar','Mural','Mega Valla','Cartelera','Paleta'] as const
 
 interface Support {
   id: string

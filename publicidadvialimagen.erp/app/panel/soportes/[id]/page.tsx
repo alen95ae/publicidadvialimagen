@@ -23,7 +23,7 @@ const GmapsLinkPaste = dynamic(() => import("@/components/maps/GmapsLinkPaste"),
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [
-  'Vallas Publicitarias', 'Pantallas LED', 'Murales', 'Publicidad Móvil'
+  'Unipolar', 'Bipolar', 'Tripolar', 'Mural', 'Mega Valla', 'Cartelera', 'Paleta'
 ] as const
 
 const STATUS_META = {

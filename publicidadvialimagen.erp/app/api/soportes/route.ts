@@ -24,7 +24,8 @@ function normalizeCityName(city: string): string[] {
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
+    const url = new URL(request.url)
+    const searchParams = url.searchParams
     const query = searchParams.get('q') || ''
     const statusFilter = searchParams.get('status') || ''
     const cityFilter = searchParams.get('city') || ''

@@ -29,6 +29,24 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useMessages } from "@/hooks/use-messages"
 import { useBillboards, type Billboard } from "@/hooks/use-billboards"
 
+// Función para crear slug SEO-friendly
+function createSlug(text: string | undefined | null): string {
+  if (!text) return ''
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[áàäâã]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöôõ]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n')
+    .replace(/[ç]/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 
 const cities = [
   { name: "La Paz", image: "/vallas_publicitarias_la_paz.png" },
@@ -245,7 +263,7 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] })
           {billboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
+                <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
@@ -270,12 +288,12 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] })
                         asChild
                       >
                         {billboard.available ? (
-                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                             <FileText className="mr-1 h-3 w-3" />
                             Cotizar
                           </Link>
                         ) : (
-                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                             <Eye className="mr-1 h-3 w-3" />
                             Ver más
                           </Link>

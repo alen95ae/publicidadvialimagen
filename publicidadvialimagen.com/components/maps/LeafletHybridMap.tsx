@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { createSlug } from '@/lib/url-utils';
 
 export type SupportPoint = {
   id: string;
@@ -21,11 +22,13 @@ export default function LeafletHybridMap({
   height = 520,
   center,
   zoom,
+  locale = 'es',
 }: {
   points: SupportPoint[];
   height?: number;
   center?: [number, number];
   zoom?: number;
+  locale?: 'es' | 'en';
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mapId] = useState(() => `hybridMap_${Math.random().toString(36).substr(2, 9)}`);
@@ -251,29 +254,13 @@ export default function LeafletHybridMap({
       points.forEach((p, index) => {
         console.log(`Adding marker ${index + 1}:`, p);
         
-        // Función para crear slug SEO-friendly
-        const createSlug = (text) => {
-          if (!text) return '';
-          return text
-            .toLowerCase()
-            .trim()
-            .replace(/[áàäâã]/g, 'a')
-            .replace(/[éèëê]/g, 'e')
-            .replace(/[íìïî]/g, 'i')
-            .replace(/[óòöôõ]/g, 'o')
-            .replace(/[úùüû]/g, 'u')
-            .replace(/[ñ]/g, 'n')
-            .replace(/[ç]/g, 'c')
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/[\s-]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-        };
-
         // Crear popup con información completa
+        const slug = createSlug(p.title || 'Soporte Publicitario')
+        const basePath = locale === 'en' ? '/en/billboards' : '/vallas-publicitarias'
         const popupContent = `
           <div style="min-width: 160px; max-width: 180px;">
             <div style="margin-bottom: 4px;">
-              <a href="/vallas-publicitarias/${p.id}" 
+              <a href="${basePath}/${slug}" 
                  style="color: #dc2626; text-decoration: none; font-size: 12px; font-weight: 600; display: block;"
                  onmouseover="this.style.textDecoration='underline'" 
                  onmouseout="this.style.textDecoration='none'">

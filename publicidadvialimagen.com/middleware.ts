@@ -28,6 +28,30 @@ export function middleware(req: NextRequest) {
     }
   }
   
+  // Redirección 301 desde URLs antiguas de Wix /products/ hacia /vallas-publicitarias/
+  if (pathname.startsWith("/products/")) {
+    const slug = pathname.replace("/products/", "");
+    if (slug) {
+      const url = new URL(`/vallas-publicitarias/${slug}`, req.url);
+      return NextResponse.redirect(url, { status: 301 });
+    } else {
+      const url = new URL("/vallas-publicitarias", req.url);
+      return NextResponse.redirect(url, { status: 301 });
+    }
+  }
+  
+  // Redirección 301 desde URLs antiguas de Wix /vallas/ hacia /vallas-publicitarias/
+  if (pathname.startsWith("/vallas/")) {
+    const slug = pathname.replace("/vallas/", "");
+    if (slug) {
+      const url = new URL(`/vallas-publicitarias/${slug}`, req.url);
+      return NextResponse.redirect(url, { status: 301 });
+    } else {
+      const url = new URL("/vallas-publicitarias", req.url);
+      return NextResponse.redirect(url, { status: 301 });
+    }
+  }
+  
   const match = protectedRoutes.find((r) => pathname.startsWith(r.path));
   if (!match) return NextResponse.next();
 
@@ -59,6 +83,8 @@ export const config = {
     "/erp/:path*", 
     "/dashboard/:path*", 
     "/admin/:path*",
-    "/product-page/:path*"
+    "/product-page/:path*",
+    "/products/:path*",
+    "/vallas/:path*"
   ],
 };

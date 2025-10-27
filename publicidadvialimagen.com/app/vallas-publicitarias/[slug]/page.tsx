@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { useBillboards } from "@/hooks/use-billboards"
 import { useTranslations } from "@/hooks/use-translations"
+import { createSlug } from "@/lib/url-utils"
 
 // Dynamic import para el mapa
 const LeafletHybridMap = dynamic(
@@ -33,23 +34,6 @@ const LeafletHybridMap = dynamic(
   }
 )
 
-// Función para crear slug SEO-friendly (misma que en la página principal)
-function createSlug(text: string | undefined | null): string {
-  if (!text) return ''
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[áàäâã]/g, 'a')
-    .replace(/[éèëê]/g, 'e')
-    .replace(/[íìïî]/g, 'i')
-    .replace(/[óòöôõ]/g, 'o')
-    .replace(/[úùüû]/g, 'u')
-    .replace(/[ñ]/g, 'n')
-    .replace(/[ç]/g, 'c')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/[\s-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
 
 // Componente para mostrar soportes similares de la misma ciudad
 function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboards: any[], currentBillboardId: string }) {
@@ -194,8 +178,25 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
       found: matchesSlug || matchesId || matchesIdString || matchesCode
     })
     
+    // Priorizar búsqueda por slug (URLs SEO-friendly)
     return matchesSlug || matchesId || matchesIdString || matchesCode
   })
+
+  // Log adicional para debug en producción
+  useEffect(() => {
+    console.log('🔍 DEBUG BILLBOARD SEARCH:', {
+      paramsSlug: params.slug,
+      totalBillboards: billboards.length,
+      loading,
+      billboardFound: !!billboard,
+      firstFewBillboards: billboards.slice(0, 3).map(b => ({
+        id: b.id,
+        code: b.code,
+        name: b.name,
+        slug: createSlug(b.name)
+      }))
+    })
+  }, [params.slug, billboards, loading, billboard])
   
   // Log para depuración
   useEffect(() => {
@@ -213,12 +214,16 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
         billboard,
         paramsSlug: params.slug,
         totalBillboards: billboards.length,
-        billboardIds: billboards.slice(0, 5).map(b => b.id)
+        billboardIds: billboards.slice(0, 5).map(b => b.id),
+        allBillboardIds: billboards.map(b => b.id),
+        allBillboardCodes: billboards.map(b => b.code),
+        allBillboardSlugs: billboards.slice(0, 5).map(b => createSlug(b.name))
       })
       setShouldRedirect(true)
+      // Redirigir a la página de vallas publicitarias, no a la home
       router.push("/vallas-publicitarias")
     }
-  }, [loading, billboard, router])
+  }, [loading, billboard, router, billboards, params.slug])
 
   // Mostrar loading
   if (loading) {
@@ -241,6 +246,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Redirigiendo a espacios publicitarios...</p>
+          <p className="text-sm text-gray-500 mt-2">Soporte no encontrado: {params.slug}</p>
         </div>
       </div>
     )

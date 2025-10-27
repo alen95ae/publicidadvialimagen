@@ -17,25 +17,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useBillboards } from "@/hooks/use-billboards"
 import { useTranslations } from "@/hooks/use-translations"
 import { CITY_COORDINATES } from "@/lib/city-coordinates"
+import { getBillboardUrl } from "@/lib/url-utils"
 import dynamic from "next/dynamic"
-
-// Función para crear slug SEO-friendly
-function createSlug(text: string | undefined | null): string {
-  if (!text) return ''
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[áàäâã]/g, 'a')
-    .replace(/[éèëê]/g, 'e')
-    .replace(/[íìïî]/g, 'i')
-    .replace(/[óòöôõ]/g, 'o')
-    .replace(/[úùüû]/g, 'u')
-    .replace(/[ñ]/g, 'n')
-    .replace(/[ç]/g, 'c')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/[\s-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
 
 const LeafletHybridMap = dynamic(() => import("@/components/maps/LeafletHybridMap"), {
   ssr: false,
@@ -451,7 +434,7 @@ function FilterSidebar({
 export default function VallasPublicitariasPage() {
   const searchParams = useSearchParams()
   const { billboards: allBillboards, loading, error } = useBillboards()
-  const { t } = useTranslations()
+  const { t, locale } = useTranslations()
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [minPriceInput, setMinPriceInput] = useState("")
@@ -840,6 +823,7 @@ export default function VallasPublicitariasPage() {
                 height={400}
                 center={mapCenter}
                 zoom={mapZoom}
+                locale={locale}
               />
             )}
           </div>
@@ -933,7 +917,7 @@ export default function VallasPublicitariasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {sortedBillboards.map((billboard) => (
                 <Card key={billboard.id} className="overflow-hidden">
-                  <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
+                  <Link href={getBillboardUrl(billboard.name, locale)} className="w-full h-[147px] relative block">
                     <Image
                       src={billboard.images?.[0] || "/placeholder.svg"}
                       alt={billboard.name}
@@ -958,12 +942,12 @@ export default function VallasPublicitariasPage() {
                           asChild
                         >
                           {billboard.available ? (
-                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                            <Link href={getBillboardUrl(billboard.name, locale)}>
                               <FileText className="mr-1 h-3 w-3" />
                               {t('billboards.requestQuote')}
                             </Link>
                           ) : (
-                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                            <Link href={getBillboardUrl(billboard.name, locale)}>
                               <Eye className="mr-1 h-3 w-3" />
                               {t('common.view')}
                             </Link>

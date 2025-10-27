@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
 import { createBillboardIcon } from "./billboard-icon"
+import { getBillboardUrl } from "@/lib/url-utils"
 
 interface BillboardLocation {
   id: string | number
@@ -24,9 +25,10 @@ interface DynamicMapProps {
   selectedCity?: string
   isFullscreen?: boolean
   zoom?: number
+  locale?: 'es' | 'en'
 }
 
-export default function DynamicMap({ billboards, selectedCity, isFullscreen = false, zoom }: DynamicMapProps) {
+export default function DynamicMap({ billboards, selectedCity, isFullscreen = false, zoom, locale = 'es' }: DynamicMapProps) {
   // Coordinates for Bolivia cities (approximate centers)
   const cityCoordinates: Record<string, [number, number]> = {
     "La Paz": [-16.5000, -68.1500],
@@ -109,7 +111,7 @@ export default function DynamicMap({ billboards, selectedCity, isFullscreen = fa
               <Popup>
                 <div className="p-2 min-w-[250px]">
                   <Link 
-                    href={`/vallas-publicitarias/${billboard.id}`}
+                    href={getBillboardUrl(billboard.name, locale)}
                     className="font-semibold text-sm mb-2 text-primary hover:underline block"
                   >
                     {billboard.name}

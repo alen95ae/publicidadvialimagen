@@ -29,24 +29,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useMessages } from "@/hooks/use-messages"
 import { useBillboards, type Billboard } from "@/hooks/use-billboards"
 import { useTranslations } from "@/hooks/use-translations"
-
-// Función para crear slug SEO-friendly
-function createSlug(text: string | undefined | null): string {
-  if (!text) return ''
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[áàäâã]/g, 'a')
-    .replace(/[éèëê]/g, 'e')
-    .replace(/[íìïî]/g, 'i')
-    .replace(/[óòöôõ]/g, 'o')
-    .replace(/[úùüû]/g, 'u')
-    .replace(/[ñ]/g, 'n')
-    .replace(/[ç]/g, 'c')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/[\s-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
+import { getBillboardUrl } from "@/lib/url-utils"
 
 
 const cities = [
@@ -241,7 +224,7 @@ function ServicesCarousel({ t }: { t: (key: string) => string }) {
   )
 }
 
-function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[], t: (key: string) => string }) {
+function FeaturedBillboardsCarousel({ billboards, t, locale }: { billboards: Billboard[], t: (key: string) => string, locale: 'es' | 'en' }) {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { 
       loop: true,
@@ -266,7 +249,7 @@ function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[]
           {billboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
+                <Link href={getBillboardUrl(billboard.name, locale)} className="w-full h-[147px] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
@@ -291,12 +274,12 @@ function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[]
                         asChild
                       >
                         {billboard.available ? (
-                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                          <Link href={getBillboardUrl(billboard.name, locale)}>
                             <FileText className="mr-1 h-3 w-3" />
                             {t('home.featuredBillboards.quote')}
                           </Link>
                         ) : (
-                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                          <Link href={getBillboardUrl(billboard.name, locale)}>
                             <Eye className="mr-1 h-3 w-3" />
                             {t('home.featuredBillboards.viewMore')}
                           </Link>
@@ -351,7 +334,7 @@ export default function HomePage() {
   }, [])
   const { addMessage } = useMessages()
   const { billboards, loading, error } = useBillboards()
-  const { t } = useTranslations()
+  const { t, locale } = useTranslations()
   
   // Debug logs
   useEffect(() => {
@@ -494,7 +477,7 @@ export default function HomePage() {
             </div>
           ) : featuredBillboards.length > 0 ? (
             <>
-              <FeaturedBillboardsCarousel billboards={featuredBillboards} t={t} />
+              <FeaturedBillboardsCarousel billboards={featuredBillboards} t={t} locale={locale} />
               <div className="mt-10 text-center">
                 <Button
                   variant="outline"

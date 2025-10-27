@@ -933,7 +933,7 @@ export default function VallasPublicitariasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {sortedBillboards.map((billboard) => (
                 <Card key={billboard.id} className="overflow-hidden">
-                  <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
+                  <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
                     <Image
                       src={billboard.images?.[0] || "/placeholder.svg"}
                       alt={billboard.name}
@@ -958,12 +958,12 @@ export default function VallasPublicitariasPage() {
                           asChild
                         >
                           {billboard.available ? (
-                            <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
                               <FileText className="mr-1 h-3 w-3" />
                               Cotizar
                             </Link>
                           ) : (
-                            <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                            <Link href={`/vallas-publicitarias/${billboard.id}`}>
                               <Eye className="mr-1 h-3 w-3" />
                               Ver más
                             </Link>

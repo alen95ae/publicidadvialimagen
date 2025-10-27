@@ -87,7 +87,7 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
           {similarBillboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
+                <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
@@ -112,12 +112,12 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
                         asChild
                       >
                         {billboard.available ? (
-                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <FileText className="mr-1 h-3 w-3" />
                             Cotizar
                           </Link>
                         ) : (
-                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <Eye className="mr-1 h-3 w-3" />
                             Ver más
                           </Link>
@@ -173,10 +173,10 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
     window.scrollTo(0, 0)
   }, [])
   
-  // Buscar el billboard por slug
+  // Buscar el billboard por slug o ID
   const billboard = billboards.find(b => {
     const expectedSlug = createSlug(b.name)
-    return expectedSlug === params.slug
+    return expectedSlug === params.slug || b.id === params.slug
   })
   
   // Log para depuración

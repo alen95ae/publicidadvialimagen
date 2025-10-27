@@ -266,7 +266,7 @@ function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[]
           {billboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
+                <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
@@ -291,12 +291,12 @@ function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[]
                         asChild
                       >
                         {billboard.available ? (
-                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <FileText className="mr-1 h-3 w-3" />
                             {t('billboards.requestQuote')}
                           </Link>
                         ) : (
-                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <Eye className="mr-1 h-3 w-3" />
                             {t('common.view')}
                           </Link>
@@ -482,7 +482,7 @@ export default function HomePage() {
       <section className="py-12 md:py-16">
         <div className="container px-4 md:px-6">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
-            {t('billboards.title')}
+            {t('home.featuredBillboards.title')}
           </h2>
           {loading ? (
             <div className="text-center py-12">

@@ -273,7 +273,7 @@ export default function LeafletHybridMap({
         const popupContent = `
           <div style="min-width: 160px; max-width: 180px;">
             <div style="margin-bottom: 4px;">
-              <a href="/vallas-publicitarias/${createSlug(p.title)}" 
+              <a href="/vallas-publicitarias/${p.id}" 
                  style="color: #dc2626; text-decoration: none; font-size: 12px; font-weight: 600; display: block;"
                  onmouseover="this.style.textDecoration='underline'" 
                  onmouseout="this.style.textDecoration='none'">

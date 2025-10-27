@@ -36,10 +36,13 @@ export const translations = {
     // Homepage
     home: {
       hero: {
-        title: 'Espacios Publicitarios Premium',
-        subtitle: 'Potencia tu marca con nuestras vallas publicitarias estratégicamente ubicadas en las mejores ubicaciones de Bolivia',
-        cta: 'Ver Vallas Disponibles',
+        title: 'Vallas publicitarias en Bolivia',
+        subtitle: 'Potencia tu marca con nuestros espacios publicitarios estratégicamente ubicados en las mejores ubicaciones de Bolivia',
+        cta: 'Explorar Soportes',
         ctaSecondary: 'Solicitar Cotización'
+      },
+      featuredBillboards: {
+        title: 'Espacios publicitarios destacados'
       },
       features: {
         title: '¿Por qué elegirnos?',
@@ -60,7 +63,7 @@ export const translations = {
     // Billboards
     billboards: {
       title: 'Vallas Publicitarias',
-      subtitle: 'Descubre nuestras ubicaciones estratégicas',
+      subtitle: 'Compara soportes disponibles en tu ciudad',
       search: 'Buscar ubicación...',
       filter: 'Filtrar por',
       city: 'Ciudad',
@@ -83,7 +86,7 @@ export const translations = {
       // Página de vallas publicitarias
       page: {
         title: 'Vallas Publicitarias',
-        subtitle: 'Descubre nuestras ubicaciones estratégicas',
+        subtitle: 'Compara soportes disponibles en tu ciudad',
         breadcrumb: 'Vallas Publicitarias',
         loadingMap: 'Cargando mapa...',
         showMap: 'Mostrar mapa',
@@ -155,7 +158,7 @@ export const translations = {
     // Print Shop
     printShop: {
       title: 'Impresión Digital',
-      subtitle: 'Servicios de impresión profesional',
+      subtitle: 'Nuestras categorias de vallas publicitarias',
       services: {
         banners: 'Banners',
         posters: 'Afiches',
@@ -505,6 +508,9 @@ export const translations = {
         cta: 'View Available Billboards',
         ctaSecondary: 'Request Quote'
       },
+      featuredBillboards: {
+        title: 'Featured Advertising Spaces'
+      },
       features: {
         title: 'Why choose us?',
         strategic: {
@@ -524,7 +530,7 @@ export const translations = {
     // Billboards
     billboards: {
       title: 'Billboards',
-      subtitle: 'Discover our strategic locations',
+      subtitle: 'Compare available supports in your city',
       search: 'Search location...',
       filter: 'Filter by',
       city: 'City',
@@ -547,7 +553,7 @@ export const translations = {
       // Billboards page
       page: {
         title: 'Billboards',
-        subtitle: 'Discover our strategic locations',
+        subtitle: 'Compare available supports in your city',
         breadcrumb: 'Billboards',
         loadingMap: 'Loading map...',
         showMap: 'Show map',
@@ -619,7 +625,7 @@ export const translations = {
     // Print Shop
     printShop: {
       title: 'Digital Printing',
-      subtitle: 'Professional printing services',
+      subtitle: 'Our billboard advertising categories',
       services: {
         banners: 'Banners',
         posters: 'Posters',

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useLayoutEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
-import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Monitor } from "lucide-react"
+import useEmblaCarousel from 'embla-carousel-react'
+import { Calendar, MapPin, ArrowLeft, Ruler, Building, Lightbulb, CheckCircle, Eye, Calendar as CalendarIcon, FileText, Monitor, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { useBillboards } from "@/hooks/use-billboards"
+import { useTranslations } from "@/hooks/use-translations"
 
 // Dynamic import para el mapa
 const LeafletHybridMap = dynamic(
@@ -49,6 +51,107 @@ function createSlug(text: string | undefined | null): string {
     .replace(/^-+|-+$/g, '')
 }
 
+// Componente para mostrar soportes similares de la misma ciudad
+function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboards: any[], currentBillboardId: string }) {
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { 
+      loop: true,
+      align: 'start',
+      slidesToScroll: 1,
+      containScroll: 'trimSnaps',
+    }
+  )
+
+  const scrollPrev = useCallback(() => {
+    if (emblaApi) emblaApi.scrollPrev()
+  }, [emblaApi])
+
+  const scrollNext = useCallback(() => {
+    if (emblaApi) emblaApi.scrollNext()
+  }, [emblaApi])
+
+  // Filtrar soportes de la misma ciudad, excluyendo el actual
+  const similarBillboards = billboards.filter(b => 
+    b.id !== currentBillboardId && 
+    b.city === billboards.find(current => current.id === currentBillboardId)?.city
+  ).slice(0, 8) // Limitar a 8 soportes
+
+  if (similarBillboards.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="relative">
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="flex gap-4 pb-4">
+          {similarBillboards.map((billboard) => (
+            <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
+              <Card className="overflow-hidden">
+                <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`} className="w-full h-[147px] relative block">
+                  <Image
+                    src={billboard.images?.[0] || "/placeholder.svg"}
+                    alt={billboard.name}
+                    width={280}
+                    height={147}
+                    className="h-full w-full object-cover hover:opacity-90 transition-opacity"
+                  />
+                </Link>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Ruler className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {billboard.dimensions || "Medidas no disponibles"}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 text-xs"
+                        asChild
+                      >
+                        {billboard.available ? (
+                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                            <FileText className="mr-1 h-3 w-3" />
+                            Cotizar
+                          </Link>
+                        ) : (
+                          <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
+                            <Eye className="mr-1 h-3 w-3" />
+                            Ver más
+                          </Link>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Botones de navegación */}
+      <button
+        onClick={scrollPrev}
+        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Anterior"
+      >
+        <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+      
+      <button
+        onClick={scrollNext}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Siguiente"
+      >
+        <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+      </button>
+    </div>
+  )
+}
+
 interface BillboardDetailPageProps {
   params: {
     slug: string
@@ -62,7 +165,13 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [shouldRedirect, setShouldRedirect] = useState(false)
   const { billboards, loading } = useBillboards()
+  const { t } = useTranslations()
   const router = useRouter()
+  
+  // Scroll al inicio inmediatamente
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
   
   // Buscar el billboard por slug
   const billboard = billboards.find(b => {
@@ -125,9 +234,9 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   }
 
   const additionalServices = [
-    { id: "diseno", name: "Diseño gráfico" },
-    { id: "impresion", name: "Impresión de lona" },
-    { id: "instalacion", name: "Instalación en valla" }
+    { id: "diseno", name: t('billboards.page.graphicDesign') },
+    { id: "impresion", name: t('billboards.page.bannerPrinting') },
+    { id: "instalacion", name: t('billboards.page.billboardInstallation') }
   ]
 
   const handleServiceToggle = (serviceId: string) => {
@@ -156,7 +265,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   }
 
   return (
-    <div className="container px-4 py-8 md:px-6 md:py-12">
+    <div className="container px-4 py-8 md:px-6 md:py-12" style={{ scrollBehavior: 'auto' }}>
       {/* Breadcrumb */}
       <div className="mb-6">
         <div className="flex items-center text-sm text-muted-foreground mb-4">
@@ -173,7 +282,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
         <Button variant="outline" size="sm" asChild>
           <Link href="/vallas-publicitarias">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver a espacios
+            {t('billboards.page.backToSpaces')}
           </Link>
         </Button>
       </div>
@@ -211,7 +320,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           
           {/* Mapa con ubicación real */}
           <div className="mt-6">
-            <h3 className="text-lg font-semibold mb-3">Ubicación</h3>
+            <h3 className="text-lg font-semibold mb-3">{t('billboards.page.location')}</h3>
             {displayData.coordinates && displayData.coordinates.lat && displayData.coordinates.lng ? (
               <LeafletHybridMap
                 points={[{
@@ -233,7 +342,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                 <div className="text-center p-4">
                   <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    Ubicación: {displayData.location}
+                    {t('billboards.page.location')}: {displayData.location}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     (Coordenadas no disponibles)
@@ -271,34 +380,34 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
 
           {/* Características del espacio */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Características del espacio</h3>
+            <h3 className="font-semibold text-lg">{t('billboards.page.spaceCharacteristics')}</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-3">
                 <Ruler className="h-5 w-5 text-gray-400" />
                 <div>
                   <div className="font-medium">{displayData.technicalSpecs.dimension}</div>
-                  <div className="text-sm text-muted-foreground">Dimensión</div>
+                  <div className="text-sm text-muted-foreground">{t('billboards.page.dimension')}</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Monitor className="h-5 w-5 text-gray-400" />
                 <div>
                   <div className="font-medium">{displayData.technicalSpecs.tipo}</div>
-                  <div className="text-sm text-muted-foreground">Tipo de soporte</div>
+                  <div className="text-sm text-muted-foreground">{t('billboards.page.supportType')}</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Eye className="h-5 w-5 text-gray-400" />
                 <div>
                   <div className="font-medium">{displayData.technicalSpecs.impactos}</div>
-                  <div className="text-sm text-muted-foreground">Impactos diarios</div>
+                  <div className="text-sm text-muted-foreground">{t('billboards.page.dailyImpacts')}</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Lightbulb className={`h-5 w-5 ${displayData.technicalSpecs.iluminacion === 'Sí' ? 'text-yellow-500' : 'text-gray-400'}`} />
                 <div>
                   <div className="font-medium">{displayData.technicalSpecs.iluminacion}</div>
-                  <div className="text-sm text-muted-foreground">Iluminación</div>
+                  <div className="text-sm text-muted-foreground">{t('billboards.page.lighting')}</div>
                 </div>
               </div>
             </div>
@@ -315,7 +424,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-2xl font-bold">
-                  Cotizar espacio
+                  {t('billboards.page.quoteSpace')}
                 </CardTitle>
               </div>
             </CardHeader>
@@ -323,12 +432,12 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
 
               {/* Fecha de inicio */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Fecha de inicio</Label>
+                <Label className="text-sm font-medium">{t('billboards.page.startDate')}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start text-left font-normal">
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedStartDate ? new Date(selectedStartDate).toLocaleDateString('es-ES') : "Seleccionar fecha"}
+                      {selectedStartDate ? new Date(selectedStartDate).toLocaleDateString('es-ES') : t('billboards.page.selectDate')}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -344,7 +453,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
 
               {/* Meses de alquiler */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Meses de alquiler</Label>
+                <Label className="text-sm font-medium">{t('billboards.page.rentalMonths')}</Label>
                 <Select value={selectedMonths} onValueChange={setSelectedMonths}>
                   <SelectTrigger>
                     <SelectValue />
@@ -376,7 +485,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
 
               {/* Servicios adicionales */}
               <div className="space-y-3">
-                <Label className="text-sm font-medium">Servicios adicionales (se pagan al inicio)</Label>
+                <Label className="text-sm font-medium">{t('billboards.page.additionalServices')}</Label>
                 <div className="space-y-2">
                   {additionalServices.map((service) => (
                     <div key={service.id} className="flex items-center space-x-2">
@@ -420,12 +529,25 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                 }}
               >
                 <FileText className="mr-2 h-4 w-4" />
-                Solicitar cotización
+                {t('billboards.page.requestQuote')}
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Sección de Otros soportes similares */}
+      <section className="mt-16 py-12">
+        <div className="container px-4 md:px-6">
+          <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
+            {t('billboards.page.similarSupports')}
+          </h2>
+          <SimilarSupportsCarousel 
+            billboards={billboards} 
+            currentBillboardId={billboard.id} 
+          />
+        </div>
+      </section>
     </div>
   )
 }

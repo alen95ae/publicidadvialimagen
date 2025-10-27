@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useTranslations } from "@/hooks/use-translations"
 
 interface CartItem {
   id: string
@@ -35,6 +36,7 @@ interface CartItem {
 }
 
 export default function CartPage() {
+  const { t } = useTranslations()
   const [cartItems, setCartItems] = useState<CartItem[]>([])
 
   const updateQuantity = (id: string, newQuantity: number) => {
@@ -82,25 +84,25 @@ export default function CartPage() {
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 text-balance">Carrito de Compras</h1>
+        <h1 className="text-3xl font-bold mb-2 text-balance">{t('cart.title')}</h1>
         <div className="flex items-center text-sm text-muted-foreground">
           <Link href="/" className="hover:text-primary">
-            Inicio
+            {t('nav.home')}
           </Link>
           <span className="mx-2">/</span>
-          <span>Carrito</span>
+          <span>{t('cart.breadcrumb')}</span>
         </div>
       </div>
 
       {cartItems.length === 0 ? (
         <div className="text-center py-12">
-          <h2 className="text-2xl font-semibold mb-4">Tu carrito está vacío</h2>
+          <h2 className="text-2xl font-semibold mb-4">{t('cart.empty.title')}</h2>
           <p className="text-muted-foreground mb-8 text-pretty">
-            Parece que aún no has añadido ningún producto a tu carrito.
+            {t('cart.empty.description')}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white" asChild>
-              <Link href="/print-shop">Explorar servicios de Impresión</Link>
+              <Link href="/print-shop">{t('cart.empty.explorePrinting')}</Link>
             </Button>
           </div>
         </div>
@@ -112,7 +114,7 @@ export default function CartPage() {
                 <div className="p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-semibold">Alquiler de Vallas</h2>
+                    <h2 className="text-lg font-semibold">{t('cart.billboardRental')}</h2>
                   </div>
                   <div className="space-y-4">
                     {billboardItems.map((item) => (
@@ -134,7 +136,7 @@ export default function CartPage() {
                                 {item.location}
                               </div>
                               <div className="mt-2">
-                                <p className="text-sm text-muted-foreground mb-1">Meses seleccionados:</p>
+                                <p className="text-sm text-muted-foreground mb-1">{t('cart.selectedMonths')}</p>
                                 <div className="flex flex-wrap gap-1">
                                   {item.selectedMonths?.map((month) => (
                                     <Badge key={month} variant="outline" className="text-xs">
@@ -146,8 +148,8 @@ export default function CartPage() {
                             </div>
                           </div>
                           <div className="col-span-2 text-center">
-                            <div className="text-sm text-muted-foreground">€{item.monthlyPrice}/mes</div>
-                            <div className="text-xs text-muted-foreground">{item.selectedMonths?.length} mes(es)</div>
+                            <div className="text-sm text-muted-foreground">€{item.monthlyPrice}{t('cart.perMonth')}</div>
+                            <div className="text-xs text-muted-foreground">{item.selectedMonths?.length} {t('cart.months')}</div>
                           </div>
                           <div className="col-span-2 flex items-center justify-center">
                             <div className="flex items-center border rounded-md">
@@ -194,7 +196,7 @@ export default function CartPage() {
                 <div className="p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <Package className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-semibold">Productos de Impresión</h2>
+                    <h2 className="text-lg font-semibold">{t('cart.printProducts')}</h2>
                   </div>
                   <div className="space-y-4">
                     {printItems.map((item) => (
@@ -215,13 +217,13 @@ export default function CartPage() {
                                 <Ruler className="h-3 w-3" />
                                 {item.width}m × {item.height}m = {item.area}m²
                               </div>
-                              <div className="text-sm text-muted-foreground">€{item.pricePerM2}/m²</div>
+                              <div className="text-sm text-muted-foreground">€{item.pricePerM2}{t('cart.perM2')}</div>
                               {item.addOns && item.addOns.length > 0 && (
                                 <div className="mt-1">
-                                  <p className="text-xs text-muted-foreground">Servicios adicionales:</p>
+                                  <p className="text-xs text-muted-foreground">{t('cart.additionalServices')}</p>
                                   {item.addOns.map((addOn, index) => (
                                     <Badge key={index} variant="outline" className="text-xs mr-1">
-                                      {addOn.name} (+€{addOn.price}/m²)
+                                      {addOn.name} (+€{addOn.price}{t('cart.perM2')})
                                     </Badge>
                                   ))}
                                 </div>
@@ -235,7 +237,7 @@ export default function CartPage() {
                                 (item.pricePerM2 || 0) +
                                 (item.addOns?.reduce((sum, addOn) => sum + addOn.price, 0) || 0)
                               ).toFixed(2)}
-                              /m²
+                              {t('cart.perM2')}
                             </div>
                             <div className="text-xs text-muted-foreground">{item.area}m²</div>
                           </div>
@@ -282,14 +284,14 @@ export default function CartPage() {
             <div className="flex items-center justify-between bg-muted p-4 rounded-lg">
               <div className="flex gap-2">
                 <Button variant="outline" asChild>
-                  <Link href="/vallas-publicitarias">Más Vallas</Link>
+                  <Link href="/vallas-publicitarias">{t('cart.moreBillboards')}</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link href="/print-shop">Más Productos</Link>
+                  <Link href="/print-shop">{t('cart.moreProducts')}</Link>
                 </Button>
               </div>
               <Button variant="ghost" onClick={() => setCartItems([])}>
-                Vaciar Carrito
+                {t('cart.emptyCart')}
               </Button>
             </div>
           </div>
@@ -297,12 +299,12 @@ export default function CartPage() {
           <div>
             <Card>
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold mb-4">Resumen del Pedido</h2>
+                <h2 className="text-xl font-semibold mb-4">{t('cart.orderSummary')}</h2>
                 <div className="space-y-4">
                   {billboardItems.length > 0 && (
                     <>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Alquiler de vallas</span>
+                        <span className="text-muted-foreground">{t('cart.billboardRentalSubtotal')}</span>
                         <span>€{billboardSubtotal.toLocaleString()}</span>
                       </div>
                     </>
@@ -310,35 +312,35 @@ export default function CartPage() {
                   {printItems.length > 0 && (
                     <>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Productos de impresión</span>
+                        <span className="text-muted-foreground">{t('cart.printProductsSubtotal')}</span>
                         <span>€{printSubtotal.toFixed(2)}</span>
                       </div>
                     </>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">{t('cart.subtotal')}</span>
                     <span>€{subtotal.toFixed(2)}</span>
                   </div>
                   {shipping > 0 && (
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Envío</span>
+                      <span className="text-muted-foreground">{t('cart.shipping')}</span>
                       <span>€{shipping.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">IVA (21%)</span>
+                    <span className="text-muted-foreground">{t('cart.vat')}</span>
                     <span>€{tax.toFixed(2)}</span>
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between font-medium text-lg">
-                    <span>Total</span>
+                    <span>{t('cart.total')}</span>
                     <span className="text-primary">€{total.toFixed(2)}</span>
                   </div>
 
                   <div className="pt-4">
                     <Button className="w-full bg-primary hover:bg-primary/90" size="lg" asChild>
                       <Link href="/checkout">
-                        Proceder al Pago
+                        {t('cart.proceedToPayment')}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
@@ -356,8 +358,8 @@ export default function CartPage() {
 
                     <div className="grid gap-2">
                       <div className="flex items-center">
-                        <Input type="text" placeholder="Código de descuento" className="rounded-r-none" />
-                        <Button className="rounded-l-none bg-primary hover:bg-primary/90">Aplicar</Button>
+                        <Input type="text" placeholder={t('cart.discountCode')} className="rounded-r-none" />
+                        <Button className="rounded-l-none bg-primary hover:bg-primary/90">{t('cart.apply')}</Button>
                       </div>
                     </div>
                   </div>
@@ -366,13 +368,13 @@ export default function CartPage() {
                     {billboardItems.length > 0 && (
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
-                        <span>Las vallas se activarán en las fechas seleccionadas</span>
+                        <span>{t('cart.billboardActivation')}</span>
                       </div>
                     )}
                     {printItems.length > 0 && (
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4" />
-                        <span>Productos de impresión: 2-5 días laborables</span>
+                        <span>{t('cart.printDelivery')}</span>
                       </div>
                     )}
                   </div>

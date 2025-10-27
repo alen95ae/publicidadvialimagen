@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
+import { useTranslations } from "@/hooks/use-translations"
 
 interface ProfileTabProps {
   user: {
@@ -23,6 +24,7 @@ interface ProfileTabProps {
 export default function ProfileTab({ user }: ProfileTabProps) {
   const { toast } = useToast()
   const { updateProfile } = useAuth()
+  const { t } = useTranslations()
   const [loading, setLoading] = useState(false)
   
   const [name, setName] = useState(user?.name || "")
@@ -39,15 +41,15 @@ export default function ProfileTab({ user }: ProfileTabProps) {
       if (error) {
         toast({
           variant: "destructive",
-          title: "Error",
+          title: t('common.error'),
           description: error.message,
         })
         return
       }
 
       toast({
-        title: "¡Perfil actualizado!",
-        description: "Tus datos han sido actualizados correctamente",
+        title: t('account.profile.profileUpdated'),
+        description: t('account.profile.profileUpdatedDesc'),
       })
     } finally {
       setLoading(false)
@@ -64,9 +66,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Información Personal</CardTitle>
+        <CardTitle>{t('account.profile.title')}</CardTitle>
         <CardDescription>
-          Actualiza tu información personal y cómo te mostramos
+          {t('account.profile.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -78,28 +80,28 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           <div className="flex-1">
             <Button variant="outline" size="sm" disabled>
               <Upload className="mr-2 h-4 w-4" />
-              Subir foto
+              {t('account.profile.uploadPhoto')}
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
-              Próximamente: Podrás subir tu foto de perfil
+              {t('account.profile.uploadPhotoComingSoon')}
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Nombre completo</Label>
+            <Label htmlFor="name">{t('account.profile.fullName')}</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Tu nombre completo"
+              placeholder={t('account.profile.fullNamePlaceholder')}
               disabled={loading}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t('account.profile.email')}</Label>
             <Input
               id="email"
               type="email"
@@ -108,14 +110,14 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               className="bg-muted"
             />
             <p className="text-xs text-muted-foreground">
-              Tu email no se puede cambiar por seguridad
+              {t('account.profile.emailCannotChange')}
             </p>
           </div>
 
           <div className="flex justify-end">
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar Cambios
+              {t('account.profile.saveChanges')}
             </Button>
           </div>
         </form>

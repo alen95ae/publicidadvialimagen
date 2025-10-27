@@ -184,9 +184,15 @@ export async function GET(req: Request) {
       const normalizedCity = normalizeCityName(soporte.ciudad)
       
       // Usar coordenadas reales si están disponibles, si no usar las de la ciudad
-      const coordinates = (soporte.latitud && soporte.longitud) 
-        ? { lat: soporte.latitud, lng: soporte.longitud }
-        : getCoordinatesFromCity(normalizedCity)
+      let coordinates: { lat: number, lng: number } | undefined = undefined
+      if (soporte.latitud && soporte.longitud) {
+        coordinates = { lat: soporte.latitud, lng: soporte.longitud }
+      } else {
+        const cityCoords = getCoordinatesFromCity(normalizedCity)
+        if (cityCoords) {
+          coordinates = { lat: cityCoords[0], lng: cityCoords[1] }
+        }
+      }
       
       const finalFormat = soporte.tipo_soporte || getFormatFromType(soporte.tipo_soporte)
       

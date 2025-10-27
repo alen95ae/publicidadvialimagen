@@ -55,6 +55,7 @@ export default function SoportesPage() {
   const [supports, setSupports] = useState<Support[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
+  const [searchQuery, setSearchQuery] = useState("") // Para debounce
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [cityFilter, setCityFilter] = useState<string>("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -67,20 +68,12 @@ export default function SoportesPage() {
     hasNext: false,
     hasPrev: false,
   })
-  const [ownerDraft, setOwnerDraft] = useState("")
-  const [priceMonthDraft, setPriceMonthDraft] = useState("")
-  const [titleDraft, setTitleDraft] = useState("")
-  const [typeDraft, setTypeDraft] = useState<string | undefined>(undefined)
-  const [codeDraft, setCodeDraft] = useState("")
-  
-  // Estados para controlar popovers
-  const [ownerOpen, setOwnerOpen] = useState(false)
-  const [priceOpen, setPriceOpen] = useState(false)
-  const [titleOpen, setTitleOpen] = useState(false)
-  const [typeOpen, setTypeOpen] = useState(false)
-  const [codeOpen, setCodeOpen] = useState(false)
   const [openImport, setOpenImport] = useState(false)
   const [importLoading, setImportLoading] = useState(false)
+  
+  // Estados para edición en línea
+  const [editedSupports, setEditedSupports] = useState<Record<string, Partial<Support>>>({})
+  const [savingChanges, setSavingChanges] = useState(false)
   const router = useRouter()
 
   const fetchSupports = async (query = "", page: number = currentPage) => {
@@ -124,9 +117,19 @@ export default function SoportesPage() {
     }
   }
 
+  // Debounce para la búsqueda
   useEffect(() => {
-    fetchSupports(q, 1)
-  }, [q, statusFilter, cityFilter])
+    const timer = setTimeout(() => {
+      setSearchQuery(q)
+    }, 300) // 300ms de delay
+
+    return () => clearTimeout(timer)
+  }, [q])
+
+  // Efecto para hacer la búsqueda cuando cambie searchQuery
+  useEffect(() => {
+    fetchSupports(searchQuery, 1)
+  }, [searchQuery, statusFilter, cityFilter])
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return
@@ -250,11 +253,96 @@ export default function SoportesPage() {
     }
   }
 
+  // Edición inline: actualizar campo de un soporte
+  const handleFieldChange = (supportId: string, field: keyof Support, value: any) => {
+    setEditedSupports(prev => ({
+      ...prev,
+      [supportId]: {
+        ...prev[supportId],
+        [field]: value
+      }
+    }))
+  }
+
+  // Guardar cambios editados
+  const handleSaveChanges = async () => {
+    if (Object.keys(editedSupports).length === 0) return
+
+    setSavingChanges(true)
+    try {
+      const count = Object.keys(editedSupports).length
+      const promises = Object.entries(editedSupports).map(async ([id, changes]) => {
+        // Primero obtener el soporte completo para hacer PUT
+        const support = supportsArray.find(s => s.id === id)
+        if (!support) {
+          throw new Error(`Soporte ${id} no encontrado`)
+        }
+        
+        // Combinar datos existentes con cambios
+        const updatedData = { ...support, ...changes }
+        
+        return api(`/api/soportes/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedData)
+        })
+      })
+
+      await Promise.all(promises)
+      setEditedSupports({})
+      setSelected({})
+      fetchSupports()
+      toast.success(`${count} soporte(s) actualizado(s)`)
+    } catch (error) {
+      console.error('Error al guardar cambios:', error)
+      toast.error("Error al guardar cambios")
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  // Descartar cambios
+  const handleDiscardChanges = () => {
+    setEditedSupports({})
+    toast.info("Cambios descartados")
+  }
+
+  // Aplicar cambio masivo a seleccionados
+  const handleBulkFieldChange = (field: keyof Support, value: any) => {
+    const updates: Record<string, Partial<Support>> = {}
+    Object.keys(selected).filter(id => selected[id]).forEach(id => {
+      updates[id] = {
+        ...(editedSupports[id] || {}),
+        [field]: value
+      }
+    })
+    setEditedSupports(prev => ({ ...prev, ...updates }))
+    toast.info(`Campo ${field} actualizado para ${Object.keys(selected).filter(id => selected[id]).length} soporte(s)`)
+  }
+
   async function exportPDF() {
     const ids = Object.keys(selected).filter(id => selected[id])
-    if (!ids.length) return
-    const url = `/api/soportes/export/pdf?ids=${ids.join(',')}`
-    window.open(url, '_blank')
+    if (!ids.length) {
+      toast.error("Selecciona al menos un soporte para generar el catálogo")
+      return
+    }
+    
+    try {
+      const url = `/api/soportes/export/pdf?ids=${ids.join(',')}`
+      
+      // Crear un enlace temporal para descargar el PDF
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `catalogo-soportes-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast.success(`Catálogo PDF generado para ${ids.length} soporte(s)`)
+    } catch (error) {
+      console.error('Error generando PDF:', error)
+      toast.error("Error al generar el catálogo PDF")
+    }
   }
 
   // Kanban helpers
@@ -500,16 +588,6 @@ export default function SoportesPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={exportPDF}
-                disabled={!someSelected}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Catálogo PDF
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={handleCsvExport}
               >
                 <Download className="w-4 h-4 mr-2" />
@@ -543,7 +621,7 @@ export default function SoportesPage() {
               </Dialog>
               
               <Link href="/panel/soportes/nuevo">
-                <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
+                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo Soporte
                 </Button>
@@ -561,150 +639,97 @@ export default function SoportesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Barra de acciones masivas */}
-            {(someSelected || allSelected) && (
-              <div className="mb-3 rounded-xl border bg-white p-3 shadow-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    {Object.keys(selected).filter(id => selected[id]).length} seleccionados
-                  </span>
 
-                  {/* Disponibilidad */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="secondary">Cambiar disponibilidad</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      {Object.keys(STATUS_META).map(k => (
-                        <DropdownMenuItem key={k} onClick={() => bulkUpdate({ status: k })}>
-                          {STATUS_META[k as keyof typeof STATUS_META].label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            {/* Barra azul unificada de acciones masivas */}
+            {((someSelected || allSelected) || Object.keys(editedSupports).length > 0) && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-blue-800">
+                      {Object.keys(selected).filter(id => selected[id]).length} seleccionados
+                    </span>
+                    
+                    {/* Solo mostrar desplegables cuando hay más de 1 seleccionado */}
+                    {!singleSelected && Object.keys(selected).filter(id => selected[id]).length > 1 && (
+                      <>
+                        {/* Cambiar tipo de soporte */}
+                        <Select onValueChange={(value) => handleBulkFieldChange('type', value)}>
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="Cambiar tipo de soporte" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TYPE_OPTIONS.map((type) => (
+                              <SelectItem key={type} value={type}>{type}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
 
-                  {/* Cambiar propietario - POPOVER inline */}
-                  <Popover open={ownerOpen} onOpenChange={setOwnerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="secondary">Cambiar propietario</Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64">
-                      <div className="space-y-2">
-                        <Label>Nuevo propietario</Label>
-                        <Input 
-                          value={ownerDraft} 
-                          onChange={e => setOwnerDraft(e.target.value)} 
-                          placeholder="Ej: Imagen" 
-                        />
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => { setOwnerDraft(''); setOwnerOpen(false) }}>Cancelar</Button>
-                          <Button size="sm" onClick={async () => { await bulkUpdate({ owner: ownerDraft }); setOwnerOpen(false) }}>Aplicar</Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                     {/* Cambiar estado */}
+                     <Select onValueChange={(value) => handleBulkFieldChange('status', value)}>
+                       <SelectTrigger className="w-48">
+                         <SelectValue placeholder="Cambiar estado" />
+                       </SelectTrigger>
+                       <SelectContent>
+                         {Object.keys(STATUS_META).map((status) => (
+                           <SelectItem key={status} value={status}>
+                             {STATUS_META[status as keyof typeof STATUS_META].label}
+                           </SelectItem>
+                         ))}
+                       </SelectContent>
+                     </Select>
+                   </>
+                 )}
 
-                  {/* Cambiar precio/mes - POPOVER inline */}
-                  <Popover open={priceOpen} onOpenChange={setPriceOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="secondary">Cambiar precio/mes</Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64">
-                      <div className="space-y-2">
-                        <Label>Nuevo precio/mes (€)</Label>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          className="no-spinner"
-                          value={priceMonthDraft} 
-                          onChange={e => setPriceMonthDraft(e.target.value)} 
-                        />
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => { setPriceMonthDraft(''); setPriceOpen(false) }}>Cancelar</Button>
-                          <Button size="sm" onClick={async () => { await bulkUpdate({ priceMonth: Number(priceMonthDraft) }); setPriceOpen(false) }}>Aplicar</Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* Cambiar título */}
-                  <Popover open={titleOpen} onOpenChange={setTitleOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="secondary">Cambiar título</Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <div className="space-y-2">
-                        <Label>Nuevo título</Label>
-                        <Input value={titleDraft} onChange={e => setTitleDraft(e.target.value)} />
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => { setTitleDraft(''); setTitleOpen(false) }}>Cancelar</Button>
-                          <Button size="sm" onClick={async () => { await bulkUpdate({ title: titleDraft }); setTitleOpen(false) }}>Aplicar</Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* Cambiar tipo (select con opciones) */}
-                  <Popover open={typeOpen} onOpenChange={setTypeOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="secondary">Cambiar tipo</Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64">
-                      <div className="space-y-2">
-                        <Label>Tipo de soporte</Label>
-                        <select
-                          className="w-full rounded-md border border-gray-200 bg-white p-2 text-sm"
-                          value={typeDraft ?? ''}
-                          onChange={(e) => setTypeDraft(e.target.value)}
+                 {/* Catálogo PDF - Siempre visible cuando hay soportes seleccionados */}
+                 {Object.keys(selected).filter(id => selected[id]).length > 0 && (
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={exportPDF}
+                   >
+                     <Download className="w-4 h-4 mr-2" />
+                     Catálogo PDF
+                   </Button>
+                 )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {Object.keys(editedSupports).length > 0 && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          onClick={handleSaveChanges}
+                          disabled={savingChanges}
+                          className="bg-red-600 hover:bg-red-700 text-white"
                         >
-                          <option value="" disabled>Selecciona…</option>
-                          {TYPE_OPTIONS.map(op => <option key={op} value={op}>{op}</option>)}
-                        </select>
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => { setTypeDraft(undefined); setTypeOpen(false) }}>Cancelar</Button>
-                          <Button size="sm" onClick={async () => { if(typeDraft){ await bulkUpdate({ type: typeDraft }); setTypeOpen(false) } }}>Aplicar</Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* Cambiar código (solo 1 seleccionado) */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Popover open={codeOpen} onOpenChange={setCodeOpen}>
-                            <PopoverTrigger asChild>
-                              <Button variant="secondary" disabled={!singleSelected}>
-                                Cambiar código
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64">
-                              <div className="space-y-2">
-                                <Label>Nuevo código</Label>
-                                <Input value={codeDraft} onChange={e => setCodeDraft(e.target.value)} placeholder="Ej: SM-009" />
-                                <div className="flex justify-end gap-2">
-                                  <Button size="sm" variant="outline" onClick={() => { setCodeDraft(''); setCodeOpen(false) }}>Cancelar</Button>
-                                  <Button size="sm" onClick={async () => { await bulkUpdate({ __codeSingle: codeDraft }); setCodeOpen(false) }}>Aplicar</Button>
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </span>
-                      </TooltipTrigger>
-                      {!singleSelected && <TooltipContent>Selecciona exactamente 1 soporte para cambiar el código.</TooltipContent>}
-                    </Tooltip>
-                  </TooltipProvider>
-
-                  <div className="flex-1" />
-                  <Button variant="outline" onClick={bulkDuplicate} disabled={!someSelected}>
-                    <Copy className="w-4 h-4 mr-2" />
-                    Duplicar
-                  </Button>
-                  <Button variant="destructive" onClick={bulkDelete}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Eliminar
-                  </Button>
+                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedSupports).length})`}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleDiscardChanges}
+                        >
+                          Descartar
+                        </Button>
+                      </>
+                    )}
+                    
+                    {singleSelected && (
+                      <Button variant="outline" size="sm" onClick={bulkDuplicate}>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Duplicar
+                      </Button>
+                    )}
+                    
+                    <Button 
+                      size="sm" 
+                      onClick={bulkDelete}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Eliminar
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -750,24 +775,57 @@ export default function SoportesPage() {
                         />
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
-                          {support.code}
-                        </span>
+                        {selected[support.id] ? (
+                          <Input
+                            value={editedSupports[support.id]?.code ?? support.code}
+                            onChange={(e) => handleFieldChange(support.id, 'code', e.target.value)}
+                            className="h-8 font-mono text-xs"
+                          />
+                        ) : (
+                          <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                            {support.code}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[42ch]">
-                        {support.title?.length > 40 ? (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger className="text-left">
-                                {support.title.slice(0,40) + '…'}
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-sm">{support.title}</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : (support.title || '—')}
+                        {selected[support.id] ? (
+                          <Input
+                            value={editedSupports[support.id]?.title ?? support.title ?? ''}
+                            onChange={(e) => handleFieldChange(support.id, 'title', e.target.value)}
+                            className="h-8"
+                            placeholder="Título del soporte"
+                          />
+                        ) : (
+                          support.title?.length > 40 ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger className="text-left">
+                                  {support.title.slice(0,40) + '…'}
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-sm">{support.title}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (support.title || '—')
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{support.type}</Badge>
+                        {selected[support.id] ? (
+                          <Select 
+                            value={editedSupports[support.id]?.type ?? support.type}
+                            onValueChange={(value) => handleFieldChange(support.id, 'type', value)}
+                          >
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TYPE_OPTIONS.map((type) => (
+                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="secondary">{support.type}</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
@@ -785,14 +843,40 @@ export default function SoportesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          {formatPrice(support.priceMonth)} Bs
-                        </div>
+                        {selected[support.id] ? (
+                          <Input
+                            type="number"
+                            value={editedSupports[support.id]?.priceMonth ?? support.priceMonth ?? ''}
+                            onChange={(e) => handleFieldChange(support.id, 'priceMonth', parseFloat(e.target.value) || null)}
+                            className="h-8 w-24"
+                            placeholder="0.00"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            {formatPrice(support.priceMonth)} Bs
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${STATUS_META[support.status]?.className || 'bg-gray-100 text-gray-800'}`}>
-                          {STATUS_META[support.status]?.label || support.status}
-                        </span>
+                        {selected[support.id] ? (
+                          <Select 
+                            value={editedSupports[support.id]?.status ?? support.status}
+                            onValueChange={(value) => handleFieldChange(support.id, 'status', value)}
+                          >
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.keys(STATUS_META).map((status) => (
+                                <SelectItem key={status} value={status}>{STATUS_META[status as keyof typeof STATUS_META].label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${STATUS_META[support.status]?.className || 'bg-gray-100 text-gray-800'}`}>
+                            {STATUS_META[support.status]?.label || support.status}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

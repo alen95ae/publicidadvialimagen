@@ -1,11 +1,14 @@
 "use client"
 
 import { CampaignsProvider } from "./campaigns-provider"
+import { TranslationProvider } from "./translation-provider"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CampaignsProvider>
-      {children}
-    </CampaignsProvider>
+    <TranslationProvider>
+      <CampaignsProvider>
+        {children}
+      </CampaignsProvider>
+    </TranslationProvider>
   )
 }

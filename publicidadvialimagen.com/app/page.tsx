@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { useMessages } from "@/hooks/use-messages"
 import { useBillboards, type Billboard } from "@/hooks/use-billboards"
+import { useTranslations } from "@/hooks/use-translations"
 
 // Función para crear slug SEO-friendly
 function createSlug(text: string | undefined | null): string {
@@ -61,59 +62,59 @@ const cities = [
   { name: "Cobija", image: "/vallas_publicitarias_cobija.png" },
 ]
 
-const advertisingCategories = [
+const getAdvertisingCategories = (t: (key: string) => string) => [
   {
     id: 1,
-    name: "Unipolar",
+    name: t('billboards.categories.unipolar'),
     icon: Monitor,
     description: "",
     image: "/Unipolares-en-bolivia.png",
   },
   {
     id: 2,
-    name: "Bipolar",
+    name: t('billboards.categories.bipolar'),
     icon: MonitorPlay,
     description: "",
     image: "/Bipolares-en-bolivia.png",
   },
   {
     id: 3,
-    name: "Tripolar",
+    name: t('billboards.categories.tripolar'),
     icon: Building2,
     description: "",
     image: "/Tripolares-en-bolivia.png",
   },
   {
     id: 4,
-    name: "Mural",
+    name: t('billboards.categories.mural'),
     icon: TruckIcon,
     description: "",
     image: "/mural-en-bolivia.png",
   },
   {
     id: 5,
-    name: "Mega Valla",
+    name: t('billboards.categories.megaValla'),
     icon: Monitor,
     description: "",
     image: "/megavalla-en-bolivia.png",
   },
   {
     id: 6,
-    name: "Cartelera",
+    name: t('billboards.categories.cartelera'),
     icon: MonitorPlay,
     description: "",
     image: "/cartelera-en-bolivia.png",
   },
   {
     id: 7,
-    name: "Paleta",
+    name: t('billboards.categories.paleta'),
     icon: Building2,
     description: "",
     image: "/paleta-en-bolivia.png",
   },
 ]
 
-function CitiesCarousel() {
+function CitiesCarousel({ t }: { t: (key: string) => string }) {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { 
       loop: true,
@@ -156,7 +157,7 @@ function CitiesCarousel() {
       <button
         onClick={scrollPrev}
         className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Ciudad anterior"
+        aria-label={t('common.previous')}
       >
         <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -164,7 +165,7 @@ function CitiesCarousel() {
       <button
         onClick={scrollNext}
         className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Siguiente ciudad"
+        aria-label={t('common.next')}
       >
         <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -172,7 +173,7 @@ function CitiesCarousel() {
   )
 }
 
-function ServicesCarousel() {
+function ServicesCarousel({ t }: { t: (key: string) => string }) {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { 
       loop: true,
@@ -189,6 +190,8 @@ function ServicesCarousel() {
   const scrollNext = useCallback(() => {
     if (emblaApi) emblaApi.scrollNext()
   }, [emblaApi])
+
+  const advertisingCategories = getAdvertisingCategories(t)
 
   return (
     <div className="relative">
@@ -222,7 +225,7 @@ function ServicesCarousel() {
       <button
         onClick={scrollPrev}
         className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Servicio anterior"
+        aria-label={t('common.previous')}
       >
         <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -230,7 +233,7 @@ function ServicesCarousel() {
       <button
         onClick={scrollNext}
         className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Siguiente servicio"
+        aria-label={t('common.next')}
       >
         <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -238,7 +241,7 @@ function ServicesCarousel() {
   )
 }
 
-function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] }) {
+function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[], t: (key: string) => string }) {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { 
       loop: true,
@@ -290,12 +293,12 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] })
                         {billboard.available ? (
                           <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                             <FileText className="mr-1 h-3 w-3" />
-                            Cotizar
+                            {t('billboards.requestQuote')}
                           </Link>
                         ) : (
                           <Link href={`/vallas-publicitarias/${createSlug(billboard.name)}`}>
                             <Eye className="mr-1 h-3 w-3" />
-                            Ver más
+                            {t('common.view')}
                           </Link>
                         )}
                       </Button>
@@ -312,7 +315,7 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] })
       <button
         onClick={scrollPrev}
         className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Anterior"
+        aria-label={t('common.previous')}
       >
         <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -320,7 +323,7 @@ function FeaturedBillboardsCarousel({ billboards }: { billboards: Billboard[] })
       <button
         onClick={scrollNext}
         className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        aria-label="Siguiente"
+        aria-label={t('common.next')}
       >
         <ChevronRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
       </button>
@@ -348,6 +351,7 @@ export default function HomePage() {
   }, [])
   const { addMessage } = useMessages()
   const { billboards, loading, error } = useBillboards()
+  const { t } = useTranslations()
   
   // Debug logs
   useEffect(() => {
@@ -433,13 +437,13 @@ export default function HomePage() {
           {/* Texto a la izquierda en desktop, segundo en móvil */}
           <div className="text-left text-black z-10 order-2 lg:order-1">
             <h1 className="text-4xl md:text-6xl font-bold mb-6">
-              Vallas Publicitarias en Bolivia
+              {t('home.hero.title')}
             </h1>
             <p className="text-muted-foreground md:text-lg text-pretty mb-8">
-              Conectamos tu marca con audiencias masivas a través de espacios publicitarios estratégicamente ubicados.
+              {t('home.hero.subtitle')}
             </p>
             <Button size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8 py-4" asChild>
-              <Link href="/vallas-publicitarias">Explorar Vallas</Link>
+              <Link href="/vallas-publicitarias">{t('home.hero.cta')}</Link>
             </Button>
           </div>
           
@@ -460,37 +464,37 @@ export default function HomePage() {
       <section className="py-12 md:py-16 bg-background overflow-hidden">
         <div className="container px-4 md:px-6">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
-            Compara soportes disponibles en tu ciudad
+            {t('billboards.subtitle')}
           </h2>
-          <CitiesCarousel />
+          <CitiesCarousel t={t} />
         </div>
       </section>
 
       <section className="bg-muted py-12 md:py-16">
         <div className="container px-4 md:px-6">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
-            Nuestros Servicios de Publicidad Exterior
+            {t('printShop.subtitle')}
           </h2>
-          <ServicesCarousel />
+          <ServicesCarousel t={t} />
         </div>
       </section>
 
       <section className="py-12 md:py-16">
         <div className="container px-4 md:px-6">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
-            Espacios Publicitarios Destacados
+            {t('billboards.title')}
           </h2>
           {loading ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">Cargando espacios publicitarios...</p>
+              <p className="text-muted-foreground">{t('common.loading')}</p>
             </div>
           ) : error ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">Error al cargar los espacios. Por favor, intenta más tarde.</p>
+              <p className="text-muted-foreground">{t('common.error')}</p>
             </div>
           ) : featuredBillboards.length > 0 ? (
             <>
-              <FeaturedBillboardsCarousel billboards={featuredBillboards} />
+              <FeaturedBillboardsCarousel billboards={featuredBillboards} t={t} />
               <div className="mt-10 text-center">
                 <Button
                   variant="outline"
@@ -498,7 +502,7 @@ export default function HomePage() {
                   className="border-primary text-primary hover:bg-primary hover:text-primary-foreground bg-transparent"
                   asChild
                 >
-                  <Link href="/vallas-publicitarias">Ver Todos los Espacios</Link>
+                  <Link href="/vallas-publicitarias">{t('billboards.viewDetails')}</Link>
                 </Button>
               </div>
             </>
@@ -515,28 +519,27 @@ export default function HomePage() {
           <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
             <div className="space-y-4">
               <h2 className="text-2xl font-bold tracking-tight md:text-3xl text-balance">
-                Servicios de Impresión a Medida
+                {t('printShop.title')}
               </h2>
               <p className="text-muted-foreground md:text-lg text-pretty">
-                Complementa tu estrategia publicitaria con nuestros servicios de impresión profesional. Vinilos
-                adhesivos, lonas, banners y más, calculados por metro cuadrado.
+                {t('printShop.subtitle')}
               </p>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
-                  Materiales de alta durabilidad
+                  {t('printShop.features.durability')}
                 </li>
                 <li className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-primary" />
-                  Entrega rápida garantizada
+                  {t('printShop.features.delivery')}
                 </li>
                 <li className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
-                  Acabados profesionales
+                  {t('printShop.features.finishes')}
                 </li>
               </ul>
               <Button size="lg" className="bg-secondary hover:bg-secondary/90 text-secondary-foreground" asChild>
-                <Link href="/print-shop">Explorar Impresión</Link>
+                <Link href="/print-shop">{t('printShop.services.banners')}</Link>
               </Button>
             </div>
             <div className="relative h-[300px] sm:h-[400px] rounded-xl overflow-hidden">
@@ -554,42 +557,42 @@ export default function HomePage() {
       <section className="py-12 md:py-16">
         <div className="container px-4 md:px-6">
           <h2 className="text-2xl font-bold tracking-tight text-center mb-8 md:text-3xl text-balance">
-            Por Qué Elegir Publicidad Vial Imagen
+            {t('home.features.title')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-background border-border">
               <CardContent className="flex flex-col items-center text-center p-6">
                 <MapPin className="h-10 w-10 mb-4 text-primary" />
-                <h3 className="text-lg font-semibold mb-2">Ubicaciones Premium</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('home.features.strategic.title')}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Espacios publicitarios en las mejores ubicaciones con máximo impacto visual.
+                  {t('home.features.strategic.description')}
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-background border-border">
               <CardContent className="flex flex-col items-center text-center p-6">
                 <ShieldCheck className="h-10 w-10 mb-4 text-primary" />
-                <h3 className="text-lg font-semibold mb-2">Calidad Garantizada</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('home.features.quality.title')}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Todos nuestros espacios y servicios cumplen los más altos estándares de calidad.
+                  {t('home.features.quality.description')}
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-background border-border">
               <CardContent className="flex flex-col items-center text-center p-6">
                 <Clock className="h-10 w-10 mb-4 text-primary" />
-                <h3 className="text-lg font-semibold mb-2">Soporte 24/7</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('home.features.coverage.title')}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Nuestro equipo está disponible para ayudarte en cualquier momento.
+                  {t('home.features.coverage.description')}
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-background border-border">
               <CardContent className="flex flex-col items-center text-center p-6">
                 <CreditCard className="h-10 w-10 mb-4 text-primary" />
-                <h3 className="text-lg font-semibold mb-2">Pago Seguro</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('common.save')}</h3>
                 <p className="text-muted-foreground text-sm">
-                  Múltiples opciones de pago seguras para tu comodidad y tranquilidad.
+                  {t('common.save')}
                 </p>
               </CardContent>
             </Card>
@@ -602,10 +605,10 @@ export default function HomePage() {
         <div className="container px-4 md:px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight mb-4 md:text-4xl">
-              Confían en Nosotros
+              {t('clients.title')}
           </h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Empresas líderes que han elegido nuestros espacios publicitarios para potenciar su marca
+              {t('clients.subtitle')}
             </p>
           </div>
           
@@ -613,62 +616,62 @@ export default function HomePage() {
             {/* First row */}
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente1.svg" alt="Cliente 1" className="w-full h-full object-cover" />
+                <img src="/Cliente1.svg" alt={`${t('clients.client')} 1`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente2.svg" alt="Cliente 2" className="w-full h-full object-cover" />
+                <img src="/Cliente2.svg" alt={`${t('clients.client')} 2`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente3.svg" alt="Cliente 3" className="w-full h-full object-cover" />
+                <img src="/Cliente3.svg" alt={`${t('clients.client')} 3`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente4.svg" alt="Cliente 4" className="w-full h-full object-cover" />
+                <img src="/Cliente4.svg" alt={`${t('clients.client')} 4`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente5.svg" alt="Cliente 5" className="w-full h-full object-cover" />
+                <img src="/Cliente5.svg" alt={`${t('clients.client')} 5`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             {/* Second row */}
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente6.svg" alt="Cliente 6" className="w-full h-full object-cover" />
+                <img src="/Cliente6.svg" alt={`${t('clients.client')} 6`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente7.svg" alt="Cliente 7" className="w-full h-full object-cover" />
+                <img src="/Cliente7.svg" alt={`${t('clients.client')} 7`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente8.svg" alt="Cliente 8" className="w-full h-full object-cover" />
+                <img src="/Cliente8.svg" alt={`${t('clients.client')} 8`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente9.svg" alt="Cliente 9" className="w-full h-full object-cover" />
+                <img src="/Cliente9.svg" alt={`${t('clients.client')} 9`} className="w-full h-full object-cover" />
               </div>
             </div>
             
             <div className="flex flex-col items-center group">
               <div className="w-28 h-28 md:w-28 md:h-28 rounded-full bg-gray-700 dark:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105 border border-gray-200 dark:border-gray-600 overflow-hidden">
-                <img src="/Cliente10.svg" alt="Cliente 10" className="w-full h-full object-cover" />
+                <img src="/Cliente10.svg" alt={`${t('clients.client')} 10`} className="w-full h-full object-cover" />
               </div>
             </div>
           </div>
@@ -677,22 +680,22 @@ export default function HomePage() {
           <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <div className="text-center">
               <div className="text-3xl md:text-4xl font-bold text-primary mb-2">+400</div>
-              <div className="text-muted-foreground">Soportes Publicitarios</div>
+              <div className="text-muted-foreground">{t('clients.stats.billboards')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl md:text-4xl font-bold text-primary mb-2">+1000</div>
-              <div className="text-muted-foreground">Clientes</div>
+              <div className="text-muted-foreground">{t('clients.stats.clients')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl md:text-4xl font-bold text-primary mb-2">+36</div>
-              <div className="text-muted-foreground">Años de Experiencia</div>
+              <div className="text-muted-foreground">{t('clients.stats.experience')}</div>
             </div>
           </div>
           
           {/* Premio Maya 2023 */}
           <div className="mt-16 text-center">
-            <h3 className="text-2xl font-bold tracking-tight text-center mb-4 md:text-3xl text-balance">Ganador Premios Maya 2023</h3>
-            <p className="text-muted-foreground md:text-lg text-pretty mb-6">A mejor empresa de publicidad vial</p>
+            <h3 className="text-2xl font-bold tracking-tight text-center mb-4 md:text-3xl text-balance">{t('clients.award.title')}</h3>
+            <p className="text-muted-foreground md:text-lg text-pretty mb-6">{t('clients.award.subtitle')}</p>
             <div className="flex justify-center">
               <div className="w-32 h-32 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center overflow-hidden">
                 <svg id="Capa_1" data-name="Capa 1" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" viewBox="0 0 1080 1080" className="w-full h-full">
@@ -756,13 +759,10 @@ export default function HomePage() {
         <div className="container px-4 md:px-6 max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold tracking-tight mb-4 md:text-3xl text-balance">
-              Contacto
+              {t('contact.title')}
             </h2>
             <p className="text-muted-foreground md:text-lg text-pretty mb-2">
-              Contáctenos para una cotización sin compromiso:
-            </p>
-            <p className="text-muted-foreground">
-              Contestaremos en pocos minutos
+              {t('contact.subtitle')}
             </p>
           </div>
           
@@ -792,13 +792,13 @@ export default function HomePage() {
               <div className="space-y-6">
                 <div>
                   <label htmlFor="nombre" className="block text-sm font-medium text-foreground mb-2">
-                    Nombre
+                    {t('contact.form.name')}
                   </label>
                   <Input
                     id="nombre"
                     name="nombre"
                     type="text"
-                    placeholder="Nombre"
+                    placeholder={t('contact.form.name')}
                     value={formData.nombre}
                     onChange={handleInputChange}
                     required
@@ -808,13 +808,13 @@ export default function HomePage() {
                 
                 <div>
                   <label htmlFor="telefono" className="block text-sm font-medium text-foreground mb-2">
-                    Teléfono
+                    {t('contact.form.phone')}
                   </label>
                   <Input
                     id="telefono"
                     name="telefono"
                     type="tel"
-                    placeholder="Teléfono"
+                    placeholder={t('contact.form.phone')}
                     value={formData.telefono}
                     onChange={handleInputChange}
                     required
@@ -827,13 +827,13 @@ export default function HomePage() {
               <div className="space-y-6">
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
-                    Email
+                    {t('contact.form.email')}
                   </label>
                   <Input
                     id="email"
                     name="email"
                     type="email"
-                    placeholder="Correo electrónico"
+                    placeholder={t('contact.form.email')}
                     value={formData.email}
                     onChange={handleInputChange}
                     required
@@ -843,13 +843,13 @@ export default function HomePage() {
                 
                 <div>
                   <label htmlFor="empresa" className="block text-sm font-medium text-foreground mb-2">
-                    Empresa
+                    {t('contact.form.company')}
                   </label>
                   <Input
                     id="empresa"
                     name="empresa"
                     type="text"
-                    placeholder="Empresa"
+                    placeholder={t('contact.form.company')}
                     value={formData.empresa}
                     onChange={handleInputChange}
                     required
@@ -862,13 +862,13 @@ export default function HomePage() {
               <div className="col-span-1 md:col-span-2">
                 <div>
                   <label htmlFor="mensaje" className="block text-sm font-medium text-foreground mb-2">
-                    Mensaje
+                    {t('contact.form.message')}
                   </label>
                   <textarea
                     id="mensaje"
                     name="mensaje"
                     rows={6}
-                    placeholder="Escribe tu mensaje aquí (máx. 500 caracteres)"
+                    placeholder={t('contact.form.message')}
                     maxLength={500}
                     value={formData.mensaje}
                     onChange={handleInputChange}
@@ -888,7 +888,7 @@ export default function HomePage() {
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-lg font-medium"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Enviando...' : 'Enviar consulta'}
+                {isSubmitting ? t('common.loading') : t('contact.form.send')}
               </Button>
             </div>
           )}

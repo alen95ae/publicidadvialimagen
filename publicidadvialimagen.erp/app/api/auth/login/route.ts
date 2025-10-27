@@ -5,8 +5,8 @@ import { createAuthCookie } from "@/lib/auth/cookies";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
-    console.log("Login attempt for email:", email);
+    const { email, password, rememberMe } = await req.json();
+    console.log("Login attempt for email:", email, "rememberMe:", rememberMe);
     
     if (!email || !password) {
       return NextResponse.json({ error: "Email y contraseña son obligatorios" }, { status: 400 });
@@ -30,7 +30,8 @@ export async function POST(req: Request) {
     const role = user.fields.Rol || "invitado";
     const redirect = (role === "usuario" || role === "admin") ? "/panel" : "/panel";
 
-    const maxAge = 7 * 24 * 60 * 60; // 7 días
+    // Duración de la cookie basada en "mantener sesión iniciada"
+    const maxAge = rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 días si rememberMe, 1 día si no
     const cookie = createAuthCookie("session", token, maxAge);
     
     const response = NextResponse.json({

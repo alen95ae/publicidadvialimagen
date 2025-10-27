@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  erp:
+    build: ./publicidadvialimagen.erp
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./publicidadvialimagen.erp:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    networks:
+      - publicidad-network
+
+  web:
+    build: ./publicidadvialimagen.com
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./publicidadvialimagen.com:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    networks:
+      - publicidad-network
+
+networks:
+  publicidad-network:
+    driver: bridge

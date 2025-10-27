@@ -40,13 +40,21 @@ export async function GET(request: Request) {
 
     // Filtro de búsqueda por texto (código, título, ciudad, tipo)
     if (query) {
-      const searchFilter = `OR(
-        SEARCH("${query}", LOWER({Código})) > 0,
-        SEARCH("${query}", LOWER({Título})) > 0,
-        SEARCH("${query}", LOWER({Ciudad})) > 0,
-        SEARCH("${query}", LOWER({Tipo de soporte})) > 0
-      )`
-      filterParts.push(searchFilter)
+      // Limpiar la query
+      const cleanQuery = query.trim()
+      
+      if (cleanQuery.length > 0) {
+        // Usar FIND con LOWER para búsqueda case-insensitive
+        // FIND es más robusto para búsquedas con caracteres especiales
+        const lowerQuery = cleanQuery.toLowerCase()
+        const searchFilter = `OR(
+          FIND("${lowerQuery}", LOWER({Código})) > 0,
+          FIND("${lowerQuery}", LOWER({Título})) > 0,
+          FIND("${lowerQuery}", LOWER({Ciudad})) > 0,
+          FIND("${lowerQuery}", LOWER({Tipo de soporte})) > 0
+        )`
+        filterParts.push(searchFilter)
+      }
     }
 
     // Filtro de estado

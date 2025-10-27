@@ -14,11 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card, CardContent } from "@/components/ui/card"
+import { useTranslations } from "@/hooks/use-translations"
 
 // Cambiar a false para mostrar la página normal
 const MAINTENANCE_MODE = true
 
 export default function PrintShopPage() {
+  const { t } = useTranslations()
   const [priceRange, setPriceRange] = useState([0, 100])
   const [selectedFilters, setSelectedFilters] = useState({
     materials: [],
@@ -349,14 +351,13 @@ export default function PrintShopPage() {
             {/* Contenido */}
             <div className="space-y-4">
               <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-                Próximamente
+                {t('printShop.page.comingSoon')}
               </h1>
               <p className="text-xl md:text-2xl text-muted-foreground font-medium">
-                Página en Construcción
+                {t('printShop.page.underConstruction')}
               </p>
               <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-                Estamos trabajando para traerte nuestros servicios de impresión digital. 
-                Muy pronto podrás disfrutar de materiales de alta calidad para tus proyectos publicitarios.
+                {t('printShop.page.constructionDesc')}
               </p>
             </div>
 
@@ -366,9 +367,9 @@ export default function PrintShopPage() {
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center space-y-2">
                     <Ruler className="h-8 w-8 text-primary" />
-                    <h3 className="font-semibold">Cálculo por m²</h3>
+                    <h3 className="font-semibold">{t('printShop.page.calculationPerM2')}</h3>
                     <p className="text-sm text-muted-foreground text-center">
-                      Precios transparentes calculados exactamente
+                      {t('printShop.page.calculationDesc')}
                     </p>
                   </div>
                 </CardContent>
@@ -377,9 +378,9 @@ export default function PrintShopPage() {
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center space-y-2">
                     <Shield className="h-8 w-8 text-primary" />
-                    <h3 className="font-semibold">Alta Calidad</h3>
+                    <h3 className="font-semibold">{t('printShop.page.highQuality')}</h3>
                     <p className="text-sm text-muted-foreground text-center">
-                      Materiales profesionales y duraderos
+                      {t('printShop.page.qualityDesc')}
                     </p>
                   </div>
                 </CardContent>
@@ -388,9 +389,9 @@ export default function PrintShopPage() {
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center space-y-2">
                     <Clock className="h-8 w-8 text-primary" />
-                    <h3 className="font-semibold">Entrega Rápida</h3>
+                    <h3 className="font-semibold">{t('printShop.page.fastDeliveryTitle')}</h3>
                     <p className="text-sm text-muted-foreground text-center">
-                      Tiempos de producción optimizados
+                      {t('printShop.page.deliveryDesc')}
                     </p>
                   </div>
                 </CardContent>
@@ -402,7 +403,7 @@ export default function PrintShopPage() {
               <Button asChild size="lg" className="gap-2">
                 <Link href="/">
                   <Home className="h-5 w-5" />
-                  Volver al Inicio
+                  {t('printShop.page.backToHome')}
                 </Link>
               </Button>
             </div>
@@ -416,16 +417,16 @@ export default function PrintShopPage() {
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 text-balance">Servicios de Impresión</h1>
+        <h1 className="text-3xl font-bold mb-2 text-balance">{t('printShop.page.title')}</h1>
         <p className="text-muted-foreground mb-4 text-pretty">
-          Materiales de impresión profesional calculados por metro cuadrado
+          {t('printShop.page.subtitle')}
         </p>
         <div className="flex items-center text-sm text-muted-foreground">
           <Link href="/" className="hover:text-primary">
-            Inicio
+            {t('nav.home')}
           </Link>
           <span className="mx-2">/</span>
-          <span>Impresión</span>
+          <span>{t('printShop.page.breadcrumb')}</span>
         </div>
       </div>
 

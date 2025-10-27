@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useCotizaciones } from "@/hooks/use-cotizaciones"
+import { useTranslations } from "@/hooks/use-translations"
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ interface QuotesTabProps {
 export default function QuotesTab({ userId }: QuotesTabProps) {
   const { toast } = useToast()
   const { quotes, loading } = useCotizaciones(userId)
+  const { t } = useTranslations()
 
   const getStatusBadge = (estado: string) => {
     switch (estado) {
@@ -48,8 +50,8 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Mis Cotizaciones</CardTitle>
-          <CardDescription>Solicitudes de cotización que has enviado</CardDescription>
+          <CardTitle>{t('account.quotes.title')}</CardTitle>
+          <CardDescription>{t('account.quotes.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-12">
@@ -63,21 +65,21 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Mis Cotizaciones</CardTitle>
+        <CardTitle>{t('account.quotes.title')}</CardTitle>
         <CardDescription>
-          Solicitudes de cotización que has enviado ({quotes.length})
+          {t('account.quotes.description')} ({quotes.length})
         </CardDescription>
       </CardHeader>
       <CardContent>
         {quotes.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No tienes cotizaciones</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('account.quotes.noQuotes')}</h3>
             <p className="text-muted-foreground mb-4">
-              Explora nuestros soportes publicitarios disponibles
+              {t('account.quotes.noQuotesDesc')}
             </p>
             <Button asChild>
-              <a href="/vallas-publicitarias">Ver Soportes</a>
+              <a href="/vallas-publicitarias">{t('account.quotes.viewSupports')}</a>
             </Button>
           </div>
         ) : (
@@ -87,7 +89,7 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
                 <CardContent className="p-4">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h3 className="font-semibold mb-2">Cotización #{quote.id}</h3>
+                      <h3 className="font-semibold mb-2">{t('account.quotes.quoteNumber')} #{quote.id}</h3>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-3 w-3" />
                         <span>
@@ -100,28 +102,28 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
                   <div className="space-y-2 text-sm mb-4">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Empresa:</span>
+                      <span className="font-medium">{t('account.quotes.company')}</span>
                       <span>{quote.empresa}</span>
                     </div>
                     {quote.fecha_inicio && (
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">Fecha Inicio:</span>
+                        <span className="font-medium">{t('account.quotes.startDate')}</span>
                         <span>{new Date(quote.fecha_inicio).toLocaleDateString('es-ES')}</span>
                       </div>
                     )}
                     {quote.meses_alquiler && (
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">Meses de Alquiler:</span>
-                        <span>{quote.meses_alquiler} meses</span>
+                        <span className="font-medium">{t('account.quotes.rentalMonths')}</span>
+                        <span>{quote.meses_alquiler} {t('account.quotes.months')}</span>
                       </div>
                     )}
                     {quote.servicios_adicionales && quote.servicios_adicionales.length > 0 && (
                       <div className="flex items-start gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div>
-                          <span className="font-medium">Servicios Adicionales:</span>
+                          <span className="font-medium">{t('account.quotes.additionalServices')}</span>
                           <div className="mt-1 flex flex-wrap gap-1">
                             {quote.servicios_adicionales.map((servicio, idx) => (
                               <Badge key={idx} variant="secondary" className="text-xs">
@@ -136,7 +138,7 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
 
                   {quote.mensaje && (
                     <div className="mb-4">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Comentarios:</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">{t('account.quotes.comments')}</p>
                       <p className="text-sm text-muted-foreground line-clamp-2">
                         {quote.mensaje}
                       </p>
@@ -146,25 +148,25 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" className="w-full">
-                        Ver Detalles
+                        {t('account.quotes.viewDetails')}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl">
                       <DialogHeader>
-                        <DialogTitle>Cotización #{quote.id.slice(0, 8)}</DialogTitle>
+                        <DialogTitle>{t('account.quotes.quoteNumber')} #{quote.id.slice(0, 8)}</DialogTitle>
                         <DialogDescription>
-                          Solicitada el {format(new Date(quote.created_at), "d 'de' MMMM, yyyy", { locale: es })}
+                          {t('account.quotes.requestedOn')} {format(new Date(quote.created_at), "d 'de' MMMM, yyyy", { locale: es })}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
                         <div>
-                          <h4 className="font-semibold mb-2">Empresa</h4>
+                          <h4 className="font-semibold mb-2">{t('account.quotes.company')}</h4>
                           <p>{quote.empresa}</p>
                         </div>
                         {/* Campo soporte oculto para el cliente */}
                         {quote.fecha_inicio && (
                           <div>
-                            <h4 className="font-semibold mb-2">Fecha de Inicio</h4>
+                            <h4 className="font-semibold mb-2">{t('account.quotes.startDate')}</h4>
                             <p className="text-sm">{new Date(quote.fecha_inicio).toLocaleDateString('es-ES', { 
                               year: 'numeric', 
                               month: 'long', 
@@ -174,13 +176,13 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
                         )}
                         {quote.meses_alquiler && (
                           <div>
-                            <h4 className="font-semibold mb-2">Duración del Alquiler</h4>
-                            <p className="text-sm">{quote.meses_alquiler} meses</p>
+                            <h4 className="font-semibold mb-2">{t('account.quotes.rentalDuration')}</h4>
+                            <p className="text-sm">{quote.meses_alquiler} {t('account.quotes.months')}</p>
                           </div>
                         )}
                         {quote.servicios_adicionales && quote.servicios_adicionales.length > 0 && (
                           <div>
-                            <h4 className="font-semibold mb-2">Servicios Adicionales</h4>
+                            <h4 className="font-semibold mb-2">{t('account.quotes.additionalServices')}</h4>
                             <div className="flex flex-wrap gap-2">
                               {quote.servicios_adicionales.map((servicio, idx) => (
                                 <Badge key={idx} variant="secondary">
@@ -192,17 +194,17 @@ export default function QuotesTab({ userId }: QuotesTabProps) {
                         )}
                         {quote.mensaje && (
                           <div>
-                            <h4 className="font-semibold mb-2">Comentarios</h4>
+                            <h4 className="font-semibold mb-2">{t('account.quotes.comments')}</h4>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quote.mensaje}</p>
                           </div>
                         )}
                         {quote.respuesta && (
                           <div className="border-t pt-4">
-                            <h4 className="font-semibold mb-2 text-green-600">Respuesta del Equipo</h4>
+                            <h4 className="font-semibold mb-2 text-green-600">{t('account.quotes.teamResponse')}</h4>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quote.respuesta}</p>
                             {quote.fecha_respuesta && (
                               <p className="text-xs text-muted-foreground mt-2">
-                                Respondida el {format(new Date(quote.fecha_respuesta), "d 'de' MMMM, yyyy", { locale: es })}
+                                {t('account.quotes.respondedOn')} {format(new Date(quote.fecha_respuesta), "d 'de' MMMM, yyyy", { locale: es })}
                               </p>
                             )}
                           </div>

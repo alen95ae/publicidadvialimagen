@@ -1,7 +1,27 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
+import { useTranslations } from "@/hooks/use-translations"
 
 export default function Footer() {
+  const { t } = useTranslations()
+  
+  // Función para obtener el nombre original del formato para la URL
+  const getFormatUrlName = (format: string) => {
+    // Mapear los nombres de formatos a sus equivalentes para URL
+    const formatUrlMap: Record<string, string> = {
+      'Unipolar': 'Unipolar',
+      'Bipolar': 'Bipolar', 
+      'Tripolar': 'Tripolar',
+      'Mural': 'Mural',
+      'Mega Valla': 'Mega Valla',
+      'Cartelera': 'Cartelera',
+      'Paleta': 'Paleta'
+    }
+    return formatUrlMap[format] || format
+  }
+  
   return (
     <footer className="border-t bg-background">
       <div className="container px-4 py-8 md:px-6 md:py-12">
@@ -18,53 +38,53 @@ export default function Footer() {
             </Link>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Servicios</h3>
+            <h3 className="text-sm font-medium">{t('footer.billboards')}</h3>
             <nav className="flex flex-col space-y-2">
-              <Link href="/vallas-publicitarias?formats=Unipolar" className="text-sm text-muted-foreground hover:text-primary">
-                Unipolar
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Unipolar')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.unipolar')}
               </Link>
-              <Link href="/vallas-publicitarias?formats=Bipolar" className="text-sm text-muted-foreground hover:text-primary">
-                Bipolar
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Bipolar')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.bipolar')}
               </Link>
-              <Link href="/vallas-publicitarias?formats=Tripolar" className="text-sm text-muted-foreground hover:text-primary">
-                Tripolar
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Tripolar')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.tripolar')}
               </Link>
-              <Link href="/vallas-publicitarias?formats=Mural" className="text-sm text-muted-foreground hover:text-primary">
-                Mural
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Mural')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.mural')}
               </Link>
-              <Link href="/vallas-publicitarias?formats=Mega Valla" className="text-sm text-muted-foreground hover:text-primary">
-                Mega Valla
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Mega Valla')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.megaValla')}
               </Link>
-              <Link href="/vallas-publicitarias?formats=Cartelera" className="text-sm text-muted-foreground hover:text-primary">
-                Cartelera
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Cartelera')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.cartelera')}
               </Link>
-              <Link href="/vallas-publicitarias?formats=Paleta" className="text-sm text-muted-foreground hover:text-primary">
-                Paleta
+              <Link href={`/vallas-publicitarias?formats=${getFormatUrlName('Paleta')}`} className="text-sm text-muted-foreground hover:text-primary">
+                {t('billboards.categories.paleta')}
               </Link>
             </nav>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Empresa</h3>
+            <h3 className="text-sm font-medium">{t('footer.company')}</h3>
             <nav className="flex flex-col space-y-2">
               <Link href="/about" className="text-sm text-muted-foreground hover:text-primary">
-                Nosotros
+                {t('footer.links.about')}
               </Link>
               <Link href="#" className="text-sm text-muted-foreground hover:text-primary">
-                Casos de Éxito
+                {t('footer.links.successCases')}
               </Link>
               <Link href="#" className="text-sm text-muted-foreground hover:text-primary">
-                Información de Entrega
+                {t('footer.links.deliveryInfo')}
               </Link>
               <Link href="/contact" className="text-sm text-muted-foreground hover:text-primary">
-                Contacto
+                {t('footer.links.contact')}
               </Link>
               <Link href="#" className="text-sm text-muted-foreground hover:text-primary">
-                Blog
+                {t('footer.links.blog')}
               </Link>
             </nav>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">La Paz</h3>
+            <h3 className="text-sm font-medium">{t('footer.laPaz')}</h3>
             <div className="flex flex-col space-y-2 text-sm text-muted-foreground">
               <p>C. Nicolás Acosta Esq. Pedro Blanco</p>
               <p>(Alto San Pedro) N° 1471</p>
@@ -74,7 +94,7 @@ export default function Footer() {
             </div>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Santa Cruz</h3>
+            <h3 className="text-sm font-medium">{t('footer.santaCruz')}</h3>
             <div className="flex flex-col space-y-2 text-sm text-muted-foreground">
               <p>Avenida 2 de Agosto, Calle 6</p>
               <p>(Entre 4 y 5 Anillo) N° 27</p>
@@ -87,18 +107,18 @@ export default function Footer() {
         <div className="mt-8 border-t pt-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} Publicidad Vial Imagen. Todos los derechos reservados.
+              &copy; {new Date().getFullYear()} Publicidad Vial Imagen. {t('footer.copyright')}
             </p>
             <div className="flex items-center gap-4">
               <div className="flex justify-center gap-4">
                 <Link href="/privacy-policy" className="text-xs text-muted-foreground hover:text-primary">
-                  Política de Privacidad
+                  {t('footer.links.privacy')}
                 </Link>
                 <Link href="/terms-of-service" className="text-xs text-muted-foreground hover:text-primary">
-                  Términos de Servicio
+                  {t('footer.links.terms')}
                 </Link>
                 <Link href="/cookie-policy" className="text-xs text-muted-foreground hover:text-primary">
-                  Política de Cookies
+                  {t('footer.links.cookies')}
                 </Link>
               </div>
               <div className="flex gap-4">
@@ -120,7 +140,7 @@ export default function Footer() {
                     <rect x="2" y="9" width="4" height="12"></rect>
                     <circle cx="4" cy="4" r="2"></circle>
                   </svg>
-                  <span className="sr-only">LinkedIn</span>
+                  <span className="sr-only">{t('footer.social.linkedin')}</span>
                 </Link>
                 {/* Facebook */}
                 <Link href="https://www.facebook.com/PVISRL" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
@@ -138,7 +158,7 @@ export default function Footer() {
                   >
                     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
                   </svg>
-                  <span className="sr-only">Facebook</span>
+                  <span className="sr-only">{t('footer.social.facebook')}</span>
                 </Link>
                 {/* Instagram */}
                 <Link href="https://www.instagram.com/imagenpublicidadbolivia/?hl=es-la" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary">
@@ -158,7 +178,7 @@ export default function Footer() {
                     <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
                     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
                   </svg>
-                  <span className="sr-only">Instagram</span>
+                  <span className="sr-only">{t('footer.social.instagram')}</span>
                 </Link>
               </div>
             </div>

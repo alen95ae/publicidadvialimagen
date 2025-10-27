@@ -15,7 +15,7 @@ import { ArrowLeft, Save, MapPin, Calculator } from "lucide-react"
 import { toast } from "sonner"
 import dynamic from 'next/dynamic'
 
-const InteractiveMap = dynamic(() => import('@/components/interactive-map'), { ssr: false })
+const EditableLeafletMap = dynamic(() => import('@/components/maps/EditableLeafletMap'), { ssr: false })
 
 // Constantes para selects y colores
 const TYPE_OPTIONS = [
@@ -575,11 +575,41 @@ export default function NuevoSoportePage() {
                 
                 <div className="space-y-2">
                   <Label>Ubicación en el mapa</Label>
-                  <InteractiveMap
+                  <EditableLeafletMap
                     lat={formData.latitude || -16.5000}
                     lng={formData.longitude || -68.1500}
-                    editable={true}
+                    onChange={(coords) => {
+                      console.log('🎯 Map coordinates changed:', coords);
+                      const newGoogleMapsLink = `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15`;
+                      console.log('🔗 Generated new Google Maps link:', newGoogleMapsLink);
+                      
+                      setFormData(prev => ({
+                        ...prev,
+                        latitude: coords.lat,
+                        longitude: coords.lng,
+                        googleMapsLink: newGoogleMapsLink
+                      }));
+                      
+                      toast.success(`Ubicación actualizada: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+                    }}
+                    height={420}
                   />
+                  <div className="text-sm mt-2 text-gray-600">
+                    <div>Lat: {(formData.latitude || -16.5000).toFixed(6)} | Lng: {(formData.longitude || -68.1500).toFixed(6)}</div>
+                    {formData.googleMapsLink && (
+                      <div className="mt-1">
+                        <span className="text-xs text-gray-500">Enlace generado:</span>
+                        <a 
+                          href={formData.googleMapsLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 text-xs ml-1"
+                        >
+                          {formData.googleMapsLink}
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

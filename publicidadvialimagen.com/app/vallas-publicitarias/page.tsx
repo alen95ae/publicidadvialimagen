@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card, CardContent } from "@/components/ui/card"
 import { useBillboards } from "@/hooks/use-billboards"
+import { useTranslations } from "@/hooks/use-translations"
 import { CITY_COORDINATES } from "@/lib/city-coordinates"
 import dynamic from "next/dynamic"
 
@@ -252,24 +253,24 @@ function normalizeCityName(city: string): string {
 }
 
 // Función para normalizar tipos de soporte
-function normalizeFormatName(format: string): string {
+function normalizeFormatName(format: string, t: (key: string) => string): string {
   const formatMap: Record<string, string> = {
     // Mapear variantes a los nombres estándar
-    'Unipolar': 'Unipolar',
-    'unipolar': 'Unipolar',
-    'Bipolar': 'Bipolar',
-    'bipolar': 'Bipolar',
-    'Tripolar': 'Tripolar',
-    'tripolar': 'Tripolar',
-    'Mural': 'Mural',
-    'mural': 'Mural',
-    'Mega Valla': 'Mega Valla',
-    'mega valla': 'Mega Valla',
-    'megavalla': 'Mega Valla',
-    'Cartelera': 'Cartelera',
-    'cartelera': 'Cartelera',
-    'Paleta': 'Paleta',
-    'paleta': 'Paleta',
+    'Unipolar': t('billboards.categories.unipolar'),
+    'unipolar': t('billboards.categories.unipolar'),
+    'Bipolar': t('billboards.categories.bipolar'),
+    'bipolar': t('billboards.categories.bipolar'),
+    'Tripolar': t('billboards.categories.tripolar'),
+    'tripolar': t('billboards.categories.tripolar'),
+    'Mural': t('billboards.categories.mural'),
+    'mural': t('billboards.categories.mural'),
+    'Mega Valla': t('billboards.categories.megaValla'),
+    'mega valla': t('billboards.categories.megaValla'),
+    'megavalla': t('billboards.categories.megaValla'),
+    'Cartelera': t('billboards.categories.cartelera'),
+    'cartelera': t('billboards.categories.cartelera'),
+    'Paleta': t('billboards.categories.paleta'),
+    'paleta': t('billboards.categories.paleta'),
   }
   return formatMap[format] || format
 }
@@ -291,7 +292,8 @@ function FilterSidebar({
   setMaxPriceInput,
   handleApplyPriceFilter,
   dynamicMinPrice,
-  dynamicMaxPrice
+  dynamicMaxPrice,
+  t
 }: {
   isMobile?: boolean
   selectedFilters: {
@@ -308,18 +310,19 @@ function FilterSidebar({
   handleApplyPriceFilter: () => void
   dynamicMinPrice: number
   dynamicMaxPrice: number
+  t: (key: string) => string
 }) {
   return (
     <div className={`space-y-6 ${isMobile ? "" : "sticky top-20"}`}>
       <div className="flex items-center justify-between">
-        <h3 className="font-medium text-lg">Filtros</h3>
+        <h3 className="font-medium text-lg">{t('billboards.page.filters')}</h3>
         <Button
           variant="ghost"
           size="sm"
           onClick={clearFilters}
           className="h-8 text-xs text-black hover:text-red-500 hover:bg-transparent"
         >
-          Limpiar todo
+          {t('billboards.page.clearAll')}
         </Button>
       </div>
 
@@ -389,17 +392,25 @@ function FilterSidebar({
 
         {/* Tipo de Soporte */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Tipo de Soporte</h3>
+          <h3 className="text-sm font-medium">{t('billboards.filter')}</h3>
           <div className="space-y-2">
-            {["Unipolar", "Bipolar", "Tripolar", "Mural", "Mega Valla", "Cartelera", "Paleta"].map((format) => (
-              <div key={format} className="flex items-center space-x-2">
+            {[
+              { key: 'unipolar', original: 'Unipolar' },
+              { key: 'bipolar', original: 'Bipolar' },
+              { key: 'tripolar', original: 'Tripolar' },
+              { key: 'mural', original: 'Mural' },
+              { key: 'megaValla', original: 'Mega Valla' },
+              { key: 'cartelera', original: 'Cartelera' },
+              { key: 'paleta', original: 'Paleta' }
+            ].map(({ key, original }) => (
+              <div key={original} className="flex items-center space-x-2">
                 <Checkbox
-                  id={`format-${format}`}
-                  checked={selectedFilters.formats.includes(format)}
-                  onCheckedChange={() => toggleFilter("formats", format)}
+                  id={`format-${original}`}
+                  checked={selectedFilters.formats.includes(original)}
+                  onCheckedChange={() => toggleFilter("formats", original)}
                 />
-                <Label htmlFor={`format-${format}`} className="text-sm font-normal cursor-pointer">
-                  {format}
+                <Label htmlFor={`format-${original}`} className="text-sm font-normal cursor-pointer">
+                  {t(`billboards.categories.${key}`)}
                 </Label>
               </div>
             ))}
@@ -408,7 +419,7 @@ function FilterSidebar({
 
         {/* Disponibilidad */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Disponibilidad</h3>
+          <h3 className="text-sm font-medium">{t('billboards.page.availability')}</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -417,7 +428,7 @@ function FilterSidebar({
                 onCheckedChange={() => toggleFilter("availability", "available")}
               />
               <Label htmlFor="available-now" className="text-sm font-normal cursor-pointer">
-                Disponible ahora
+                {t('billboards.page.availableNow')}
               </Label>
             </div>
             <div className="flex items-center space-x-2">
@@ -427,7 +438,7 @@ function FilterSidebar({
                 onCheckedChange={() => toggleFilter("availability", "coming-soon")}
               />
               <Label htmlFor="coming-soon" className="text-sm font-normal cursor-pointer">
-                Próximamente
+                {t('billboards.page.comingSoon')}
               </Label>
             </div>
           </div>
@@ -440,6 +451,7 @@ function FilterSidebar({
 export default function VallasPublicitariasPage() {
   const searchParams = useSearchParams()
   const { billboards: allBillboards, loading, error } = useBillboards()
+  const { t } = useTranslations()
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [minPriceInput, setMinPriceInput] = useState("")
@@ -485,8 +497,8 @@ export default function VallasPublicitariasPage() {
 
     if (selectedFilters.formats.length > 0) {
       const matchesFormat = selectedFilters.formats.some(filterFormat => {
-        const normalizedFilter = normalizeFormatName(filterFormat)
-        const normalizedBillboard = normalizeFormatName(billboard.format)
+        const normalizedFilter = normalizeFormatName(filterFormat, t)
+        const normalizedBillboard = normalizeFormatName(billboard.format, t)
         const matches = normalizedFilter === normalizedBillboard
         
         return matches
@@ -624,7 +636,7 @@ export default function VallasPublicitariasPage() {
     
     // Procesar formatos igual que city
     if (formatsParam) {
-      const normalizedFormat = normalizeFormatName(formatsParam)
+      const normalizedFormat = normalizeFormatName(formatsParam, t)
       setSelectedFilters(prev => ({
         ...prev,
         formats: [normalizedFormat]
@@ -759,19 +771,19 @@ export default function VallasPublicitariasPage() {
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 text-balance">
-          {searchQuery ? `Resultados para "${searchQuery}"` : "Espacios Publicitarios"}
+          {searchQuery ? `${t('billboards.page.noResults')} "${searchQuery}"` : t('billboards.page.title')}
         </h1>
         {searchQuery && (
           <p className="text-muted-foreground mb-2">
-            Se encontraron {sortedBillboards.length} espacios publicitarios
+            {sortedBillboards.length} {t('billboards.page.products')} found
           </p>
         )}
         <div className="flex items-center text-sm text-muted-foreground">
           <Link href="/" className="hover:text-primary">
-            Inicio
+            {t('nav.home')}
           </Link>
           <span className="mx-2">/</span>
-          <span>Vallas Publicitarias</span>
+          <span>{t('billboards.page.breadcrumb')}</span>
         </div>
       </div>
 
@@ -789,6 +801,7 @@ export default function VallasPublicitariasPage() {
             handleApplyPriceFilter={handleApplyPriceFilter}
             dynamicMinPrice={dynamicMinPrice}
             dynamicMaxPrice={dynamicMaxPrice}
+            t={t}
           />
         </div>
 
@@ -796,7 +809,7 @@ export default function VallasPublicitariasPage() {
         <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
           <SheetContent side="left" className="w-full sm:max-w-md">
             <SheetHeader className="mb-4">
-              <SheetTitle>Filtros</SheetTitle>
+              <SheetTitle>{t('billboards.page.filters')}</SheetTitle>
               <SheetDescription>Encuentra el espacio publicitario perfecto</SheetDescription>
             </SheetHeader>
             <FilterSidebar 
@@ -811,6 +824,7 @@ export default function VallasPublicitariasPage() {
               handleApplyPriceFilter={handleApplyPriceFilter}
               dynamicMinPrice={dynamicMinPrice}
               dynamicMaxPrice={dynamicMaxPrice}
+              t={t}
             />
           </SheetContent>
         </Sheet>
@@ -819,7 +833,7 @@ export default function VallasPublicitariasPage() {
         <div className="flex-1">
           {/* Map Section */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Ubicación de Espacios Publicitarios</h2>
+            <h2 className="text-xl font-semibold mb-4">{t('billboards.page.locationTitle')}</h2>
             {isMapVisible && (
               <LeafletHybridMap 
                 points={supportPoints} 
@@ -839,7 +853,7 @@ export default function VallasPublicitariasPage() {
                 onClick={() => setMobileFiltersOpen(true)}
               >
                 <Filter className="h-4 w-4" />
-                Filtros
+                {t('billboards.page.filters')}
               </Button>
 
               {/* Map Toggle Button */}
@@ -852,12 +866,12 @@ export default function VallasPublicitariasPage() {
                 {isMapVisible ? (
                   <>
                     <Eye className="h-4 w-4" />
-                    Ocultar mapa
+                    {t('billboards.page.hideMap')}
                   </>
                 ) : (
                   <>
                     <MapPin className="h-4 w-4" />
-                    Mostrar mapa
+                    {t('billboards.page.showMap')}
                   </>
                 )}
               </Button>
@@ -897,13 +911,13 @@ export default function VallasPublicitariasPage() {
             </span>
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Ordenar por" />
+                  <SelectValue placeholder={t('billboards.page.sortBy')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="featured">Populares</SelectItem>
-                  <SelectItem value="traffic">Mayor Tráfico</SelectItem>
-                  <SelectItem value="name-az">Alfabético A-Z</SelectItem>
-                  <SelectItem value="name-za">Alfabético Z-A</SelectItem>
+                  <SelectItem value="featured">{t('billboards.page.popular')}</SelectItem>
+                  <SelectItem value="traffic">{t('billboards.page.highestTraffic')}</SelectItem>
+                  <SelectItem value="name-az">{t('billboards.page.alphabeticalAZ')}</SelectItem>
+                  <SelectItem value="name-za">{t('billboards.page.alphabeticalZA')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

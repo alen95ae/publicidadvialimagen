@@ -19,11 +19,13 @@ import {
   CheckCircle
 } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "@/hooks/use-translations"
 
 
 export default function SolicitarCotizacionPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { t } = useTranslations()
   
   // Datos que vienen de la página de producto
   const [datosProducto, setDatosProducto] = useState({
@@ -130,9 +132,9 @@ export default function SolicitarCotizacionPage() {
   // Mapear nombres abreviados a nombres completos
   const mapearServicios = (servicios: string[]) => {
     const mapeo: { [key: string]: string } = {
-      'diseno': 'Diseño gráfico',
-      'impresion': 'Impresión de lona',
-      'instalacion': 'Instalación en valla'
+      'diseno': t('billboards.page.graphicDesign'),
+      'impresion': t('billboards.page.bannerPrinting'),
+      'instalacion': t('billboards.page.billboardInstallation')
     }
     return servicios.map(servicio => mapeo[servicio] || servicio)
   }
@@ -171,20 +173,19 @@ export default function SolicitarCotizacionPage() {
           <CardContent className="pt-6">
             <div className="text-center">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Solicitud Enviada!</h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('quoteRequest.success.title')}</h2>
               <p className="text-gray-600 mb-6">
-                Tu solicitud de cotización ha sido enviada exitosamente. 
-                Nos pondremos en contacto contigo pronto.
+                {t('quoteRequest.success.description')}
               </p>
               <div className="space-y-3">
                 <Link href="/">
                   <Button className="w-full">
-                    Volver al Inicio
+                    {t('quoteRequest.success.backToHome')}
                   </Button>
                 </Link>
                 <Link href="/vallas-publicitarias">
                   <Button variant="outline" className="w-full">
-                    Ver Más Productos
+                    {t('quoteRequest.success.viewMoreProducts')}
                   </Button>
                 </Link>
               </div>
@@ -202,10 +203,10 @@ export default function SolicitarCotizacionPage() {
         <div className="mb-8">
           <Link href="/" className="inline-flex items-center text-[#D54644] hover:text-[#D54644]/80 mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Volver
+            {t('quoteRequest.back')}
           </Link>
-          <h1 className="text-3xl font-bold text-gray-800">Solicitar Cotización</h1>
-          <p className="text-gray-600">Completa los datos para solicitar tu cotización</p>
+          <h1 className="text-3xl font-bold text-gray-800">{t('quoteRequest.title')}</h1>
+          <p className="text-gray-600">{t('quoteRequest.subtitle')}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -214,29 +215,29 @@ export default function SolicitarCotizacionPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="w-5 h-5" />
-                Resumen de tu Selección
+                {t('quoteRequest.summary.title')}
               </CardTitle>
               <CardDescription>
-                Revisa los datos que seleccionaste en el producto
+                {t('quoteRequest.summary.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="font-medium">Fecha de Inicio:</span>
+                <span className="font-medium">{t('quoteRequest.summary.startDate')}</span>
                 <span>{datosProducto.fechaInicio}</span>
               </div>
               
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4 text-gray-400" />
-                <span className="font-medium">Meses de Alquiler:</span>
-                <span>{datosProducto.mesesAlquiler} meses</span>
+                <span className="font-medium">{t('quoteRequest.summary.rentalMonths')}</span>
+                <span>{datosProducto.mesesAlquiler} {t('quoteRequest.summary.months')}</span>
               </div>
               
               
               {serviciosSeleccionados.length > 0 && (
                 <div>
-                  <span className="font-medium">Servicios Adicionales:</span>
+                  <span className="font-medium">{t('quoteRequest.summary.additionalServices')}</span>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {serviciosSeleccionados.map((servicio, index) => (
                       <span key={index} className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs text-blue-800">
@@ -254,10 +255,10 @@ export default function SolicitarCotizacionPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="w-5 h-5" />
-                Datos de Contacto
+                {t('quoteRequest.contact.title')}
               </CardTitle>
               <CardDescription>
-                Completa tus datos para procesar la solicitud
+                {t('quoteRequest.contact.description')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -268,44 +269,44 @@ export default function SolicitarCotizacionPage() {
                   <input type="text" name="fake-field" autoComplete="off" />
                 </div>
                 <div>
-                  <Label htmlFor="empresa">Empresa *</Label>
+                  <Label htmlFor="empresa">{t('quoteRequest.contact.company')} *</Label>
                   <Input
                     id="empresa"
                     name="empresa"
                     value={formData.empresa}
                     onChange={handleInputChange}
-                    placeholder="Nombre de tu empresa"
+                    placeholder={t('quoteRequest.contact.companyPlaceholder')}
                     required
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="contacto">Nombre *</Label>
+                  <Label htmlFor="contacto">{t('quoteRequest.contact.name')} *</Label>
                   <Input
                     id="contacto"
                     name="contacto"
                     value={formData.contacto}
                     onChange={handleInputChange}
-                    placeholder="Tu nombre completo"
+                    placeholder={t('quoteRequest.contact.namePlaceholder')}
                     required
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="telefono">Teléfono *</Label>
+                  <Label htmlFor="telefono">{t('quoteRequest.contact.phone')} *</Label>
                   <Input
                     id="telefono"
                     name="telefono"
                     type="tel"
                     value={formData.telefono}
                     onChange={handleInputChange}
-                    placeholder="+591 2 1234567"
+                    placeholder={t('quoteRequest.contact.phonePlaceholder')}
                     required
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">{t('quoteRequest.contact.email')} *</Label>
                   {/* Campo oculto para confundir al autocompletado */}
                   <input type="text" style={{ display: 'none' }} autoComplete="off" />
                   <Input
@@ -314,7 +315,7 @@ export default function SolicitarCotizacionPage() {
                     type="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    placeholder="tu@empresa.com"
+                    placeholder={t('quoteRequest.contact.emailPlaceholder')}
                     required
                     autoComplete="new-password"
                     data-lpignore="true"
@@ -323,13 +324,13 @@ export default function SolicitarCotizacionPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="comentarios">Comentarios</Label>
+                  <Label htmlFor="comentarios">{t('quoteRequest.contact.comments')}</Label>
                   <Textarea
                     id="comentarios"
                     name="comentarios"
                     value={formData.comentarios}
                     onChange={handleInputChange}
-                    placeholder="Información adicional sobre tu solicitud..."
+                    placeholder={t('quoteRequest.contact.commentsPlaceholder')}
                     rows={3}
                   />
                 </div>
@@ -341,7 +342,7 @@ export default function SolicitarCotizacionPage() {
                   disabled={isSubmitting}
                   onClick={() => console.log('🔘 Botón de envío clickeado')}
                 >
-                  {isSubmitting ? 'Enviando...' : 'Solicitar Cotización'}
+                  {isSubmitting ? t('quoteRequest.contact.submitting') : t('quoteRequest.contact.submit')}
                 </Button>
               </form>
             </CardContent>

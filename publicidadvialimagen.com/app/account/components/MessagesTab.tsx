@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useMessages, Message } from "@/hooks/use-messages"
+import { useTranslations } from "@/hooks/use-translations"
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
   const [removing, setRemoving] = useState<string | null>(null)
   const { toast } = useToast()
   const { messages, loading, markAsRead, deleteMessage } = useMessages()
+  const { t } = useTranslations()
 
   const handleMarkAsRead = async (messageId: string) => {
     await markAsRead(messageId)
@@ -39,8 +41,8 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "No se pudo eliminar el mensaje",
+        title: t('common.error'),
+        description: t('account.messages.deleteMessage'),
       })
     } finally {
       setRemoving(null)
@@ -51,8 +53,8 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Mis Mensajes</CardTitle>
-          <CardDescription>Mensajes y respuestas recibidas</CardDescription>
+          <CardTitle>{t('account.messages.title')}</CardTitle>
+          <CardDescription>{t('account.messages.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-12">
@@ -68,12 +70,12 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Mis Mensajes</CardTitle>
+        <CardTitle>{t('account.messages.title')}</CardTitle>
         <CardDescription>
-          Mensajes y respuestas recibidas ({messages.length})
+          {t('account.messages.description')} ({messages.length})
           {unreadCount > 0 && (
             <Badge variant="default" className="ml-2">
-              {unreadCount} sin leer
+              {unreadCount} {t('account.messages.unread')}
             </Badge>
           )}
         </CardDescription>
@@ -82,9 +84,9 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
         {messages.length === 0 ? (
           <div className="text-center py-12">
             <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No tienes mensajes</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('account.messages.noMessages')}</h3>
             <p className="text-muted-foreground mb-4">
-              Los mensajes y respuestas que recibas aparecerán aquí
+              {t('account.messages.noMessagesDesc')}
             </p>
           </div>
         ) : (
@@ -97,11 +99,11 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="font-semibold">{message.asunto}</h3>
                         {!message.leido && (
-                          <Badge variant="default" className="text-xs">Nuevo</Badge>
+                          <Badge variant="default" className="text-xs">{t('account.messages.new')}</Badge>
                         )}
                         {message.respondido && (
                           <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                            Respondido
+                            {t('account.messages.responded')}
                           </Badge>
                         )}
                       </div>
@@ -144,36 +146,36 @@ export default function MessagesTab({ userId }: MessagesTabProps) {
                         className="w-full"
                         onClick={() => !message.leido && handleMarkAsRead(message.id)}
                       >
-                        Ver Mensaje Completo
+                        {t('account.messages.viewFullMessage')}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl">
                       <DialogHeader>
                         <DialogTitle>{message.asunto}</DialogTitle>
                         <DialogDescription>
-                          Recibido el {format(new Date(message.created_at), "d 'de' MMMM, yyyy", { locale: es })}
+                          {t('account.messages.receivedOn')} {format(new Date(message.created_at), "d 'de' MMMM, yyyy", { locale: es })}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
                         <div>
-                          <h4 className="font-semibold mb-2">De</h4>
+                          <h4 className="font-semibold mb-2">{t('account.messages.from')}</h4>
                           <p className="text-sm">{message.email}</p>
                         </div>
                         <div>
-                          <h4 className="font-semibold mb-2">Mensaje</h4>
+                          <h4 className="font-semibold mb-2">{t('account.messages.message')}</h4>
                           <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                             {message.mensaje}
                           </p>
                         </div>
                         {message.respuesta && (
                           <div className="border-t pt-4">
-                            <h4 className="font-semibold mb-2 text-green-600">Respuesta</h4>
+                            <h4 className="font-semibold mb-2 text-green-600">{t('account.messages.response')}</h4>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                               {message.respuesta}
                             </p>
                             {message.fecha_respuesta && (
                               <p className="text-xs text-muted-foreground mt-2">
-                                Respondido el {format(new Date(message.fecha_respuesta), "d 'de' MMMM, yyyy", { locale: es })}
+                                {t('account.messages.respondedOn')} {format(new Date(message.fecha_respuesta), "d 'de' MMMM, yyyy", { locale: es })}
                               </p>
                             )}
                           </div>

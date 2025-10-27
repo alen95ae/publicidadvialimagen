@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useMessages } from "@/hooks/use-messages"
+import { useTranslations } from "@/hooks/use-translations"
 
 
 // Dynamic ContactMap to avoid SSR issues
@@ -23,6 +24,7 @@ const ContactMap = dynamic(() => import("@/components/maps/ContactMap"), {
 })
 
 export default function ContactPage() {
+  const { t } = useTranslations()
   const [formSubmitted, setFormSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -107,9 +109,9 @@ export default function ContactPage() {
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold tracking-tight mb-4 md:text-4xl">Contacto</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-4 md:text-4xl">{t('contact.page.title')}</h1>
           <p className="text-muted-foreground md:text-lg">
-            ¿Tienes alguna pregunta? Nos encantaría escucharte. Envíanos un mensaje y te responderemos lo antes posible.
+            {t('contact.page.subtitle')}
           </p>
         </div>
 
@@ -117,12 +119,12 @@ export default function ContactPage() {
         <div className="mb-12">
           <Card className="shadow-lg">
             <CardContent className="p-8">
-              <h2 className="text-2xl font-semibold mb-6 text-center">Envíanos un Mensaje</h2>
+              <h2 className="text-2xl font-semibold mb-6 text-center">{t('contact.page.sendMessage')}</h2>
 
               {formSubmitted ? (
                 <div className="bg-primary/10 text-primary p-4 rounded-lg mb-6">
-                  <h3 className="font-semibold text-lg mb-2">¡Gracias!</h3>
-                  <p>Tu mensaje ha sido enviado exitosamente. Te responderemos lo antes posible.</p>
+                  <h3 className="font-semibold text-lg mb-2">{t('contact.page.thanks')}</h3>
+                  <p>{t('contact.page.thanksDesc')}</p>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
@@ -143,23 +145,23 @@ export default function ContactPage() {
                   <input type="hidden" name="js" value={antiSpam.js} readOnly />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nombre</Label>
+                      <Label htmlFor="name">{t('contact.form.name')}</Label>
                       <Input 
                         id="name" 
                         name="name"
-                        placeholder="Tu nombre" 
+                        placeholder={t('contact.page.namePlaceholder')} 
                         value={formData.name}
                         onChange={handleInputChange}
                         required 
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
+                      <Label htmlFor="email">{t('contact.form.email')}</Label>
                       <Input 
                         id="email" 
                         name="email"
                         type="email" 
-                        placeholder="tu@email.com" 
+                        placeholder={t('contact.page.emailPlaceholder')} 
                         value={formData.email}
                         onChange={handleInputChange}
                         required 
@@ -169,23 +171,23 @@ export default function ContactPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Teléfono</Label>
+                      <Label htmlFor="phone">{t('contact.form.phone')}</Label>
                       <Input 
                         id="phone" 
                         name="phone"
                         type="tel" 
-                        placeholder="Tu teléfono" 
+                        placeholder={t('contact.page.phonePlaceholder')} 
                         value={formData.phone}
                         onChange={handleInputChange}
                         required 
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="company">Empresa</Label>
+                      <Label htmlFor="company">{t('contact.form.company')}</Label>
                       <Input 
                         id="company" 
                         name="company"
-                        placeholder="Tu empresa" 
+                        placeholder={t('contact.page.companyPlaceholder')} 
                         value={formData.company}
                         onChange={handleInputChange}
                         required 
@@ -194,11 +196,11 @@ export default function ContactPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="message">Mensaje</Label>
+                    <Label htmlFor="message">{t('contact.form.message')}</Label>
                     <Textarea 
                       id="message" 
                       name="message"
-                      placeholder="Escribe tu mensaje aquí (máx. 500 caracteres)" 
+                      placeholder={t('contact.page.messagePlaceholder')} 
                       className="min-h-[150px]" 
                       maxLength={500}
                       value={formData.message}
@@ -213,7 +215,7 @@ export default function ContactPage() {
                       className="w-full sm:w-auto px-8"
                       disabled={isSubmitting}
                     >
-                      {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
+                      {isSubmitting ? t('contact.page.sending') : t('contact.page.sendMessageBtn')}
                     </Button>
                   </div>
                 </form>
@@ -226,7 +228,7 @@ export default function ContactPage() {
         <div className="mb-12">
           <Card className="shadow-lg">
             <CardContent className="p-8">
-              <h2 className="text-xl font-semibold mb-6 text-center">Síguenos en Redes Sociales</h2>
+              <h2 className="text-xl font-semibold mb-6 text-center">{t('contact.page.followUs')}</h2>
               
               <div className="flex flex-col sm:flex-row justify-center gap-8">
                 {/* LinkedIn */}
@@ -311,7 +313,7 @@ export default function ContactPage() {
 
         {/* Título Sucursales */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Sucursales</h2>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">{t('contact.page.branches')}</h2>
         </div>
 
         {/* Fichas de Sucursales */}
@@ -320,7 +322,7 @@ export default function ContactPage() {
           <div className="space-y-6">
             <Card className="shadow-lg">
               <CardContent className="p-8">
-                <h3 className="text-xl font-semibold mb-6 text-center">La Paz</h3>
+                <h3 className="text-xl font-semibold mb-6 text-center">{t('contact.page.laPaz')}</h3>
                 
                 {/* Imagen de La Paz */}
                 <div className="flex justify-center mb-6">
@@ -339,11 +341,8 @@ export default function ContactPage() {
                       <MapPin className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Ubicación</h4>
-                      <address className="not-italic text-muted-foreground">
-                        C. Nicolás Acosta Esq. Pedro Blanco<br />
-                        (Alto San Pedro) N° 1471<br />
-                        La Paz, Bolivia
+                      <h4 className="font-semibold mb-2">{t('contact.page.location')}</h4>
+                      <address className="not-italic text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('contact.page.laPazAddress') }}>
                       </address>
                     </div>
                   </div>
@@ -353,12 +352,8 @@ export default function ContactPage() {
                       <Phone className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Teléfonos</h4>
-                      <p className="text-muted-foreground">
-                        (591-2) 2493155 – 2493156
-                      </p>
-                      <p className="text-muted-foreground">
-                        76244800 – 77229109
+                      <h4 className="font-semibold mb-2">{t('contact.page.phones')}</h4>
+                      <p className="text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('contact.page.laPazPhones') }}>
                       </p>
                     </div>
                   </div>
@@ -368,10 +363,10 @@ export default function ContactPage() {
                       <Mail className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Email</h4>
+                      <h4 className="font-semibold mb-2">{t('contact.page.email')}</h4>
                       <p className="text-muted-foreground">
                         <a href="mailto:contactos@publicidadvialimagen.com" className="hover:text-primary">
-                          contactos@publicidadvialimagen.com
+                          {t('contact.page.laPazEmail')}
                         </a>
                       </p>
                     </div>
@@ -382,10 +377,9 @@ export default function ContactPage() {
                       <Clock className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Horarios</h4>
-                      <p className="text-muted-foreground">Lunes - Viernes: 8:30am - 6:30pm</p>
-                      <p className="text-muted-foreground">Sábados: 9:30am - 1:00pm</p>
-                      <p className="text-muted-foreground">Domingos: Cerrado</p>
+                      <h4 className="font-semibold mb-2">{t('contact.page.hours')}</h4>
+                      <p className="text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('contact.page.laPazHours') }}>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -398,7 +392,7 @@ export default function ContactPage() {
           <div className="space-y-6">
             <Card className="shadow-lg">
               <CardContent className="p-8">
-                <h3 className="text-xl font-semibold mb-6 text-center">Santa Cruz</h3>
+                <h3 className="text-xl font-semibold mb-6 text-center">{t('contact.page.santaCruz')}</h3>
                 
                 {/* Imagen de Santa Cruz */}
                 <div className="flex justify-center mb-6">
@@ -417,11 +411,8 @@ export default function ContactPage() {
                       <MapPin className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Ubicación</h4>
-                      <address className="not-italic text-muted-foreground">
-                        Avenida 2 de Agosto, Calle 6<br />
-                        (Entre 4 y 5 Anillo) N° 27<br />
-                        Santa Cruz, Bolivia
+                      <h4 className="font-semibold mb-2">{t('contact.page.location')}</h4>
+                      <address className="not-italic text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('contact.page.santaCruzAddress') }}>
                       </address>
                     </div>
                   </div>
@@ -431,12 +422,8 @@ export default function ContactPage() {
                       <Phone className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Teléfonos</h4>
-                      <p className="text-muted-foreground">
-                        (591-3) 3494677
-                      </p>
-                      <p className="text-muted-foreground">
-                        76244800 - 78988344
+                      <h4 className="font-semibold mb-2">{t('contact.page.phones')}</h4>
+                      <p className="text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('contact.page.santaCruzPhones') }}>
                       </p>
                     </div>
                   </div>
@@ -446,10 +433,10 @@ export default function ContactPage() {
                       <Mail className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Email</h4>
+                      <h4 className="font-semibold mb-2">{t('contact.page.email')}</h4>
                       <p className="text-muted-foreground">
                         <a href="mailto:comercial@publicidadvialimagen.com" className="hover:text-primary">
-                          comercial@publicidadvialimagen.com
+                          {t('contact.page.santaCruzEmail')}
                         </a>
                       </p>
                     </div>
@@ -460,9 +447,9 @@ export default function ContactPage() {
                       <Clock className="h-6 w-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Horarios</h4>
-                      <p className="text-muted-foreground">Lunes - Viernes: 8:30am - 5:15pm</p>
-                      <p className="text-muted-foreground">Sábados y Domingos: Cerrado</p>
+                      <h4 className="font-semibold mb-2">{t('contact.page.hours')}</h4>
+                      <p className="text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('contact.page.santaCruzHours') }}>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -473,27 +460,27 @@ export default function ContactPage() {
 
         {/* Mapas de Sucursales (Leaflet Hybrid Maps) */}
         <div className="mt-8">
-          <h2 className="text-2xl font-bold tracking-tight mb-6 text-center">Ubicación de Nuestras Sucursales</h2>
+          <h2 className="text-2xl font-bold tracking-tight mb-6 text-center">{t('contact.page.branchLocation')}</h2>
           
           <div className="grid md:grid-cols-2 gap-8">
             {/* Mapa de La Paz */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-center">Sucursal La Paz</h3>
+              <h3 className="text-lg font-semibold text-center">{t('contact.page.laPaz')}</h3>
               <ContactMap 
                 lat={-16.506308}
                 lng={-68.139439}
-                title="Sucursal La Paz<br/>C. Nicolás Acosta Esq. Pedro Blanco<br/><a href='https://maps.app.goo.gl/mGtyd2gxh4B7a7T97' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver ubicación</a>"
+                title={`${t('contact.page.laPaz')}<br/>C. Nicolás Acosta Esq. Pedro Blanco<br/><a href='https://maps.app.goo.gl/mGtyd2gxh4B7a7T97' target='_blank' style='color: #dc2626; text-decoration: none;'>${t('contact.page.viewLocation')}</a>`}
                 height={300}
               />
             </div>
 
             {/* Mapa de Santa Cruz */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-center">Sucursal Santa Cruz</h3>
+              <h3 className="text-lg font-semibold text-center">{t('contact.page.santaCruz')}</h3>
               <ContactMap 
                 lat={-17.751314}
                 lng={-63.153452}
-                title="Sucursal Santa Cruz<br/>Avenida 2 de Agosto, Calle 6<br/><a href='https://maps.app.goo.gl/Ead7Bnyu5EG5jdQE9' target='_blank' style='color: #dc2626; text-decoration: none;'>📍 Ver ubicación</a>"
+                title={`${t('contact.page.santaCruz')}<br/>Avenida 2 de Agosto, Calle 6<br/><a href='https://maps.app.goo.gl/Ead7Bnyu5EG5jdQE9' target='_blank' style='color: #dc2626; text-decoration: none;'>${t('contact.page.viewLocation')}</a>`}
                 height={300}
               />
             </div>

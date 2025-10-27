@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import SupportMap from "@/components/support-map"
 import dynamic from "next/dynamic";
 
-const EditableSupportMap = dynamic(() => import("@/components/maps/EditableSupportMap"), { ssr: false });
+const EditableLeafletMap = dynamic(() => import("@/components/maps/EditableLeafletMap"), { ssr: false });
 const GmapsLinkPaste = dynamic(() => import("@/components/maps/GmapsLinkPaste"), { ssr: false });
 
 // Constantes para selects y colores
@@ -763,7 +763,7 @@ export default function SoporteDetailPage() {
                   
                   <div className="space-y-2">
                     <Label>Ubicación en el mapa</Label>
-                    <EditableSupportMap
+                    <EditableLeafletMap
                       lat={formData.latitude || -16.5000}
                       lng={formData.longitude || -68.1500}
                       onChange={(coords) => {
@@ -858,7 +858,7 @@ export default function SoporteDetailPage() {
               {!editing && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-700">Ubicación</Label>
-                  <EditableSupportMap
+                  <EditableLeafletMap
                     lat={support.latitude || -16.5000}
                     lng={support.longitude || -68.1500}
                     onChange={() => {}} // No editable en modo visualización

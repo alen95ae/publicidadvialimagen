@@ -15,10 +15,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/hooks/use-auth"
+import { useTranslations } from "@/hooks/use-translations"
 
 export default function UserMenu() {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const { t } = useTranslations()
 
   const getInitials = () => {
     if (user?.name) {
@@ -47,7 +49,7 @@ export default function UserMenu() {
       <Button variant="ghost" size="icon" asChild>
         <Link href="/login">
           <User className="h-5 w-5" />
-          <span className="sr-only">Iniciar Sesión</span>
+          <span className="sr-only">{t('userMenu.login')}</span>
         </Link>
       </Button>
     )
@@ -81,7 +83,7 @@ export default function UserMenu() {
           className="cursor-pointer"
         >
           <User className="mr-2 h-4 w-4" />
-          <span>Perfil</span>
+          <span>{t('userMenu.profile')}</span>
         </DropdownMenuItem>
         <DropdownMenuItem 
           onClick={(e) => {
@@ -92,7 +94,7 @@ export default function UserMenu() {
           className="cursor-pointer"
         >
           <FileText className="mr-2 h-4 w-4" />
-          <span>Cotizaciones</span>
+          <span>{t('userMenu.quotes')}</span>
         </DropdownMenuItem>
         <DropdownMenuItem 
           onClick={(e) => {
@@ -103,7 +105,7 @@ export default function UserMenu() {
           className="cursor-pointer"
         >
           <MessageSquare className="mr-2 h-4 w-4" />
-          <span>Mensajes</span>
+          <span>{t('userMenu.messages')}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem 
@@ -114,7 +116,7 @@ export default function UserMenu() {
           className="cursor-pointer text-destructive"
         >
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Cerrar Sesión</span>
+          <span>{t('userMenu.logout')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

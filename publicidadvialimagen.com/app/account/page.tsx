@@ -7,6 +7,7 @@ import { User, FileText, MessageSquare, LogOut, Loader2 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
+import { useTranslations } from "@/hooks/use-translations"
 
 import ProfileTab from "./components/ProfileTab"
 import QuotesTab from "./components/QuotesTab"
@@ -16,6 +17,7 @@ export default function AccountPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslations()
   const [activeTab, setActiveTab] = useState("profile")
   
   // Leer el tab desde la URL o el hash
@@ -78,9 +80,9 @@ export default function AccountPage() {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Mi Cuenta</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t('account.title')}</h1>
             <p className="text-muted-foreground mt-2">
-              Gestiona tu perfil y solicitudes
+              {t('account.subtitle')}
             </p>
           </div>
           <Button 
@@ -92,7 +94,7 @@ export default function AccountPage() {
             }}
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Cerrar Sesión
+            {t('account.logout')}
           </Button>
         </div>
 
@@ -100,15 +102,15 @@ export default function AccountPage() {
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
             <TabsTrigger value="profile" className="flex items-center gap-2 py-3">
               <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Perfil</span>
+              <span className="hidden sm:inline">{t('account.tabs.profile')}</span>
             </TabsTrigger>
             <TabsTrigger value="quotes" className="flex items-center gap-2 py-3">
               <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Cotizaciones</span>
+              <span className="hidden sm:inline">{t('account.tabs.quotes')}</span>
             </TabsTrigger>
             <TabsTrigger value="messages" className="flex items-center gap-2 py-3">
               <MessageSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">Mensajes</span>
+              <span className="hidden sm:inline">{t('account.tabs.messages')}</span>
             </TabsTrigger>
           </TabsList>
 

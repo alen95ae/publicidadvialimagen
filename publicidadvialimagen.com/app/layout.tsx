@@ -13,7 +13,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Publicidad Vial Imagen | Vallas Publicitarias",
-  description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca",
+  description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca - Multilingual support ES/EN",
   generator: 'v0.app',
   icons: {
     icon: '/favicon.svg',
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <head>
         {/* Google Analytics 4 */}
         <Script

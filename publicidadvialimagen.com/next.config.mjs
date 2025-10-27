@@ -9,6 +9,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  i18n: {
+    locales: ['es', 'en'],
+    defaultLocale: 'es',
+  },
   webpack(config, { isServer, dev }) {
     if (isServer && dev) {
       config.output.chunkFilename = "[id].js"

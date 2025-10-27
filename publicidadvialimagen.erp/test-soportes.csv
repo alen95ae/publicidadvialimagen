@@ -1,6 +1,0 @@
-Ciudad,Estado,Titulo,Precio por mes,Codigo,Ancho,Alto,Impactos dia,Ubicación,Tipo Soporte,Propietario,Notas
-La Paz,disponible,Valla Principal Zona Sur,1500,V001,3.5,2.5,5000,Zona Sur La Paz,Vallas Publicitarias,Propietario por Defecto,Ubicación estratégica en zona sur
-Santa Cruz,disponible,Billboard Centro Comercial,2500,V002,4.0,3.0,8000,Centro Comercial SCZ,Pantallas LED,Propietario por Defecto,Centro comercial con alto tráfico
-Cochabamba,reservado,Marquesina Avenida Principal,800,V003,2.0,1.5,3000,Avenida Principal CBB,Murales,Propietario por Defecto,Marquesina en avenida principal
-Oruro,disponible,Valla Avenida Principal,1200,V004,3.0,2.0,4000,Avenida Principal ORU,Vallas Publicitarias,Propietario por Defecto,Valla en avenida principal
-Potosí,ocupado,Marquesina Centro,600,V005,2.5,1.8,2500,Centro Potosí,Murales,Propietario por Defecto,Marquesina en centro histórico

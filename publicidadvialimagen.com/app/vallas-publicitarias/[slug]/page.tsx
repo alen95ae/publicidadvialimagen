@@ -173,21 +173,28 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
     window.scrollTo(0, 0)
   }, [])
   
-  // Buscar el billboard por slug o ID
+  // Buscar el billboard por slug o ID con múltiples estrategias
   const billboard = billboards.find(b => {
     const expectedSlug = createSlug(b.name)
     const matchesSlug = expectedSlug === params.slug
     const matchesId = b.id === params.slug
+    const matchesIdString = String(b.id) === String(params.slug)
+    const matchesCode = b.code === params.slug
+    
     console.log(`🔍 Buscando billboard:`, {
       paramsSlug: params.slug,
       billboardId: b.id,
+      billboardCode: b.code,
       billboardName: b.name,
       expectedSlug,
       matchesSlug,
       matchesId,
-      found: matchesSlug || matchesId
+      matchesIdString,
+      matchesCode,
+      found: matchesSlug || matchesId || matchesIdString || matchesCode
     })
-    return matchesSlug || matchesId
+    
+    return matchesSlug || matchesId || matchesIdString || matchesCode
   })
   
   // Log para depuración

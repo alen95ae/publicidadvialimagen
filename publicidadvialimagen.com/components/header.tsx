@@ -89,6 +89,17 @@ export default function Header() {
   const searchRef = useRef<HTMLDivElement>(null)
   const { locale, setLocale, t } = useTranslations()
 
+  // Función para cambiar idioma y navegar
+  const handleLanguageChange = (newLocale: Locale) => {
+    setLocale(newLocale)
+    // Navegar a la ruta con el nuevo idioma
+    if (newLocale === 'en') {
+      router.push('/en')
+    } else {
+      router.push('/')
+    }
+  }
+
   // Sugerencias predefinidas
   const allSuggestions = [
     "La Paz",
@@ -302,7 +313,7 @@ export default function Header() {
               <Button 
                 variant={locale === 'es' ? 'default' : 'outline'} 
                 size="sm" 
-                onClick={() => setLocale('es')}
+                onClick={() => handleLanguageChange('es')}
                 className="gap-2"
               >
                 <BoliviaFlag className="h-3 w-3" />
@@ -311,7 +322,7 @@ export default function Header() {
               <Button 
                 variant={locale === 'en' ? 'default' : 'outline'} 
                 size="sm" 
-                onClick={() => setLocale('en')}
+                onClick={() => handleLanguageChange('en')}
                 className="gap-2"
               >
                 <USAFlag className="h-3 w-3" />

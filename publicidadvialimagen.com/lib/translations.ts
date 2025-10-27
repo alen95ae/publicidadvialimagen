@@ -22,7 +22,7 @@ export const translations = {
       save: 'Guardar',
       edit: 'Editar',
       delete: 'Eliminar',
-      view: 'Ver',
+      view: 'Ver más',
       more: 'Más',
       less: 'Menos',
       close: 'Cerrar',
@@ -42,7 +42,9 @@ export const translations = {
         ctaSecondary: 'Solicitar Cotización'
       },
       featuredBillboards: {
-        title: 'Espacios publicitarios destacados'
+        title: 'Espacios publicitarios destacados',
+        quote: 'Cotizar',
+        viewMore: 'Ver más'
       },
       features: {
         title: '¿Por qué elegirnos?',
@@ -72,7 +74,7 @@ export const translations = {
       price: 'Precio',
       availability: 'Disponibilidad',
       viewDetails: 'Ver Detalles',
-      requestQuote: 'Solicitar Cotización',
+      requestQuote: 'Cotizar',
       addToCart: 'Agregar al Carrito',
       categories: {
         unipolar: 'Unipolar',
@@ -152,7 +154,7 @@ export const translations = {
         bannerPrinting: 'Impresión de lona',
         billboardInstallation: 'Instalación en valla',
         similarSupports: 'Otros soportes similares',
-        requestQuote: 'Solicitar cotización'
+        requestQuote: 'Cotizar'
       }
     },
     // Print Shop
@@ -509,7 +511,9 @@ export const translations = {
         ctaSecondary: 'Request Quote'
       },
       featuredBillboards: {
-        title: 'Featured Advertising Spaces'
+        title: 'Featured Advertising Spaces',
+        quote: 'Quote',
+        viewMore: 'View more'
       },
       features: {
         title: 'Why choose us?',
@@ -539,7 +543,7 @@ export const translations = {
       price: 'Price',
       availability: 'Availability',
       viewDetails: 'View Details',
-      requestQuote: 'Request Quote',
+      requestQuote: 'Quote',
       addToCart: 'Add to Cart',
       categories: {
         unipolar: 'Single-Pole Billboard',
@@ -619,7 +623,7 @@ export const translations = {
         bannerPrinting: 'Banner printing',
         billboardInstallation: 'Billboard installation',
         similarSupports: 'Other similar supports',
-        requestQuote: 'Request quote'
+        requestQuote: 'Quote'
       }
     },
     // Print Shop

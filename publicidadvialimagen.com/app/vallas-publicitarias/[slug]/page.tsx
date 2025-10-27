@@ -176,7 +176,18 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   // Buscar el billboard por slug o ID
   const billboard = billboards.find(b => {
     const expectedSlug = createSlug(b.name)
-    return expectedSlug === params.slug || b.id === params.slug
+    const matchesSlug = expectedSlug === params.slug
+    const matchesId = b.id === params.slug
+    console.log(`🔍 Buscando billboard:`, {
+      paramsSlug: params.slug,
+      billboardId: b.id,
+      billboardName: b.name,
+      expectedSlug,
+      matchesSlug,
+      matchesId,
+      found: matchesSlug || matchesId
+    })
+    return matchesSlug || matchesId
   })
   
   // Log para depuración
@@ -190,6 +201,13 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   // Redirección cuando no se encuentra el soporte
   useEffect(() => {
     if (!loading && !billboard) {
+      console.log('❌ Billboard no encontrado:', {
+        loading,
+        billboard,
+        paramsSlug: params.slug,
+        totalBillboards: billboards.length,
+        billboardIds: billboards.slice(0, 5).map(b => b.id)
+      })
       setShouldRedirect(true)
       router.push("/vallas-publicitarias")
     }

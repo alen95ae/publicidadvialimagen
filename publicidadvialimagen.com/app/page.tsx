@@ -293,12 +293,12 @@ function FeaturedBillboardsCarousel({ billboards, t }: { billboards: Billboard[]
                         {billboard.available ? (
                           <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <FileText className="mr-1 h-3 w-3" />
-                            {t('billboards.requestQuote')}
+                            {t('home.featuredBillboards.quote')}
                           </Link>
                         ) : (
                           <Link href={`/vallas-publicitarias/${billboard.id}`}>
                             <Eye className="mr-1 h-3 w-3" />
-                            {t('common.view')}
+                            {t('home.featuredBillboards.viewMore')}
                           </Link>
                         )}
                       </Button>

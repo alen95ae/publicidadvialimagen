@@ -960,12 +960,12 @@ export default function VallasPublicitariasPage() {
                           {billboard.available ? (
                             <Link href={`/vallas-publicitarias/${billboard.id}`}>
                               <FileText className="mr-1 h-3 w-3" />
-                              Cotizar
+                              {t('billboards.requestQuote')}
                             </Link>
                           ) : (
                             <Link href={`/vallas-publicitarias/${billboard.id}`}>
                               <Eye className="mr-1 h-3 w-3" />
-                              Ver más
+                              {t('common.view')}
                             </Link>
                           )}
                         </Button>

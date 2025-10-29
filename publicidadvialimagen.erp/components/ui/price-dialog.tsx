@@ -84,6 +84,15 @@ export function PriceDialog({
     if (coste === 0) return
 
     setRows(prev => {
+      // Calcular el total de las filas que NO son predefinidas (nuevas filas + coste)
+      const totalNoPredefinidas = prev.reduce((sum, row) => {
+        if (row.campo === "Utilidad (U)" || row.campo === "Factura (F)" || row.campo === "Comisión (C)") {
+          return sum
+        }
+        const valor = typeof row.valor === 'string' ? parseFloat(row.valor) || 0 : row.valor
+        return sum + valor
+      }, 0)
+
       const newRows = prev.map(row => {
         if (row.campo === "Utilidad (U)") {
           // Utilidad: 28% del coste
@@ -176,12 +185,21 @@ export function PriceDialog({
   // Añadir nueva fila
   const handleAddRow = () => {
     const newRowId = Math.max(...rows.map(r => r.id)) + 1
-    setRows(prev => [...prev, {
-      id: newRowId,
-      campo: "",
-      porcentaje: 0,
-      valor: 0
-    }])
+    setRows(prev => {
+      // Encontrar el índice de "Coste" (siempre debe ser el primero)
+      const costeIndex = prev.findIndex(row => row.campo === "Coste")
+      
+      // Insertar la nueva fila después de "Coste"
+      const newRows = [...prev]
+      newRows.splice(costeIndex + 1, 0, {
+        id: newRowId,
+        campo: "",
+        porcentaje: 0,
+        valor: 0
+      })
+      
+      return newRows
+    })
   }
 
   // Eliminar fila
@@ -267,84 +285,88 @@ export function PriceDialog({
               </div>
 
               {/* Filas dinámicas */}
-              {rows.map((row) => (
-                <div key={row.id} className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                  {/* Campo */}
-                  <div className="md:col-span-4">
-                    <Input
-                      ref={row.id === 1 ? firstInputRef : undefined}
-                      placeholder="Nombre del campo..."
-                      value={row.campo}
-                      onChange={(e) => handleCampoChange(row.id, e.target.value)}
-                      disabled={row.campo === "Coste"}
-                      className={row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}
-                    />
-                  </div>
+              {rows.map((row, index) => (
+                <div key={row.id}>
+                  {/* Botón añadir línea - solo después de Coste */}
+                  {row.campo === "Coste" && (
+                    <div className="flex justify-start mb-4">
+                      <Button
+                        onClick={handleAddRow}
+                        variant="outline"
+                        className="w-auto"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Añadir Línea
+                      </Button>
+                    </div>
+                  )}
 
-                  {/* Porcentaje */}
-                  <div className="md:col-span-3">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.porcentaje}
-                      onChange={(e) => handlePorcentajeChange(row.id, e.target.value)}
-                      onBlur={(e) => {
-                        const value = parseFloat(e.target.value) || 0
-                        handlePorcentajeChange(row.id, value.toFixed(2))
-                      }}
-                      placeholder="0.00"
-                      disabled={row.campo === "Coste"}
-                      className={row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}
-                    />
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                    {/* Campo */}
+                    <div className="md:col-span-4">
+                      <Input
+                        ref={row.id === 1 ? firstInputRef : undefined}
+                        placeholder="Nombre del campo..."
+                        value={row.campo}
+                        onChange={(e) => handleCampoChange(row.id, e.target.value)}
+                        disabled={row.campo === "Coste"}
+                        className={row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}
+                      />
+                    </div>
 
-                  {/* Valor */}
-                  <div className="md:col-span-3">
-                    <Input
-                      ref={row.id === 1 ? firstValueRef : undefined}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.valor}
-                      onChange={(e) => handleValorChange(row.id, e.target.value)}
-                      onBlur={(e) => {
-                        const value = parseFloat(e.target.value) || 0
-                        handleValorChange(row.id, value.toFixed(2))
-                      }}
-                      placeholder="0.00"
-                    />
-                  </div>
+                    {/* Porcentaje */}
+                    <div className="md:col-span-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.porcentaje}
+                        onChange={(e) => handlePorcentajeChange(row.id, e.target.value)}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value) || 0
+                          handlePorcentajeChange(row.id, value.toFixed(2))
+                        }}
+                        placeholder="0.00"
+                        disabled={row.campo === "Coste"}
+                        className={row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}
+                      />
+                    </div>
 
-                  {/* Botón eliminar fila */}
-                  <div className="md:col-span-2">
-                    <div className="flex items-center justify-start h-10">
-                      {rows.length > 1 && row.campo !== "Coste" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveRow(row.id)}
-                          className="h-10 w-10 p-0 text-red-600 hover:text-red-700 hover:bg-transparent -ml-2"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                    {/* Valor */}
+                    <div className="md:col-span-3">
+                      <Input
+                        ref={row.id === 1 ? firstValueRef : undefined}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.valor}
+                        onChange={(e) => handleValorChange(row.id, e.target.value)}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value) || 0
+                          handleValorChange(row.id, value.toFixed(2))
+                        }}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    {/* Botón eliminar fila */}
+                    <div className="md:col-span-2">
+                      <div className="flex items-center justify-start h-10">
+                        {rows.length > 1 && row.campo !== "Coste" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveRow(row.id)}
+                            className="h-10 w-10 p-0 text-red-600 hover:text-red-700 hover:bg-transparent -ml-2"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
-
-              {/* Botón añadir línea */}
-              <div className="flex justify-start">
-                <Button
-                  onClick={handleAddRow}
-                  variant="outline"
-                  className="w-auto"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Añadir Línea
-                </Button>
-              </div>
             </div>
           </div>
         </div>

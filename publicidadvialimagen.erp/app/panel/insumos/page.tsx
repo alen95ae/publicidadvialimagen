@@ -14,9 +14,7 @@ import {
   Upload,
   CheckCircle,
   XCircle,
-  Copy,
-  Calculator,
-  DollarSign
+  Copy
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -60,19 +58,15 @@ import {
 } from "@/components/ui/dialog"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
-import { EditProductDialog } from "@/components/ui/edit-product-dialog"
-import { CostCalculatorDialog } from "@/components/ui/cost-calculator-dialog"
-import { PriceDialog } from "@/components/ui/price-dialog"
 
-// Tipo para los items del inventario
-interface InventoryItem {
+// Tipo para los items de insumos
+interface InsumoItem {
   id: string
   codigo: string
   nombre: string
   responsable: string
   unidad_medida: string
   coste: number
-  precio_venta: number
   categoria: string
   cantidad: number
   disponibilidad: string
@@ -101,85 +95,74 @@ const unidadesMedida = [
   "pliego"
 ]
 
-// Función para calcular el porcentaje de utilidad
-function calcularPorcentajeUtilidad(coste: number, precioVenta: number): number {
-  if (coste === 0) return 0
-  return ((precioVenta - coste) / coste) * 100
-}
 
-// Datos de ejemplo para el inventario
-const inventarioItems = [
+// Datos de ejemplo para los insumos
+const insumosItems = [
   {
     id: 1,
-    codigo: "INV-001",
-    nombre: "Soporte Publicitario 6x3",
-    responsable: "Juan Pérez",
-    unidadMedida: "unidad",
-    coste: 150.00,
-    precioVenta: 250.00,
-    categoria: "Displays",
-    cantidad: 25,
+    codigo: "INS-001",
+    nombre: "Tornillos Anclaje M8",
+    responsable: "Ana Martínez",
+    unidad_medida: "kg",
+    coste: 12.50,
+    categoria: "Insumos",
+    cantidad: 150,
     disponibilidad: "Disponible",
   },
   {
     id: 2,
-    codigo: "INV-002", 
-    nombre: "Banner Vinilo 2x1",
+    codigo: "INS-002", 
+    nombre: "Pintura Acrílica Blanca",
+    responsable: "Carlos López",
+    unidad_medida: "litro",
+    coste: 25.00,
+    categoria: "Insumos",
+    cantidad: 45,
+    disponibilidad: "Disponible"
+  },
+  {
+    id: 3,
+    codigo: "INS-003",
+    nombre: "Vinilo Adhesivo Transparente",
     responsable: "María García",
-    unidadMedida: "m²",
-    coste: 45.00,
-    precioVenta: 75.00,
-    categoria: "Impresion digital",
+    unidad_medida: "m²",
+    coste: 8.50,
+    categoria: "Insumos",
     cantidad: 0,
     disponibilidad: "Agotado"
   },
   {
-    id: 3,
-    codigo: "INV-003",
-    nombre: "Estructura Metálica Base",
-    responsable: "Carlos López",
-    unidadMedida: "unidad",
-    coste: 320.00,
-    precioVenta: 450.00,
-    categoria: "Categoria general",
-    cantidad: 8,
-    disponibilidad: "Bajo Stock"
-  },
-  {
     id: 4,
-    codigo: "INV-004",
-    nombre: "Tornillos Anclaje M8",
-    responsable: "Ana Martínez",
-    unidadMedida: "kg",
-    coste: 12.50,
-    precioVenta: 18.00,
+    codigo: "INS-004",
+    nombre: "Cables Eléctricos 2.5mm",
+    responsable: "Pedro Ruiz",
+    unidad_medida: "metro",
+    coste: 3.20,
     categoria: "Insumos",
-    cantidad: 150,
+    cantidad: 200,
     disponibilidad: "Disponible"
   },
   {
     id: 5,
-    codigo: "INV-005",
-    nombre: "Servicio de Corte Láser",
-    responsable: "Pedro Ruiz",
-    unidadMedida: "hora",
-    coste: 25.00,
-    precioVenta: 40.00,
-    categoria: "Corte y grabado",
-    cantidad: 0,
+    codigo: "INS-005",
+    nombre: "Tornillos Phillips 3x20",
+    responsable: "Laura Sánchez",
+    unidad_medida: "pieza",
+    coste: 0.15,
+    categoria: "Insumos",
+    cantidad: 500,
     disponibilidad: "Disponible"
   },
   {
     id: 6,
-    codigo: "INV-006",
-    nombre: "Instalación Publicitaria",
-    responsable: "Laura Sánchez",
-    unidadMedida: "hora",
-    coste: 30.00,
-    precioVenta: 50.00,
-    categoria: "Mano de obra",
-    cantidad: 0,
-    disponibilidad: "Disponible"
+    codigo: "INS-006",
+    nombre: "Pegamento Industrial",
+    responsable: "Juan Pérez",
+    unidad_medida: "litro",
+    coste: 18.00,
+    categoria: "Insumos",
+    cantidad: 12,
+    disponibilidad: "Bajo Stock"
   }
 ]
 
@@ -197,7 +180,7 @@ function getDisponibilidadBadge(disponibilidad: string) {
 }
 
 
-export default function InventarioPage() {
+export default function InsumosPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -214,17 +197,6 @@ export default function InventarioPage() {
     hasNext: false,
     hasPrev: false
   })
-  
-  // Estados para el diálogo de edición
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<InventoryItem | null>(null)
-  const [isNewProduct, setIsNewProduct] = useState(false)
-  
-  // Estados para la calculadora de costos
-  const [calculatorOpen, setCalculatorOpen] = useState(false)
-  
-  // Estados para el diálogo de precios
-  const [priceDialogOpen, setPriceDialogOpen] = useState(false)
 
   // Cargar datos de la API al inicializar
   useEffect(() => {
@@ -240,8 +212,8 @@ export default function InventarioPage() {
       params.set('page', page.toString())
       params.set('limit', '25')
       
-      console.log('Fetching inventario from:', `/api/inventario?${params.toString()}`)
-      const response = await fetch(`/api/inventario?${params.toString()}`)
+      console.log('Fetching insumos from:', `/api/insumos?${params.toString()}`)
+      const response = await fetch(`/api/insumos?${params.toString()}`)
       
       if (response.ok) {
         const result = await response.json()
@@ -251,7 +223,7 @@ export default function InventarioPage() {
         setCurrentPage(page)
       } else {
         const errorData = await response.json()
-        console.error('Error al cargar inventario:', errorData)
+        console.error('Error al cargar insumos:', errorData)
         setItems([])
       }
     } catch (error) {
@@ -272,7 +244,6 @@ export default function InventarioPage() {
   const [nombreDraft, setNombreDraft] = useState("")
   const [responsableDraft, setResponsableDraft] = useState("")
   const [costeDraft, setCosteDraft] = useState("")
-  const [precioVentaDraft, setPrecioVentaDraft] = useState("")
   const [categoriaDraft, setCategoriaDraft] = useState<string | undefined>(undefined)
   const [cantidadDraft, setCantidadDraft] = useState("")
   const [disponibilidadDraft, setDisponibilidadDraft] = useState<string | undefined>(undefined)
@@ -282,15 +253,17 @@ export default function InventarioPage() {
   const [nombreOpen, setNombreOpen] = useState(false)
   const [responsableOpen, setResponsableOpen] = useState(false)
   const [costeOpen, setCosteOpen] = useState(false)
-  const [precioVentaOpen, setPrecioVentaOpen] = useState(false)
   const [categoriaOpen, setCategoriaOpen] = useState(false)
   const [cantidadOpen, setCantidadOpen] = useState(false)
   const [disponibilidadOpen, setDisponibilidadOpen] = useState(false)
   const [unidadOpen, setUnidadOpen] = useState(false)
   
+  // Estados para edición en línea
+  const [editedItems, setEditedItems] = useState<Record<string, Partial<InsumoItem>>>({})
+  const [savingChanges, setSavingChanges] = useState(false)
   
   // Estados para cambios masivos pendientes
-  const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<InventoryItem>>>({})
+  const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<InsumoItem>>>({})
   
   // Estados para acciones masivas
   const [showBulkActions, setShowBulkActions] = useState(false)
@@ -327,7 +300,7 @@ export default function InventarioPage() {
     const ids = Object.keys(selected).filter(id => selected[id])
     
     try {
-      const response = await fetch('/api/inventario/bulk', {
+      const response = await fetch('/api/insumos/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'update', data: patch })
@@ -342,7 +315,6 @@ export default function InventarioPage() {
         setNombreDraft('')
         setResponsableDraft('')
         setCosteDraft('')
-        setPrecioVentaDraft('')
         setCategoriaDraft(undefined)
         setCantidadDraft('')
         setDisponibilidadDraft(undefined)
@@ -356,8 +328,8 @@ export default function InventarioPage() {
   }
 
   // Aplicar cambio masivo a seleccionados (versión pendiente)
-  const handleBulkFieldChange = (field: keyof InventoryItem, value: any) => {
-    const updates: Record<string, Partial<InventoryItem>> = {}
+  const handleBulkFieldChange = (field: keyof InsumoItem, value: any) => {
+    const updates: Record<string, Partial<InsumoItem>> = {}
     Object.keys(selected).filter(id => selected[id]).forEach(id => {
       updates[id] = {
         ...(pendingChanges[id] || {}),
@@ -372,10 +344,11 @@ export default function InventarioPage() {
   const handleSaveBulkChanges = async () => {
     if (Object.keys(pendingChanges).length === 0) return
 
+    setSavingChanges(true)
     try {
       const count = Object.keys(pendingChanges).length
       const promises = Object.entries(pendingChanges).map(async ([id, changes]) => {
-        const response = await fetch(`/api/inventario/${id}`, {
+        const response = await fetch(`/api/insumos/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(changes)
@@ -393,6 +366,8 @@ export default function InventarioPage() {
     } catch (error) {
       console.error('Error guardando cambios:', error)
       toast.error('Error al guardar cambios')
+    } finally {
+      setSavingChanges(false)
     }
   }
 
@@ -404,10 +379,10 @@ export default function InventarioPage() {
 
   async function bulkDelete() {
     const ids = Object.keys(selected).filter(id => selected[id])
-    if (!confirm(`¿Eliminar ${ids.length} items del inventario?`)) return
+    if (!confirm(`¿Eliminar ${ids.length} items de insumos?`)) return
     
     try {
-      const response = await fetch('/api/inventario/bulk', {
+      const response = await fetch('/api/insumos/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'delete' })
@@ -431,14 +406,14 @@ export default function InventarioPage() {
       if (searchTerm) params.set('q', searchTerm)
       if (selectedCategory) params.set('categoria', selectedCategory)
       
-      const response = await fetch(`/api/inventario/export?${params.toString()}`)
+      const response = await fetch(`/api/insumos/export?${params.toString()}`)
       
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `inventario_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `insumos_${new Date().toISOString().split('T')[0]}.csv`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -470,87 +445,61 @@ export default function InventarioPage() {
   }
 
   const handleEdit = (id: string) => {
-    const product = items.find(item => item.id === id)
-    if (product) {
-      setEditingProduct(product)
-      setIsNewProduct(false)
-      setEditDialogOpen(true)
-    }
+    // Activar edición en línea para el item
+    setSelected(prev => ({ ...prev, [id]: true }))
   }
 
-  const handleNewProduct = () => {
-    setEditingProduct(null)
-    setIsNewProduct(true)
-    setEditDialogOpen(true)
+  const handleFieldChange = (id: string, field: keyof InsumoItem, value: string | number) => {
+    setEditedItems(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value
+      }
+    }))
   }
 
-  const handleOpenCalculator = (product: any) => {
-    setCalculatorOpen(true)
-    setEditingProduct(product)
-  }
-
-  const handleOpenPriceDialog = (product: any) => {
-    setPriceDialogOpen(true)
-    setEditingProduct(product)
-  }
-
-  const handleCalculateCosts = (total: number, items: any[]) => {
-    toast.success(`Cálculo completado: Total Bs ${total.toFixed(2)} con ${items.length} insumos`)
-    // Aquí podrías guardar el cálculo o hacer algo más con los datos
-    console.log('Cálculo de costos:', { total, items })
-  }
-
-  const handleCalculatePrices = (total: number, items: any[]) => {
-    toast.success(`Cálculo de precios completado: Total Bs ${total.toFixed(2)} con ${items.length} insumos`)
-    // Aquí podrías guardar el cálculo o hacer algo más con los datos
-    console.log('Cálculo de precios:', { total, items })
-  }
-
-  const handleSaveProduct = async (productData: any) => {
+  const handleSaveChanges = async (id: string) => {
+    if (!editedItems[id]) return
+    
+    setSavingChanges(true)
     try {
-      if (isNewProduct) {
-        // Crear nuevo producto
-        const response = await fetch('/api/inventario', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(productData),
-        })
+      const response = await fetch(`/api/insumos/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editedItems[id]),
+      })
 
-        if (response.ok) {
-          toast.success('Producto creado correctamente')
-          await fetchItems()
-        } else {
-          const errorData = await response.json()
-          toast.error(errorData.error || 'Error al crear el producto')
-          throw new Error('Error al crear el producto')
-        }
+      if (response.ok) {
+        toast.success('Cambios guardados correctamente')
+        setEditedItems(prev => {
+          const newItems = { ...prev }
+          delete newItems[id]
+          return newItems
+        })
+        setSelected(prev => ({ ...prev, [id]: false }))
+        fetchItems()
       } else {
-        // Actualizar producto existente
-        const response = await fetch(`/api/inventario/${productData.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(productData),
-        })
-
-        if (response.ok) {
-          toast.success('Producto actualizado correctamente')
-          await fetchItems()
-        } else {
-          const errorData = await response.json()
-          toast.error(errorData.error || 'Error al actualizar el producto')
-          throw new Error('Error al actualizar el producto')
-        }
+        toast.error('Error al guardar cambios')
       }
     } catch (error) {
-      console.error('Error al guardar producto:', error)
-      throw error
+      console.error('Error saving changes:', error)
+      toast.error('Error al guardar cambios')
+    } finally {
+      setSavingChanges(false)
     }
   }
 
+  const handleCancelEdit = (id: string) => {
+    setEditedItems(prev => {
+      const newItems = { ...prev }
+      delete newItems[id]
+      return newItems
+    })
+    setSelected(prev => ({ ...prev, [id]: false }))
+  }
 
   // Funciones para acciones masivas
   const selectedItems = Object.keys(selected).filter(id => selected[id])
@@ -565,7 +514,7 @@ export default function InventarioPage() {
         [bulkAction]: bulkValue
       }))
 
-      const response = await fetch('/api/inventario/bulk', {
+      const response = await fetch('/api/insumos/bulk', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -594,7 +543,7 @@ export default function InventarioPage() {
     if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedCount} items?`)) return
 
     try {
-      const response = await fetch('/api/inventario/bulk', {
+      const response = await fetch('/api/insumos/bulk', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -628,7 +577,7 @@ export default function InventarioPage() {
         id: undefined
       }
 
-      const response = await fetch('/api/inventario', {
+      const response = await fetch('/api/insumos', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -652,7 +601,7 @@ export default function InventarioPage() {
     if (!confirm('¿Estás seguro de que quieres eliminar este item?')) return
     
     try {
-      const response = await fetch(`/api/inventario/${id}`, {
+      const response = await fetch(`/api/insumos/${id}`, {
         method: 'DELETE',
       })
 
@@ -668,15 +617,6 @@ export default function InventarioPage() {
     }
   }
 
-  const handleCostes = (id: string) => {
-    const item = items.find(i => i.id === id)
-    if (!item) return
-    
-    // Por ahora mostrar un toast con información de costes
-    const utilidad = calcularPorcentajeUtilidad(item.coste, item.precio_venta)
-    toast.info(`Costes de ${item.nombre}: Coste: Bs ${item.coste.toFixed(2)}, Precio: Bs ${item.precio_venta.toFixed(2)}, Utilidad: ${utilidad.toFixed(1)}%`)
-  }
-
   // Función para manejar la importación de CSV
   const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -688,7 +628,7 @@ export default function InventarioPage() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/inventario/import', {
+      const response = await fetch('/api/insumos/import', {
         method: 'POST',
         body: formData
       })
@@ -729,13 +669,13 @@ export default function InventarioPage() {
             <div className="flex items-center gap-6 ml-4">
               <Link 
                 href="/panel/inventario" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
+                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
               >
                 Productos
               </Link>
               <Link 
                 href="/panel/insumos" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
               >
                 Insumos
               </Link>
@@ -805,11 +745,11 @@ export default function InventarioPage() {
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>Importar inventario (CSV)</DialogTitle>
+                        <DialogTitle>Importar insumos (CSV)</DialogTitle>
                         <DialogDescription>
                           Columnas: codigo, nombre, descripcion, categoria, cantidad, unidad_medida, coste, precio_venta, responsable, disponibilidad
                           <br/>
-                          <a href="/api/inventario/import/template" className="underline">Descargar plantilla</a>
+                          <a href="/api/insumos/import/template" className="underline">Descargar plantilla</a>
                         </DialogDescription>
                       </DialogHeader>
                       <input 
@@ -821,10 +761,7 @@ export default function InventarioPage() {
                       {importLoading && <p>Importando...</p>}
                     </DialogContent>
                   </Dialog>
-                  <Button 
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                    onClick={handleNewProduct}
-                  >
+                  <Button className="bg-red-600 hover:bg-red-700 text-white">
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo Item
                   </Button>
@@ -834,10 +771,10 @@ export default function InventarioPage() {
           </Card>
         </div>
 
-        {/* Tabla de inventario */}
+        {/* Tabla de insumos */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Inventario ({filteredItems.length})</CardTitle>
+            <CardTitle>Lista de Insumos ({filteredItems.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {/* Barra azul unificada de acciones masivas */}
@@ -901,9 +838,10 @@ export default function InventarioPage() {
                         <Button 
                           size="sm" 
                           onClick={handleSaveBulkChanges}
+                          disabled={savingChanges}
                           className="bg-red-600 hover:bg-red-700 text-white"
                         >
-                          Guardar cambios ({Object.keys(pendingChanges).length})
+                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(pendingChanges).length})`}
                         </Button>
                         <Button 
                           variant="outline" 
@@ -937,10 +875,10 @@ export default function InventarioPage() {
             )}
 
             {loading ? (
-              <div className="text-center py-8 text-gray-500">Cargando inventario...</div>
+              <div className="text-center py-8 text-gray-500">Cargando insumos...</div>
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en el inventario"}
+                {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en los insumos"}
               </div>
             ) : (
               <Table>
@@ -960,8 +898,6 @@ export default function InventarioPage() {
                     <TableHead>Unidad</TableHead>
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Coste</TableHead>
-                    <TableHead>Precio Venta</TableHead>
-                    <TableHead>% Utilidad</TableHead>
                     <TableHead>Disponibilidad</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
@@ -984,77 +920,169 @@ export default function InventarioPage() {
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[42ch]">
-                        <div className="truncate">
-                          {item.nombre.length > 30 ? (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <span className="cursor-pointer hover:text-blue-600">
-                                  {item.nombre.substring(0, 30)}...
-                                </span>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto max-w-sm">
-                                <p className="text-sm">{item.nombre}</p>
-                              </PopoverContent>
-                            </Popover>
-                          ) : (
-                            item.nombre
-                          )}
-                        </div>
+                        {selected[item.id] ? (
+                          <Input
+                            value={editedItems[item.id]?.nombre ?? item.nombre}
+                            onChange={(e) => handleFieldChange(item.id, 'nombre', e.target.value)}
+                            className="h-8"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="truncate">
+                            {item.nombre.length > 30 ? (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <span className="cursor-pointer hover:text-blue-600">
+                                    {item.nombre.substring(0, 30)}...
+                                  </span>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto max-w-sm">
+                                  <p className="text-sm">{item.nombre}</p>
+                                </PopoverContent>
+                              </Popover>
+                            ) : (
+                              item.nombre
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {item.responsable}
+                        {selected[item.id] ? (
+                          <Input
+                            value={editedItems[item.id]?.responsable ?? item.responsable}
+                            onChange={(e) => handleFieldChange(item.id, 'responsable', e.target.value)}
+                            className="h-8"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                          />
+                        ) : (
+                          item.responsable
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{item.categoria}</Badge>
+                        {selected[item.id] ? (
+                          <Select 
+                            value={editedItems[item.id]?.categoria ?? item.categoria}
+                            onValueChange={(value) => handleFieldChange(item.id, 'categoria', value)}
+                          >
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categorias.map((categoria) => (
+                                <SelectItem key={categoria} value={categoria}>
+                                  {categoria}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="secondary">{item.categoria}</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
-                          {item.unidad_medida}
-                        </Badge>
+                        {selected[item.id] ? (
+                          <Select 
+                            value={editedItems[item.id]?.unidad_medida ?? item.unidad_medida}
+                            onValueChange={(value) => handleFieldChange(item.id, 'unidad_medida', value)}
+                          >
+                            <SelectTrigger className="h-8 w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {unidadesMedida.map((unidad) => (
+                                <SelectItem key={unidad} value={unidad}>
+                                  {unidad}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
+                            {item.unidad_medida}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium">{item.cantidad}</span>
+                        {selected[item.id] ? (
+                          <Input
+                            type="number"
+                            value={editedItems[item.id]?.cantidad ?? item.cantidad}
+                            onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
+                            className="h-8 w-20"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="font-medium">{item.cantidad}</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        Bs {item.coste.toFixed(2)}
+                        {selected[item.id] ? (
+                          <div className="flex items-center">
+                            <span className="text-sm text-gray-500 mr-1">Bs</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editedItems[item.id]?.coste ?? item.coste}
+                              onChange={(e) => handleFieldChange(item.id, 'coste', parseFloat(e.target.value) || 0)}
+                              className="h-8 w-20"
+                              onBlur={() => handleSaveChanges(item.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveChanges(item.id)
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEdit(item.id)
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          `Bs ${item.coste.toFixed(2)}`
+                        )}
                       </TableCell>
                       <TableCell>
-                        Bs {item.precio_venta.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-medium ${
-                          calcularPorcentajeUtilidad(item.coste, item.precio_venta) >= 50 
-                            ? 'text-green-600' 
-                            : calcularPorcentajeUtilidad(item.coste, item.precio_venta) >= 20 
-                            ? 'text-yellow-600' 
-                            : 'text-red-600'
-                        }`}>
-                          {calcularPorcentajeUtilidad(item.coste, item.precio_venta).toFixed(1)}%
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {getDisponibilidadBadge(item.disponibilidad)}
+                        {selected[item.id] ? (
+                          <Select 
+                            value={editedItems[item.id]?.disponibilidad ?? item.disponibilidad}
+                            onValueChange={(value) => handleFieldChange(item.id, 'disponibilidad', value)}
+                          >
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Disponible">Disponible</SelectItem>
+                              <SelectItem value="Agotado">Agotado</SelectItem>
+                              <SelectItem value="Reservado">Reservado</SelectItem>
+                              <SelectItem value="No disponible">No disponible</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          getDisponibilidadBadge(item.disponibilidad)
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Costes"
-                            onClick={() => handleOpenCalculator(item)}
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <Calculator className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Precio"
-                            onClick={() => handleOpenPriceDialog(item)}
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </Button>
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -1141,31 +1169,6 @@ export default function InventarioPage() {
           </div>
         )}
       </main>
-
-      {/* Diálogo de edición de productos */}
-      <EditProductDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        product={editingProduct}
-        onSave={handleSaveProduct}
-        isNew={isNewProduct}
-      />
-
-      {/* Diálogo de calculadora de costos */}
-      <CostCalculatorDialog
-        open={calculatorOpen}
-        onOpenChange={setCalculatorOpen}
-        onCalculate={handleCalculateCosts}
-        product={editingProduct}
-      />
-
-      {/* Diálogo de calculadora de precios */}
-      <PriceDialog
-        open={priceDialogOpen}
-        onOpenChange={setPriceDialogOpen}
-        onCalculate={handleCalculatePrices}
-        product={editingProduct}
-      />
     </div>
   )
 }

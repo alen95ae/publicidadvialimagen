@@ -879,28 +879,30 @@ export default function SoportesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => router.push(`/panel/soportes/${support.id}`)}
                             title="Ver soporte"
+                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
                             title="Editar soporte"
+                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(support.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             title="Eliminar soporte"
                           >
                             <Trash2 className="w-4 h-4" />

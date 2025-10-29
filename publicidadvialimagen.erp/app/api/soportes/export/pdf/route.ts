@@ -67,14 +67,13 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
     
     // Función para agregar pie de página
     const addFooter = (pdf: jsPDF) => {
-      const footerY = 190 // Ajustado para landscape
+      const footerY = 200 // Bajado al fondo de la hoja (210mm - 12mm = 198mm, pero 200 para estar seguro)
       pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.rect(0, footerY, 297, 20, 'F') // 297mm es el ancho en landscape
+      pdf.rect(0, footerY, 297, 12, 'F') // Mantiene el mismo tamaño de 12mm
       
       pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(10)
-      pdf.text(`© ${new Date().getFullYear()} Publicidad Vial Imagen`, 148.5, footerY + 8, { align: 'center' })
-      pdf.text(`Generado el ${currentDate}`, 148.5, footerY + 14, { align: 'center' })
+      pdf.setFontSize(9)
+      pdf.text(`© ${new Date().getFullYear()} Publicidad Vial Imagen | Generado el ${currentDate}`, 148.5, footerY + 7, { align: 'center' })
     }
 
     // Función para obtener colores del estado (igual que en la web)
@@ -104,53 +103,84 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
       
       yPosition = 10
       
-      // Logo de la empresa (izquierda) - Usando base64 con proporciones originales
-      try {
-        // Leer el archivo del logo y convertirlo a base64
-        const logoPath = path.join(process.cwd(), 'public', 'Mesa de trabajo 1-8.png')
-        const logoBuffer = fs.readFileSync(logoPath)
-        const logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`
-        
-        // Calcular dimensiones manteniendo proporciones originales
-        // Asumiendo que el logo tiene una proporción típica de 3:1 (ancho:alto)
-        const aspectRatio = 3 // Proporción típica para logos horizontales
-        const maxHeight = 20 // Altura máxima deseada
-        const calculatedWidth = maxHeight * aspectRatio
-        const logoWidth = Math.min(calculatedWidth, 50) // Máximo 50mm de ancho
-        const logoHeight = logoWidth / aspectRatio // Altura calculada para mantener proporción
-        
-        pdf.addImage(logoBase64, 'PNG', 20, yPosition - 2, logoWidth, logoHeight)
-      } catch (error) {
-        console.log('Error cargando logo desde archivo:', error)
-        // Fallback: Logo con texto
-        pdf.setFillColor(190, 8, 17) // Color rojo corporativo
-        pdf.roundedRect(20, yPosition - 5, 80, 20, 3, 3, 'F')
-        
-        // Texto del logo como fallback
-        pdf.setTextColor(255, 255, 255)
-        pdf.setFontSize(7)
-        pdf.setFont('helvetica', 'bold')
-        pdf.text('PUBLICIDAD', 60, yPosition + 2, { align: 'center' })
-        pdf.text('VIAL IMAGEN', 60, yPosition + 8, { align: 'center' })
-        
-        // Línea decorativa
-        pdf.setDrawColor(255, 255, 255)
-        pdf.setLineWidth(0.5)
-        pdf.line(25, yPosition + 5, 95, yPosition + 5)
+      // Logo de la empresa (esquina superior derecha) - Con proporciones exactas 24x5.5
+      const addLogo = () => {
+        try {
+          // Cargar el nuevo logo JPG con proporciones exactas
+          const logoPath = path.join(process.cwd(), 'public', 'logo.jpg')
+          const logoBuffer = fs.readFileSync(logoPath)
+          const logoBase64 = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
+          
+          // Proporciones exactas 24x5.5 (aspectRatio = 24/5.5 ≈ 4.36) - Tamaño reducido a la mitad
+          const aspectRatio = 24 / 5.5
+          const maxHeight = 7.5 // Altura reducida a la mitad (15/2)
+          const calculatedWidth = maxHeight * aspectRatio
+          const logoWidth = Math.min(calculatedWidth, 35) // Ancho reducido a la mitad (70/2)
+          const logoHeight = logoWidth / aspectRatio // Altura calculada para mantener proporción exacta
+          
+          const logoX = 20 // Posición a la izquierda del título
+          const logoY = yPosition - 1
+          
+          pdf.addImage(logoBase64, 'JPEG', logoX, logoY, logoWidth, logoHeight)
+          console.log('Logo JPG cargado exitosamente con proporciones 24x5.5')
+          return true
+        } catch (error) {
+          console.log('Error cargando logo JPG, intentando fallbacks:', error)
+          
+          try {
+            // Fallback 1: Captura de pantalla
+            const logoPath = path.join(process.cwd(), 'public', 'Captura de pantalla 2025-10-27 a la(s) 7.12.41 p.m..png')
+            const logoBuffer = fs.readFileSync(logoPath)
+            const logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`
+            
+            const logoWidth = 30 // Reducido a la mitad
+            const logoHeight = 7.5 // Reducido a la mitad
+            const logoX = 20 // Posición a la izquierda del título
+            const logoY = yPosition - 1
+            
+            pdf.addImage(logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight)
+            console.log('Logo PNG fallback cargado exitosamente')
+            return true
+          } catch (pngError) {
+            console.log('Error cargando logo PNG, intentando SVG:', pngError)
+            
+            try {
+              // Fallback 2: Logo SVG del ERP
+              const logoPath = path.join(process.cwd(), 'public', 'logo-publicidad-vial-imagen.svg')
+              const logoBuffer = fs.readFileSync(logoPath)
+              const logoBase64 = `data:image/svg+xml;base64,${logoBuffer.toString('base64')}`
+              
+              const logoWidth = 30 // Reducido a la mitad
+              const logoHeight = 7.5 // Reducido a la mitad
+              const logoX = 20 // Posición a la izquierda del título
+              const logoY = yPosition - 1
+              
+              pdf.addImage(logoBase64, 'SVG', logoX, logoY, logoWidth, logoHeight)
+              console.log('Logo SVG cargado exitosamente')
+              return true
+            } catch (finalError) {
+              console.log('Error cargando todos los logos:', finalError)
+              return false
+            }
+          }
+        }
       }
       
-      // Título del soporte (derecha del logo, en rojo y negrita)
+      // Ejecutar la función del logo
+      addLogo()
+      
+      // Título del soporte (a la derecha del logo, en rojo y negrita)
       pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
       pdf.setFontSize(18)
       pdf.setFont('helvetica', 'bold')
-      pdf.text(support.title, 80, yPosition + 5)
+      pdf.text(support.title, 70, yPosition + 5) // Movido a la derecha del logo (20 + 35 + 15 de margen)
       
-      yPosition += 35
+      yPosition += 20
       
       // Imagen principal del soporte y mapa de ubicación
       if (support.images && support.images.length > 0) {
         try {
-          // Imagen principal del soporte (izquierda)
+          // Imagen principal del soporte (izquierda) - Aumentada de tamaño
           const imageUrl = support.images[0]
           if (imageUrl) {
             // Convertir URL a base64 si es necesario
@@ -169,7 +199,8 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
             }
             
             if (imageBase64) {
-              pdf.addImage(imageBase64, 'JPEG', 20, yPosition, 120, 80)
+              // Aumentar tamaño de 120x80 a 130x90, más a la izquierda
+              pdf.addImage(imageBase64, 'JPEG', 15, yPosition, 130, 90)
             }
           }
         } catch (error) {
@@ -199,35 +230,64 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
             const mapBuffer = await mapResponse.arrayBuffer()
             const mapBase64 = `data:image/png;base64,${Buffer.from(mapBuffer).toString('base64')}`
             
-            // Agregar la imagen del mapa al PDF
-            const mapWidth = 120
-            const mapHeight = 80
-            const mapX = 150
+            // Agregar la imagen del mapa al PDF - Aumentada de tamaño y más cerca de la imagen principal
+            const mapWidth = 130
+            const mapHeight = 90
+            const mapX = 155  // Más cerca de la imagen principal (15 + 130 + 10 = 155)
             const mapY = yPosition
             
             pdf.addImage(mapBase64, 'PNG', mapX, mapY, mapWidth, mapHeight)
             
-            // Agregar chincheta roja en el centro (simulando el icono de valla)
-            pdf.setFillColor(255, 0, 0)
-            pdf.circle(mapX + mapWidth/2, mapY + mapHeight/2, 3, 'F')
+            // Agregar enlace clickeable al mapa para Google Maps
+            const googleMapsUrl = `https://www.google.com/maps?q=${support.latitude},${support.longitude}`
+            pdf.link(mapX, mapY, mapWidth, mapHeight, { url: googleMapsUrl })
             
-            // Borde blanco para la chincheta
-            pdf.setDrawColor(255, 255, 255)
-            pdf.setLineWidth(1)
-            pdf.circle(mapX + mapWidth/2, mapY + mapHeight/2, 3)
+            // Agregar icono de valla publicitaria en el centro del mapa
+            const iconSize = 12 // Tamaño del icono en mm
+            const iconX = mapX + mapWidth/2 - iconSize/2
+            const iconY = mapY + mapHeight/2 - iconSize/2
             
-            // Agregar título del mapa
-            pdf.setTextColor(0, 0, 0)
-            pdf.setFontSize(8)
-            pdf.setFont('helvetica', 'bold')
-            pdf.text('UBICACIÓN', mapX + mapWidth/2, mapY - 5, { align: 'center' })
+            // Dibujar icono de valla publicitaria usando formas geométricas
+            // Color rojo vivo como el punto anterior
+            const redColor = [255, 0, 0] // Rojo vivo #FF0000
+            
+            // Guardar estado actual
+            pdf.saveGraphicsState()
+            
+            // Dibujar la valla (rectángulo principal)
+            pdf.setFillColor(redColor[0], redColor[1], redColor[2])
+            pdf.setDrawColor(255, 255, 255) // Borde blanco
+            pdf.setLineWidth(0.5)
+            const billboardWidth = iconSize * 0.75
+            const billboardHeight = iconSize * 0.5
+            const billboardX = iconX + (iconSize - billboardWidth) / 2
+            const billboardY = iconY + (iconSize - billboardHeight) / 2 - 2
+            
+            pdf.roundedRect(billboardX, billboardY, billboardWidth, billboardHeight, 1, 1, 'FD')
+            
+            // Dibujar el poste de soporte
+            const postWidth = iconSize * 0.15
+            const postHeight = iconSize * 0.3
+            const postX = iconX + (iconSize - postWidth) / 2
+            const postY = billboardY + billboardHeight
+            
+            pdf.roundedRect(postX, postY, postWidth, postHeight, 0.5, 0.5, 'FD')
+            
+            // Restaurar estado
+            pdf.restoreGraphicsState()
+            
+            // Agregar indicador visual de que es clickeable
+            pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
+            pdf.setFontSize(6)
+            pdf.setFont('helvetica', 'normal')
+            pdf.text('Clic para abrir en Google Maps', mapX + mapWidth/2, mapY + mapHeight + 3, { align: 'center' })
           } else {
             console.log('Error descargando tile de OpenStreetMap')
             // Fallback: mostrar coordenadas sin mapa
             pdf.setTextColor(0, 0, 0)
             pdf.setFontSize(8)
             pdf.setFont('helvetica', 'bold')
-            pdf.text('UBICACIÓN', 230, yPosition + 5, { align: 'center' })
+            pdf.text('UBICACIÓN', 220, yPosition + 5, { align: 'center' })
             pdf.setFontSize(6)
             pdf.setFont('helvetica', 'normal')
             pdf.text(`Lat: ${support.latitude.toFixed(4)}`, 200, yPosition + 15)
@@ -240,7 +300,7 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
           pdf.setTextColor(0, 0, 0)
           pdf.setFontSize(8)
           pdf.setFont('helvetica', 'bold')
-          pdf.text('UBICACIÓN', 230, yPosition + 5, { align: 'center' })
+          pdf.text('UBICACIÓN', 220, yPosition + 5, { align: 'center' })
           pdf.setFontSize(6)
           pdf.setFont('helvetica', 'normal')
           pdf.text(`Lat: ${support.latitude.toFixed(4)}`, 200, yPosition + 15)
@@ -248,75 +308,60 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
         }
       }
       
-      yPosition += 90
+      yPosition += 100 // Aumentado de 90 a 100 para bajar la línea roja
       
       // Línea separadora
       pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
       pdf.line(20, yPosition, 277, yPosition)
-      yPosition += 15
+      yPosition += 15 // Aumentado de 10 a 15 para más espacio
       
-      // Código con etiqueta
+      // Información del espacio en 3 columnas (compactada)
+      pdf.setFontSize(9) // Reducido de 10 a 9
       pdf.setTextColor(0, 0, 0)
-      pdf.setFontSize(10)
       pdf.setFont('helvetica', 'normal')
-      pdf.text('Código:', 20, yPosition)
       
-      // Medir el ancho del código para hacer el recuadro proporcional
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'bold')
-      const codeWidth = pdf.getTextWidth(support.code) + 8
-      pdf.setFillColor(240, 240, 240) // Gris claro
-      pdf.roundedRect(20, yPosition - 8, codeWidth, 16, 3, 3, 'F')
-      pdf.setTextColor(0, 0, 0)
-      pdf.text(support.code, 20 + codeWidth/2, yPosition, { align: 'center' })
-      
-      // Estado con etiqueta (derecha)
-      pdf.setFontSize(10)
-      pdf.setFont('helvetica', 'normal')
-      pdf.text('Estado:', 150, yPosition)
-      
-      // Medir el ancho del estado para hacer el recuadro proporcional
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'bold')
-      const statusText = support.status.toUpperCase()
-      const statusWidth = pdf.getTextWidth(statusText) + 8
-      const statusColors = getStatusColors(support.status)
-      pdf.setFillColor(statusColors.bg[0], statusColors.bg[1], statusColors.bg[2])
-      pdf.roundedRect(150, yPosition - 8, statusWidth, 16, 6, 6, 'F')
-      pdf.setTextColor(statusColors.text[0], statusColors.text[1], statusColors.text[2])
-      pdf.text(statusText, 150 + statusWidth/2, yPosition, { align: 'center' })
-      
-      yPosition += 25
-      
-      // Detalles en dos columnas
-      const leftDetails = [
-        `Tipo: ${support.type}`,
+      // Primera columna (izquierda)
+      const col1X = 20
+      const col1Fields = [
+        `Código: ${support.code}`,
         `Ciudad: ${support.city}`,
-        `Dimensiones: ${support.widthM}m × ${support.heightM}m`,
-        `Área: ${support.areaM2}m²`
+        `Zona: `, // En blanco de momento
+        `Período de alquiler: Mensual` // Siempre "Mensual"
       ]
       
-      const rightDetails = [
-        `Precio Mensual: $${support.priceMonth?.toLocaleString() || 'N/A'}`,
-        `Impactos Diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`,
+      // Segunda columna (centro)
+      const col2X = 120
+      const col2Fields = [
+        `Medidas: ${support.widthM}m × ${support.heightM}m`,
+        `Sustrato de impresión: Lona`, // Siempre "Lona"
+        `Tipo de soporte: ${support.type}`,
         `Iluminación: ${support.lighting || 'No'}`
       ]
       
-      pdf.setFontSize(12)
-      pdf.setTextColor(0, 0, 0)
-      pdf.setFont('helvetica', 'normal')
+      // Tercera columna (derecha)
+      const col3X = 220
+      const col3Fields = [
+        `Divisa: Bs`, // Siempre "Bs"
+        `Impactos diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`,
+        `Costo de Producción: `, // En blanco de momento
+        `Costo de alquiler: ${support.priceMonth?.toLocaleString() || 'N/A'} Bs`
+      ]
       
-      // Columna izquierda
-      leftDetails.forEach((detail, i) => {
-        pdf.text(detail, 20, yPosition + i * 15)
+      // Dibujar las 3 columnas con espaciado compacto
+      const lineSpacing = 16 // Aumentado de 14 a 16 para más espacio
+      col1Fields.forEach((field, i) => {
+        pdf.text(field, col1X, yPosition + i * lineSpacing)
       })
       
-      // Columna derecha
-      rightDetails.forEach((detail, i) => {
-        pdf.text(detail, 150, yPosition + i * 15)
+      col2Fields.forEach((field, i) => {
+        pdf.text(field, col2X, yPosition + i * lineSpacing)
       })
       
-      yPosition += Math.max(leftDetails.length, rightDetails.length) * 15 + 20
+      col3Fields.forEach((field, i) => {
+        pdf.text(field, col3X, yPosition + i * lineSpacing)
+      })
+      
+      yPosition += col1Fields.length * lineSpacing + 15
       
       // Información adicional si hay espacio
       if (yPosition < 150) {

@@ -139,9 +139,29 @@ export default function SolicitudesPage() {
   const loadSolicitudes = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/solicitudes')
+      console.log('🔄 Iniciando carga de solicitudes...')
+      
+      // Usar URL absoluta con fallback a localhost
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+      const apiUrl = `${baseUrl}/api/solicitudes`
+      
+      console.log('🌐 URL de la API:', apiUrl)
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Incluir cookies de sesión
+        cache: 'no-store'
+      })
+      
+      console.log('📡 Respuesta del servidor:', response.status, response.statusText)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log('📊 Datos recibidos:', data.length, 'registros')
+        
         // Filtrar registros con datos faltantes o vacíos
         const solicitudesValidas = data.filter((solicitud: any) => 
           solicitud.codigo && 
@@ -152,10 +172,37 @@ export default function SolicitudesPage() {
         setSolicitudesList(solicitudesValidas)
         console.log(`✅ Cargadas ${solicitudesValidas.length} solicitudes válidas (${data.length - solicitudesValidas.length} filtradas)`)
       } else {
-        console.error('Error loading solicitudes:', await response.text())
+        const errorText = await response.text()
+        console.error('❌ Error del servidor:', response.status, response.statusText)
+        console.error('❌ Detalles del error:', errorText)
+        
+        // Manejar diferentes tipos de errores
+        if (response.status === 401) {
+          console.log('🔒 Error de autenticación, redirigiendo al login')
+          // El middleware debería manejar esto, pero por si acaso
+          window.location.href = '/login'
+          return
+        } else if (response.status === 500) {
+          console.log('⚠️ Error interno del servidor, usando datos de ejemplo')
+          setSolicitudesList(solicitudes)
+        } else {
+          console.log('⚠️ Error del servidor, usando datos de ejemplo')
+          setSolicitudesList(solicitudes)
+        }
       }
     } catch (error) {
-      console.error('Error loading solicitudes:', error)
+      console.error('❌ Error de red al cargar solicitudes:', error)
+      console.error('❌ Tipo de error:', error.constructor.name)
+      console.error('❌ Mensaje:', error.message)
+      
+      // Si es un error de red, usar datos de ejemplo
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.log('⚠️ Error de conexión, usando datos de ejemplo')
+        setSolicitudesList(solicitudes)
+      } else {
+        console.log('⚠️ Error inesperado, usando datos de ejemplo')
+        setSolicitudesList(solicitudes)
+      }
     } finally {
       setLoading(false)
     }

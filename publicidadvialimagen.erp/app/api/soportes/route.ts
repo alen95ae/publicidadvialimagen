@@ -7,7 +7,14 @@ import { extractCoordinatesFromGoogleMapsLink, buildPayload, rowToSupport } from
 // Función para normalizar nombres de ciudades (manejar acentos y variantes)
 function normalizeCityName(city: string): string[] {
   const cityMap: Record<string, string[]> = {
+    'La Paz': ['La Paz', 'LaPaz'],
+    'Santa Cruz': ['Santa Cruz', 'Santa Cruz de la Sierra', 'SantaCruz'],
+    'Cochabamba': ['Cochabamba', 'Cocha'],
+    'El Alto': ['El Alto', 'ElAlto'],
+    'Sucre': ['Sucre'],
     'Potosí': ['Potosí', 'Potosi'],
+    'Tarija': ['Tarija'],
+    'Oruro': ['Oruro'],
     'Beni': ['Beni', 'Trinidad'],
     'Pando': ['Pando', 'Cobija']
   }
@@ -70,13 +77,20 @@ export async function GET(request: Request) {
 
     // Filtro de ciudad (con soporte para variantes y acentos)
     if (cityFilter) {
+      console.log('🏙️ City filter received:', cityFilter)
       const cityVariants = normalizeCityName(cityFilter)
+      console.log('🏙️ City variants:', cityVariants)
+      
       if (cityVariants.length === 1) {
-        filterParts.push(`{Ciudad} = "${cityVariants[0]}"`)
+        const cityFilterStr = `{Ciudad} = "${cityVariants[0]}"`
+        console.log('🏙️ Single city filter:', cityFilterStr)
+        filterParts.push(cityFilterStr)
       } else {
         // Si hay múltiples variantes, usar OR
         const cityFilters = cityVariants.map(v => `{Ciudad} = "${v}"`).join(', ')
-        filterParts.push(`OR(${cityFilters})`)
+        const cityFilterStr = `OR(${cityFilters})`
+        console.log('🏙️ Multiple city filter:', cityFilterStr)
+        filterParts.push(cityFilterStr)
       }
     }
 

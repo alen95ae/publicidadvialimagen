@@ -161,7 +161,10 @@ export default function Sidebar({ children }: SidebarProps) {
           <ul className="space-y-2">
             {modules.map((module) => {
               const Icon = module.icon
-              const isActive = pathname === module.href
+              // Para el módulo inventario, también considerar activo cuando estamos en insumos
+              const isActive = module.key === 'inventario' 
+                ? (pathname === module.href || pathname === '/panel/insumos')
+                : pathname === module.href
               
               // Manejar logout como botón especial
               if (module.isLogout) {

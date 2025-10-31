@@ -37,13 +37,28 @@ export async function airtableCreate(table: string, records: Array<{ fields: Rec
 
 export async function airtableUpdate(table: string, id: string, fields: Record<string, any>) {
   const url = `${API}/${baseId}/${encodeURIComponent(table)}/${id}`;
+  
+  // Log detallado del payload que se envía
+  const payload = { fields }
+  console.log('📤 Payload enviado a Airtable:', JSON.stringify(payload, null, 2))
+  
   const res = await fetch(url, {
     method: "PATCH",
     headers: headers(),
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify(payload),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Update ${table} failed: ${res.status} ${await res.text()}`);
+  
+  if (!res.ok) {
+    const errorText = await res.text()
+    console.error('❌ Error respuesta Airtable:', {
+      status: res.status,
+      statusText: res.statusText,
+      error: errorText
+    })
+    throw new Error(`Update ${table} failed: ${res.status} ${errorText}`);
+  }
+  
   return res.json();
 }
 

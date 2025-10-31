@@ -24,21 +24,22 @@ const unidadesMedida = [
   "pliego"
 ]
 
-interface InsumoItem {
+interface RecursoItem {
   id: string
   codigo: string
   nombre: string
   unidad_medida: string
   coste: number
-  precio_venta: number
+  precio_venta?: number
   categoria: string
   cantidad: number
-  disponibilidad: string
+  disponibilidad?: string
+  responsable?: string
 }
 
 interface CalculatorItem {
   id: string
-  insumo: InsumoItem
+  recurso: RecursoItem
   cantidad: number
   unidad: string
   coste_unitario: number
@@ -58,35 +59,35 @@ export function CostCalculatorDialog({
   onCalculate,
   product 
 }: CostCalculatorDialogProps) {
-  const [insumos, setInsumos] = useState<InsumoItem[]>([])
+  const [recursos, setRecursos] = useState<RecursoItem[]>([])
   const [calculatorItems, setCalculatorItems] = useState<CalculatorItem[]>([])
   const [loading, setLoading] = useState(false)
   const [totalCost, setTotalCost] = useState(0)
   const [rows, setRows] = useState([{
     id: 1,
-    selectedInsumo: null as InsumoItem | null,
+    selectedRecurso: null as RecursoItem | null,
     cantidad: 1,
     unidad: "",
     searchTerm: ""
   }])
-  const [filteredInsumos, setFilteredInsumos] = useState<InsumoItem[]>([])
+  const [filteredRecursos, setFilteredRecursos] = useState<RecursoItem[]>([])
   const [showDropdown, setShowDropdown] = useState<number | null>(null)
 
-  // Cargar insumos disponibles
+  // Cargar recursos disponibles
   useEffect(() => {
     if (open) {
-      fetchInsumos()
+      fetchRecursos()
       // Resetear filas cuando se abre
       setRows([{
         id: 1,
-        selectedInsumo: null,
+        selectedRecurso: null,
         cantidad: 1,
         unidad: "",
         searchTerm: ""
       }])
       // Ocultar dropdown y limpiar filtros al abrir
       setShowDropdown(null)
-      setFilteredInsumos([])
+      setFilteredRecursos([])
     }
   }, [open])
 
@@ -99,8 +100,8 @@ export function CostCalculatorDialog({
   // Recalcular total basado en las filas actuales (para mostrar total en tiempo real)
   useEffect(() => {
     const totalFromRows = rows.reduce((sum, row) => {
-      if (row.selectedInsumo && row.cantidad > 0) {
-        return sum + (row.selectedInsumo.coste * row.cantidad)
+      if (row.selectedRecurso && row.cantidad > 0) {
+        return sum + (row.selectedRecurso.coste * row.cantidad)
       }
       return sum
     }, 0)
@@ -125,17 +126,17 @@ export function CostCalculatorDialog({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const fetchInsumos = async () => {
+  const fetchRecursos = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/insumos')
+      const response = await fetch('/api/recursos')
       
       if (response.ok) {
         const result = await response.json()
-        setInsumos(result.data || [])
+        setRecursos(result.data || [])
       } else {
-        console.error('Error al cargar insumos')
-        toast.error('Error al cargar la lista de insumos')
+        console.error('Error al cargar recursos')
+        toast.error('Error al cargar la lista de recursos')
       }
     } catch (error) {
       console.error('Error de conexión:', error)
@@ -149,18 +150,18 @@ export function CostCalculatorDialog({
   const handleSearchChange = (rowId: number, searchTerm: string) => {
     setRows(prev => prev.map(row => 
       row.id === rowId 
-        ? { ...row, searchTerm, selectedInsumo: null }
+        ? { ...row, searchTerm, selectedRecurso: null }
         : row
     ))
     
     // Solo mostrar dropdown si hay texto de búsqueda
     if (searchTerm.trim().length > 0) {
-      // Filtrar insumos basado en el término de búsqueda
-      const filtered = insumos.filter(insumo => 
-        insumo.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        insumo.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+      // Filtrar recursos basado en el término de búsqueda
+      const filtered = recursos.filter(recurso => 
+        recurso.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        recurso.codigo.toLowerCase().includes(searchTerm.toLowerCase())
       )
-      setFilteredInsumos(filtered)
+      setFilteredRecursos(filtered)
       setShowDropdown(rowId)
     } else {
       // Si no hay texto, ocultar dropdown
@@ -169,14 +170,14 @@ export function CostCalculatorDialog({
   }
 
 
-  const handleInsumoSelect = (rowId: number, insumo: InsumoItem) => {
+  const handleRecursoSelect = (rowId: number, recurso: RecursoItem) => {
     setRows(prev => prev.map(row => 
       row.id === rowId 
         ? { 
             ...row, 
-            selectedInsumo: insumo, 
-            unidad: insumo.unidad_medida,
-            searchTerm: insumo.nombre
+            selectedRecurso: recurso, 
+            unidad: recurso.unidad_medida,
+            searchTerm: recurso.nombre
           }
         : row
     ))
@@ -202,7 +203,7 @@ export function CostCalculatorDialog({
     const newRowId = Math.max(...rows.map(r => r.id)) + 1
     setRows(prev => [...prev, {
       id: newRowId,
-      selectedInsumo: null,
+      selectedRecurso: null,
       cantidad: 1,
       unidad: "",
       searchTerm: ""
@@ -220,27 +221,27 @@ export function CostCalculatorDialog({
   const handleAddItem = (rowId: number) => {
     const row = rows.find(r => r.id === rowId)
     
-    if (!row || !row.selectedInsumo || row.cantidad <= 0) {
-      toast.warning('Completa la fila con insumo y cantidad')
+    if (!row || !row.selectedRecurso || row.cantidad <= 0) {
+      toast.warning('Completa la fila con recurso y cantidad')
       return
     }
 
     const newItem: CalculatorItem = {
       id: `calc_${Date.now()}_${rowId}`,
-      insumo: row.selectedInsumo,
+      recurso: row.selectedRecurso,
       cantidad: row.cantidad,
       unidad: row.unidad,
-      coste_unitario: row.selectedInsumo.coste,
-      coste_total: row.selectedInsumo.coste * row.cantidad
+      coste_unitario: row.selectedRecurso.coste,
+      coste_total: row.selectedRecurso.coste * row.cantidad
     }
 
     setCalculatorItems(prev => [...prev, newItem])
-    toast.success(`${row.selectedInsumo.nombre} añadido a la calculadora`)
+    toast.success(`${row.selectedRecurso.nombre} añadido a la calculadora`)
     
     // Limpiar la fila actual
     setRows(prev => prev.map(r => 
       r.id === rowId 
-        ? { ...r, selectedInsumo: null, cantidad: 1, unidad: "", searchTerm: "" }
+        ? { ...r, selectedRecurso: null, cantidad: 1, unidad: "", searchTerm: "" }
         : r
     ))
   }
@@ -277,7 +278,7 @@ export function CostCalculatorDialog({
 
   const handleCalculate = () => {
     if (calculatorItems.length === 0) {
-      toast.warning('Añade al menos un insumo para calcular')
+      toast.warning('Añade al menos un recurso para calcular')
       return
     }
 
@@ -306,12 +307,12 @@ export function CostCalculatorDialog({
             Calculadora de Costes
           </DialogTitle>
           <DialogDescription>
-            Añade insumos y calcula el coste total de tu proyecto
+            Añade recursos y calcula el coste total de tu proyecto
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Sección de selección de insumos */}
+          {/* Sección de selección de recursos */}
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium">Producto (1m²): {product?.nombre || 'Sin producto seleccionado'}</Label>
@@ -322,26 +323,27 @@ export function CostCalculatorDialog({
               {rows.map((row, index) => (
                 <div key={row.id} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                    {/* Buscador de insumos */}
+                    {/* Buscador de recursos */}
                     <div className="space-y-2 md:col-span-4 relative dropdown-container">
-                      {index === 0 && <Label>Insumo</Label>}
+                      {index === 0 && <Label>Recurso</Label>}
                       <Input
-                        placeholder="Buscar insumo..."
+                        placeholder="Buscar recurso..."
                         value={row.searchTerm}
                         onChange={(e) => handleSearchChange(row.id, e.target.value)}
                         onFocus={() => setShowDropdown(row.id)}
                       />
                       
                       {/* Dropdown de resultados */}
-                      {showDropdown === row.id && filteredInsumos.length > 0 && (
+                      {showDropdown === row.id && filteredRecursos.length > 0 && (
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          {filteredInsumos.map((insumo) => (
+                          {filteredRecursos.map((recurso) => (
                             <div
-                              key={insumo.id}
+                              key={recurso.id}
                               className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                              onClick={() => handleInsumoSelect(row.id, insumo)}
+                              onClick={() => handleRecursoSelect(row.id, recurso)}
                             >
-                              <div className="font-medium text-sm">{insumo.nombre}</div>
+                              <div className="font-medium text-sm">{recurso.nombre}</div>
+                              <div className="text-xs text-gray-500">{recurso.codigo} | {recurso.categoria}</div>
                             </div>
                           ))}
                         </div>
@@ -373,7 +375,7 @@ export function CostCalculatorDialog({
                     <div className="space-y-2 md:col-span-2">
                       {index === 0 && <Label>Precio</Label>}
                       <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background bg-gray-50 items-center">
-                        {row.selectedInsumo ? `Bs ${(row.selectedInsumo.coste * row.cantidad).toFixed(2)}` : ''}
+                        {row.selectedRecurso ? `Bs ${(row.selectedRecurso.coste * row.cantidad).toFixed(2)}` : ''}
                       </div>
                     </div>
 

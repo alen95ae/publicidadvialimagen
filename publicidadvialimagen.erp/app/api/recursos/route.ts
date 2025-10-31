@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getProductosPage } from '@/lib/airtableProductos'
+import { getRecursosPage, createRecurso } from '@/lib/airtableRecursos'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '25')
+    const limit = parseInt(searchParams.get('limit') || '50')
     const query = searchParams.get('q') || ''
     const categoria = searchParams.get('categoria') || ''
 
-    console.log('🔍 Productos search params:', { page, limit, query, categoria })
+    console.log('🔍 Recursos search params:', { page, limit, query, categoria })
 
     // Obtener datos de Airtable
-    const result = await getProductosPage(page, limit, query, categoria)
+    const result = await getRecursosPage(page, limit, query, categoria)
 
-    console.log('📊 Productos pagination:', result.pagination)
-    console.log('📊 Productos data length:', result.data.length)
+    console.log('📊 Recursos pagination:', result.pagination)
+    console.log('📊 Recursos data length:', result.data.length)
 
     return NextResponse.json({
       success: true,
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ Error en API inventario:', error)
+    console.error('❌ Error en API recursos:', error)
     return NextResponse.json(
       { success: false, error: 'Error interno del servidor' },
       { status: 500 }
@@ -35,21 +35,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log('📝 Creando nuevo producto:', JSON.stringify(body, null, 2))
+    console.log('📝 Creando nuevo recurso:', JSON.stringify(body, null, 2))
 
-    const { createProducto } = await import('@/lib/airtableProductos')
-    const nuevoProducto = await createProducto(body)
+    const nuevoRecurso = await createRecurso(body)
     
-    console.log('✅ Producto creado correctamente:', nuevoProducto.id)
+    console.log('✅ Recurso creado correctamente:', nuevoRecurso.id)
 
     return NextResponse.json({
       success: true,
-      data: nuevoProducto
+      data: nuevoRecurso
     })
 
   } catch (error) {
-    console.error('❌ Error creando producto:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Error al crear producto'
+    console.error('❌ Error creando recurso:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error al crear recurso'
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

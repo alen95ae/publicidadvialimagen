@@ -1,144 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-// Datos de ejemplo (en producción vendría de una base de datos)
-let inventarioItems = [
-  {
-    id: 1,
-    codigo: "INV-001",
-    nombre: "Soporte Publicitario 6x3",
-    responsable: "Juan Pérez",
-    unidad_medida: "unidad",
-    coste: 150.00,
-    precio_venta: 250.00,
-    categoria: "Displays",
-    cantidad: 25,
-    disponibilidad: "Disponible",
-  },
-  {
-    id: 2,
-    codigo: "INV-002", 
-    nombre: "Banner Vinilo 2x1",
-    responsable: "María García",
-    unidad_medida: "m²",
-    coste: 45.00,
-    precio_venta: 75.00,
-    categoria: "Impresion digital",
-    cantidad: 0,
-    disponibilidad: "Agotado"
-  },
-  {
-    id: 3,
-    codigo: "INV-003",
-    nombre: "Estructura Metálica Base",
-    responsable: "Carlos López",
-    unidad_medida: "unidad",
-    coste: 320.00,
-    precio_venta: 450.00,
-    categoria: "Categoria general",
-    cantidad: 8,
-    disponibilidad: "Bajo Stock"
-  },
-  {
-    id: 4,
-    codigo: "INV-004",
-    nombre: "Tornillos Anclaje M8",
-    responsable: "Ana Martínez",
-    unidad_medida: "kg",
-    coste: 12.50,
-    precio_venta: 18.00,
-    categoria: "Insumos",
-    cantidad: 150,
-    disponibilidad: "Disponible"
-  },
-  {
-    id: 5,
-    codigo: "INV-005",
-    nombre: "Servicio de Corte Láser",
-    responsable: "Pedro Ruiz",
-    unidad_medida: "hora",
-    coste: 25.00,
-    precio_venta: 40.00,
-    categoria: "Corte y grabado",
-    cantidad: 0,
-    disponibilidad: "Disponible"
-  },
-  {
-    id: 6,
-    codigo: "INV-006",
-    nombre: "Instalación Publicitaria",
-    responsable: "Laura Sánchez",
-    unidad_medida: "hora",
-    coste: 30.00,
-    precio_venta: 50.00,
-    categoria: "Mano de obra",
-    cantidad: 0,
-    disponibilidad: "Disponible"
-  }
-]
+import { getAllProductos, updateProducto, deleteProducto } from '@/lib/airtableProductos'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { ids, action, data } = body
-
-    console.log('🔧 Bulk operation:', { action, ids, data })
+    const { ids, action, data } = await request.json()
+    console.log(`📦 Bulk action: ${action} for IDs:`, ids, 'with data:', data)
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'IDs requeridos' },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: 'No IDs provided for bulk action' }, { status: 400 })
     }
+
+    let results: any[] = []
+    let errors: string[] = []
 
     if (action === 'update') {
-      if (!data) {
-        return NextResponse.json(
-          { success: false, error: 'Datos de actualización requeridos' },
-          { status: 400 }
-        )
-      }
-
-      // Actualizar items seleccionados
-      const updatedIds = []
-      inventarioItems = inventarioItems.map(item => {
-        if (ids.includes(item.id.toString())) {
-          updatedIds.push(item.id)
-          return { ...item, ...data }
+      for (const id of ids) {
+        try {
+          const updated = await updateProducto(id, data)
+          results.push(updated)
+        } catch (error: any) {
+          console.error(`❌ Error updating product ${id}:`, error)
+          errors.push(`Error updating ${id}: ${error.message || 'Unknown error'}`)
         }
-        return item
-      })
-
-      console.log('✅ Updated items:', updatedIds)
-
-      return NextResponse.json({
-        success: true,
-        message: `${updatedIds.length} items actualizados`,
-        updatedIds
-      })
-
+      }
     } else if (action === 'delete') {
-      // Eliminar items seleccionados
-      const originalLength = inventarioItems.length
-      inventarioItems = inventarioItems.filter(item => !ids.includes(item.id.toString()))
-      const deletedCount = originalLength - inventarioItems.length
-
-      console.log('🗑️ Deleted items:', deletedCount)
-
-      return NextResponse.json({
-        success: true,
-        message: `${deletedCount} items eliminados`,
-        deletedCount
-      })
-
+      for (const id of ids) {
+        try {
+          await deleteProducto(id)
+          results.push({ id, status: 'deleted' })
+        } catch (error: any) {
+          console.error(`❌ Error deleting product ${id}:`, error)
+          errors.push(`Error deleting ${id}: ${error.message || 'Unknown error'}`)
+        }
+      }
     } else {
-      return NextResponse.json(
-        { success: false, error: 'Acción no válida' },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: 'Invalid bulk action' }, { status: 400 })
     }
 
+    if (errors.length > 0) {
+      return NextResponse.json({ success: false, message: 'Some operations failed', errors, results }, { status: 207 })
+    }
+
+    return NextResponse.json({ success: true, message: `${ids.length} productos ${action}d correctamente`, results })
+
   } catch (error) {
-    console.error('❌ Error en bulk operation:', error)
+    console.error('❌ Error en API bulk productos:', error)
     return NextResponse.json(
       { success: false, error: 'Error interno del servidor' },
       { status: 500 }

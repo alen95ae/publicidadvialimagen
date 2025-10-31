@@ -16,7 +16,9 @@ import {
   XCircle,
   Copy,
   Calculator,
-  DollarSign
+  DollarSign,
+  LayoutGrid,
+  List
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -63,6 +65,7 @@ import { toast } from "sonner"
 import { EditProductDialog } from "@/components/ui/edit-product-dialog"
 import { CostCalculatorDialog } from "@/components/ui/cost-calculator-dialog"
 import { PriceDialog } from "@/components/ui/price-dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Tipo para los items del inventario
 interface InventoryItem {
@@ -76,19 +79,24 @@ interface InventoryItem {
   categoria: string
   cantidad: number
   disponibilidad: string
+  imagen_portada?: string
 }
 
-// Categorías disponibles (ordenadas alfabéticamente)
-const categorias = [
+// Categorías disponibles - Valores exactos en Airtable
+const categoriasProductos = [
   "Categoria general",
-  "Corte y grabado", 
-  "Displays",
-  "Impresion digital",
-  "Insumos",
-  "Mano de obra"
+  "Impresion Digital",
+  "Corte y Grabado",
+  "Displays"
 ]
 
-// Unidades de medida disponibles
+// Unidades de medida disponibles para edición masiva
+const unidadesProductos = [
+  "m2",
+  "unidad"
+]
+
+// Unidades de medida disponibles (para filtros y otras funciones)
 const unidadesMedida = [
   "unidad",
   "m²",
@@ -129,7 +137,7 @@ const inventarioItems = [
     unidadMedida: "m²",
     coste: 45.00,
     precioVenta: 75.00,
-    categoria: "Impresion digital",
+    categoria: "Impresion Digital",
     cantidad: 0,
     disponibilidad: "Agotado"
   },
@@ -165,7 +173,7 @@ const inventarioItems = [
     unidadMedida: "hora",
     coste: 25.00,
     precioVenta: 40.00,
-    categoria: "Corte y grabado",
+    categoria: "Corte y Grabado",
     cantidad: 0,
     disponibilidad: "Disponible"
   },
@@ -183,16 +191,11 @@ const inventarioItems = [
   }
 ]
 
-function getDisponibilidadBadge(disponibilidad: string) {
-  switch (disponibilidad) {
-    case "Disponible":
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Disponible</Badge>
-    case "Bajo Stock":
-      return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Bajo Stock</Badge>
-    case "Agotado":
-      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Agotado</Badge>
-    default:
-      return <Badge variant="secondary">{disponibilidad}</Badge>
+function getStockBadge(cantidad: number) {
+  if (cantidad >= 1) {
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{cantidad}</Badge>
+  } else {
+    return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Agotado</Badge>
   }
 }
 
@@ -225,6 +228,16 @@ export default function InventarioPage() {
   
   // Estados para el diálogo de precios
   const [priceDialogOpen, setPriceDialogOpen] = useState(false)
+  
+  // Estados para edición en línea
+  const [editedItems, setEditedItems] = useState<Record<string, Partial<InventoryItem>>>({})
+  const [savingChanges, setSavingChanges] = useState(false)
+  
+  // Estados para cambios masivos pendientes
+  const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<InventoryItem>>>({})
+  
+  // Estado para vista (lista o galería)
+  const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
 
   // Cargar datos de la API al inicializar
   useEffect(() => {
@@ -238,7 +251,7 @@ export default function InventarioPage() {
       if (searchTerm) params.set('q', searchTerm)
       if (selectedCategory) params.set('categoria', selectedCategory)
       params.set('page', page.toString())
-      params.set('limit', '25')
+      params.set('limit', '50')
       
       console.log('Fetching inventario from:', `/api/inventario?${params.toString()}`)
       const response = await fetch(`/api/inventario?${params.toString()}`)
@@ -268,59 +281,344 @@ export default function InventarioPage() {
     fetchItems(1)
   }, [searchTerm, selectedCategory])
   
-  // Estados para edición masiva
-  const [nombreDraft, setNombreDraft] = useState("")
-  const [responsableDraft, setResponsableDraft] = useState("")
-  const [costeDraft, setCosteDraft] = useState("")
-  const [precioVentaDraft, setPrecioVentaDraft] = useState("")
-  const [categoriaDraft, setCategoriaDraft] = useState<string | undefined>(undefined)
-  const [cantidadDraft, setCantidadDraft] = useState("")
-  const [disponibilidadDraft, setDisponibilidadDraft] = useState<string | undefined>(undefined)
-  const [unidadDraft, setUnidadDraft] = useState("")
-  
-  // Estados para controlar popovers
-  const [nombreOpen, setNombreOpen] = useState(false)
-  const [responsableOpen, setResponsableOpen] = useState(false)
-  const [costeOpen, setCosteOpen] = useState(false)
-  const [precioVentaOpen, setPrecioVentaOpen] = useState(false)
-  const [categoriaOpen, setCategoriaOpen] = useState(false)
-  const [cantidadOpen, setCantidadOpen] = useState(false)
-  const [disponibilidadOpen, setDisponibilidadOpen] = useState(false)
-  const [unidadOpen, setUnidadOpen] = useState(false)
-  
-  
-  // Estados para cambios masivos pendientes
-  const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<InventoryItem>>>({})
-  
   // Estados para acciones masivas
   const [showBulkActions, setShowBulkActions] = useState(false)
   const [bulkAction, setBulkAction] = useState<string>("")
   const [bulkValue, setBulkValue] = useState<string>("")
-
+  
   // Filtrar items basado en búsqueda y categoría
   const filteredItems = items.filter(item => {
     const matchesSearch = searchTerm === "" || 
       item.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.categoria.toLowerCase().includes(searchTerm.toLowerCase())
+      item.nombre.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesCategory = selectedCategory === "" || item.categoria === selectedCategory
+    // Comparación case-insensitive para categoría
+    const matchesCategory = selectedCategory === "" || 
+      item.categoria?.toLowerCase().trim() === selectedCategory.toLowerCase().trim()
     
     return matchesSearch && matchesCategory
   })
-
-
+  
   // Funciones para edición masiva
   const ids = filteredItems.map(i => i.id)
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) || allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])
   const singleSelected = selectedIds.length === 1
+  
+  // Efecto para mostrar/ocultar barra de acciones masivas
+  useEffect(() => {
+    setShowBulkActions(someSelected)
+  }, [someSelected])
+
+
+  // Funciones para edición inline
+  const handleFieldChange = (id: string, field: keyof InventoryItem, value: string | number) => {
+    setEditedItems(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value
+      }
+    }))
+  }
+
+  const handleSaveChanges = async (id: string) => {
+    if (!editedItems[id]) return
+    
+    setSavingChanges(true)
+    try {
+      const response = await fetch(`/api/inventario/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editedItems[id]),
+      })
+
+      if (response.ok) {
+        toast.success('Cambios guardados correctamente')
+        setEditedItems(prev => {
+          const newItems = { ...prev }
+          delete newItems[id]
+          return newItems
+        })
+        setSelected(prev => ({ ...prev, [id]: false }))
+        fetchItems()
+      } else {
+        toast.error('Error al guardar cambios')
+      }
+    } catch (error) {
+      console.error('Error saving changes:', error)
+      toast.error('Error al guardar cambios')
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  // Guardar inmediatamente un campo específico sin depender de editedItems
+  const handleImmediateSave = async (id: string, patch: Partial<InventoryItem>) => {
+    // Limpiar valores string antes de enviar (remover TODAS las comillas y espacios extras)
+    const cleanedPatch: any = {}
+    Object.keys(patch).forEach(key => {
+      const value = patch[key as keyof InventoryItem]
+      if (typeof value === 'string') {
+        cleanedPatch[key] = value
+          .replace(/["""''']+/g, '')  // Eliminar TODAS las comillas
+          .replace(/\s+/g, ' ')       // Normalizar espacios
+          .trim()
+      } else {
+        cleanedPatch[key] = value
+      }
+    })
+    
+    setSavingChanges(true)
+    try {
+      const response = await fetch(`/api/inventario/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanedPatch)
+      })
+      if (response.ok) {
+        // Limpiar cambios pendientes del item
+        setEditedItems(prev => {
+          const newItems = { ...prev }
+          delete newItems[id]
+          return newItems
+        })
+        // Deseleccionar el item después de guardar (como en recursos)
+        setSelected(prev => ({ ...prev, [id]: false }))
+        await fetchItems()
+        // No mostrar toast para cambios inmediatos (categoría/unidad)
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.error || 'Error al guardar cambios'
+        toast.error(errorMessage)
+      }
+    } catch (error) {
+      console.error('Error saving changes:', error)
+      toast.error('Error al guardar cambios')
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  const handleCancelEdit = (id: string) => {
+    setEditedItems(prev => {
+      const newItems = { ...prev }
+      delete newItems[id]
+      return newItems
+    })
+    setSelected(prev => ({ ...prev, [id]: false }))
+  }
+
+  // Guardar cambios cuando se deselecciona un item
+  useEffect(() => {
+    Object.keys(editedItems).forEach(async (id) => {
+      // Si el item tiene cambios pendientes Y no está seleccionado, guardar
+      if (!selected[id] && editedItems[id] && Object.keys(editedItems[id]).length > 0) {
+        const changes = { ...editedItems[id] }
+        // Limpiar del estado inmediatamente para evitar loops
+        setEditedItems(prev => {
+          const newItems = { ...prev }
+          delete newItems[id]
+          return newItems
+        })
+        
+        // Guardar cambios
+        setSavingChanges(true)
+        try {
+          const response = await fetch(`/api/inventario/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(changes)
+          })
+          
+          if (response.ok) {
+            toast.success('Cambios guardados correctamente')
+            await fetchItems()
+          } else {
+            toast.error('Error al guardar cambios')
+          }
+        } catch (error) {
+          console.error('Error saving changes:', error)
+          toast.error('Error al guardar cambios')
+        } finally {
+          setSavingChanges(false)
+        }
+      }
+    })
+  }, [selected])
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = {}
     ids.forEach(id => { next[id] = checked })
     setSelected(next)
+  }
+  
+  const handleBulkFieldChange = (field: keyof InventoryItem, value: any) => {
+    const selectedIds = Object.keys(selected).filter(id => selected[id])
+    
+    // Limpiar el valor si es string (remover TODAS las comillas y espacios extras)
+    let valorLimpio = value
+    if (typeof value === 'string') {
+      // Eliminar TODAS las comillas y normalizar espacios
+      valorLimpio = value
+        .replace(/["""''']+/g, '')  // Eliminar TODAS las comillas
+        .replace(/\s+/g, ' ')       // Normalizar espacios
+        .trim()
+    }
+    
+    console.log(`📝 handleBulkFieldChange: campo=${field}, valor original=${JSON.stringify(value)}, valor limpio=${JSON.stringify(valorLimpio)}, items seleccionados=${selectedIds.length}`)
+    
+    const updates: Record<string, Partial<InventoryItem>> = {}
+    selectedIds.forEach(id => {
+      updates[id] = {
+        ...(pendingChanges[id] || {}),
+        [field]: valorLimpio
+      }
+    })
+    
+    console.log('📝 Cambios pendientes que se van a agregar:', updates)
+    
+    setPendingChanges(prev => {
+      const next = { ...prev, ...updates }
+      console.log('📝 Estado actualizado de pendingChanges:', next)
+      console.log('📝 Total de items con cambios pendientes:', Object.keys(next).length)
+      return next
+    })
+    
+    toast.info(`Campo ${field} actualizado para ${selectedIds.length} item(s)`)
+  }
+
+  // Guardar cambios pendientes masivos
+  const handleSaveBulkChanges = async () => {
+    // Capturar el estado actual inmediatamente para evitar problemas de timing
+    const changesToSave = { ...pendingChanges }
+    const pendingCount = Object.keys(changesToSave).length
+    
+    console.log('💾 handleSaveBulkChanges llamado - cambios pendientes:', pendingCount)
+    console.log('💾 Contenido de pendingChanges:', changesToSave)
+    
+    if (pendingCount === 0) {
+      console.warn('⚠️ No hay cambios pendientes para guardar')
+      toast.info('No hay cambios pendientes para guardar')
+      return
+    }
+
+    setSavingChanges(true)
+    try {
+      const count = Object.keys(changesToSave).length
+      console.log('💾 Guardando cambios masivos:', { count, changes: changesToSave })
+      
+      const promises = Object.entries(changesToSave).map(async ([id, changes]) => {
+        // Limpiar valores string antes de enviar
+        const cleanedChanges: any = {}
+        Object.keys(changes).forEach(key => {
+          const value = changes[key as keyof InventoryItem]
+          if (typeof value === 'string') {
+            cleanedChanges[key] = value
+              .replace(/["""''']+/g, '')  // Eliminar TODAS las comillas
+              .replace(/\s+/g, ' ')       // Normalizar espacios
+              .trim()
+          } else {
+            cleanedChanges[key] = value
+          }
+        })
+        
+        console.log(`📤 Enviando actualización para ${id}:`, cleanedChanges)
+        console.log(`📤 JSON que se enviará:`, JSON.stringify(cleanedChanges))
+        
+        try {
+          const response = await fetch(`/api/inventario/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cleanedChanges)
+          })
+          
+          if (!response.ok) {
+            let errorMessage = `Error ${response.status} actualizando item ${id}`
+            
+            try {
+              const contentType = response.headers.get('content-type')
+              
+              if (contentType && contentType.includes('application/json')) {
+                const errorData = await response.json()
+                console.warn(`⚠️ Error data completo recibido para ${id}:`, JSON.stringify(errorData, null, 2))
+                
+                // Intentar obtener el mensaje de error de diferentes campos posibles
+                errorMessage = errorData.error || errorData.message || errorData.details || errorMessage
+                
+                // Si el objeto está vacío o no tiene información útil, usar status
+                if (!errorData || (typeof errorData === 'object' && Object.keys(errorData).length === 0)) {
+                  errorMessage = `Error ${response.status}: ${response.statusText || 'Error desconocido'}`
+                }
+                
+                console.warn(`⚠️ Error actualizando ${id}:`, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  errorData: errorData,
+                  changes: changes,
+                  errorMessage: errorMessage
+                })
+              } else {
+                // Si no es JSON, usar el status text
+                errorMessage = `Error ${response.status}: ${response.statusText || 'Error desconocido'}`
+                console.warn(`⚠️ Error actualizando ${id} (no JSON):`, {
+                  status: response.status,
+                  statusText: response.statusText
+                })
+              }
+            } catch (e) {
+              // Si no se puede parsear, usar el status text
+              errorMessage = `Error ${response.status}: ${response.statusText || 'Error desconocido'}`
+              console.warn(`⚠️ Error parsing response for ${id}:`, e)
+            }
+            
+            return { success: false, id, error: errorMessage }
+          }
+          
+          const result = await response.json()
+          console.log(`✅ Item ${id} actualizado correctamente:`, result)
+          return { success: true, id, data: result }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : `Error desconocido actualizando ${id}`
+          console.warn(`⚠️ Error en fetch para ${id}:`, error)
+          return { success: false, id, error: errorMessage }
+        }
+      })
+
+      const results = await Promise.all(promises)
+      const successCount = results.filter(r => r.success).length
+      const failedResults = results.filter(r => !r.success)
+      
+      if (failedResults.length > 0) {
+        // Usar console.warn para evitar que Next.js lo trate como error no manejado
+        console.warn('⚠️ Algunos items fallaron:', failedResults)
+        const errorMessages = failedResults.map(r => r.error).filter(Boolean).join(', ')
+        const message = errorMessages || 'Error desconocido'
+        toast.error(`${successCount} actualizado(s), ${failedResults.length} fallido(s): ${message}`)
+      } else {
+        toast.success(`${successCount} item(s) actualizado(s) correctamente`)
+      }
+      
+      // Limpiar cambios pendientes solo después de guardar exitosamente
+      setPendingChanges({})
+      // Limpiar selección después de guardar
+      setSelected({})
+      await fetchItems()
+    } catch (error) {
+      console.warn('⚠️ Error updating items:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Error al actualizar items'
+      toast.error(errorMessage)
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  const handleDiscardChanges = () => {
+    setPendingChanges({})
+    toast.info("Cambios descartados")
   }
 
   async function bulkUpdate(patch: any) {
@@ -337,69 +635,12 @@ export default function InventarioPage() {
         // Recargar los datos después de la actualización
         await fetchItems()
         setSelected({})
-        
-        // Limpiar los drafts
-        setNombreDraft('')
-        setResponsableDraft('')
-        setCosteDraft('')
-        setPrecioVentaDraft('')
-        setCategoriaDraft(undefined)
-        setCantidadDraft('')
-        setDisponibilidadDraft(undefined)
-        setUnidadDraft('')
       } else {
         console.error('Error al actualizar items')
       }
     } catch (error) {
       console.error('Error de conexión:', error)
     }
-  }
-
-  // Aplicar cambio masivo a seleccionados (versión pendiente)
-  const handleBulkFieldChange = (field: keyof InventoryItem, value: any) => {
-    const updates: Record<string, Partial<InventoryItem>> = {}
-    Object.keys(selected).filter(id => selected[id]).forEach(id => {
-      updates[id] = {
-        ...(pendingChanges[id] || {}),
-        [field]: value
-      }
-    })
-    setPendingChanges(prev => ({ ...prev, ...updates }))
-    toast.info(`Campo ${field} actualizado para ${Object.keys(selected).filter(id => selected[id]).length} item(s)`)
-  }
-
-  // Guardar cambios pendientes masivos
-  const handleSaveBulkChanges = async () => {
-    if (Object.keys(pendingChanges).length === 0) return
-
-    try {
-      const count = Object.keys(pendingChanges).length
-      const promises = Object.entries(pendingChanges).map(async ([id, changes]) => {
-        const response = await fetch(`/api/inventario/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(changes)
-        })
-        if (!response.ok) {
-          throw new Error(`Error actualizando item ${id}`)
-        }
-        return response
-      })
-
-      await Promise.all(promises)
-      setPendingChanges({})
-      await fetchItems()
-      toast.success(`${count} item(s) actualizado(s) correctamente`)
-    } catch (error) {
-      console.error('Error guardando cambios:', error)
-      toast.error('Error al guardar cambios')
-    }
-  }
-
-  // Descartar cambios pendientes
-  const handleDiscardChanges = () => {
-    setPendingChanges({})
-    toast.info("Cambios descartados")
   }
 
   async function bulkDelete() {
@@ -734,16 +975,10 @@ export default function InventarioPage() {
                 Productos
               </Link>
               <Link 
-                href="/panel/insumos" 
+                href="/panel/recursos" 
                 className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
               >
-                Insumos
-              </Link>
-              <Link 
-                href="/panel/mano-de-obra" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Mano de Obra
+                Recursos
               </Link>
             </div>
           </div>
@@ -768,7 +1003,7 @@ export default function InventarioPage() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
-                      placeholder="Buscar por código, nombre o categoría..."
+                      placeholder="Buscar por código y nombre..."
                       className="pl-10"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -776,12 +1011,13 @@ export default function InventarioPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 items-center">
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value)}>
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Filtrar por categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categorias.map((categoria) => (
+                      <SelectItem value="all">Todas las categorías</SelectItem>
+                      {categoriasProductos.map((categoria) => (
                         <SelectItem key={categoria} value={categoria}>
                           {categoria}
                         </SelectItem>
@@ -837,11 +1073,33 @@ export default function InventarioPage() {
         {/* Tabla de inventario */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Inventario ({filteredItems.length})</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Lista de Productos ({filteredItems.length})</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className={viewMode === "list" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Lista
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("gallery")}
+                  className={viewMode === "gallery" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
+                >
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Galería
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Barra azul unificada de acciones masivas */}
-            {someSelected && (
+            {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
+            {viewMode === "list" && someSelected && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -858,23 +1116,11 @@ export default function InventarioPage() {
                             <SelectValue placeholder="Cambiar categoría" />
                           </SelectTrigger>
                           <SelectContent>
-                            {categorias.map((categoria) => (
+                            {categoriasProductos.map((categoria) => (
                               <SelectItem key={categoria} value={categoria}>
                                 {categoria}
                               </SelectItem>
                             ))}
-                          </SelectContent>
-                        </Select>
-
-                        {/* Cambiar disponibilidad */}
-                        <Select onValueChange={(value) => handleBulkFieldChange('disponibilidad', value)}>
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Cambiar disponibilidad" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Disponible">Disponible</SelectItem>
-                            <SelectItem value="Bajo Stock">Bajo Stock</SelectItem>
-                            <SelectItem value="Agotado">Agotado</SelectItem>
                           </SelectContent>
                         </Select>
 
@@ -884,7 +1130,7 @@ export default function InventarioPage() {
                             <SelectValue placeholder="Cambiar unidad" />
                           </SelectTrigger>
                           <SelectContent>
-                            {unidadesMedida.map((unidad) => (
+                            {unidadesProductos.map((unidad) => (
                               <SelectItem key={unidad} value={unidad}>
                                 {unidad}
                               </SelectItem>
@@ -901,9 +1147,10 @@ export default function InventarioPage() {
                         <Button 
                           size="sm" 
                           onClick={handleSaveBulkChanges}
+                          disabled={savingChanges}
                           className="bg-red-600 hover:bg-red-700 text-white"
                         >
-                          Guardar cambios ({Object.keys(pendingChanges).length})
+                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(pendingChanges).length})`}
                         </Button>
                         <Button 
                           variant="outline" 
@@ -925,7 +1172,7 @@ export default function InventarioPage() {
                     
                     <Button 
                       size="sm" 
-                      onClick={bulkDelete}
+                      onClick={handleBulkDelete}
                       className="bg-red-600 hover:bg-red-700 text-white"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
@@ -941,6 +1188,76 @@ export default function InventarioPage() {
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en el inventario"}
+              </div>
+            ) : viewMode === "gallery" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {filteredItems.map((item) => (
+                  <Card 
+                    key={item.id} 
+                    className="overflow-hidden transition-all cursor-pointer hover:shadow-lg p-0"
+                  >
+                    <div className="relative aspect-square w-full bg-gray-100 group">
+                      {item.imagen_portada ? (
+                        <img
+                          src={item.imagen_portada}
+                          alt={item.nombre}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105 rounded-t-lg"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full w-full bg-gradient-to-br from-gray-200 to-gray-300 rounded-t-lg">
+                          <span className="text-gray-400 text-sm font-medium">Sin imagen</span>
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="p-2">
+                      <div className="space-y-1.5">
+                        <div>
+                          <p className="text-[10px] font-mono text-gray-500 mb-0.5">{item.codigo}</p>
+                          <h3 className="font-semibold text-xs line-clamp-2 min-h-[2rem] leading-tight">{item.nombre}</h3>
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                            {item.categoria || 'Sin categoría'}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                            {item.unidad_medida || 'Sin unidad'}
+                          </Badge>
+                        </div>
+                        <div className="space-y-0.5 pt-1 border-t">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-gray-600">Stock:</span>
+                            <span className="font-medium">{item.cantidad}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-gray-600">Precio:</span>
+                            <span className="font-medium text-green-600">Bs {item.precio_venta.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 pt-1 border-t">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Editar"
+                            onClick={() => handleEdit(item.id)}
+                            className="flex-1 text-[10px] h-6 px-1"
+                          >
+                            <Edit className="w-2.5 h-2.5 mr-0.5" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Eliminar"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             ) : (
               <Table>
@@ -958,11 +1275,10 @@ export default function InventarioPage() {
                     <TableHead>Responsable</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Unidad</TableHead>
-                    <TableHead>Cantidad</TableHead>
                     <TableHead>Coste</TableHead>
                     <TableHead>Precio Venta</TableHead>
                     <TableHead>% Utilidad</TableHead>
-                    <TableHead>Disponibilidad</TableHead>
+                    <TableHead>Stock</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -979,41 +1295,133 @@ export default function InventarioPage() {
                         />
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
-                          {item.codigo}
-                        </span>
+                        {selected[item.id] ? (
+                          <Input
+                            value={editedItems[item.id]?.codigo ?? item.codigo}
+                            onChange={(e) => handleFieldChange(item.id, 'codigo', e.target.value)}
+                            className="h-8 font-mono text-xs"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                            {item.codigo}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[42ch]">
-                        <div className="truncate">
-                          {item.nombre.length > 30 ? (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <span className="cursor-pointer hover:text-blue-600">
-                                  {item.nombre.substring(0, 30)}...
-                                </span>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto max-w-sm">
-                                <p className="text-sm">{item.nombre}</p>
-                              </PopoverContent>
-                            </Popover>
-                          ) : (
-                            item.nombre
-                          )}
-                        </div>
+                        {selected[item.id] ? (
+                          <Input
+                            value={editedItems[item.id]?.nombre ?? item.nombre}
+                            onChange={(e) => handleFieldChange(item.id, 'nombre', e.target.value)}
+                            className="h-8"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="truncate">
+                            {item.nombre && item.nombre.length > 30 ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger className="text-left">
+                                    {item.nombre.slice(0, 30) + "…"}
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm">{item.nombre}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              item.nombre
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {item.responsable}
+                        {selected[item.id] ? (
+                          <Input
+                            value={editedItems[item.id]?.responsable ?? item.responsable}
+                            onChange={(e) => handleFieldChange(item.id, 'responsable', e.target.value)}
+                            className="h-8"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                          />
+                        ) : (
+                          item.responsable
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{item.categoria}</Badge>
+                        {selected[item.id] ? (
+                          <Select 
+                            value={(editedItems[item.id]?.categoria ?? item.categoria) || undefined}
+                            onValueChange={(value) => {
+                              // Limpiar el valor antes de guardar (remover TODAS las comillas y normalizar)
+                              const categoriaLimpia = typeof value === 'string' 
+                                ? value.replace(/["""''']+/g, '').replace(/\s+/g, ' ').trim()
+                                : value
+                              handleImmediateSave(item.id, { categoria: categoriaLimpia as string })
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-40">
+                              <SelectValue placeholder="Seleccionar categoría" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categoriasProductos.map((categoria) => (
+                                <SelectItem key={categoria} value={categoria}>
+                                  {categoria}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="secondary">{item.categoria || 'Sin categoría'}</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
-                          {item.unidad_medida}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium">{item.cantidad}</span>
+                        {selected[item.id] ? (
+                          <Select 
+                            value={(editedItems[item.id]?.unidad_medida ?? item.unidad_medida) || undefined}
+                            onValueChange={(value) => {
+                              // Limpiar el valor antes de guardar (remover TODAS las comillas)
+                              const unidadLimpia = typeof value === 'string' 
+                                ? value.replace(/["""''']+/g, '').replace(/\s+/g, ' ').trim()
+                                : value
+                              handleImmediateSave(item.id, { unidad_medida: unidadLimpia as string })
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-24">
+                              <SelectValue placeholder="Seleccionar unidad" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {unidadesProductos.map((unidad) => (
+                                <SelectItem key={unidad} value={unidad}>
+                                  {unidad}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
+                            {item.unidad_medida || 'Sin unidad'}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         Bs {item.coste.toFixed(2)}
@@ -1033,7 +1441,25 @@ export default function InventarioPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {getDisponibilidadBadge(item.disponibilidad)}
+                        {selected[item.id] ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editedItems[item.id]?.cantidad ?? item.cantidad}
+                            onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
+                            className="h-8 w-20"
+                            onBlur={() => handleSaveChanges(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveChanges(item.id)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEdit(item.id)
+                              }
+                            }}
+                          />
+                        ) : (
+                          getStockBadge(item.cantidad)
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -1136,7 +1562,7 @@ export default function InventarioPage() {
             
             {/* Información de paginación */}
             <div className="ml-4 text-sm text-gray-600">
-              Mostrando {((currentPage - 1) * 25) + 1} - {Math.min(currentPage * 25, pagination.total)} de {pagination.total} items
+              Mostrando {((currentPage - 1) * 50) + 1} - {Math.min(currentPage * 50, pagination.total)} de {pagination.total} items
             </div>
           </div>
         )}

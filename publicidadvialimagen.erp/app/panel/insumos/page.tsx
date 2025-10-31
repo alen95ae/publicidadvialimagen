@@ -166,16 +166,11 @@ const insumosItems = [
   }
 ]
 
-function getDisponibilidadBadge(disponibilidad: string) {
-  switch (disponibilidad) {
-    case "Disponible":
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Disponible</Badge>
-    case "Bajo Stock":
-      return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Bajo Stock</Badge>
-    case "Agotado":
-      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Agotado</Badge>
-    default:
-      return <Badge variant="secondary">{disponibilidad}</Badge>
+function getStockBadge(cantidad: number) {
+  if (cantidad >= 1) {
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{cantidad}</Badge>
+  } else {
+    return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Agotado</Badge>
   }
 }
 
@@ -803,17 +798,21 @@ export default function InsumosPage() {
                           </SelectContent>
                         </Select>
 
-                        {/* Cambiar disponibilidad */}
-                        <Select onValueChange={(value) => handleBulkFieldChange('disponibilidad', value)}>
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Cambiar disponibilidad" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Disponible">Disponible</SelectItem>
-                            <SelectItem value="Bajo Stock">Bajo Stock</SelectItem>
-                            <SelectItem value="Agotado">Agotado</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {/* Cambiar cantidad */}
+                        <Input
+                          placeholder="Nueva cantidad"
+                          type="number"
+                          min="0"
+                          value={cantidadDraft}
+                          onChange={(e) => setCantidadDraft(e.target.value)}
+                          onBlur={() => {
+                            if (cantidadDraft) {
+                              handleBulkFieldChange('cantidad', parseInt(cantidadDraft) || 0)
+                              setCantidadDraft('')
+                            }
+                          }}
+                          className="w-32"
+                        />
 
                         {/* Cambiar unidad */}
                         <Select onValueChange={(value) => handleBulkFieldChange('unidad_medida', value)}>
@@ -896,9 +895,8 @@ export default function InsumosPage() {
                     <TableHead>Responsable</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Unidad</TableHead>
-                    <TableHead>Cantidad</TableHead>
                     <TableHead>Coste</TableHead>
-                    <TableHead>Disponibilidad</TableHead>
+                    <TableHead>Stock</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1019,26 +1017,6 @@ export default function InsumosPage() {
                       </TableCell>
                       <TableCell>
                         {selected[item.id] ? (
-                          <Input
-                            type="number"
-                            value={editedItems[item.id]?.cantidad ?? item.cantidad}
-                            onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
-                            className="h-8 w-20"
-                            onBlur={() => handleSaveChanges(item.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                handleSaveChanges(item.id)
-                              } else if (e.key === 'Escape') {
-                                handleCancelEdit(item.id)
-                              }
-                            }}
-                          />
-                        ) : (
-                          <span className="font-medium">{item.cantidad}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {selected[item.id] ? (
                           <div className="flex items-center">
                             <span className="text-sm text-gray-500 mr-1">Bs</span>
                             <Input
@@ -1078,7 +1056,7 @@ export default function InsumosPage() {
                             </SelectContent>
                           </Select>
                         ) : (
-                          getDisponibilidadBadge(item.disponibilidad)
+                          getStockBadge(item.cantidad)
                         )}
                       </TableCell>
                       <TableCell className="text-center">

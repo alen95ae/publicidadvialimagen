@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
 import { createHash, randomBytes } from "crypto";
 import { airtableList, airtableCreate, airtableUpdate } from "@/lib/airtable-rest";
+import { getBaseUrl } from "@/lib/url";
 
 const INVITATIONS_TABLE = process.env.AIRTABLE_TABLE_INVITATIONS || "Invitaciones";
 const INVITATIONS_TABLE_FALLBACK = "Invitations";
@@ -117,7 +118,8 @@ export async function POST(request: NextRequest) {
     const fechaExpiracion = new Date(Date.now() + horasValidez * 60 * 60 * 1000).toISOString();
     
     // Generar enlace de invitación
-    const baseUrl = process.env.KINDE_SITE_URL || 'http://localhost:3000';
+    // Usar la función helper que maneja correctamente localhost vs producción
+    const baseUrl = getBaseUrl().replace(/\/$/, ''); // Remover barra final si existe
     const enlace = `${baseUrl}/register?token=${invitationToken}&email=${encodeURIComponent(email)}`;
 
     const invitationData = {

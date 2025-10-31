@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createUser, createUserWithRole, findUserByEmail, signSession, setSessionCookie } from "@/lib/auth";
 import { airtableList, airtableUpdate } from "@/lib/airtable-rest";
 import { verify } from "@/lib/auth/jwt";
+import { getBaseUrl } from "@/lib/url";
 
 const TABLE_INV = process.env.AIRTABLE_TABLE_INVITATIONS || "Invitaciones";
 
@@ -24,8 +25,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "El email ya está registrado" }, { status: 409 });
     }
 
-    // Verificar la invitación
-    const invitationResponse = await fetch(`${process.env.KINDE_SITE_URL || 'http://localhost:3000'}/api/ajustes/verify-invitation?token=${token}&email=${email}`);
+    // Verificar la invitación usando getBaseUrl() para manejar correctamente el entorno
+    const baseUrl = getBaseUrl().replace(/\/$/, ''); // Remover barra final si existe
+    const invitationResponse = await fetch(`${baseUrl}/api/ajustes/verify-invitation?token=${token}&email=${email}`);
     const invitationData = await invitationResponse.json();
 
     if (!invitationResponse.ok || !invitationData.valid) {
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
     console.log("User created:", user);
 
     // Marcar la invitación como usada
-    await fetch(`${process.env.KINDE_SITE_URL || 'http://localhost:3000'}/api/ajustes/verify-invitation`, {
+    await fetch(`${baseUrl}/api/ajustes/verify-invitation`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, email }),

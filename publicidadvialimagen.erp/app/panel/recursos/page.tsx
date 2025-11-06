@@ -12,14 +12,16 @@ import {
   MoreHorizontal,
   CheckCircle,
   XCircle,
-  Copy
+  Copy,
+  X,
+  LayoutGrid,
+  List
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -47,17 +49,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { EditRecursoDialog } from "@/components/ui/edit-recurso-dialog"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
 
 // Tipo para los items de recursos
@@ -71,6 +65,7 @@ interface RecursoItem {
   categoria: string
   cantidad: number
   disponibilidad: string
+  imagen_portada?: string
 }
 
 // Categorías disponibles (solo las válidas en Airtable)
@@ -163,6 +158,7 @@ function getStockBadge(cantidad: number) {
 
 
 export default function RecursosPage() {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -178,10 +174,6 @@ export default function RecursosPage() {
     hasPrev: false
   })
   
-  // Estados para el diálogo de edición
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingRecurso, setEditingRecurso] = useState<RecursoItem | null>(null)
-  const [isNewRecurso, setIsNewRecurso] = useState(false)
 
   // Cargar datos de la API al inicializar
   useEffect(() => {
@@ -255,6 +247,9 @@ export default function RecursosPage() {
   const [showBulkActions, setShowBulkActions] = useState(false)
   const [bulkAction, setBulkAction] = useState<string>("")
   const [bulkValue, setBulkValue] = useState<string>("")
+  
+  // Estado para vista (lista o galería)
+  const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
 
   // Filtrar items basado en búsqueda y categoría
   const filteredItems = items.filter(item => {
@@ -403,96 +398,11 @@ export default function RecursosPage() {
   }
 
   const handleEdit = (id: string) => {
-    const recurso = items.find(item => item.id === id)
-    if (recurso) {
-      setEditingRecurso(recurso)
-      setIsNewRecurso(false)
-      setEditDialogOpen(true)
-    }
+    router.push(`/panel/recursos/${id}`)
   }
 
   const handleNewRecurso = () => {
-    setEditingRecurso(null)
-    setIsNewRecurso(true)
-    setEditDialogOpen(true)
-  }
-
-  const handleSaveRecurso = async (recursoData: Partial<RecursoItem> & { id?: string }) => {
-    try {
-      console.log('📤 handleSaveRecurso - Datos originales:', recursoData)
-      
-      // Limpiar TODOS los strings para evitar escapes
-      const cleanedData: any = {
-        ...recursoData,
-        codigo: typeof recursoData.codigo === 'string' ? recursoData.codigo.trim() : recursoData.codigo,
-        nombre: typeof recursoData.nombre === 'string' ? recursoData.nombre.trim() : recursoData.nombre,
-        unidad_medida: typeof recursoData.unidad_medida === 'string' 
-          ? recursoData.unidad_medida.trim().replace(/[\\'"]/g, '') 
-          : recursoData.unidad_medida,
-        responsable: typeof recursoData.responsable === 'string' ? recursoData.responsable.trim() : recursoData.responsable,
-      }
-      
-      // Agregar descripcion solo si existe
-      if ('descripcion' in recursoData && typeof (recursoData as any).descripcion === 'string') {
-        cleanedData.descripcion = (recursoData as any).descripcion.trim()
-      }
-      
-      console.log('📤 handleSaveRecurso - Datos limpiados:', cleanedData)
-      
-      if (isNewRecurso) {
-        // Crear nuevo recurso
-        const response = await fetch('/api/recursos', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(cleanedData),
-        })
-
-        const data = await response.json()
-        
-        if (response.ok) {
-          toast.success('Recurso creado correctamente')
-          await fetchItems()
-        } else {
-          console.error('❌ Error crear:', { status: response.status, data })
-          const errorMsg = data.error || 'Error al crear el recurso'
-          toast.error(errorMsg)
-          throw new Error(errorMsg)
-        }
-      } else {
-        // Actualizar recurso existente
-        const response = await fetch(`/api/recursos/${cleanedData.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(cleanedData),
-        })
-
-        let data
-        try {
-          data = await response.json()
-        } catch (e) {
-          console.error('❌ Error parseando JSON de respuesta')
-          data = { error: 'Respuesta inválida del servidor' }
-        }
-        
-        if (response.ok) {
-          console.log('✅ Recurso actualizado correctamente')
-          toast.success('Recurso actualizado correctamente')
-          await fetchItems()
-        } else {
-          console.error('❌ Error actualizar:', { status: response.status, statusText: response.statusText, data })
-          const errorMsg = data.error || `Error ${response.status}: ${response.statusText}`
-          toast.error(errorMsg)
-          throw new Error(errorMsg)
-        }
-      }
-    } catch (error: any) {
-      console.error('💥 Error en handleSaveRecurso:', error)
-      throw new Error(error.message || 'Error al guardar el recurso')
-    }
+    router.push('/panel/recursos/nuevo')
   }
 
   const handleFieldChange = (id: string, field: keyof RecursoItem, value: string | number) => {
@@ -692,7 +602,6 @@ export default function RecursosPage() {
     }
   }
 
-
   return (
     <div className="p-6">
       {/* Header */}
@@ -712,6 +621,12 @@ export default function RecursosPage() {
                 className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
               >
                 Recursos
+              </Link>
+              <Link 
+                href="/panel/ajustes-inventario" 
+                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Control de Stock
               </Link>
             </div>
           </div>
@@ -744,11 +659,12 @@ export default function RecursosPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 items-center">
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value)}>
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Filtrar por categoría" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="all">Todas las categorías</SelectItem>
                       {categorias.map((categoria) => (
                         <SelectItem key={categoria} value={categoria}>
                           {categoria}
@@ -776,11 +692,33 @@ export default function RecursosPage() {
         {/* Tabla de insumos */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Recursos ({filteredItems.length})</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Lista de Recursos ({filteredItems.length})</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className={viewMode === "list" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Lista
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("gallery")}
+                  className={viewMode === "gallery" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
+                >
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Galería
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Barra azul unificada de acciones masivas */}
-            {someSelected && (
+            {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
+            {viewMode === "list" && someSelected && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -871,6 +809,76 @@ export default function RecursosPage() {
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en los recursos"}
+              </div>
+            ) : viewMode === "gallery" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {filteredItems.map((item) => (
+                  <Card 
+                    key={item.id} 
+                    className="overflow-hidden transition-all cursor-pointer hover:shadow-lg p-0"
+                  >
+                    <div className="relative aspect-square w-full bg-gray-100 group">
+                      {item.imagen_portada ? (
+                        <img
+                          src={item.imagen_portada}
+                          alt={item.nombre}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105 rounded-t-lg"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full w-full bg-gradient-to-br from-gray-200 to-gray-300 rounded-t-lg">
+                          <span className="text-gray-400 text-sm font-medium">Sin imagen</span>
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="p-2">
+                      <div className="space-y-1.5">
+                        <div>
+                          <p className="text-[10px] font-mono text-gray-500 mb-0.5">{item.codigo}</p>
+                          <h3 className="font-semibold text-xs line-clamp-2 min-h-[2rem] leading-tight">{item.nombre}</h3>
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                            {item.categoria || 'Sin categoría'}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                            {item.unidad_medida || 'Sin unidad'}
+                          </Badge>
+                        </div>
+                        <div className="space-y-0.5 pt-1 border-t">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-gray-600">Stock:</span>
+                            <span className="font-medium">{item.cantidad}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-gray-600">Coste:</span>
+                            <span className="font-medium text-green-600">Bs {item.coste.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 pt-1 border-t">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Editar"
+                            onClick={() => handleEdit(item.id)}
+                            className="flex-1 text-[10px] h-6 px-1"
+                          >
+                            <Edit className="w-2.5 h-2.5 mr-0.5" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Eliminar"
+                            onClick={() => handleDelete(item.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             ) : (
               <Table>
@@ -1150,14 +1158,6 @@ export default function RecursosPage() {
         )}
       </main>
 
-      {/* Diálogo de edición de recursos */}
-      <EditRecursoDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        recurso={editingRecurso}
-        onSave={handleSaveRecurso}
-        isNew={isNewRecurso}
-      />
     </div>
   )
 }

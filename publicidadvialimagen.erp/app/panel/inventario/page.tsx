@@ -2,6 +2,7 @@
 
 import type React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { 
   Plus, 
   Search, 
@@ -15,8 +16,6 @@ import {
   CheckCircle,
   XCircle,
   Copy,
-  Calculator,
-  DollarSign,
   LayoutGrid,
   List
 } from "lucide-react"
@@ -52,6 +51,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -62,9 +62,6 @@ import {
 } from "@/components/ui/dialog"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
-import { EditProductDialog } from "@/components/ui/edit-product-dialog"
-import { CostCalculatorDialog } from "@/components/ui/cost-calculator-dialog"
-import { PriceDialog } from "@/components/ui/price-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Tipo para los items del inventario
@@ -80,6 +77,7 @@ interface InventoryItem {
   cantidad: number
   disponibilidad: string
   imagen_portada?: string
+  mostrar_en_web?: boolean
 }
 
 // Categorías disponibles - Valores exactos en Airtable
@@ -193,7 +191,7 @@ const inventarioItems = [
 
 function getStockBadge(cantidad: number) {
   if (cantidad >= 1) {
-    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{cantidad}</Badge>
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Disponible</Badge>
   } else {
     return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Agotado</Badge>
   }
@@ -201,6 +199,7 @@ function getStockBadge(cantidad: number) {
 
 
 export default function InventarioPage() {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -217,17 +216,6 @@ export default function InventarioPage() {
     hasNext: false,
     hasPrev: false
   })
-  
-  // Estados para el diálogo de edición
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<InventoryItem | null>(null)
-  const [isNewProduct, setIsNewProduct] = useState(false)
-  
-  // Estados para la calculadora de costos
-  const [calculatorOpen, setCalculatorOpen] = useState(false)
-  
-  // Estados para el diálogo de precios
-  const [priceDialogOpen, setPriceDialogOpen] = useState(false)
   
   // Estados para edición en línea
   const [editedItems, setEditedItems] = useState<Record<string, Partial<InventoryItem>>>({})
@@ -711,85 +699,11 @@ export default function InventarioPage() {
   }
 
   const handleEdit = (id: string) => {
-    const product = items.find(item => item.id === id)
-    if (product) {
-      setEditingProduct(product)
-      setIsNewProduct(false)
-      setEditDialogOpen(true)
-    }
+    router.push(`/panel/inventario/${id}?edit=true`)
   }
 
   const handleNewProduct = () => {
-    setEditingProduct(null)
-    setIsNewProduct(true)
-    setEditDialogOpen(true)
-  }
-
-  const handleOpenCalculator = (product: any) => {
-    setCalculatorOpen(true)
-    setEditingProduct(product)
-  }
-
-  const handleOpenPriceDialog = (product: any) => {
-    setPriceDialogOpen(true)
-    setEditingProduct(product)
-  }
-
-  const handleCalculateCosts = (total: number, items: any[]) => {
-    toast.success(`Cálculo completado: Total Bs ${total.toFixed(2)} con ${items.length} insumos`)
-    // Aquí podrías guardar el cálculo o hacer algo más con los datos
-    console.log('Cálculo de costos:', { total, items })
-  }
-
-  const handleCalculatePrices = (total: number, items: any[]) => {
-    toast.success(`Cálculo de precios completado: Total Bs ${total.toFixed(2)} con ${items.length} insumos`)
-    // Aquí podrías guardar el cálculo o hacer algo más con los datos
-    console.log('Cálculo de precios:', { total, items })
-  }
-
-  const handleSaveProduct = async (productData: any) => {
-    try {
-      if (isNewProduct) {
-        // Crear nuevo producto
-        const response = await fetch('/api/inventario', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(productData),
-        })
-
-        if (response.ok) {
-          toast.success('Producto creado correctamente')
-          await fetchItems()
-        } else {
-          const errorData = await response.json()
-          toast.error(errorData.error || 'Error al crear el producto')
-          throw new Error('Error al crear el producto')
-        }
-      } else {
-        // Actualizar producto existente
-        const response = await fetch(`/api/inventario/${productData.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(productData),
-        })
-
-        if (response.ok) {
-          toast.success('Producto actualizado correctamente')
-          await fetchItems()
-        } else {
-          const errorData = await response.json()
-          toast.error(errorData.error || 'Error al actualizar el producto')
-          throw new Error('Error al actualizar el producto')
-        }
-      }
-    } catch (error) {
-      console.error('Error al guardar producto:', error)
-      throw error
-    }
+    router.push('/panel/inventario/nuevo?edit=true')
   }
 
 
@@ -909,14 +823,6 @@ export default function InventarioPage() {
     }
   }
 
-  const handleCostes = (id: string) => {
-    const item = items.find(i => i.id === id)
-    if (!item) return
-    
-    // Por ahora mostrar un toast con información de costes
-    const utilidad = calcularPorcentajeUtilidad(item.coste, item.precio_venta)
-    toast.info(`Costes de ${item.nombre}: Coste: Bs ${item.coste.toFixed(2)}, Precio: Bs ${item.precio_venta.toFixed(2)}, Utilidad: ${utilidad.toFixed(1)}%`)
-  }
 
   // Función para manejar la importación de CSV
   const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -979,6 +885,12 @@ export default function InventarioPage() {
                 className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
               >
                 Recursos
+              </Link>
+              <Link 
+                href="/panel/ajustes-inventario" 
+                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Control de Stock
               </Link>
             </div>
           </div>
@@ -1272,13 +1184,13 @@ export default function InventarioPage() {
                     </TableHead>
                     <TableHead>Código</TableHead>
                     <TableHead>Nombre</TableHead>
-                    <TableHead>Responsable</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Unidad</TableHead>
                     <TableHead>Coste</TableHead>
                     <TableHead>Precio Venta</TableHead>
                     <TableHead>% Utilidad</TableHead>
                     <TableHead>Stock</TableHead>
+                    <TableHead>Mostrar en Web</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1346,25 +1258,6 @@ export default function InventarioPage() {
                               item.nombre
                             )}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {selected[item.id] ? (
-                          <Input
-                            value={editedItems[item.id]?.responsable ?? item.responsable}
-                            onChange={(e) => handleFieldChange(item.id, 'responsable', e.target.value)}
-                            className="h-8"
-                            onBlur={() => handleSaveChanges(item.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                handleSaveChanges(item.id)
-                              } else if (e.key === 'Escape') {
-                                handleCancelEdit(item.id)
-                              }
-                            }}
-                          />
-                        ) : (
-                          item.responsable
                         )}
                       </TableCell>
                       <TableCell>
@@ -1461,26 +1354,19 @@ export default function InventarioPage() {
                           getStockBadge(item.cantidad)
                         )}
                       </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center">
+                          <Switch
+                            checked={editedItems[item.id]?.mostrar_en_web ?? item.mostrar_en_web ?? false}
+                            onCheckedChange={(checked) => {
+                              handleImmediateSave(item.id, { mostrar_en_web: checked })
+                            }}
+                            className="data-[state=checked]:bg-red-500 data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-red-600 data-[state=unchecked]:hover:bg-gray-400 transition-colors"
+                          />
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Costes"
-                            onClick={() => handleOpenCalculator(item)}
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <Calculator className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Precio"
-                            onClick={() => handleOpenPriceDialog(item)}
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </Button>
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -1567,31 +1453,6 @@ export default function InventarioPage() {
           </div>
         )}
       </main>
-
-      {/* Diálogo de edición de productos */}
-      <EditProductDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        product={editingProduct}
-        onSave={handleSaveProduct}
-        isNew={isNewProduct}
-      />
-
-      {/* Diálogo de calculadora de costos */}
-      <CostCalculatorDialog
-        open={calculatorOpen}
-        onOpenChange={setCalculatorOpen}
-        onCalculate={handleCalculateCosts}
-        product={editingProduct}
-      />
-
-      {/* Diálogo de calculadora de precios */}
-      <PriceDialog
-        open={priceDialogOpen}
-        onOpenChange={setPriceDialogOpen}
-        onCalculate={handleCalculatePrices}
-        product={editingProduct}
-      />
     </div>
   )
 }

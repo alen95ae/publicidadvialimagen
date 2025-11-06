@@ -1,4 +1,4 @@
-import { airtableList, airtableCreate, airtableUpdate, airtableDelete, getAllRecords, getRecordsPage } from './airtable-rest'
+import { airtableList, airtableCreate, airtableUpdate, airtableDelete, airtableGet, getAllRecords, getRecordsPage } from './airtable-rest'
 
 const TABLE_NAME = 'Recursos'
 
@@ -7,12 +7,14 @@ export interface RecursoAirtable {
   codigo: string
   nombre: string
   descripcion?: string
+  imagen_portada?: string
   categoria: 'Insumos' | 'Mano de Obra'
   responsable: string
   unidad_medida: string
   cantidad: number
   coste: number
   precio_venta?: number
+  variantes?: any[]
   fecha_creacion: string
   fecha_actualizacion: string
 }
@@ -26,6 +28,7 @@ export interface RecursoAirtableFields {
   'Unidad de Medida': string
   'Stock': number
   'Coste': number
+  'Variantes'?: string
   // 'Precio Venta' no existe en Airtable - campo comentado
   // 'Precio Venta'?: number
   'Fecha Creación': string
@@ -44,17 +47,38 @@ export function airtableToRecurso(record: any): RecursoAirtable {
     unidadMedida = 'm2'
   }
   
+  // Manejar imagen principal (attachment)
+  let imagenPortada: string | undefined
+  if (fields['Imagen Principal'] && Array.isArray(fields['Imagen Principal']) && fields['Imagen Principal'].length > 0) {
+    imagenPortada = fields['Imagen Principal'][0].url || undefined
+  }
+  
+  // Parsear variantes desde JSON string
+  let variantes: any[] = []
+  if (fields['Variantes']) {
+    try {
+      variantes = typeof fields['Variantes'] === 'string' 
+        ? JSON.parse(fields['Variantes']) 
+        : fields['Variantes']
+    } catch (e) {
+      console.error('Error parseando variantes:', e)
+      variantes = []
+    }
+  }
+  
   return {
     id: record.id,
     codigo: fields['Código'] || '',
     nombre: fields['Nombre'] || '',
     descripcion: fields['Descripción'] || '',
+    imagen_portada: imagenPortada,
     categoria: fields['Categoría'] || 'Insumos',
     responsable: fields['Responsable'] || '',
     unidad_medida: unidadMedida,
     cantidad: fields['Stock'] || 0,
     coste: fields['Coste'] || 0,
     precio_venta: fields['Precio Venta'] || 0,
+    variantes: variantes,
     fecha_creacion: fields['Fecha Creación'] || new Date().toISOString(),
     fecha_actualizacion: fields['Fecha Actualización'] || new Date().toISOString()
   }
@@ -148,6 +172,47 @@ function recursoPartialToAirtable(recurso: Partial<RecursoAirtable>): Record<str
   if (recurso.coste !== undefined && recurso.coste !== null) {
     fields['Coste'] = Number(recurso.coste) || 0
   }
+  
+  // Guardar variantes como JSON string
+  if (recurso.variantes !== undefined && recurso.variantes !== null) {
+    try {
+      fields['Variantes'] = typeof recurso.variantes === 'string' 
+        ? recurso.variantes 
+        : JSON.stringify(recurso.variantes)
+    } catch (e) {
+      console.error('Error serializando variantes:', e)
+      fields['Variantes'] = '[]'
+    }
+  }
+  
+  // Manejar imagen principal (attachment)
+  if (recurso.imagen_portada !== undefined) {
+    if (recurso.imagen_portada === null || recurso.imagen_portada === '') {
+      // Eliminar imagen
+      fields['Imagen Principal'] = []
+    } else {
+      const rawUrl = String(recurso.imagen_portada).trim()
+      if (rawUrl && !rawUrl.startsWith('blob:')) {
+        // Convertir URL relativa a absoluta
+        let imagenUrl: string
+        if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+          imagenUrl = rawUrl // Ya es absoluta
+        } else {
+          // Convertir URL relativa a absoluta
+          const baseUrl = process.env.PUBLIC_SITE_URL ||
+            process.env.NEXTAUTH_URL || 
+            process.env.NEXT_PUBLIC_BASE_URL || 
+            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+          
+          imagenUrl = `${baseUrl}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`
+        }
+        
+        // Formato correcto para Airtable attachments con URL
+        fields['Imagen Principal'] = [{ url: imagenUrl }]
+      }
+    }
+  }
+  
   // Precio Venta comentado - el campo no existe en Airtable
   // if (recurso.precio_venta !== undefined && recurso.precio_venta !== null) {
   //   fields['Precio Venta'] = Number(recurso.precio_venta) || 0
@@ -304,13 +369,12 @@ export async function deleteRecurso(id: string) {
 // Obtener recurso por ID
 export async function getRecursoById(id: string) {
   try {
-    const response = await airtableList(TABLE_NAME, { filterByFormula: `{Record ID} = "${id}"` })
-    if (response.records.length === 0) {
-      throw new Error('Recurso no encontrado')
-    }
-    return airtableToRecurso(response.records[0])
+    console.log('🔍 Obteniendo recurso por ID directo:', id)
+    const record = await airtableGet(TABLE_NAME, id)
+    console.log('✅ Recurso obtenido:', record)
+    return airtableToRecurso(record)
   } catch (error) {
-    console.error('Error obteniendo recurso por ID:', error)
+    console.error('❌ Error obteniendo recurso por ID:', error)
     throw error
   }
 }

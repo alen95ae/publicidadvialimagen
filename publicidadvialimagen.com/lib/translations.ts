@@ -59,6 +59,10 @@ export const translations = {
         coverage: {
           title: 'Amplia Cobertura',
           description: 'Presencia en las principales ciudades de Bolivia'
+        },
+        securePayment: {
+          title: 'Pago Seguro',
+          description: 'Procesos de pago seguros y confiables para tu tranquilidad'
         }
       }
     },
@@ -166,7 +170,8 @@ export const translations = {
         posters: 'Afiches',
         stickers: 'Stickers',
         businessCards: 'Tarjetas de Presentación',
-        flyers: 'Volantes'
+        flyers: 'Volantes',
+        exploreServices: 'Explorar Servicios'
       },
       features: {
         durability: 'Materiales de alta durabilidad',
@@ -237,7 +242,10 @@ export const translations = {
         customerFocus: 'Enfoque al cliente',
         customerDesc: 'Estamos dedicados a proporcionar un servicio excepcional y construir relaciones duraderas con nuestros clientes.',
         reliability: 'Confiabilidad',
-        reliabilityDesc: 'Cumplimos nuestras promesas con entrega rápida, instalaciones precisas y soporte al cliente responsivo.'
+        reliabilityDesc: 'Cumplimos nuestras promesas con entrega rápida, instalaciones precisas y soporte al cliente responsivo.',
+        ourTeam: 'Nuestro equipo',
+        ourTeamDesc: 'Conoce al equipo de profesionales que hace posible nuestro éxito día a día.',
+        ourTeamText: 'En Publicidad Vial Imagen contamos con un equipo multidisciplinario de profesionales altamente capacitados, comprometidos con la excelencia y la innovación. Cada miembro de nuestro equipo aporta su experiencia y dedicación para brindar soluciones publicitarias de calidad que superan las expectativas de nuestros clientes. Trabajamos juntos con pasión y profesionalismo para hacer realidad cada proyecto publicitario.'
       }
     },
     // Contact
@@ -528,6 +536,10 @@ export const translations = {
         coverage: {
           title: 'Wide Coverage',
           description: 'Presence in the main cities of Bolivia'
+        },
+        securePayment: {
+          title: 'Secure Payment',
+          description: 'Secure and reliable payment processes for your peace of mind'
         }
       }
     },
@@ -635,7 +647,8 @@ export const translations = {
         posters: 'Posters',
         stickers: 'Stickers',
         businessCards: 'Business Cards',
-        flyers: 'Flyers'
+        flyers: 'Flyers',
+        exploreServices: 'Explore Services'
       },
       features: {
         durability: 'High durability materials',
@@ -706,7 +719,10 @@ export const translations = {
         customerFocus: 'Customer focus',
         customerDesc: 'We are dedicated to providing exceptional service and building lasting relationships with our clients.',
         reliability: 'Reliability',
-        reliabilityDesc: 'We keep our promises with fast delivery, precise installations and responsive customer support.'
+        reliabilityDesc: 'We keep our promises with fast delivery, precise installations and responsive customer support.',
+        ourTeam: 'Our team',
+        ourTeamDesc: 'Meet the team of professionals who make our success possible every day.',
+        ourTeamText: 'At Publicidad Vial Imagen we have a multidisciplinary team of highly qualified professionals, committed to excellence and innovation. Each member of our team brings their experience and dedication to provide quality advertising solutions that exceed our clients\' expectations. We work together with passion and professionalism to make every advertising project a reality.'
       }
     },
     // Contact
@@ -944,12 +960,33 @@ export const translations = {
 export type TranslationKeys = typeof translations.es;
 
 export function getTranslation(locale: Locale, key: string): string {
-  const keys = key.split('.');
-  let value: any = translations[locale];
-  
-  for (const k of keys) {
-    value = value?.[k];
+  try {
+    const keys = key.split('.');
+    let value: any = translations[locale] || translations.es; // Fallback a español si el locale no existe
+    
+    for (const k of keys) {
+      if (value && typeof value === 'object' && k in value) {
+        value = value[k];
+      } else {
+        // Si no se encuentra, intentar con el locale por defecto
+        if (locale !== 'es') {
+          value = translations.es;
+          for (const k2 of keys) {
+            if (value && typeof value === 'object' && k2 in value) {
+              value = value[k2];
+            } else {
+              return key;
+            }
+          }
+          return typeof value === 'string' ? value : key;
+        }
+        return key;
+      }
+    }
+    
+    return typeof value === 'string' ? value : key;
+  } catch (error) {
+    console.warn(`Translation error for key "${key}" with locale "${locale}":`, error);
+    return key;
   }
-  
-  return value || key;
 }

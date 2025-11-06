@@ -16,7 +16,31 @@ export const metadata: Metadata = {
   description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca - Multilingual support ES/EN",
   generator: 'v0.app',
   icons: {
-    icon: '/favicon.svg',
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico',
+  },
+  openGraph: {
+    title: "Publicidad Vial Imagen",
+    description: "Tu plataforma inteligente de publicidad exterior",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Publicidad Vial Imagen",
+      },
+    ],
+    url: "https://publicidadvialimagen.vercel.app",
+    siteName: "Publicidad Vial Imagen",
+    locale: "es_ES",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Publicidad Vial Imagen",
+    description: "Tu plataforma inteligente de publicidad exterior",
+    images: ["/og-image.jpg"],
   },
 }
 

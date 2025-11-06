@@ -16,15 +16,15 @@ export function createSlug(text: string | undefined | null): string {
     .replace(/^-+|-+$/g, '')
 }
 
-// Función para generar URL de billboard con idioma correcto
+// Función para generar URL de billboard
+// Nota: El sistema de i18n funciona con contexto, no con rutas separadas
+// Por lo tanto, siempre usamos la misma ruta independientemente del idioma
 export function getBillboardUrl(billboardName: string, locale: 'es' | 'en' = 'es'): string {
   const slug = createSlug(billboardName)
-  const basePath = locale === 'en' ? '/en/billboards' : '/vallas-publicitarias'
-  return `${basePath}/${slug}`
+  return `/vallas-publicitarias/${slug}`
 }
 
 // Función para generar URL de billboard por ID (fallback)
 export function getBillboardUrlById(billboardId: string, locale: 'es' | 'en' = 'es'): string {
-  const basePath = locale === 'en' ? '/en/billboards' : '/vallas-publicitarias'
-  return `${basePath}/${billboardId}`
+  return `/vallas-publicitarias/${billboardId}`
 }

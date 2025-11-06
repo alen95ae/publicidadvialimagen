@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, startTransition } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { ShoppingCart, Search, Menu, X, ChevronDown } from "lucide-react"
@@ -89,15 +89,15 @@ export default function Header() {
   const searchRef = useRef<HTMLDivElement>(null)
   const { locale, setLocale, t } = useTranslations()
 
-  // Función para cambiar idioma y navegar
+  // Función para cambiar idioma
   const handleLanguageChange = (newLocale: Locale) => {
-    setLocale(newLocale)
-    // Navegar a la ruta con el nuevo idioma
-    if (newLocale === 'en') {
-      router.push('/en')
-    } else {
-      router.push('/')
-    }
+    // Cerrar el menú móvil primero para evitar conflictos durante el render
+    setMobileMenuOpen(false)
+    
+    // Actualizar el locale usando startTransition para evitar conflictos
+    startTransition(() => {
+      setLocale(newLocale)
+    })
   }
 
   // Sugerencias predefinidas

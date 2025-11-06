@@ -54,11 +54,16 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
     if (emblaApi) emblaApi.scrollNext()
   }, [emblaApi])
 
-  // Filtrar soportes de la misma ciudad, excluyendo el actual
-  const similarBillboards = billboards.filter(b => 
-    b.id !== currentBillboardId && 
-    b.city === billboards.find(current => current.id === currentBillboardId)?.city
-  ).slice(0, 8) // Limitar a 8 soportes
+  // Filtrar soportes disponibles de la misma ciudad, excluyendo el actual
+  const currentBillboard = billboards.find(current => current.id === currentBillboardId)
+  const similarBillboards = billboards
+    .filter(b => 
+      b.id !== currentBillboardId && 
+      b.available && // Solo soportes disponibles
+      b.city === currentBillboard?.city
+    )
+    .sort(() => Math.random() - 0.5) // Mezclar aleatoriamente
+    .slice(0, 8) // Limitar a 8 soportes
 
   if (similarBillboards.length === 0) {
     return null
@@ -83,16 +88,26 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Ruler className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">
-                          {billboard.dimensions || "Medidas no disponibles"}
-                        </span>
+                    <div className="flex items-end justify-between gap-2">
+                      <div className="flex flex-col gap-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Ruler className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {billboard.dimensions || "Medidas no disponibles"}
+                          </span>
+                        </div>
+                        {billboard.city && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {billboard.city}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <Button
                         size="sm"
-                        className="bg-primary hover:bg-primary/90 text-xs"
+                        className="bg-primary hover:bg-primary/90 text-xs shrink-0"
                         asChild
                       >
                         {billboard.available ? (

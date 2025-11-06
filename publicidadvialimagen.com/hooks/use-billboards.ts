@@ -115,7 +115,7 @@ export function useBillboards() {
           }
           return {
           id: soporte.id,
-          code: soporte.id, // Usar ID como código temporal
+          code: soporte.code || soporte.id, // Usar código real del soporte (ej: "34-LPZ")
           name: soporte.name,
           images: soporte.images || [soporte.image], // Usar todas las imágenes disponibles
           monthlyPrice: soporte.monthlyPrice,

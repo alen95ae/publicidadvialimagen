@@ -461,15 +461,29 @@ export default function VallasPublicitariasPage() {
   const billboardsWithoutPriceFilter = billboards.filter((billboard) => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
-      const matchesCity = billboard.city?.toLowerCase().includes(query)
-      const matchesCode = billboard.id?.toString().toLowerCase().includes(query)
-      const matchesType = billboard.type?.toLowerCase().includes(query)
-      const matchesFormat = billboard.format?.toLowerCase().includes(query)
-      const matchesName = billboard.name?.toLowerCase().includes(query)
-      const matchesLocation = billboard.location?.toLowerCase().includes(query)
+      const billboardCode = billboard.code?.toLowerCase()
       
-      if (!matchesCity && !matchesCode && !matchesType && !matchesFormat && !matchesName && !matchesLocation) {
-        return false
+      // Si la búsqueda parece un código (formato: números-letras o números-letras-números, ej: "34-LPZ", "34LPZ")
+      const looksLikeCode = /^\d+[-]?[A-Za-z]+/i.test(searchQuery.trim())
+      
+      if (looksLikeCode && billboardCode) {
+        // Búsqueda por código: coincidencia exacta o parcial (case-insensitive)
+        const codeMatch = billboardCode === query || billboardCode.includes(query)
+        if (!codeMatch) {
+          return false
+        }
+      } else {
+        // Búsqueda normal en todos los campos
+        const matchesCity = billboard.city?.toLowerCase().includes(query)
+        const matchesCode = billboardCode?.includes(query) || billboard.id?.toString().toLowerCase().includes(query)
+        const matchesType = billboard.type?.toLowerCase().includes(query)
+        const matchesFormat = billboard.format?.toLowerCase().includes(query)
+        const matchesName = billboard.name?.toLowerCase().includes(query)
+        const matchesLocation = billboard.location?.toLowerCase().includes(query)
+        
+        if (!matchesCity && !matchesCode && !matchesType && !matchesFormat && !matchesName && !matchesLocation) {
+          return false
+        }
       }
     }
 
@@ -917,7 +931,7 @@ export default function VallasPublicitariasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {sortedBillboards.map((billboard) => (
                 <Card key={billboard.id} className="overflow-hidden">
-                  <Link href={getBillboardUrl(billboard.name, locale)} className="w-full h-[147px] relative block">
+                  <Link href={getBillboardUrl(billboard.name, locale)} className="w-full aspect-[222/147] relative block">
                     <Image
                       src={billboard.images?.[0] || "/placeholder.svg"}
                       alt={billboard.name}
@@ -929,16 +943,26 @@ export default function VallasPublicitariasPage() {
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Ruler className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {billboard.dimensions || "Medidas no disponibles"}
-                          </span>
+                      <div className="flex items-end justify-between gap-2">
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Ruler className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {billboard.dimensions || "Medidas no disponibles"}
+                            </span>
+                          </div>
+                          {billboard.city && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium text-muted-foreground">
+                                {billboard.city}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <Button
                           size="sm"
-                          className="bg-primary hover:bg-primary/90 text-xs"
+                          className="bg-primary hover:bg-primary/90 text-xs shrink-0"
                           asChild
                         >
                           {billboard.available ? (

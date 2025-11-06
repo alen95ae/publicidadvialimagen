@@ -11,7 +11,7 @@ export const CITY_COORDINATES = {
   },
   "Cochabamba": {
     center: [-17.3833, -66.1667] as [number, number],
-    zoom: 11  // Ciudad grande (-1)
+    zoom: 12  // Ciudad grande - zoom aumentado para vista más cercana
   },
   "El Alto": {
     center: [-16.5167, -68.1833] as [number, number],

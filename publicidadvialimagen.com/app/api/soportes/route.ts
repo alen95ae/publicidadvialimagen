@@ -201,7 +201,7 @@ export async function GET(req: Request) {
       
       return {
         id: soporte.id,
-        code: soporte.id, // ID de Airtable para usar en relaciones
+        code: soporte.codigo || soporte.id, // Código del soporte (ej: "34-LPZ")
         name: soporte.titulo || soporte.codigo,
         image: images[0] || "/placeholder.svg?height=300&width=400",
         images: images.length > 0 ? images : ["/placeholder.svg?height=300&width=400"],

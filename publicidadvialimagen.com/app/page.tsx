@@ -249,7 +249,7 @@ function FeaturedBillboardsCarousel({ billboards, t, locale }: { billboards: Bil
           {billboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={getBillboardUrl(billboard.name, locale)} className="w-full h-[147px] relative block">
+                <Link href={getBillboardUrl(billboard.name, locale)} className="w-full aspect-[280/147] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
@@ -261,16 +261,26 @@ function FeaturedBillboardsCarousel({ billboards, t, locale }: { billboards: Bil
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Ruler className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">
-                          {billboard.dimensions || "Medidas no disponibles"}
-                        </span>
+                    <div className="flex items-end justify-between gap-2">
+                      <div className="flex flex-col gap-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Ruler className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {billboard.dimensions || "Medidas no disponibles"}
+                          </span>
+                        </div>
+                        {billboard.city && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {billboard.city}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <Button
                         size="sm"
-                        className="bg-primary hover:bg-primary/90 text-xs"
+                        className="bg-primary hover:bg-primary/90 text-xs shrink-0"
                         asChild
                       >
                         {billboard.available ? (
@@ -408,8 +418,11 @@ export default function HomePage() {
   }
 
 
-  // Seleccionar los primeros 7 soportes disponibles como destacados
-  const featuredBillboards = billboards.filter(b => b.available).slice(0, 7)
+  // Seleccionar 7 soportes disponibles aleatorios como destacados
+  const featuredBillboards = billboards
+    .filter(b => b.available)
+    .sort(() => Math.random() - 0.5) // Mezclar aleatoriamente
+    .slice(0, 7)
 
 
   return (
@@ -521,8 +534,8 @@ export default function HomePage() {
                   {t('printShop.features.finishes')}
                 </li>
               </ul>
-              <Button size="lg" className="bg-secondary hover:bg-secondary/90 text-secondary-foreground" asChild>
-                <Link href="/print-shop">{t('printShop.services.banners')}</Link>
+              <Button size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8 py-4" asChild>
+                <Link href="/print-shop">{t('printShop.services.exploreServices')}</Link>
               </Button>
             </div>
             <div className="relative h-[300px] sm:h-[400px] rounded-xl overflow-hidden">
@@ -573,9 +586,9 @@ export default function HomePage() {
             <Card className="bg-background border-border">
               <CardContent className="flex flex-col items-center text-center p-6">
                 <CreditCard className="h-10 w-10 mb-4 text-primary" />
-                <h3 className="text-lg font-semibold mb-2">{t('common.save')}</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('home.features.securePayment.title')}</h3>
                 <p className="text-muted-foreground text-sm">
-                  {t('common.save')}
+                  {t('home.features.securePayment.description')}
                 </p>
               </CardContent>
             </Card>

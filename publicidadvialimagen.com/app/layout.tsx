@@ -17,30 +17,6 @@ export const metadata: Metadata = {
   generator: 'v0.app',
   icons: {
     icon: '/favicon.svg',
-    shortcut: '/favicon.svg',
-    apple: '/favicon.svg',
-  },
-  openGraph: {
-    title: "Publicidad Vial Imagen",
-    description: "Tu plataforma inteligente de publicidad exterior",
-    images: [
-      {
-        url: "/logo-publicidad-vial.svg",
-        width: 1200,
-        height: 630,
-        alt: "Publicidad Vial Imagen",
-      },
-    ],
-    url: "https://publicidadvialimagen.vercel.app",
-    siteName: "Publicidad Vial Imagen",
-    locale: "es_ES",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Publicidad Vial Imagen",
-    description: "Tu plataforma inteligente de publicidad exterior",
-    images: ["/logo-publicidad-vial.svg"],
   },
 }
 

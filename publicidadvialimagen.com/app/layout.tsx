@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     description: "Tu plataforma inteligente de publicidad exterior",
     images: [
       {
-        url: "/og-image.jpg",
+        url: "/logo-publicidad-vial.svg",
         width: 1200,
         height: 630,
         alt: "Publicidad Vial Imagen",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Publicidad Vial Imagen",
     description: "Tu plataforma inteligente de publicidad exterior",
-    images: ["/og-image.jpg"],
+    images: ["/logo-publicidad-vial.svg"],
   },
 }
 

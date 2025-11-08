@@ -40,7 +40,8 @@ export async function airtableUpdate(table: string, id: string, fields: Record<s
   
   // Log detallado del payload que se envía
   const payload = { fields }
-  console.log('📤 Payload enviado a Airtable:', JSON.stringify(payload, null, 2))
+  console.log('➡️ airtableUpdate payload:', { table, id, fields: Object.keys(fields) })
+  console.log('➡️ airtableUpdate payload (detalle):', JSON.stringify(payload, null, 2))
   
   const res = await fetch(url, {
     method: "PATCH",
@@ -51,15 +52,23 @@ export async function airtableUpdate(table: string, id: string, fields: Record<s
   
   if (!res.ok) {
     const errorText = await res.text()
+    let errorData: any = null
+    try {
+      errorData = JSON.parse(errorText)
+    } catch {}
+    
     console.error('❌ Error respuesta Airtable:', {
       status: res.status,
       statusText: res.statusText,
-      error: errorText
+      error: errorText,
+      errorData: errorData
     })
     throw new Error(`Update ${table} failed: ${res.status} ${errorText}`);
   }
   
-  return res.json();
+  const result = await res.json()
+  console.log('✅ airtableUpdate exitoso:', { table, id, fieldsUpdated: Object.keys(fields) })
+  return result
 }
 
 export async function airtableUpsertByEmail(table: string, fields: Record<string, any>) {
@@ -118,4 +127,35 @@ export async function getRecordsPage(
   if (view) params.view = view;
   
   return await airtableList(tableName, params);
+}
+
+export async function airtableGet(table: string, id: string) {
+  const url = `${API}/${baseId}/${encodeURIComponent(table)}/${id}`;
+  console.log('🔍 Fetching from Airtable:', url)
+  
+  const res = await fetch(url, {
+    headers: headers(),
+    cache: "no-store",
+  });
+  
+  if (!res.ok) {
+    const errorText = await res.text()
+    console.error('❌ Error obteniendo registro de Airtable:', {
+      status: res.status,
+      statusText: res.statusText,
+      error: errorText,
+      table,
+      id
+    })
+    throw new Error(`Get ${table} failed: ${res.status} ${errorText}`);
+  }
+  
+  const data = await res.json();
+  // La API de Airtable devuelve directamente el record cuando es GET individual
+  // Asegurarnos de que tenga la estructura { id, fields }
+  if (data && !data.fields && data.id) {
+    // Si ya tiene id pero no fields, puede que sea un formato diferente
+    console.warn('⚠️ Formato inesperado de respuesta de Airtable:', data)
+  }
+  return data;
 }

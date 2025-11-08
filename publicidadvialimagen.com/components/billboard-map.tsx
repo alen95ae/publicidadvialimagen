@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Map, EyeOff, Maximize2, Minimize2 } from "lucide-react"
@@ -42,15 +42,70 @@ interface BillboardMapProps {
 
 export default function BillboardMap({ billboards, selectedCity, isVisible, onToggle }: BillboardMapProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [mapKey, setMapKey] = useState(0)
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
   }
 
+  // Asegurar que el body no tenga overflow hidden cuando se sale del modo completo
+  // y limpiar los popups de Leaflet cuando se sale del modo completo
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+      
+      // Cerrar todos los popups de Leaflet y resetear z-index
+      setTimeout(() => {
+        // Buscar y cerrar todos los popups de Leaflet
+        const popups = document.querySelectorAll('.leaflet-popup')
+        popups.forEach((popup) => {
+          const closeButton = popup.querySelector('.leaflet-popup-close-button')
+          if (closeButton) {
+            ;(closeButton as HTMLElement).click()
+          }
+        })
+        
+        // Resetear z-index de los controles de Leaflet
+        const leafletControls = document.querySelectorAll('.leaflet-control-container')
+        leafletControls.forEach((control) => {
+          const element = control as HTMLElement
+          if (element.style.zIndex) {
+            element.style.zIndex = ''
+          }
+        })
+        
+        // Resetear z-index de los panes de Leaflet
+        const leafletPanes = document.querySelectorAll('.leaflet-pane')
+        leafletPanes.forEach((pane) => {
+          const element = pane as HTMLElement
+          if (parseInt(element.style.zIndex || '0') > 50) {
+            element.style.zIndex = ''
+          }
+        })
+      }, 100)
+      
+      // Forzar re-render del mapa para limpiar estados
+      setMapKey(prev => prev + 1)
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isFullscreen])
+
   return (
     <div className="w-full">
       {isVisible && (
-        <div className={`mb-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+        <div 
+          className={`mb-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'relative'}`}
+          style={!isFullscreen ? { 
+            isolation: 'isolate',
+            zIndex: 0,
+            position: 'relative'
+          } : undefined}
+        >
           {isFullscreen && (
             <div className="absolute top-4 right-4 z-[1000] flex gap-2">
               <Button
@@ -66,6 +121,7 @@ export default function BillboardMap({ billboards, selectedCity, isVisible, onTo
           )}
           <div className={isFullscreen ? 'h-screen' : ''}>
             <DynamicMap 
+              key={mapKey}
               billboards={billboards} 
               selectedCity={selectedCity}
               isFullscreen={isFullscreen}

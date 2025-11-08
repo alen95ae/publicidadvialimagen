@@ -32,7 +32,13 @@ export async function PUT(
   try {
     const { id } = params
     const body = await request.json()
-    console.log('📝 Actualizando producto:', id, body)
+    
+    console.log('📝 Actualizando producto:', id)
+    console.log('📝 Body recibido:', JSON.stringify(body, null, 2))
+    console.log('📝 calculadora_de_precios (tipo):', typeof body.calculadora_de_precios)
+    try {
+      console.log('📝 calculadora_de_precios (preview):', JSON.stringify(body.calculadora_de_precios)?.slice(0, 500))
+    } catch {}
 
     const productoActualizado = await updateProducto(id, body)
 

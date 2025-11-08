@@ -15,6 +15,7 @@ export interface RecursoAirtable {
   coste: number
   precio_venta?: number
   variantes?: any[]
+  control_stock?: any // Campo para guardar datos de stock, diferencia de precio y precio variante
   fecha_creacion: string
   fecha_actualizacion: string
 }
@@ -29,6 +30,7 @@ export interface RecursoAirtableFields {
   'Stock': number
   'Coste': number
   'Variantes'?: string
+  'Control de Stock'?: string // Campo JSON para datos de control de stock
   // 'Precio Venta' no existe en Airtable - campo comentado
   // 'Precio Venta'?: number
   'Fecha Creación': string
@@ -57,12 +59,44 @@ export function airtableToRecurso(record: any): RecursoAirtable {
   let variantes: any[] = []
   if (fields['Variantes']) {
     try {
-      variantes = typeof fields['Variantes'] === 'string' 
+      let parsedVariantes = typeof fields['Variantes'] === 'string' 
         ? JSON.parse(fields['Variantes']) 
         : fields['Variantes']
+      
+      // Si las variantes vienen como objeto con { variantes: [...], datosVariantes: {...} }
+      // extraer solo el array de variantes
+      if (parsedVariantes && typeof parsedVariantes === 'object' && !Array.isArray(parsedVariantes)) {
+        if (parsedVariantes.variantes && Array.isArray(parsedVariantes.variantes)) {
+          variantes = parsedVariantes.variantes
+        } else {
+          variantes = []
+        }
+      } else if (Array.isArray(parsedVariantes)) {
+        variantes = parsedVariantes
+      }
     } catch (e) {
       console.error('Error parseando variantes:', e)
       variantes = []
+    }
+  }
+  
+  // Parsear control de stock desde JSON string
+  let controlStock: any = {}
+  if (fields['Control de Stock']) {
+    try {
+      if (typeof fields['Control de Stock'] === 'string') {
+        const trimmed = fields['Control de Stock'].trim()
+        if (trimmed.length > 0) {
+          controlStock = JSON.parse(trimmed)
+          console.log(`✅ Control de Stock parseado para "${fields['Nombre']}"`)
+        }
+      } else if (typeof fields['Control de Stock'] === 'object') {
+        controlStock = fields['Control de Stock']
+      }
+    } catch (e) {
+      console.error(`❌ Error parseando Control de Stock de "${fields['Nombre']}":`, e)
+      console.error('❌ Contenido:', fields['Control de Stock'])
+      controlStock = {}
     }
   }
   
@@ -79,6 +113,7 @@ export function airtableToRecurso(record: any): RecursoAirtable {
     coste: fields['Coste'] || 0,
     precio_venta: fields['Precio Venta'] || 0,
     variantes: variantes,
+    control_stock: controlStock,
     fecha_creacion: fields['Fecha Creación'] || new Date().toISOString(),
     fecha_actualizacion: fields['Fecha Actualización'] || new Date().toISOString()
   }
@@ -182,6 +217,19 @@ function recursoPartialToAirtable(recurso: Partial<RecursoAirtable>): Record<str
     } catch (e) {
       console.error('Error serializando variantes:', e)
       fields['Variantes'] = '[]'
+    }
+  }
+  
+  // Guardar control de stock como JSON string
+  if (recurso.control_stock !== undefined && recurso.control_stock !== null) {
+    try {
+      fields['Control de Stock'] = typeof recurso.control_stock === 'string' 
+        ? recurso.control_stock 
+        : JSON.stringify(recurso.control_stock)
+      console.log('📦 Control de Stock guardado:', fields['Control de Stock'])
+    } catch (e) {
+      console.error('Error serializando Control de Stock:', e)
+      fields['Control de Stock'] = '{}'
     }
   }
   

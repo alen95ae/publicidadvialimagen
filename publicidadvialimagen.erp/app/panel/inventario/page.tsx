@@ -311,37 +311,27 @@ export default function InventarioPage() {
     }))
   }
 
-  const handleSaveChanges = async (id: string) => {
+  // Agregar cambios a pendingChanges en lugar de guardar inmediatamente
+  const handleSaveChanges = (id: string) => {
     if (!editedItems[id]) return
     
-    setSavingChanges(true)
-    try {
-      const response = await fetch(`/api/inventario/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editedItems[id]),
-      })
-
-      if (response.ok) {
-        toast.success('Cambios guardados correctamente')
-        setEditedItems(prev => {
-          const newItems = { ...prev }
-          delete newItems[id]
-          return newItems
-        })
-        setSelected(prev => ({ ...prev, [id]: false }))
-        fetchItems()
-      } else {
-        toast.error('Error al guardar cambios')
+    // Agregar cambios a pendingChanges pero no guardar automáticamente
+    setPendingChanges(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        ...editedItems[id]
       }
-    } catch (error) {
-      console.error('Error saving changes:', error)
-      toast.error('Error al guardar cambios')
-    } finally {
-      setSavingChanges(false)
-    }
+    }))
+    
+    // Limpiar editedItems pero mantener seleccionado
+    setEditedItems(prev => {
+      const newItems = { ...prev }
+      delete newItems[id]
+      return newItems
+    })
+    
+    toast.info('Cambios agregados. Presiona "Guardar" para confirmar.')
   }
 
   // Guardar inmediatamente un campo específico sin depender de editedItems
@@ -400,43 +390,7 @@ export default function InventarioPage() {
     setSelected(prev => ({ ...prev, [id]: false }))
   }
 
-  // Guardar cambios cuando se deselecciona un item
-  useEffect(() => {
-    Object.keys(editedItems).forEach(async (id) => {
-      // Si el item tiene cambios pendientes Y no está seleccionado, guardar
-      if (!selected[id] && editedItems[id] && Object.keys(editedItems[id]).length > 0) {
-        const changes = { ...editedItems[id] }
-        // Limpiar del estado inmediatamente para evitar loops
-        setEditedItems(prev => {
-          const newItems = { ...prev }
-          delete newItems[id]
-          return newItems
-        })
-        
-        // Guardar cambios
-        setSavingChanges(true)
-        try {
-          const response = await fetch(`/api/inventario/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(changes)
-          })
-          
-          if (response.ok) {
-            toast.success('Cambios guardados correctamente')
-            await fetchItems()
-          } else {
-            toast.error('Error al guardar cambios')
-          }
-        } catch (error) {
-          console.error('Error saving changes:', error)
-          toast.error('Error al guardar cambios')
-        } finally {
-          setSavingChanges(false)
-        }
-      }
-    })
-  }, [selected])
+  // Ya no guardamos automáticamente al deseleccionar - el usuario debe usar los botones
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = {}
@@ -481,12 +435,19 @@ export default function InventarioPage() {
 
   // Guardar cambios pendientes masivos
   const handleSaveBulkChanges = async () => {
-    // Capturar el estado actual inmediatamente para evitar problemas de timing
-    const changesToSave = { ...pendingChanges }
-    const pendingCount = Object.keys(changesToSave).length
+    // Combinar pendingChanges y editedItems
+    const allChanges = { ...pendingChanges }
+    Object.entries(editedItems).forEach(([id, changes]) => {
+      allChanges[id] = {
+        ...allChanges[id],
+        ...changes
+      }
+    })
+    
+    const pendingCount = Object.keys(allChanges).length
     
     console.log('💾 handleSaveBulkChanges llamado - cambios pendientes:', pendingCount)
-    console.log('💾 Contenido de pendingChanges:', changesToSave)
+    console.log('💾 Contenido de allChanges:', allChanges)
     
     if (pendingCount === 0) {
       console.warn('⚠️ No hay cambios pendientes para guardar')
@@ -496,10 +457,10 @@ export default function InventarioPage() {
 
     setSavingChanges(true)
     try {
-      const count = Object.keys(changesToSave).length
-      console.log('💾 Guardando cambios masivos:', { count, changes: changesToSave })
+      const count = Object.keys(allChanges).length
+      console.log('💾 Guardando cambios masivos:', { count, changes: allChanges })
       
-      const promises = Object.entries(changesToSave).map(async ([id, changes]) => {
+      const promises = Object.entries(allChanges).map(async ([id, changes]) => {
         // Limpiar valores string antes de enviar
         const cleanedChanges: any = {}
         Object.keys(changes).forEach(key => {
@@ -592,6 +553,7 @@ export default function InventarioPage() {
       
       // Limpiar cambios pendientes solo después de guardar exitosamente
       setPendingChanges({})
+      setEditedItems({})
       // Limpiar selección después de guardar
       setSelected({})
       await fetchItems()
@@ -606,6 +568,8 @@ export default function InventarioPage() {
 
   const handleDiscardChanges = () => {
     setPendingChanges({})
+    setEditedItems({})
+    setSelected({})
     toast.info("Cambios descartados")
   }
 
@@ -1054,7 +1018,7 @@ export default function InventarioPage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    {Object.keys(pendingChanges).length > 0 && (
+                    {(Object.keys(pendingChanges).length > 0 || Object.keys(editedItems).length > 0) && (
                       <>
                         <Button 
                           size="sm" 
@@ -1062,7 +1026,7 @@ export default function InventarioPage() {
                           disabled={savingChanges}
                           className="bg-red-600 hover:bg-red-700 text-white"
                         >
-                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(pendingChanges).length})`}
+                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(pendingChanges).length + Object.keys(editedItems).length})`}
                         </Button>
                         <Button 
                           variant="outline" 
@@ -1108,7 +1072,10 @@ export default function InventarioPage() {
                     key={item.id} 
                     className="overflow-hidden transition-all cursor-pointer hover:shadow-lg p-0"
                   >
-                    <div className="relative aspect-square w-full bg-gray-100 group">
+                    <div 
+                      className="relative aspect-square w-full bg-gray-100 group cursor-pointer"
+                      onClick={() => handleEdit(item.id)}
+                    >
                       {item.imagen_portada ? (
                         <img
                           src={item.imagen_portada}
@@ -1212,7 +1179,6 @@ export default function InventarioPage() {
                             value={editedItems[item.id]?.codigo ?? item.codigo}
                             onChange={(e) => handleFieldChange(item.id, 'codigo', e.target.value)}
                             className="h-8 font-mono text-xs"
-                            onBlur={() => handleSaveChanges(item.id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleSaveChanges(item.id)
@@ -1233,7 +1199,6 @@ export default function InventarioPage() {
                             value={editedItems[item.id]?.nombre ?? item.nombre}
                             onChange={(e) => handleFieldChange(item.id, 'nombre', e.target.value)}
                             className="h-8"
-                            onBlur={() => handleSaveChanges(item.id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleSaveChanges(item.id)
@@ -1341,7 +1306,6 @@ export default function InventarioPage() {
                             value={editedItems[item.id]?.cantidad ?? item.cantidad}
                             onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
                             className="h-8 w-20"
-                            onBlur={() => handleSaveChanges(item.id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleSaveChanges(item.id)

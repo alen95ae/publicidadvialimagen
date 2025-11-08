@@ -202,12 +202,15 @@ export default function AjustesInventarioPage() {
           // Generar ID único para esta combinación
           const id = `${recurso.id}-${indexCombo}-${sucursal}`
 
-          // Obtener stock, precio variante y diferencia de precio desde las variantes
-          const stockVariante = getStockFromVarianteData(recurso, combinacion, sucursal)
-          const precioVarianteData = getPrecioVarianteFromData(recurso, combinacion, sucursal)
+          // Obtener stock, precio variante y diferencia de precio desde Control de Stock
+          const stockVariante = getStockFromControlStock(recurso, combinacion, sucursal)
+          const precioVarianteData = getPrecioVarianteFromControlStock(recurso, combinacion, sucursal)
           const diferenciaPrecio = precioVarianteData.diferencia || 0
           const precioVariante = precioVarianteData.precio || recurso.coste || 0
 
+          // Crear combinación con sucursal incluida
+          const combinacionConSucursal = { ...combinacion, Sucursal: sucursal }
+          
           ajustes.push({
             id,
             recursoId: recurso.id,
@@ -219,7 +222,7 @@ export default function AjustesInventarioPage() {
             diferenciaPrecio,
             precioVariante,
             stock: stockVariante,
-            variantesData: combinacion
+            variantesData: combinacionConSucursal // Incluye sucursal en los datos
           })
         })
       })
@@ -228,73 +231,64 @@ export default function AjustesInventarioPage() {
     return ajustes
   }, [items])
 
-  // Función auxiliar para obtener stock desde datos de variantes
-  function getStockFromVarianteData(recurso: any, combinacion: any, sucursal: string): number {
+  // Función auxiliar para obtener stock desde Control de Stock
+  function getStockFromControlStock(recurso: any, combinacion: any, sucursal: string): number {
     try {
-      if (!recurso.variantes) return 0
+      if (!recurso.control_stock) return 0
       
-      let variantesData: any = null
-      if (typeof recurso.variantes === 'string') {
-        variantesData = JSON.parse(recurso.variantes)
+      let controlStock: any = null
+      if (typeof recurso.control_stock === 'string') {
+        controlStock = JSON.parse(recurso.control_stock)
       } else {
-        variantesData = recurso.variantes
+        controlStock = recurso.control_stock
       }
       
-      // Si es un array, no hay datosVariantes todavía
-      if (Array.isArray(variantesData)) {
-        return 0
-      }
-      
-      // Estructura esperada: { variantes: [...], datosVariantes: { "Color:x|Grosor:y": { "La Paz": { stock: 50, diferenciaPrecio: 5.5 } } } }
-      if (variantesData.datosVariantes && typeof variantesData.datosVariantes === 'object') {
-        const key = generateVarianteKey(combinacion)
-        const datosCombinacion = variantesData.datosVariantes[key]
+      // Estructura esperada: { "Color:x|Grosor:y|Sucursal:La Paz": { stock: 50, diferenciaPrecio: 5.5, precioVariante: 15.5 } }
+      if (controlStock && typeof controlStock === 'object') {
+        // Crear combinación con sucursal
+        const combinacionConSucursal = { ...combinacion, Sucursal: sucursal }
+        const key = generateVarianteKey(combinacionConSucursal)
+        const datosVariante = controlStock[key]
         
-        if (datosCombinacion && datosCombinacion[sucursal]) {
-          return datosCombinacion[sucursal].stock || 0
+        if (datosVariante && datosVariante.stock !== undefined) {
+          return datosVariante.stock || 0
         }
       }
     } catch (e) {
-      console.error('Error leyendo stock desde variantes:', e)
+      console.error('Error leyendo stock desde Control de Stock:', e)
     }
     return 0
   }
 
-  // Función auxiliar para obtener precio variante desde datos
-  function getPrecioVarianteFromData(recurso: any, combinacion: any, sucursal: string): { precio: number, diferencia: number } {
+  // Función auxiliar para obtener precio variante desde Control de Stock
+  function getPrecioVarianteFromControlStock(recurso: any, combinacion: any, sucursal: string): { precio: number, diferencia: number } {
     try {
-      if (!recurso.variantes) {
+      if (!recurso.control_stock) {
         return {
           precio: recurso.coste || 0,
           diferencia: 0
         }
       }
       
-      let variantesData: any = null
-      if (typeof recurso.variantes === 'string') {
-        variantesData = JSON.parse(recurso.variantes)
+      let controlStock: any = null
+      if (typeof recurso.control_stock === 'string') {
+        controlStock = JSON.parse(recurso.control_stock)
       } else {
-        variantesData = recurso.variantes
+        controlStock = recurso.control_stock
       }
       
-      // Si es un array, no hay datosVariantes todavía
-      if (Array.isArray(variantesData)) {
-        return {
-          precio: recurso.coste || 0,
-          diferencia: 0
-        }
-      }
-      
-      // Estructura esperada: { variantes: [...], datosVariantes: { "Color:x|Grosor:y": { "La Paz": { stock: 50, diferenciaPrecio: 5.5, precioVariante: 15.5 } } } }
-      if (variantesData.datosVariantes && typeof variantesData.datosVariantes === 'object') {
-        const key = generateVarianteKey(combinacion)
-        const datosCombinacion = variantesData.datosVariantes[key]
+      // Estructura esperada: { "Color:x|Grosor:y|Sucursal:La Paz": { stock: 50, diferenciaPrecio: 5.5, precioVariante: 15.5 } }
+      if (controlStock && typeof controlStock === 'object') {
+        // Crear combinación con sucursal
+        const combinacionConSucursal = { ...combinacion, Sucursal: sucursal }
+        const key = generateVarianteKey(combinacionConSucursal)
+        const datosVariante = controlStock[key]
         
-        if (datosCombinacion && datosCombinacion[sucursal]) {
-          const diferencia = datosCombinacion[sucursal].diferenciaPrecio || 0
+        if (datosVariante) {
+          const diferencia = datosVariante.diferenciaPrecio || 0
           // Si hay precioVariante guardado, usarlo; sino calcularlo
-          const precio = datosCombinacion[sucursal].precioVariante !== undefined
-            ? datosCombinacion[sucursal].precioVariante
+          const precio = datosVariante.precioVariante !== undefined
+            ? datosVariante.precioVariante
             : (recurso.coste || 0) + diferencia
           return {
             precio,
@@ -303,7 +297,7 @@ export default function AjustesInventarioPage() {
         }
       }
     } catch (e) {
-      console.error('Error leyendo precio desde variantes:', e)
+      console.error('Error leyendo precio desde Control de Stock:', e)
     }
     return {
       precio: recurso.coste || 0,
@@ -376,7 +370,7 @@ export default function AjustesInventarioPage() {
   }
 
   // Aplicar cambio masivo a seleccionados
-  const handleBulkFieldChange = (field: 'diferenciaPrecio' | 'stock', value: any) => {
+  const handleBulkFieldChange = (field: 'diferenciaPrecio' | 'stock' | 'precioVariante', value: any) => {
     const updates: Record<string, Partial<AjusteInventarioItem>> = {}
     Object.keys(selected).filter(id => selected[id]).forEach(id => {
       const item = filteredItems.find(i => i.id === id)
@@ -394,10 +388,22 @@ export default function AjustesInventarioPage() {
         fieldUpdates.precioVariante = costeBase + nuevaDiferencia
       }
       
+      // Si cambia precioVariante, también actualizar diferenciaPrecio
+      if (field === 'precioVariante') {
+        const nuevoPrecio = parseFloat(value) || 0
+        const nuevaDiferencia = nuevoPrecio - costeBase
+        fieldUpdates.diferenciaPrecio = nuevaDiferencia
+      }
+      
       updates[id] = fieldUpdates
     })
     setPendingChanges(prev => ({ ...prev, ...updates }))
-    toast.info(`Campo ${field === 'diferenciaPrecio' ? 'Diferencia de precio' : 'Stock'} actualizado para ${Object.keys(selected).filter(id => selected[id]).length} item(s)`)
+    const fieldNames: Record<string, string> = {
+      'diferenciaPrecio': 'Diferencia de precio',
+      'stock': 'Stock',
+      'precioVariante': 'Precio variante'
+    }
+    toast.info(`Campo ${fieldNames[field]} actualizado para ${Object.keys(selected).filter(id => selected[id]).length} item(s)`)
   }
 
   // Guardar cambios pendientes masivos
@@ -421,36 +427,46 @@ export default function AjustesInventarioPage() {
           cambiosPorRecurso[recursoId] = {}
         }
         
+        // La clave ya incluye la sucursal porque variantesData la contiene
         const key = generateVarianteKey(item.variantesData)
-        const sucursal = item.sucursal
         
         if (!cambiosPorRecurso[recursoId][key]) {
-          cambiosPorRecurso[recursoId][key] = {}
-        }
-        
-        // Calcular diferenciaPrecio y precioVariante actualizados
-        const diferenciaPrecioActual = changes.diferenciaPrecio !== undefined 
-          ? changes.diferenciaPrecio 
-          : item.diferenciaPrecio
-        const costeBase = recurso.coste || 0
-        const precioVarianteActual = costeBase + diferenciaPrecioActual
-        
-        if (!cambiosPorRecurso[recursoId][key][sucursal]) {
-          cambiosPorRecurso[recursoId][key][sucursal] = {
+          cambiosPorRecurso[recursoId][key] = {
             stock: item.stock,
             diferenciaPrecio: item.diferenciaPrecio,
             precioVariante: item.precioVariante
           }
         }
         
+        // Calcular diferenciaPrecio y precioVariante actualizados
+        const costeBase = recurso.coste || 0
+        let diferenciaPrecioActual = changes.diferenciaPrecio !== undefined 
+          ? changes.diferenciaPrecio 
+          : item.diferenciaPrecio
+        let precioVarianteActual = changes.precioVariante !== undefined
+          ? changes.precioVariante
+          : item.precioVariante
+        
+        // Si se actualizó precioVariante directamente, recalcular diferenciaPrecio
+        if (changes.precioVariante !== undefined) {
+          diferenciaPrecioActual = precioVarianteActual - costeBase
+        }
+        // Si se actualizó diferenciaPrecio, recalcular precioVariante
+        else if (changes.diferenciaPrecio !== undefined) {
+          precioVarianteActual = costeBase + diferenciaPrecioActual
+        }
+        
         // Actualizar con los cambios
         if (changes.stock !== undefined) {
-          cambiosPorRecurso[recursoId][key][sucursal].stock = changes.stock
+          cambiosPorRecurso[recursoId][key].stock = changes.stock
         }
         if (changes.diferenciaPrecio !== undefined) {
-          cambiosPorRecurso[recursoId][key][sucursal].diferenciaPrecio = changes.diferenciaPrecio
-          // Recalcular precioVariante cuando cambia diferenciaPrecio
-          cambiosPorRecurso[recursoId][key][sucursal].precioVariante = costeBase + changes.diferenciaPrecio
+          cambiosPorRecurso[recursoId][key].diferenciaPrecio = diferenciaPrecioActual
+          cambiosPorRecurso[recursoId][key].precioVariante = precioVarianteActual
+        }
+        if (changes.precioVariante !== undefined) {
+          cambiosPorRecurso[recursoId][key].precioVariante = precioVarianteActual
+          cambiosPorRecurso[recursoId][key].diferenciaPrecio = diferenciaPrecioActual
         }
       })
       
@@ -459,62 +475,36 @@ export default function AjustesInventarioPage() {
         const recurso = items.find(r => r.id === recursoId)
         if (!recurso) return
         
-        // Obtener estructura actual de variantes
-        let variantesData: any = { variantes: [], datosVariantes: {} }
+        // Obtener estructura actual de Control de Stock
+        let controlStock: any = {}
         try {
-          if (recurso.variantes) {
-            if (typeof recurso.variantes === 'string') {
-              const parsed = JSON.parse(recurso.variantes)
-              if (Array.isArray(parsed)) {
-                // Formato antiguo: solo array de variantes
-                variantesData = { variantes: parsed, datosVariantes: {} }
-              } else {
-                // Formato nuevo: objeto con variantes y datosVariantes
-                variantesData = parsed
-              }
-            } else if (Array.isArray(recurso.variantes)) {
-              // Formato antiguo: solo array de variantes
-              variantesData = { variantes: recurso.variantes, datosVariantes: {} }
+          if (recurso.control_stock) {
+            if (typeof recurso.control_stock === 'string') {
+              controlStock = JSON.parse(recurso.control_stock)
             } else {
-              // Formato nuevo: objeto con variantes y datosVariantes
-              variantesData = recurso.variantes
+              controlStock = recurso.control_stock
             }
           }
         } catch (e) {
-          console.error('Error parseando variantes:', e)
-          variantesData = { variantes: [], datosVariantes: {} }
+          console.error('Error parseando Control de Stock:', e)
+          controlStock = {}
         }
         
-        // Asegurar que tenemos la estructura correcta
-        if (!variantesData.variantes) {
-          variantesData.variantes = []
-        }
-        if (!variantesData.datosVariantes) {
-          variantesData.datosVariantes = {}
-        }
-        
-        // Actualizar datosVariantes con los nuevos valores
-        Object.entries(datosPorVariante).forEach(([keyVariante, datosPorSucursal]) => {
-          if (!variantesData.datosVariantes[keyVariante]) {
-            variantesData.datosVariantes[keyVariante] = {}
+        // Actualizar Control de Stock con los nuevos valores
+        // La clave ya incluye la sucursal: "Color:x|Grosor:y|Sucursal:La Paz"
+        Object.entries(datosPorVariante).forEach(([keyVariante, datos]) => {
+          controlStock[keyVariante] = {
+            stock: datos.stock,
+            diferenciaPrecio: datos.diferenciaPrecio,
+            precioVariante: datos.precioVariante
           }
-          
-          Object.entries(datosPorSucursal).forEach(([sucursal, datos]) => {
-            if (!variantesData.datosVariantes[keyVariante][sucursal]) {
-              variantesData.datosVariantes[keyVariante][sucursal] = {}
-            }
-            
-            variantesData.datosVariantes[keyVariante][sucursal].stock = datos.stock
-            variantesData.datosVariantes[keyVariante][sucursal].diferenciaPrecio = datos.diferenciaPrecio
-            variantesData.datosVariantes[keyVariante][sucursal].precioVariante = datos.precioVariante
-          })
         })
         
         // Guardar en Airtable
         const response = await fetch(`/api/recursos/${recursoId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ variantes: variantesData })
+          body: JSON.stringify({ control_stock: controlStock })
         })
         
         if (!response.ok) {
@@ -548,7 +538,7 @@ export default function AjustesInventarioPage() {
   }
 
   // Manejar cambios en campos individuales
-  const handleFieldChange = (id: string, field: 'diferenciaPrecio' | 'stock', value: string | number) => {
+  const handleFieldChange = (id: string, field: 'diferenciaPrecio' | 'stock' | 'precioVariante', value: string | number) => {
     const numValue = typeof value === 'string' ? (field === 'stock' ? parseInt(value) || 0 : parseFloat(value) || 0) : value
     
     const item = filteredItems.find(i => i.id === id)
@@ -562,6 +552,14 @@ export default function AjustesInventarioPage() {
       const nuevaDiferencia = numValue as number
       const nuevoPrecioVariante = costeBase + nuevaDiferencia
       updates.precioVariante = nuevoPrecioVariante
+    }
+    
+    // Si cambia precioVariante, también actualizar diferenciaPrecio
+    if (field === 'precioVariante') {
+      const nuevoPrecio = numValue as number
+      const nuevaDiferencia = nuevoPrecio - costeBase
+      updates.precioVariante = nuevoPrecio
+      updates.diferenciaPrecio = nuevaDiferencia
     }
     
     setEditedItems(prev => ({
@@ -727,6 +725,21 @@ export default function AjustesInventarioPage() {
                           />
                         </div>
 
+                        {/* Precio Variante */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-gray-700">Precio Variante:</label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="Cambiar precio"
+                            className="h-8 w-32 text-right"
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value) || 0
+                              handleBulkFieldChange('precioVariante', value)
+                            }}
+                          />
+                        </div>
+
                         {/* Stock */}
                         <div className="flex items-center gap-2">
                           <label className="text-sm text-gray-700">Stock:</label>
@@ -857,13 +870,39 @@ export default function AjustesInventarioPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right w-28">
-                          <span className="font-medium text-green-600">
-                            Bs {(
-                              pendingChanges[item.id]?.precioVariante ?? 
-                              editedItems[item.id]?.precioVariante ?? 
-                              item.precioVariante
-                            ).toFixed(2)}
-                          </span>
+                          <div className="flex justify-end">
+                            {selected[item.id] ? (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editedItems[item.id]?.precioVariante ?? pendingChanges[item.id]?.precioVariante ?? item.precioVariante}
+                                onChange={(e) => handleFieldChange(item.id, 'precioVariante', e.target.value)}
+                                className="h-8 w-24 text-right"
+                                onBlur={() => {
+                                  // No guardar automáticamente, solo agregar a pendingChanges
+                                  if (editedItems[item.id]) {
+                                    handleSaveChanges(item.id)
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSaveChanges(item.id)
+                                  } else if (e.key === 'Escape') {
+                                    handleCancelEdit(item.id)
+                                  }
+                                }}
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="font-medium text-green-600">
+                                Bs {(
+                                  pendingChanges[item.id]?.precioVariante ?? 
+                                  editedItems[item.id]?.precioVariante ?? 
+                                  item.precioVariante
+                                ).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right w-20">
                           <div className="flex justify-end">

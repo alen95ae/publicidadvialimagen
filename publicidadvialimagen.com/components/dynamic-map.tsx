@@ -1,7 +1,8 @@
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import { createBillboardIcon } from "./billboard-icon"
 import { getBillboardUrl } from "@/lib/url-utils"
 
@@ -26,6 +27,34 @@ interface DynamicMapProps {
   isFullscreen?: boolean
   zoom?: number
   locale?: 'es' | 'en'
+}
+
+// Componente interno para controlar el z-index del mapa
+function MapZIndexController({ isFullscreen }: { isFullscreen: boolean }) {
+  const map = useMap()
+  
+  useEffect(() => {
+    if (!isFullscreen) {
+      // Asegurar que el contenedor del mapa tenga z-index bajo
+      const mapContainer = map.getContainer()
+      if (mapContainer) {
+        mapContainer.style.zIndex = '0'
+        
+        // Resetear z-index de todos los panes de Leaflet
+        const panes = map.getPanes()
+        Object.values(panes).forEach((pane) => {
+          if (pane instanceof HTMLElement) {
+            const zIndex = parseInt(pane.style.zIndex || '0')
+            if (zIndex > 50) {
+              pane.style.zIndex = ''
+            }
+          }
+        })
+      }
+    }
+  }, [map, isFullscreen])
+  
+  return null
 }
 
 export default function DynamicMap({ billboards, selectedCity, isFullscreen = false, zoom, locale = 'es' }: DynamicMapProps) {
@@ -73,13 +102,14 @@ export default function DynamicMap({ billboards, selectedCity, isFullscreen = fa
   }
 
   return (
-    <div className={`${isFullscreen ? 'h-screen' : 'h-96'} rounded-lg overflow-hidden border`}>
+    <div className={`${isFullscreen ? 'h-screen' : 'h-96'} rounded-lg overflow-hidden border relative`} style={{ zIndex: isFullscreen ? 0 : 0 }}>
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
-        style={{ height: "100%", width: "100%" }}
+        style={{ height: "100%", width: "100%", position: "relative", zIndex: 0 }}
         className="z-0"
       >
+        <MapZIndexController isFullscreen={isFullscreen} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

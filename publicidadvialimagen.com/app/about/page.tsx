@@ -133,6 +133,31 @@ export default function AboutPage() {
         </div>
       </div>
 
+      {/* Team Section */}
+      <div className="mb-16">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold mb-4">{t('about.page.ourTeam')}</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            {t('about.page.ourTeamDesc')}
+          </p>
+        </div>
+        <div className="flex justify-center">
+          <div className="relative w-full max-w-4xl h-[400px] md:h-[500px] rounded-lg overflow-hidden">
+            <Image
+              src="/equipo_imagen.png"
+              alt={t('about.page.ourTeam')}
+              fill
+              className="object-contain rounded-lg"
+            />
+          </div>
+        </div>
+        <div className="mt-8 text-center max-w-3xl mx-auto">
+          <p className="text-muted-foreground">
+            {t('about.page.ourTeamText')}
+          </p>
+        </div>
+      </div>
+
     </div>
   )
 }

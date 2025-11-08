@@ -322,12 +322,21 @@ export default function RecursosPage() {
 
   // Guardar cambios pendientes masivos
   const handleSaveBulkChanges = async () => {
-    if (Object.keys(pendingChanges).length === 0) return
+    // Combinar pendingChanges y editedItems
+    const allChanges = { ...pendingChanges }
+    Object.entries(editedItems).forEach(([id, changes]) => {
+      allChanges[id] = {
+        ...allChanges[id],
+        ...changes
+      }
+    })
+    
+    if (Object.keys(allChanges).length === 0) return
 
     setSavingChanges(true)
     try {
-      const count = Object.keys(pendingChanges).length
-      const promises = Object.entries(pendingChanges).map(async ([id, changes]) => {
+      const count = Object.keys(allChanges).length
+      const promises = Object.entries(allChanges).map(async ([id, changes]) => {
         const response = await fetch(`/api/recursos/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -341,6 +350,8 @@ export default function RecursosPage() {
 
       await Promise.all(promises)
       setPendingChanges({})
+      setEditedItems({})
+      setSelected({})
       await fetchItems()
       toast.success(`${count} item(s) actualizado(s) correctamente`)
     } catch (error) {
@@ -354,6 +365,8 @@ export default function RecursosPage() {
   // Descartar cambios pendientes
   const handleDiscardChanges = () => {
     setPendingChanges({})
+    setEditedItems({})
+    setSelected({})
     toast.info("Cambios descartados")
   }
 
@@ -415,37 +428,27 @@ export default function RecursosPage() {
     }))
   }
 
-  const handleSaveChanges = async (id: string) => {
+  // Agregar cambios a pendingChanges en lugar de guardar inmediatamente
+  const handleSaveChanges = (id: string) => {
     if (!editedItems[id]) return
     
-    setSavingChanges(true)
-    try {
-        const response = await fetch(`/api/recursos/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(editedItems[id]),
-        })
-
-      if (response.ok) {
-        toast.success('Cambios guardados correctamente')
-        setEditedItems(prev => {
-          const newItems = { ...prev }
-          delete newItems[id]
-          return newItems
-        })
-        setSelected(prev => ({ ...prev, [id]: false }))
-        fetchItems()
-      } else {
-        toast.error('Error al guardar cambios')
+    // Agregar cambios a pendingChanges pero no guardar automáticamente
+    setPendingChanges(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        ...editedItems[id]
       }
-    } catch (error) {
-      console.error('Error saving changes:', error)
-      toast.error('Error al guardar cambios')
-    } finally {
-      setSavingChanges(false)
-    }
+    }))
+    
+    // Limpiar editedItems pero mantener seleccionado
+    setEditedItems(prev => {
+      const newItems = { ...prev }
+      delete newItems[id]
+      return newItems
+    })
+    
+    toast.info('Cambios agregados. Presiona "Guardar" para confirmar.')
   }
 
   // Guardar inmediatamente un campo específico sin depender de editedItems
@@ -763,7 +766,7 @@ export default function RecursosPage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    {Object.keys(pendingChanges).length > 0 && (
+                    {(Object.keys(pendingChanges).length > 0 || Object.keys(editedItems).length > 0) && (
                       <>
                         <Button 
                           size="sm" 
@@ -771,7 +774,7 @@ export default function RecursosPage() {
                           disabled={savingChanges}
                           className="bg-red-600 hover:bg-red-700 text-white"
                         >
-                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(pendingChanges).length})`}
+                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(pendingChanges).length + Object.keys(editedItems).length})`}
                         </Button>
                         <Button 
                           variant="outline" 
@@ -817,7 +820,10 @@ export default function RecursosPage() {
                     key={item.id} 
                     className="overflow-hidden transition-all cursor-pointer hover:shadow-lg p-0"
                   >
-                    <div className="relative aspect-square w-full bg-gray-100 group">
+                    <div 
+                      className="relative aspect-square w-full bg-gray-100 group cursor-pointer"
+                      onClick={() => handleEdit(item.id)}
+                    >
                       {item.imagen_portada ? (
                         <img
                           src={item.imagen_portada}
@@ -924,7 +930,6 @@ export default function RecursosPage() {
                             value={editedItems[item.id]?.nombre ?? item.nombre}
                             onChange={(e) => handleFieldChange(item.id, 'nombre', e.target.value)}
                             className="h-8"
-                            onBlur={() => handleSaveChanges(item.id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleSaveChanges(item.id)
@@ -957,7 +962,6 @@ export default function RecursosPage() {
                             value={editedItems[item.id]?.responsable ?? item.responsable}
                             onChange={(e) => handleFieldChange(item.id, 'responsable', e.target.value)}
                             className="h-8"
-                            onBlur={() => handleSaveChanges(item.id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleSaveChanges(item.id)
@@ -1030,7 +1034,6 @@ export default function RecursosPage() {
                               value={editedItems[item.id]?.coste ?? item.coste}
                               onChange={(e) => handleFieldChange(item.id, 'coste', parseFloat(e.target.value) || 0)}
                               className="h-8 w-20"
-                              onBlur={() => handleSaveChanges(item.id)}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   handleSaveChanges(item.id)
@@ -1052,7 +1055,6 @@ export default function RecursosPage() {
                             value={editedItems[item.id]?.cantidad ?? item.cantidad}
                             onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
                             className="h-8 w-24"
-                            onBlur={() => handleSaveChanges(item.id)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 handleSaveChanges(item.id)

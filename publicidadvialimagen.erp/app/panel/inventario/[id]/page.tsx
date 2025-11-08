@@ -105,6 +105,8 @@ export default function ProductoDetailPage() {
   ])
   const [totalPrice, setTotalPrice] = useState(0)
   const [editablePrice, setEditablePrice] = useState<string>("")
+  const [utilidadReal, setUtilidadReal] = useState<number>(0)
+  const [objetivoUtilidadReal, setObjetivoUtilidadReal] = useState<string>("")
   
   // Estados para variantes del producto (solo visualización, importadas de recursos)
   const [variantes, setVariantes] = useState<any[]>([])
@@ -192,6 +194,33 @@ export default function ProductoDetailPage() {
           setVariantes([])
         }
         
+        // Cargar calculadora de precios desde el producto
+        if (data.calculadora_de_precios) {
+          try {
+            const calcData = typeof data.calculadora_de_precios === 'string' 
+              ? JSON.parse(data.calculadora_de_precios) 
+              : data.calculadora_de_precios
+            
+            if (calcData.priceRows && Array.isArray(calcData.priceRows)) {
+              setPriceRows(calcData.priceRows)
+              setPriceRowIdCounter(Math.max(...calcData.priceRows.map((r: any) => r.id || 0), 5) + 1)
+            }
+            if (calcData.totalPrice !== undefined) {
+              setTotalPrice(calcData.totalPrice)
+              setEditablePrice(calcData.totalPrice.toFixed(2))
+            }
+            if (calcData.utilidadReal !== undefined) {
+              setUtilidadReal(calcData.utilidadReal)
+            }
+            if (calcData.objetivoUtilidadReal !== undefined && calcData.objetivoUtilidadReal !== null) {
+              setObjetivoUtilidadReal(calcData.objetivoUtilidadReal.toString())
+            }
+            console.log('✅ Calculadora de precios cargada desde Airtable')
+          } catch (e) {
+            console.error('❌ Error cargando calculadora de precios:', e)
+          }
+        }
+        
         // Cargar proveedores desde el producto
         if (data.proveedores && Array.isArray(data.proveedores)) {
           let maxProveedorId = 0
@@ -216,20 +245,31 @@ export default function ProductoDetailPage() {
         }
 
         // Cargar receta y restaurar recursos en la calculadora de costes
+        // IMPORTANTE: Solo cargar recursos, NO proveedores
         if (data.receta && Array.isArray(data.receta) && data.receta.length > 0) {
+          console.log('📋 Cargando receta con', data.receta.length, 'items')
           // Primero obtener los recursos completos desde la API
           const recursosResponse = await fetch('/api/recursos')
           if (recursosResponse.ok) {
             const recursosResult = await recursosResponse.json()
             const todosLosRecursos = recursosResult.data || []
             
+            // Filtrar solo items que sean recursos (tienen recurso_id, no son proveedores)
+            const itemsReceta = data.receta.filter((item: any) => 
+              item.recurso_id && !item.empresa // Excluir proveedores (que tienen empresa)
+            )
+            
             // Mapear la receta a costRows con los recursos completos
             let maxId = 0
-            const recetaRows = data.receta.map((item: any, index: number) => {
+            const recetaRows = itemsReceta.map((item: any, index: number) => {
               // Buscar el recurso completo por ID o código
               const recursoCompleto = todosLosRecursos.find((r: any) => 
                 r.id === item.recurso_id || (r.codigo || r.id) === item.recurso_codigo
               )
+              
+              if (!recursoCompleto) {
+                console.warn('⚠️ Recurso no encontrado en receta:', item.recurso_id || item.recurso_codigo)
+              }
               
               const newId = index + 1
               maxId = Math.max(maxId, newId)
@@ -247,6 +287,7 @@ export default function ProductoDetailPage() {
             if (recetaRows.length > 0) {
               costRowIdCounterRef.current = maxId + 1
               setCostRows(recetaRows)
+              console.log('✅ Receta cargada en calculadora de costes:', recetaRows.length, 'filas')
             } else {
               costRowIdCounterRef.current = 2
               setCostRows([{
@@ -257,7 +298,27 @@ export default function ProductoDetailPage() {
                 searchTerm: ""
               }])
             }
+          } else {
+            console.error('❌ Error cargando recursos para restaurar receta')
+            // Inicializar con fila vacía si no se pueden cargar los recursos
+            setCostRows([{
+              id: 1,
+              selectedRecurso: null,
+              cantidad: 1,
+              unidad: "",
+              searchTerm: ""
+            }])
           }
+        } else {
+          // Si no hay receta, inicializar con una fila vacía
+          console.log('📋 No hay receta guardada, inicializando calculadora vacía')
+          setCostRows([{
+            id: 1,
+            selectedRecurso: null,
+            cantidad: 1,
+            unidad: "",
+            searchTerm: ""
+          }])
         }
       } else {
         toast.error("Producto no encontrado")
@@ -332,8 +393,9 @@ export default function ProductoDetailPage() {
     
     try {
       // Construir receta (lista de recursos seleccionados en la calculadora de costes)
+      // IMPORTANTE: Solo incluir recursos, NO proveedores
       const receta = costRows
-        .filter(row => row.selectedRecurso)
+        .filter(row => row.selectedRecurso && row.selectedRecurso.id) // Solo recursos válidos
         .map(row => ({
           recurso_id: row.selectedRecurso.id,
           recurso_codigo: row.selectedRecurso.codigo || row.selectedRecurso.id,
@@ -343,6 +405,7 @@ export default function ProductoDetailPage() {
           coste_unitario: row.selectedRecurso.coste,
           coste_total: row.selectedRecurso.coste * row.cantidad
         }))
+        .filter(item => item.recurso_id) // Asegurar que solo hay recursos, no proveedores
 
       let imagenMeta: { attachmentId?: string; publicUrl?: string } | undefined
 
@@ -414,6 +477,16 @@ export default function ProductoDetailPage() {
         }
       }
 
+      // Preparar datos de la calculadora de precios (similar a cómo se hace con receta)
+      const calculadoraDePrecios = {
+        priceRows: priceRows,
+        totalPrice: totalPrice,
+        utilidadReal: utilidadReal,
+        objetivoUtilidadReal: objetivoUtilidadReal ? parseFloat(objetivoUtilidadReal) : null
+      }
+      
+      console.log('📊 Calculadora de precios a guardar:', JSON.stringify(calculadoraDePrecios, null, 2))
+      
       const dataToSend: Record<string, any> = {
         codigo: formData.codigo.trim(),
         nombre: formData.nombre.trim(),
@@ -425,8 +498,13 @@ export default function ProductoDetailPage() {
         precio_venta: parseFloat(formData.precio_venta) || 0,
         cantidad: parseInt(formData.cantidad) || 0,
         mostrar_en_web: formData.mostrar_en_web,
-        variantes: variantes.length > 0 ? variantes : [],
+        // Limpiar las variantes antes de guardar (remover recurso_id y recurso_nombre que son solo para tracking)
+        variantes: variantes.map(v => {
+          const { recurso_id, recurso_nombre, ...varianteLimpia } = v
+          return varianteLimpia
+        }), // Siempre enviar variantes, incluso si está vacío
         receta: receta.length > 0 ? receta : [],
+        calculadora_de_precios: calculadoraDePrecios, // Guardar igual que receta
         proveedores: proveedores.length > 0 ? proveedores.map(prov => ({
           empresa: prov.empresa,
           precio: parseFloat(prov.precio) || 0,
@@ -435,6 +513,9 @@ export default function ProductoDetailPage() {
           comentarios: prov.comentarios
         })) : []
       }
+
+      console.log('📤 dataToSend completo:', JSON.stringify(dataToSend, null, 2))
+      console.log('📤 calculadora_de_precios en dataToSend:', dataToSend.calculadora_de_precios)
 
       if (imagenMeta?.attachmentId) {
         dataToSend.imagen_attachment_id = imagenMeta.attachmentId
@@ -503,16 +584,16 @@ export default function ProductoDetailPage() {
           imagenFile: null
         }))
         
-        // Verificar si se guardaron las variantes y receta
+        // Verificar si se guardaron las variantes y receta (pero no es crítico si no existen en Airtable)
         if ((variantes.length > 0 && !updated.variantes) || (receta.length > 0 && !updated.receta)) {
-          console.warn("⚠️ ADVERTENCIA: Las variantes o receta no se guardaron correctamente")
-          toast.warning("Producto guardado, pero algunos campos pueden no haberse actualizado")
+          console.warn("⚠️ ADVERTENCIA: Las variantes o receta no se guardaron (puede que los campos no existan en Airtable)")
+          // No mostrar warning al usuario, el producto se guardó correctamente
+        }
+        
+        if (isNewProduct) {
+          toast.success("Producto creado correctamente")
         } else {
-          if (isNewProduct) {
-            toast.success("Producto creado correctamente")
-          } else {
-            toast.success("Producto actualizado correctamente")
-          }
+          toast.success("Producto actualizado correctamente")
         }
         
         // Esperar un momento antes de redirigir para asegurar que el toast se muestre
@@ -590,12 +671,27 @@ export default function ProductoDetailPage() {
     }
   }, [totalCost, editing])
 
-  // Calcular total de precios
+  // Calcular total de precios y utilidad real
   useEffect(() => {
     const total = priceRows.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
     setTotalPrice(total)
     // Sincronizar el valor editable cuando cambia el total calculado
     setEditablePrice(total.toFixed(2))
+    
+    // Calcular utilidad real
+    const coste = parseNum(priceRows.find(r => r.campo === "Coste")?.valor ?? 0)
+    const utilidadPorcentaje = parseNum(priceRows.find(r => r.campo === "Utilidad (U)")?.porcentaje ?? 0) / 100
+    const comisionPorcentaje = parseNum(priceRows.find(r => r.campo === "Comisión (C)")?.porcentaje ?? 0) / 100
+    const facturaPorcentaje = parseNum(priceRows.find(r => r.campo === "Factura (F)")?.porcentaje ?? 0) / 100
+    
+    if (coste > 0 && total > 0) {
+      // Fórmula: m_real = u / [(1 + u) × (1 + c) × (1 + f)]
+      const denominador = (1 + utilidadPorcentaje) * (1 + comisionPorcentaje) * (1 + facturaPorcentaje)
+      const utilidadRealCalculada = utilidadPorcentaje / denominador
+      setUtilidadReal(utilidadRealCalculada * 100) // Convertir a porcentaje
+    } else {
+      setUtilidadReal(0)
+    }
   }, [priceRows])
 
   // Calcular total de costes
@@ -649,20 +745,25 @@ export default function ProductoDetailPage() {
     }
     const utilidad = utilRow ? parseNum(utilRow.valor) : 0
 
+    const base = coste + utilidad + adicionales
+    
+    // Primero calcular la comisión sobre coste + utilidad + adicionales
     const comRow = rows.find((r: any) => r.campo === "Comisión (C)")
+    let comision = 0
     if (comRow) {
-      const base = coste + utilidad + adicionales
       const p = parseNum(comRow.porcentaje) || 8
       comRow.porcentaje = p
-      comRow.valor = round2(base * (p / 100))
+      comision = round2(base * (p / 100))
+      comRow.valor = comision
     }
 
+    // Luego calcular la factura sobre coste + utilidad + adicionales + comisión
     const facRow = rows.find((r: any) => r.campo === "Factura (F)")
     if (facRow) {
-      const base = coste + utilidad + adicionales
       const p = parseNum(facRow.porcentaje) || 16
       facRow.porcentaje = p
-      facRow.valor = round2(base * (p / 100))
+      const baseConComision = base + comision
+      facRow.valor = round2(baseConComision * (p / 100))
     }
 
     rows.forEach((r: any) => {
@@ -690,16 +791,21 @@ export default function ProductoDetailPage() {
       .reduce((sum: number, r: any) => sum + parseNum(r.valor), 0)
     const base = coste + utilidad + adicionales
 
+    // Primero calcular la comisión sobre coste + utilidad + adicionales
     const com = rows.find((r: any) => r.campo === "Comisión (C)")
+    let comision = 0
     if (com) {
       const p = parseNum(com.porcentaje) || 8
-      com.valor = round2(base * (p / 100))
+      comision = round2(base * (p / 100))
+      com.valor = comision
     }
 
+    // Luego calcular la factura sobre coste + utilidad + adicionales + comisión
     const fac = rows.find((r: any) => r.campo === "Factura (F)")
     if (fac) {
       const p = parseNum(fac.porcentaje) || 16
-      fac.valor = round2(base * (p / 100))
+      const baseConComision = base + comision
+      fac.valor = round2(baseConComision * (p / 100))
     }
 
     return rows
@@ -739,14 +845,48 @@ export default function ProductoDetailPage() {
     setShowCostDropdown(null)
     
     // Si el recurso tiene variantes, importarlas automáticamente al producto
-    if (recurso.variantes && Array.isArray(recurso.variantes) && recurso.variantes.length > 0) {
+    // Manejar diferentes formatos de variantes:
+    // 1. Array directo: recurso.variantes = [...]
+    // 2. Objeto con variantes: recurso.variantes = { variantes: [...], datosVariantes: {...} }
+    let variantesArray: any[] = []
+    
+    if (recurso.variantes) {
+      if (Array.isArray(recurso.variantes)) {
+        // Formato 1: Array directo
+        variantesArray = recurso.variantes
+      } else if (typeof recurso.variantes === 'object' && recurso.variantes.variantes) {
+        // Formato 2: Objeto con propiedad variantes
+        if (Array.isArray(recurso.variantes.variantes)) {
+          variantesArray = recurso.variantes.variantes
+        }
+      } else if (typeof recurso.variantes === 'string') {
+        // Formato 3: String JSON que necesita parsearse
+        try {
+          const parsed = JSON.parse(recurso.variantes)
+          if (Array.isArray(parsed)) {
+            variantesArray = parsed
+          } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
+            variantesArray = parsed.variantes
+          }
+        } catch (e) {
+          console.error('Error parseando variantes del recurso:', e)
+        }
+      }
+    }
+    
+    if (variantesArray.length > 0) {
       setVariantes(prev => {
-        // Combinar las variantes existentes con las nuevas, evitando duplicados por nombre
-        const existingNames = new Set(prev.map(v => v.nombre))
-        const nuevasVariantes = recurso.variantes.filter((v: any) => !existingNames.has(v.nombre))
+        // Agregar todas las variantes, incluso si tienen el mismo nombre (pueden venir de diferentes recursos)
+        // Marcar las nuevas variantes con el recurso_id para poder eliminarlas después
+        const nuevasVariantes = variantesArray.map((v: any) => ({ 
+          ...v, 
+          recurso_id: recurso.id, 
+          recurso_nombre: recurso.nombre 
+        }))
+        // Agregar todas las nuevas variantes (no filtrar duplicados por nombre)
         return [...prev, ...nuevasVariantes]
       })
-      toast.success(`${recurso.variantes.length} variante(s) importada(s) desde el recurso`)
+      toast.success(`${variantesArray.length} variante(s) importada(s) desde el recurso`)
     }
   }
 
@@ -785,8 +925,35 @@ export default function ProductoDetailPage() {
 
   const handleRemoveCostRow = (rowId: number) => {
     if (costRows.length > 1) {
+      // Obtener el recurso que se va a eliminar
+      const rowToRemove = costRows.find(row => row.id === rowId)
+      const recursoIdToRemove = rowToRemove?.selectedRecurso?.id
+      
+      // Eliminar la fila de costRows
       setCostRows(prev => prev.filter(row => row.id !== rowId))
+      
+      // Si el recurso tenía variantes importadas, eliminarlas también
+      if (recursoIdToRemove) {
+        setVariantes(prev => {
+          const variantesRestantes = prev.filter(v => v.recurso_id !== recursoIdToRemove)
+          const eliminadas = prev.filter(v => v.recurso_id === recursoIdToRemove)
+          if (eliminadas.length > 0) {
+            toast.info(`${eliminadas.length} variante(s) eliminada(s) al quitar el recurso`)
+          }
+          return variantesRestantes
+        })
+      }
     }
+  }
+  
+  // Eliminar una variante individual
+  const handleRemoveVariante = (varianteIndex: number) => {
+    setVariantes(prev => {
+      const varianteEliminada = prev[varianteIndex]
+      const nuevasVariantes = prev.filter((_, index) => index !== varianteIndex)
+      toast.success(`Variante "${varianteEliminada?.nombre || 'desconocida'}" eliminada`)
+      return nuevasVariantes
+    })
   }
 
   const handleApplyCost = async () => {
@@ -892,13 +1059,27 @@ export default function ProductoDetailPage() {
         return recalcDependientesPrices(rowsCopy)
       }
 
-      if (row.campo === "Factura (F)" || row.campo === "Comisión (C)") {
+      if (row.campo === "Comisión (C)") {
         const utilidad = parseNum(rowsCopy.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
         const adicionales = rowsCopy
           .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
           .reduce((s: number, r: any) => s + parseNum(r.valor), 0)
         const base = coste + utilidad + adicionales
         const pct = base > 0 ? (val / base) * 100 : 0
+        row.porcentaje = round2(pct)
+        return recalcDependientesPrices(rowsCopy)
+      }
+      
+      if (row.campo === "Factura (F)") {
+        const utilidad = parseNum(rowsCopy.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
+        const adicionales = rowsCopy
+          .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
+          .reduce((s: number, r: any) => s + parseNum(r.valor), 0)
+        const base = coste + utilidad + adicionales
+        // Para Factura, la base debe incluir la comisión
+        const comision = parseNum(rowsCopy.find((r: any) => r.campo === "Comisión (C)")?.valor ?? 0)
+        const baseConComision = base + comision
+        const pct = baseConComision > 0 ? (val / baseConComision) * 100 : 0
         row.porcentaje = round2(pct)
         return recalcDependientesPrices(rowsCopy)
       }
@@ -929,6 +1110,55 @@ export default function ProductoDetailPage() {
       const filtered = prev.filter(r => r.id !== rowId)
       return recalcDependientesPrices(filtered)
     })
+  }
+
+  // Aplicar objetivo de utilidad real
+  const handleAplicarObjetivoUtilidad = () => {
+    const objetivo = parseFloat(objetivoUtilidadReal)
+    if (isNaN(objetivo) || objetivo <= 0) {
+      toast.error("El objetivo debe ser un número mayor a 0")
+      return
+    }
+    
+    const objetivoDecimal = objetivo / 100 // Convertir a decimal
+    
+    // Obtener valores actuales
+    const comisionPorcentaje = parseNum(priceRows.find(r => r.campo === "Comisión (C)")?.porcentaje ?? 0) / 100
+    const facturaPorcentaje = parseNum(priceRows.find(r => r.campo === "Factura (F)")?.porcentaje ?? 0) / 100
+    
+    // Calcular A = (1 + c) × (1 + f)
+    const A = (1 + comisionPorcentaje) * (1 + facturaPorcentaje)
+    
+    // Validar máximo posible: m_max = 1 / A
+    const maximoPosible = (1 / A) * 100
+    if (objetivo > maximoPosible) {
+      toast.error(`El objetivo no puede ser mayor a ${maximoPosible.toFixed(2)}%`)
+      return
+    }
+    
+    // Calcular u necesario: u = (m_target × A) / (1 - m_target × A)
+    const denominador = 1 - (objetivoDecimal * A)
+    if (denominador <= 0) {
+      toast.error("No es posible alcanzar ese objetivo con los valores actuales")
+      return
+    }
+    
+    const uNecesario = (objetivoDecimal * A) / denominador
+    const uPorcentaje = uNecesario * 100
+    
+    // Actualizar el porcentaje de Utilidad (U)
+    setPriceRows(prev => {
+      const rowsCopy = JSON.parse(JSON.stringify(prev))
+      const utilidadRow = rowsCopy.find((r: any) => r.campo === "Utilidad (U)")
+      if (utilidadRow) {
+        utilidadRow.porcentaje = round2(uPorcentaje)
+        // Recalcular todos los valores
+        return recalcAllPrices(rowsCopy)
+      }
+      return prev
+    })
+    
+    toast.success(`Utilidad (U) ajustada a ${uPorcentaje.toFixed(2)}% para alcanzar ${objetivo.toFixed(2)}% de utilidad real`)
   }
 
   const handleApplyPrice = async () => {
@@ -1462,9 +1692,9 @@ export default function ProductoDetailPage() {
                       : ""
                     
                     return (
-                      <div key={`variante-${variante.id}-${varianteIndex}`} className={`flex items-center justify-between p-3 rounded-lg ${varianteIndex % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
+                      <div key={`variante-${variante.id || varianteIndex}-${variante.recurso_id || 'no-recurso'}-${varianteIndex}`} className={`flex items-center justify-between p-3 rounded-lg ${varianteIndex % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <h4 className="font-medium text-sm text-gray-900">{variante.nombre}</h4>
                             {isColorMode && (
                               <Badge variant="outline" className="text-xs">
@@ -1472,11 +1702,25 @@ export default function ProductoDetailPage() {
                                 Color
                               </Badge>
                             )}
+                            {variante.recurso_nombre && (
+                              <Badge variant="secondary" className="text-xs">
+                                De: {variante.recurso_nombre}
+                              </Badge>
+                            )}
                           </div>
                           {posibilidadesTexto && (
                             <p className="text-xs text-gray-600">{posibilidadesTexto}</p>
                           )}
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveVariante(varianteIndex)}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
+                          title="Eliminar variante"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     )
                   })}
@@ -1719,6 +1963,41 @@ export default function ProductoDetailPage() {
                     >
                       Aplicar Precio
                     </Button>
+                  </div>
+                  
+                  {/* Utilidad Real y Objetivo */}
+                  <div className="mt-4 space-y-3 pt-4 border-t">
+                    {/* Utilidad real (efectiva) */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Utilidad real (efectiva):</span>
+                      <span className="text-sm font-bold text-red-600">{utilidadReal.toFixed(2)}%</span>
+                    </div>
+                    
+                    {/* Objetivo utilidad real */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-700">Objetivo utilidad real:</span>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={objetivoUtilidadReal}
+                          onChange={(e) => setObjetivoUtilidadReal(e.target.value)}
+                          placeholder="Ej: 25"
+                          className="w-20 h-8 text-sm"
+                        />
+                        <span className="text-sm text-gray-600">%</span>
+                        <Button
+                          onClick={handleAplicarObjetivoUtilidad}
+                          disabled={!objetivoUtilidadReal || parseFloat(objetivoUtilidadReal) <= 0}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                          size="sm"
+                        >
+                          Aplicar
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>

@@ -185,24 +185,6 @@ export default function MensajeDetailPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Mensajes</div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/panel/mensajes">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Volver
-              </Button>
-            </Link>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="max-w-4xl mx-auto">

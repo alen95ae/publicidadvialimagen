@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Home,
 } from "lucide-react"
+import PanelHeader from "@/components/panel-header"
 
 const modules = [
   { key: "panel", title: "Panel Principal", href: "/panel", icon: Home },
@@ -219,7 +220,10 @@ export default function Sidebar({ children }: SidebarProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {children}
+        <PanelHeader />
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
       </div>
     </div>
   )

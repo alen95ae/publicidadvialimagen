@@ -129,51 +129,6 @@ export default function PlanificacionPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Soportes</div>
-            <div className="flex items-center gap-6 ml-4">
-              <Link 
-                href="/panel/soportes/gestion" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Soportes
-              </Link>
-              <Link 
-                href="/panel/soportes/alquileres" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Alquileres
-              </Link>
-              <Link 
-                href="/panel/soportes/planificacion" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
-              >
-                Planificación
-              </Link>
-              <Link 
-                href="/panel/soportes/costes" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Costes
-              </Link>
-              <Link 
-                href="/panel/soportes/mantenimiento" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Mantenimiento
-              </Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">

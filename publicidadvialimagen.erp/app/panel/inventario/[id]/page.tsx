@@ -1296,31 +1296,16 @@ export default function ProductoDetailPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Inventario</div>
-            <div className="flex items-center gap-6 ml-4">
-              <Link 
-                href="/panel/inventario" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
-              >
-                Productos
-              </Link>
-              <Link 
-                href="/panel/recursos" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Recursos
-              </Link>
-              <Link 
-                href="/panel/ajustes-inventario" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Control de Stock
-              </Link>
-            </div>
+      {/* Main Content */}
+      <main className="container mx-auto px-6 py-8">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">
+              {isNewProduct ? 'Nuevo Producto' : 'Editar Producto'}
+            </h1>
+            <p className="text-gray-600">
+              {isNewProduct ? 'Crea un nuevo producto en el inventario' : 'Modifica la información del producto'}
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <Button
@@ -1363,22 +1348,6 @@ export default function ProductoDetailPage() {
               <Save className="w-4 h-4 mr-2" />
               {saving ? "Guardando..." : "Guardar"}
             </Button>
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">
-              {isNewProduct ? 'Nuevo Producto' : 'Editar Producto'}
-            </h1>
-            <p className="text-gray-600">
-              {isNewProduct ? 'Crea un nuevo producto en el inventario' : 'Modifica la información del producto'}
-            </p>
           </div>
         </div>
 

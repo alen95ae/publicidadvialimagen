@@ -378,37 +378,6 @@ export default function ManoDeObraPage() {
 
   return (
     <div className="p-6">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Inventario</div>
-            <div className="flex items-center gap-6 ml-4">
-              <Link 
-                href="/panel/inventario" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Productos
-              </Link>
-              <Link 
-                href="/panel/insumos" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Insumos
-              </Link>
-              <Link 
-                href="/panel/mano-de-obra" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
-              >
-                Mano de Obra
-              </Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
 
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">

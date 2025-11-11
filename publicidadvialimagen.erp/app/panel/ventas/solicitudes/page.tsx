@@ -23,7 +23,6 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  FileText,
   Eye,
   Trash2
 } from "lucide-react"
@@ -341,39 +340,6 @@ export default function SolicitudesPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Ventas</div>
-            <div className="flex items-center gap-6 ml-4">
-              <Link 
-                href="/panel/ventas/cotizaciones" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Cotizaciones
-              </Link>
-              <Link 
-                href="/panel/ventas/solicitudes" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
-              >
-                Solicitudes de cotización
-              </Link>
-              <Link 
-                href="/panel/ventas/crm" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                CRM
-              </Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
@@ -480,15 +446,11 @@ export default function SolicitudesPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Building className="w-4 h-4 text-gray-400" />
-                          {solicitud.empresa}
-                        </div>
+                        {solicitud.empresa}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-gray-400" />
-                          <span className="max-w-xs truncate">{solicitud.comentarios}</span>
+                        <div className="max-w-xs">
+                          <span className="text-sm text-gray-600 line-clamp-2">{solicitud.comentarios}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">

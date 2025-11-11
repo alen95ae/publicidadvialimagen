@@ -184,19 +184,6 @@ export default function MensajesPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Mensajes</div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
@@ -294,30 +281,20 @@ export default function MensajesPage() {
                         />
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <span className="font-medium">{mensaje.nombre}</span>
-                        </div>
+                        <span className="font-medium line-clamp-2">{mensaje.nombre}</span>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-gray-400" />
-                          <span className="max-w-xs truncate">{mensaje.email}</span>
-                        </div>
+                        <span className="max-w-xs truncate" title={mensaje.email}>
+                          {mensaje.email.length > 25 ? `${mensaje.email.substring(0, 25)}...` : mensaje.email}
+                        </span>
                       </td>
                       <td className="py-3 px-4 w-40">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="whitespace-nowrap overflow-hidden text-ellipsis">
-                            {mensaje.telefono}
-                          </span>
-                        </div>
+                        <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+                          {mensaje.telefono}
+                        </span>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Building className="w-4 h-4 text-gray-400" />
-                          <span className="max-w-xs truncate">{mensaje.empresa}</span>
-                        </div>
+                        <span className="max-w-xs truncate">{mensaje.empresa}</span>
                       </td>
                       <td className="py-3 px-4">
                         <div className="max-w-xs">
@@ -325,12 +302,9 @@ export default function MensajesPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">
-                            {new Date(mensaje.fecha_recepcion).toLocaleDateString('es-ES')}
-                          </span>
-                        </div>
+                        <span className="text-sm">
+                          {new Date(mensaje.fecha_recepcion).toLocaleDateString('es-ES')}
+                        </span>
                       </td>
                       <td className="py-3 px-4">
                         <Badge className={`${getEstadoColor(mensaje.estado)} flex items-center gap-1 w-fit`}>

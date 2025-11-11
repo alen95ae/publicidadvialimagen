@@ -832,38 +832,6 @@ export default function InventarioPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Inventario</div>
-            <div className="flex items-center gap-6 ml-4">
-              <Link 
-                href="/panel/inventario" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
-              >
-                Productos
-              </Link>
-              <Link 
-                href="/panel/recursos" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Recursos
-              </Link>
-              <Link 
-                href="/panel/ajustes-inventario" 
-                className="text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Control de Stock
-              </Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
 
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">

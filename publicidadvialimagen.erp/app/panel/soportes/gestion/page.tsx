@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Copy, Upload } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Copy, Upload, LayoutGrid, List, ArrowUpDown } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
@@ -47,12 +47,13 @@ interface Support {
   pricePerM2: number | null
   productionCost: number | null
   owner: string | null
-  imageUrl: string | null
+  images: string[]
   company?: { name: string }
 }
 
 export default function SoportesPage() {
   const [supports, setSupports] = useState<Support[]>([])
+  const [allSupports, setAllSupports] = useState<Support[]>([]) // Para almacenar todos los soportes cuando hay ordenamiento
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
   const [searchQuery, setSearchQuery] = useState("") // Para debounce
@@ -74,6 +75,14 @@ export default function SoportesPage() {
   // Estados para edición en línea
   const [editedSupports, setEditedSupports] = useState<Record<string, Partial<Support>>>({})
   const [savingChanges, setSavingChanges] = useState(false)
+  
+  // Estado para vista (lista o galería)
+  const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
+  
+  // Estado para ordenamiento
+  const [sortColumn, setSortColumn] = useState<"code" | "title" | null>(null)
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  
   const router = useRouter()
 
   const fetchSupports = async (query = "", page: number = currentPage) => {
@@ -83,8 +92,15 @@ export default function SoportesPage() {
       if (query) params.set('q', query)
       if (statusFilter.length) params.set('status', statusFilter.join(','))
       if (cityFilter) params.set('city', cityFilter)
-      params.set('page', page.toString())
-      params.set('limit', '50')
+      
+      // Si hay ordenamiento activo, cargar todos los datos sin paginación
+      if (sortColumn) {
+        params.set('page', '1')
+        params.set('limit', '10000') // Límite muy alto para obtener todos
+      } else {
+        params.set('page', page.toString())
+        params.set('limit', '50')
+      }
       
       console.log('🔍 Fetching supports with params:', params.toString())
       const response = await api(`/api/soportes?${params}`)
@@ -97,21 +113,30 @@ export default function SoportesPage() {
         
         // Asegurar que supports sea siempre un array
         const supportsData = result.data || result
-        console.log('📊 Supports data:', supportsData)
-        console.log('📊 Is array:', Array.isArray(supportsData))
+        const supportsArray = Array.isArray(supportsData) ? supportsData : []
+        console.log('📊 Supports data:', supportsArray)
+        console.log('📊 Is array:', Array.isArray(supportsArray))
         
-        setSupports(Array.isArray(supportsData) ? supportsData : [])
-        setPagination(result.pagination || pagination)
-        setCurrentPage(page)
+        // Si hay ordenamiento, guardar todos los datos y aplicar paginación después
+        if (sortColumn) {
+          setAllSupports(supportsArray)
+        } else {
+          setAllSupports([])
+          setSupports(supportsArray)
+          setPagination(result.pagination || pagination)
+          setCurrentPage(page)
+        }
       } else {
         console.error('❌ Response not ok:', response.status, response.statusText)
         toast.error("Error al cargar los soportes")
         setSupports([]) // Establecer array vacío en caso de error
+        setAllSupports([])
       }
     } catch (error) {
       console.error("❌ Error fetching supports:", error)
       toast.error("Error de conexión")
       setSupports([]) // Establecer array vacío en caso de error
+      setAllSupports([])
     } finally {
       setLoading(false)
     }
@@ -130,6 +155,20 @@ export default function SoportesPage() {
   useEffect(() => {
     fetchSupports(searchQuery, 1)
   }, [searchQuery, statusFilter, cityFilter])
+  
+  // Efecto para recargar cuando cambie el ordenamiento
+  useEffect(() => {
+    if (sortColumn) {
+      // Cuando se activa el ordenamiento, cargar todos los datos
+      fetchSupports(searchQuery, 1)
+      setCurrentPage(1)
+    } else {
+      // Si se desactiva el ordenamiento, limpiar allSupports y volver a paginación normal
+      setAllSupports([])
+      // No recargar aquí para evitar loops, se recargará cuando cambien los filtros
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortColumn, sortDirection])
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return
@@ -156,7 +195,71 @@ export default function SoportesPage() {
   }
 
   // Asegurar que supports sea un array antes de usar métodos de array
-  const supportsArray = Array.isArray(supports) ? supports : []
+  // Si hay ordenamiento activo, usar allSupports; si no, usar supports normal
+  const supportsArrayBase = sortColumn 
+    ? (Array.isArray(allSupports) ? allSupports : [])
+    : (Array.isArray(supports) ? supports : [])
+  
+  // Aplicar ordenamiento si está activo
+  const sortedSupports = [...supportsArrayBase].sort((a, b) => {
+    if (!sortColumn) return 0
+    
+    if (sortColumn === "code") {
+      // Parsear código formato "123-SCZ" -> número y letras
+      const parseCode = (code: string) => {
+        const parts = (code || "").split("-")
+        const numberPart = parts[0] ? parseInt(parts[0], 10) : 0
+        const letterPart = parts[1] ? parts[1].toLowerCase() : ""
+        return { number: isNaN(numberPart) ? 0 : numberPart, letters: letterPart }
+      }
+      
+      const aParsed = parseCode(a.code || "")
+      const bParsed = parseCode(b.code || "")
+      
+      // Primero comparar por número (orden numérico)
+      if (aParsed.number !== bParsed.number) {
+        return sortDirection === "asc" 
+          ? aParsed.number - bParsed.number 
+          : bParsed.number - aParsed.number
+      }
+      
+      // Si los números son iguales, comparar por letras (orden alfabético)
+      if (aParsed.letters < bParsed.letters) return sortDirection === "asc" ? -1 : 1
+      if (aParsed.letters > bParsed.letters) return sortDirection === "asc" ? 1 : -1
+      return 0
+    } else if (sortColumn === "title") {
+      // Orden alfabético para título
+      const aValue = (a.title || "").toLowerCase()
+      const bValue = (b.title || "").toLowerCase()
+      
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
+      return 0
+    }
+    
+    return 0
+  })
+  
+  // Calcular paginación si hay ordenamiento activo
+  const limit = 50
+  const totalSupports = sortColumn ? sortedSupports.length : (pagination.total || 0)
+  const totalPages = sortColumn ? Math.ceil(sortedSupports.length / limit) : pagination.totalPages
+  const computedPagination = sortColumn ? {
+    page: currentPage,
+    limit,
+    total: sortedSupports.length,
+    totalPages: Math.ceil(sortedSupports.length / limit),
+    hasNext: currentPage < Math.ceil(sortedSupports.length / limit),
+    hasPrev: currentPage > 1
+  } : pagination
+  
+  // Aplicar paginación si hay ordenamiento activo
+  const supportsArray = sortColumn ? (() => {
+    const startIndex = (currentPage - 1) * limit
+    const endIndex = startIndex + limit
+    return sortedSupports.slice(startIndex, endIndex)
+  })() : sortedSupports
+  
   const ids = supportsArray.map(i => i.id)
   
   // Debug logs
@@ -170,17 +273,31 @@ export default function SoportesPage() {
 
   // Funciones de paginación
   const handlePageChange = (page: number) => {
-    fetchSupports(q, page)
+    if (sortColumn) {
+      // Si hay ordenamiento activo, solo cambiar la página localmente
+      setCurrentPage(page)
+    } else {
+      // Si no hay ordenamiento, recargar desde el servidor
+      fetchSupports(q, page)
+    }
   }
 
   const handlePrevPage = () => {
-    if (pagination.hasPrev) {
+    const paginationToUse = sortColumn ? {
+      hasPrev: currentPage > 1,
+      hasNext: currentPage < Math.ceil(sortedSupports.length / limit)
+    } : computedPagination
+    if (paginationToUse.hasPrev) {
       handlePageChange(currentPage - 1)
     }
   }
 
   const handleNextPage = () => {
-    if (pagination.hasNext) {
+    const paginationToUse = sortColumn ? {
+      hasPrev: currentPage > 1,
+      hasNext: currentPage < Math.ceil(sortedSupports.length / limit)
+    } : computedPagination
+    if (paginationToUse.hasNext) {
       handlePageChange(currentPage + 1)
     }
   }
@@ -305,6 +422,24 @@ export default function SoportesPage() {
   const handleDiscardChanges = () => {
     setEditedSupports({})
     toast.info("Cambios descartados")
+  }
+
+  // Función para manejar el ordenamiento
+  const handleSort = (column: "code" | "title") => {
+    if (sortColumn === column) {
+      // Si ya está ordenando por esta columna, cambiar dirección o desactivar
+      if (sortDirection === "asc") {
+        setSortDirection("desc")
+      } else {
+        // Si estaba en desc, desactivar el ordenamiento (ciclo: asc -> desc -> sin orden -> asc)
+        setSortColumn(null)
+        setSortDirection("asc")
+      }
+    } else {
+      // Si es una nueva columna, empezar con asc
+      setSortColumn(column)
+      setSortDirection("asc")
+    }
   }
 
   // Aplicar cambio masivo a seleccionados
@@ -476,51 +611,6 @@ export default function SoportesPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-xl font-bold text-slate-800">Soportes</div>
-            <div className="flex items-center gap-6 ml-4">
-              <Link 
-                href="/panel/soportes/gestion" 
-                className="text-sm font-medium text-[#D54644] hover:text-[#D54644]/80 transition-colors"
-              >
-                Soportes
-              </Link>
-              <Link 
-                href="/panel/soportes/alquileres" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Alquileres
-              </Link>
-              <Link 
-                href="/panel/soportes/planificacion" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Planificación
-              </Link>
-              <Link 
-                href="/panel/soportes/costes" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Costes
-              </Link>
-              <Link 
-                href="/panel/soportes/mantenimiento" 
-                className="text-sm font-medium text-gray-600 hover:text-[#D54644] transition-colors"
-              >
-                Mantenimiento
-              </Link>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">Buscar</span>
-            <span className="text-gray-800 font-medium">admin</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
@@ -633,15 +723,39 @@ export default function SoportesPage() {
         {/* Results */}
         <Card>
           <CardHeader>
-            <CardTitle>Soportes ({supportsArray.length})</CardTitle>
-            <CardDescription>
-              Lista de todos los soportes publicitarios
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Soportes ({supportsArray.length})</CardTitle>
+                <CardDescription>
+                  Lista de todos los soportes publicitarios
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className={viewMode === "list" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Lista
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode("gallery")}
+                  className={viewMode === "gallery" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
+                >
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Galería
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
 
-            {/* Barra azul unificada de acciones masivas */}
-            {((someSelected || allSelected) || Object.keys(editedSupports).length > 0) && (
+            {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
+            {viewMode === "list" && ((someSelected || allSelected) || Object.keys(editedSupports).length > 0) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -740,6 +854,96 @@ export default function SoportesPage() {
               <div className="text-center py-8 text-gray-500">
                 {q ? "No se encontraron soportes" : "No hay soportes registrados"}
               </div>
+            ) : viewMode === "gallery" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {supportsArray.map((support) => (
+                  <Card 
+                    key={support.id} 
+                    className="overflow-hidden transition-all cursor-pointer hover:shadow-lg p-0 flex flex-col"
+                  >
+                    <div 
+                      className="relative w-full bg-gray-100 group cursor-pointer overflow-hidden"
+                      style={{ aspectRatio: '222/147' }}
+                      onClick={() => router.push(`/panel/soportes/${support.id}`)}
+                    >
+                      {support.images && support.images.length > 0 && support.images[0] ? (
+                        <img
+                          src={support.images[0]}
+                          alt={support.title || support.code}
+                          className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
+                          <span className="text-gray-400 text-sm font-medium">Sin imagen</span>
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="p-2">
+                      <div className="space-y-1.5">
+                        <div>
+                          <p className="text-[10px] font-mono text-gray-500 mb-0.5">{support.code}</p>
+                          <h3 className="font-semibold text-xs line-clamp-2 min-h-[2rem] leading-tight">{support.title || 'Sin título'}</h3>
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                            {support.type || 'Sin tipo'}
+                          </Badge>
+                          <span className={`inline-flex items-center rounded px-1 py-0 text-[10px] font-medium ${STATUS_META[support.status]?.className || 'bg-gray-100 text-gray-800'}`}>
+                            {STATUS_META[support.status]?.label || support.status}
+                          </span>
+                        </div>
+                        <div className="space-y-0.5 pt-1 border-t">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-gray-600">Ciudad:</span>
+                            <span className="font-medium">{support.city || 'N/A'}</span>
+                          </div>
+                          {support.widthM && support.heightM && (
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-gray-600">Dimensiones:</span>
+                              <span className="font-medium">{support.widthM} × {support.heightM}m</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-gray-600">Precio:</span>
+                            <span className="font-medium text-green-600">{formatPrice(support.priceMonth)} Bs</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 pt-1 border-t">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Ver"
+                            onClick={() => router.push(`/panel/soportes/${support.id}`)}
+                            className="flex-1 text-[10px] h-6 px-1"
+                          >
+                            <Eye className="w-2.5 h-2.5 mr-0.5" />
+                            Ver
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Editar"
+                            onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
+                            className="flex-1 text-[10px] h-6 px-1"
+                          >
+                            <Edit className="w-2.5 h-2.5 mr-0.5" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Eliminar"
+                            onClick={() => handleDelete(support.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -752,8 +956,34 @@ export default function SoportesPage() {
                         aria-label="Seleccionar todo"
                       />
                     </TableHead>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Título</TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        <span>Código</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => handleSort("code")}
+                          title="Ordenar por código"
+                        >
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "code" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </Button>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        <span>Título</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => handleSort("title")}
+                          title="Ordenar por título"
+                        >
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "title" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </Button>
+                      </div>
+                    </TableHead>
                     <TableHead>Tipo de soporte</TableHead>
                     <TableHead>Ubicación</TableHead>
                     <TableHead className="text-center">Dimensiones (m)</TableHead>
@@ -919,27 +1149,27 @@ export default function SoportesPage() {
         </Card>
 
         {/* Paginación */}
-        {pagination.totalPages > 1 && (
+        {computedPagination.totalPages > 1 && (
           <div className="flex justify-center mt-8">
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handlePrevPage}
-                disabled={!pagination.hasPrev || loading}
+                disabled={!computedPagination.hasPrev || loading}
               >
                 Anterior
               </Button>
               
               {/* Mostrar páginas */}
-              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+              {Array.from({ length: Math.min(5, computedPagination.totalPages) }, (_, i) => {
                 let pageNum;
-                if (pagination.totalPages <= 5) {
+                if (computedPagination.totalPages <= 5) {
                   pageNum = i + 1;
                 } else if (currentPage <= 3) {
                   pageNum = i + 1;
-                } else if (currentPage >= pagination.totalPages - 2) {
-                  pageNum = pagination.totalPages - 4 + i;
+                } else if (currentPage >= computedPagination.totalPages - 2) {
+                  pageNum = computedPagination.totalPages - 4 + i;
                 } else {
                   pageNum = currentPage - 2 + i;
                 }
@@ -962,7 +1192,7 @@ export default function SoportesPage() {
                 variant="outline" 
                 size="sm" 
                 onClick={handleNextPage}
-                disabled={!pagination.hasNext || loading}
+                disabled={!computedPagination.hasNext || loading}
               >
                 Siguiente
               </Button>
@@ -970,7 +1200,7 @@ export default function SoportesPage() {
             
             {/* Información de paginación */}
             <div className="ml-4 text-sm text-gray-600">
-              Mostrando {((currentPage - 1) * 50) + 1} - {Math.min(currentPage * 50, pagination.total)} de {pagination.total} items
+              Mostrando {((currentPage - 1) * 50) + 1} - {Math.min(currentPage * 50, computedPagination.total)} de {computedPagination.total} items
             </div>
           </div>
         )}

@@ -28,11 +28,14 @@ export default function Footer() {
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
           <div className="space-y-4">
             <Link href="/" className="flex items-center">
-              <div className="w-40 h-40 flex items-center justify-center">
-                <img 
+              <div className="w-40 h-40 flex items-center justify-center relative">
+                <Image 
                   src="/logo-publicidad-vial.svg" 
                   alt="Publicidad Vial Imagen" 
+                  width={144}
+                  height={144}
                   className="h-36 w-auto"
+                  priority
                 />
               </div>
             </Link>

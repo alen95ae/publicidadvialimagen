@@ -292,6 +292,8 @@ export default function CheckoutPage() {
                                 alt={item.name}
                                 fill
                                 className="object-cover"
+                                sizes="64px"
+                                loading="lazy"
                               />
                               <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-xs w-5 h-5 flex items-center justify-center rounded-full">
                                 {item.quantity}

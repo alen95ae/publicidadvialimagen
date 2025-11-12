@@ -384,6 +384,8 @@ export default function ShopPage() {
                       width={222}
                       height={147}
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      sizes="222px"
+                      loading="lazy"
                     />
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 bg-black/50">
                       <Button className="mx-auto bg-primary hover:bg-primary/90 text-white">

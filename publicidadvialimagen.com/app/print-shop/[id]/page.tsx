@@ -127,6 +127,7 @@ export default function PrintProductDetailPage({ params }: PrintProductDetailPag
               fill
               className="object-cover"
               priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -137,6 +138,8 @@ export default function PrintProductDetailPage({ params }: PrintProductDetailPag
                   alt={`${product.name} - Vista ${index + 2}`}
                   fill
                   className="object-cover"
+                  sizes="(max-width: 1024px) 33vw, 16vw"
+                  loading="lazy"
                 />
               </div>
             ))}

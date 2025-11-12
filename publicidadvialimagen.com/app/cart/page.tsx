@@ -127,6 +127,8 @@ export default function CartPage() {
                                 alt={item.name}
                                 fill
                                 className="object-cover"
+                                sizes="80px"
+                                loading="lazy"
                               />
                             </div>
                             <div className="flex-1">
@@ -209,6 +211,8 @@ export default function CartPage() {
                                 alt={item.name}
                                 fill
                                 className="object-cover"
+                                sizes="80px"
+                                loading="lazy"
                               />
                             </div>
                             <div className="flex-1">

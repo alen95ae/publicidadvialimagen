@@ -31,6 +31,8 @@ export default function AboutPage() {
             alt="Equipo de Publicidad Vial Imagen"
             fill
             className="object-contain rounded-lg"
+            sizes="(max-width: 768px) 100vw, 50vw"
+            priority
           />
         </div>
         <div className="order-2 md:order-2">

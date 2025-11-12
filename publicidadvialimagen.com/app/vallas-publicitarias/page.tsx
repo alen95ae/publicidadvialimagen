@@ -938,6 +938,8 @@ export default function VallasPublicitariasPage() {
                       width={222}
                       height={147}
                       className="h-full w-full object-cover hover:opacity-90 transition-opacity"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      loading="lazy"
                     />
                   </Link>
                   <CardContent className="p-4">

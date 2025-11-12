@@ -350,6 +350,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
               fill
               className="object-cover"
               priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -366,6 +367,8 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
                   alt={`${displayData.name} - Vista ${index + 1}`}
                   fill
                   className="object-cover"
+                  sizes="(max-width: 1024px) 33vw, 16vw"
+                  loading="lazy"
                 />
               </div>
             ))}

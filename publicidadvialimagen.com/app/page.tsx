@@ -122,11 +122,16 @@ function CitiesCarousel({ t }: { t: (key: string) => string }) {
           {cities.map((city, index) => (
             <div key={index} className="flex-[0_0_auto] min-w-[140px]">
               <Link href={`/vallas-publicitarias?city=${city.name}`} className="text-center group block">
-                <img 
-                  src={city.image} 
-                  alt={city.name} 
-                  className="mx-auto mb-2 w-28 h-28 rounded-full object-cover group-hover:scale-105 transition-transform" 
-                />
+                <div className="relative mx-auto mb-2 w-28 h-28 rounded-full overflow-hidden">
+                  <Image 
+                    src={city.image} 
+                    alt={city.name} 
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform" 
+                    sizes="112px"
+                    loading="lazy"
+                  />
+                </div>
                 <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
                   {city.name}
                 </p>
@@ -192,6 +197,8 @@ function ServicesCarousel({ t }: { t: (key: string) => string }) {
                     alt={category.name}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform"
+                    sizes="160px"
+                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 </div>
@@ -256,6 +263,8 @@ function FeaturedBillboardsCarousel({ billboards, t, locale }: { billboards: Bil
                     width={280}
                     height={147}
                     className="h-full w-full object-cover hover:opacity-90 transition-opacity"
+                    sizes="280px"
+                    loading="lazy"
                   />
                 </Link>
                 <CardContent className="p-4">
@@ -458,6 +467,7 @@ export default function HomePage() {
               fill
               className="object-cover rounded-2xl"
               priority
+              sizes="(max-width: 768px) 100vw, 50vw"
             />
           </div>
         </div>

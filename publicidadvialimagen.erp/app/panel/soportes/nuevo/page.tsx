@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -444,7 +445,16 @@ export default function NuevoSoportePage() {
                   <div className="space-y-3">
                     {formData.images.map((image, index) => (
                       <div key={index} className="flex items-center gap-3">
-                        <img src={image} alt={`preview ${index + 1}`} className="h-24 w-40 object-cover rounded-md border" />
+                        <div className="relative h-24 w-40">
+                          <Image 
+                            src={image} 
+                            alt={`preview ${index + 1}`} 
+                            fill
+                            className="object-cover rounded-md border"
+                            sizes="160px"
+                            loading="lazy"
+                          />
+                        </div>
                         <Button variant="outline" onClick={() => {
                           const newImages = formData.images.filter((_, i) => i !== index)
                           handleChange("images", newImages)

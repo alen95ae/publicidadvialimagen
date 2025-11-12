@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -527,11 +528,14 @@ export default function SoporteDetailPage() {
                     {support.images && support.images.length > 0 ? (
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         {support.images.map((image, index) => (
-                          <div key={index} className="relative">
-                            <img 
+                          <div key={index} className="relative h-32">
+                            <Image 
                               src={image} 
                               alt={`Imagen ${index + 1}`} 
-                              className="h-32 w-full object-cover rounded-md border"
+                              fill
+                              className="object-cover rounded-md border"
+                              sizes="(max-width: 768px) 50vw, 25vw"
+                              loading="lazy"
                               onError={(e) => {
                                 console.error(`❌ Error cargando imagen ${index + 1}:`, image)
                                 e.currentTarget.style.display = 'none'
@@ -862,7 +866,16 @@ export default function SoporteDetailPage() {
                     <div className="space-y-3">
                       {formData.images.map((image, index) => (
                         <div key={index} className="flex items-center gap-3">
-                          <img src={image} alt={`preview ${index + 1}`} className="h-24 w-40 object-cover rounded-md border" />
+                          <div className="relative h-24 w-40">
+                            <Image 
+                              src={image} 
+                              alt={`preview ${index + 1}`} 
+                              fill
+                              className="object-cover rounded-md border"
+                              sizes="160px"
+                              loading="lazy"
+                            />
+                          </div>
                           <Button variant="outline" onClick={() => {
                             const newImages = formData.images.filter((_, i) => i !== index)
                             handleChange("images", newImages)

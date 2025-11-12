@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -1541,11 +1542,14 @@ export default function ProductoDetailPage() {
                     <div className="flex justify-center">
                       {formData.imagen_portada ? (
                         <div className="relative group">
-                          <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100">
-                            <img 
+                          <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
+                            <Image 
                               src={formData.imagen_portada} 
                               alt="Imagen de portada" 
-                              className="h-full w-full object-cover"
+                              fill
+                              className="object-cover"
+                              sizes="128px"
+                              loading="lazy"
                               onError={(e) => {
                                 const target = e.currentTarget
                                 target.style.display = 'none'
@@ -1608,20 +1612,23 @@ export default function ProductoDetailPage() {
                     <div>
                       <div className="flex justify-center">
                         {producto.imagen_portada ? (
-                          <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100">
-                            <img 
+                          <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
+                            <Image 
                               src={producto.imagen_portada} 
                               alt={producto.nombre} 
-                              className="h-full w-full object-cover"
-                            onError={(e) => {
-                              const target = e.currentTarget
-                              target.style.display = 'none'
-                              const parent = target.parentElement
-                              if (parent) {
-                                parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
-                              }
-                            }}
-                          />
+                              fill
+                              className="object-cover"
+                              sizes="128px"
+                              loading="lazy"
+                              onError={(e) => {
+                                const target = e.currentTarget
+                                target.style.display = 'none'
+                                const parent = target.parentElement
+                                if (parent) {
+                                  parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
+                                }
+                              }}
+                            />
                         </div>
                       ) : (
                         <div className="aspect-square w-32 flex items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">

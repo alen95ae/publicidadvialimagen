@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -880,11 +881,14 @@ export default function RecursoDetailPage() {
                       <div className="flex justify-center">
                         {formData.imagen_portada ? (
                           <div className="relative group">
-                            <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100">
-                              <img 
+                            <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
+                              <Image 
                                 src={formData.imagen_portada} 
                                 alt="Imagen de portada" 
-                                className="h-full w-full object-cover"
+                                fill
+                                className="object-cover"
+                                sizes="128px"
+                                loading="lazy"
                                 onError={(e) => {
                                   const target = e.currentTarget
                                   target.style.display = 'none'

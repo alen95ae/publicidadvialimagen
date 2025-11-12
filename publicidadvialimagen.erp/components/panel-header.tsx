@@ -64,7 +64,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
   ajustes: {
     title: "Ajustes",
     navItems: [
-      { label: "Usuarios", href: "/panel/ajustes" },
+      { label: "Usuarios", href: "/panel/ajustes/usuarios" },
       { label: "Roles y Permisos", href: "/panel/ajustes/roles" },
       { label: "Invitaciones", href: "/panel/ajustes/invitaciones" },
     ],
@@ -203,9 +203,17 @@ export default function PanelHeader() {
           setNotificationCount(unreadNotifications.length)
           return currentRead
         })
+      } else {
+        // Si la respuesta no es OK, simplemente no mostrar notificaciones
+        console.warn("Notifications API returned non-OK status:", response.status)
+        setNotifications([])
+        setNotificationCount(0)
       }
     } catch (error) {
+      // Error silencioso - no mostrar notificaciones si falla
       console.error("Error fetching notifications:", error)
+      setNotifications([])
+      setNotificationCount(0)
     } finally {
       setLoadingNotifications(false)
     }
@@ -278,9 +286,11 @@ export default function PanelHeader() {
   }
 
   const isActive = (href: string) => {
+    // Coincidencia exacta
     if (href === pathname) return true
-    // Para rutas como /panel/soportes/[id], considerar activo si coincide el prefijo
-    if (pathname.startsWith(href) && href !== "/panel") return true
+    // Para rutas dinámicas o subrutas, verificar que empiece con el href
+    // pero evitar falsos positivos (ej: /panel/ajustes no debería activar /panel/ajustes/roles)
+    if (pathname.startsWith(href + "/") && href !== "/panel") return true
     return false
   }
 
@@ -396,7 +406,7 @@ export default function PanelHeader() {
                         {getInitials()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium text-gray-800 hidden sm:block">
+                    <span className="text-sm font-medium text-gray-800">
                       {getUserName()}
                     </span>
                   </Button>

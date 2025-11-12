@@ -41,7 +41,7 @@ const modules = [
   { key: "sitio", title: "Sitio Web", href: "/panel/sitio", icon: Globe },
   { key: "diseno", title: "Diseño Gráfico", href: "/panel/diseno", icon: Palette },
   { key: "empleados", title: "Empleados", href: "/panel/empleados", icon: UserCog },
-  { key: "ajustes", title: "Ajustes", href: "/panel/ajustes", icon: Settings },
+  { key: "ajustes", title: "Ajustes", href: "/panel/ajustes/usuarios", icon: Settings },
   { key: "salir", title: "Salir", href: null, icon: Power, isLogout: true },
 ]
 

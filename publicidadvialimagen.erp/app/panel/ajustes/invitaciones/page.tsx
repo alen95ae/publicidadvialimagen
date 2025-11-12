@@ -2,14 +2,11 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserPlus } from "lucide-react";
-import AjustesHeader from "../components/AjustesHeader";
 import InvitationsSection from "../components/InvitationsSection";
 
 export default function InvitationsPage() {
   return (
     <div className="p-6">
-      <AjustesHeader />
-
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">

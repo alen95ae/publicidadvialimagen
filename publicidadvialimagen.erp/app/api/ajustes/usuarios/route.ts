@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const role = searchParams.get("role") || "";
     const status = searchParams.get("status") || "";
+    const puesto = searchParams.get("puesto") || "";
 
     // Solo cargar usuarios con rol admin o usuario (no invitados)
     let filterFormula = `OR({Rol} = "admin", {Rol} = "usuario")`;
@@ -44,6 +45,9 @@ export async function GET(request: NextRequest) {
     }
     if (role) {
       filters.push(`{Rol} = "${role}"`);
+    }
+    if (puesto) {
+      filters.push(`{Puesto} = "${puesto}"`);
     }
 
     if (filters.length > 1) {
@@ -70,6 +74,7 @@ export async function GET(request: NextRequest) {
       nombre: record.fields.Nombre || "",
       email: record.fields.Email || "",
       rol: record.fields.Rol || "usuario",
+      puesto: record.fields.Puesto || "",
       fechaCreacion: record.fields.FechaCreacion || record.createdTime,
       ultimoAcceso: record.fields.UltimoAcceso || null,
     }));
@@ -140,7 +145,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { id, nombre, email, rol, activo } = body;
+    const { id, nombre, email, rol, activo, puesto } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID de usuario requerido" }, { status: 400 });
@@ -151,6 +156,7 @@ export async function PUT(request: NextRequest) {
     if (email !== undefined) updateData.Email = email;
     if (rol !== undefined) updateData.Rol = rol;
     if (activo !== undefined) updateData.Activo = activo;
+    if (puesto !== undefined) updateData.Puesto = puesto;
 
     await airtableUpdate(USERS_TABLE, id, updateData);
 

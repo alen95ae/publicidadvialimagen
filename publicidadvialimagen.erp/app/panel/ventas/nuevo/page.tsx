@@ -19,9 +19,15 @@ import {
   Check,
   ChevronUp,
   ChevronDown,
-  GripVertical
+  GripVertical,
+  X,
+  Hammer,
+  FileText
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import jsPDF from 'jspdf'
+import { toast } from "sonner"
+import { Toaster } from "sonner"
 
 // Datos de ejemplo para los desplegables
 const clientes = [
@@ -35,14 +41,6 @@ const clientes = [
 const sucursales = [
   { id: "1", nombre: "La Paz" },
   { id: "2", nombre: "Santa Cruz" }
-]
-
-const vendedores = [
-  { id: "1", nombre: "Juan Pérez" },
-  { id: "2", nombre: "María García" },
-  { id: "3", nombre: "Carlos López" },
-  { id: "4", nombre: "Ana Martínez" },
-  { id: "5", nombre: "Pedro Rodríguez" }
 ]
 
 const productos = [
@@ -76,11 +74,6 @@ const productos = [
   }
 ]
 
-const impuestos = [
-  { id: "iva", nombre: "IVA", porcentaje: 0 },
-  { id: "sin_iva", nombre: "SIN IVA", porcentaje: -16 }
-]
-
 interface ProductoItem {
   id: string
   tipo: 'producto'
@@ -94,7 +87,8 @@ interface ProductoItem {
   udm: string
   precio: number
   comision: number
-  impuestos: string
+  conIVA: boolean
+  conIT: boolean
   total: number
   esSoporte?: boolean
   dimensionesBloqueadas?: boolean
@@ -131,7 +125,8 @@ export default function NuevaCotizacionPage() {
       udm: "m²",
       precio: 0,
       comision: 0,
-      impuestos: "iva",
+      conIVA: true,
+      conIT: true,
       total: 0,
       esSoporte: false,
       dimensionesBloqueadas: false
@@ -142,15 +137,23 @@ export default function NuevaCotizacionPage() {
     return ancho * alto
   }
 
-  const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, impuesto: string, esSoporte: boolean = false) => {
+  const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, conIVA: boolean, conIT: boolean, esSoporte: boolean = false) => {
     // Para soportes: cantidad × precio (sin totalM2)
     // Para productos: cantidad × totalM2 × precio
-    const subtotal = esSoporte ? (cantidad * precio) : (cantidad * totalM2 * precio)
+    let subtotal = esSoporte ? (cantidad * precio) : (cantidad * totalM2 * precio)
     const comisionTotal = subtotal * (comision / 100)
-    const impuestoSeleccionado = impuestos.find(i => i.id === impuesto)
-    const impuestoTotal = subtotal * (impuestoSeleccionado?.porcentaje || 0) / 100
     
-    return subtotal + comisionTotal + impuestoTotal
+    // Si no tiene IVA, descontar 13%
+    if (!conIVA) {
+      subtotal = subtotal * (1 - 0.13)
+    }
+    
+    // Si no tiene IT, descontar 3%
+    if (!conIT) {
+      subtotal = subtotal * (1 - 0.03)
+    }
+    
+    return subtotal + comisionTotal
   }
 
   const agregarProducto = () => {
@@ -166,7 +169,8 @@ export default function NuevaCotizacionPage() {
       udm: "m²",
       precio: 0,
       comision: 0,
-      impuestos: "iva",
+      conIVA: true,
+      conIT: true,
       total: 0,
       esSoporte: false,
       dimensionesBloqueadas: false
@@ -235,6 +239,12 @@ export default function NuevaCotizacionPage() {
   const [filteredClientes, setFilteredClientes] = useState<any[]>([])
   const [cargandoClientes, setCargandoClientes] = useState(false)
 
+  // Estados para el combobox de comerciales
+  const [openComercialCombobox, setOpenComercialCombobox] = useState(false)
+  const [todosLosComerciales, setTodosLosComerciales] = useState<any[]>([])
+  const [filteredComerciales, setFilteredComerciales] = useState<any[]>([])
+  const [cargandoComerciales, setCargandoComerciales] = useState(false)
+
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
   }
@@ -278,13 +288,14 @@ export default function NuevaCotizacionPage() {
         }
         
         // Recalcular total si cambian los valores relevantes (convertir strings vacíos a 0)
-        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'impuestos'].includes(campo)) {
+        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT'].includes(campo)) {
           productoActualizado.total = calcularTotal(
             productoActualizado.cantidad === '' ? 0 : productoActualizado.cantidad,
             productoActualizado.totalM2,
             productoActualizado.precio === '' ? 0 : productoActualizado.precio,
             productoActualizado.comision === '' ? 0 : productoActualizado.comision,
-            productoActualizado.impuestos,
+            productoActualizado.conIVA,
+            productoActualizado.conIT,
             productoActualizado.esSoporte || false
           )
         }
@@ -399,6 +410,24 @@ export default function NuevaCotizacionPage() {
     cargarClientes()
   }, [])
 
+  // Cargar todos los comerciales al inicio
+  useEffect(() => {
+    const cargarComerciales = async () => {
+      setCargandoComerciales(true)
+      try {
+        const response = await fetch('/api/ajustes/usuarios?puesto=Comercial&pageSize=100')
+        const data = await response.json()
+        setTodosLosComerciales(data.users || [])
+      } catch (error) {
+        console.error('Error cargando comerciales:', error)
+      } finally {
+        setCargandoComerciales(false)
+      }
+    }
+    
+    cargarComerciales()
+  }, [])
+
   // Función de filtrado preciso: busca solo al inicio del código o nombre
   const filtrarItems = (productoId: string, searchValue: string) => {
     if (!searchValue || searchValue.trim() === '') {
@@ -436,6 +465,24 @@ export default function NuevaCotizacionPage() {
     }).slice(0, 15) // Limitar a 15 resultados máximo
     
     setFilteredClientes(filtered)
+  }
+
+  // Función de filtrado para comerciales
+  const filtrarComerciales = (query: string) => {
+    if (!query || query.trim() === '') {
+      setFilteredComerciales(todosLosComerciales.slice(0, 20))
+      return
+    }
+    
+    const search = query.toLowerCase().trim()
+    const filtered = todosLosComerciales.filter((comercial: any) => {
+      const nombre = (comercial.nombre || '').toLowerCase()
+      
+      // Buscar al inicio del nombre
+      return nombre.startsWith(search)
+    }).slice(0, 15) // Limitar a 15 resultados máximo
+    
+    setFilteredComerciales(filtered)
   }
 
   const seleccionarProducto = (id: string, item: any) => {
@@ -549,7 +596,8 @@ export default function NuevaCotizacionPage() {
           productoActualizado.totalM2,
           productoActualizado.precio,
           productoActualizado.comision,
-          productoActualizado.impuestos,
+          productoActualizado.conIVA,
+          productoActualizado.conIT,
           esSoporte
         )
         
@@ -610,8 +658,163 @@ export default function NuevaCotizacionPage() {
     .filter((item): item is ProductoItem => item.tipo === 'producto')
     .reduce((sum, producto) => sum + producto.total, 0)
 
+  const descargarCotizacionPDF = () => {
+    try {
+      // Validar que haya datos mínimos
+      if (!cliente) {
+        toast.error("Por favor selecciona un cliente")
+        return
+      }
+
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const primaryColor: [number, number, number] = [213, 70, 68] // #D54644
+      const currentDate = new Date().toLocaleDateString('es-ES')
+      
+      let yPosition = 20
+
+      // Encabezado
+      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      pdf.rect(0, 0, 210, 40, 'F')
+      
+      pdf.setTextColor(255, 255, 255)
+      pdf.setFontSize(24)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('COTIZACIÓN', 105, 20, { align: 'center' })
+      
+      pdf.setFontSize(10)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(`Fecha: ${currentDate}`, 105, 30, { align: 'center' })
+
+      yPosition = 50
+
+      // Información del cliente
+      pdf.setTextColor(0, 0, 0)
+      pdf.setFontSize(12)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Información del Cliente', 20, yPosition)
+      
+      yPosition += 7
+      pdf.setFontSize(10)
+      pdf.setFont('helvetica', 'normal')
+      
+      const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
+      if (clienteSeleccionado) {
+        pdf.text(`Cliente: ${clienteSeleccionado.displayName}`, 20, yPosition)
+        yPosition += 5
+        if (clienteSeleccionado.legalName) {
+          pdf.text(`Empresa: ${clienteSeleccionado.legalName}`, 20, yPosition)
+          yPosition += 5
+        }
+      }
+
+      const sucursalSeleccionada = sucursales.find(s => s.id === sucursal)
+      if (sucursalSeleccionada) {
+        pdf.text(`Sucursal: ${sucursalSeleccionada.nombre}`, 20, yPosition)
+        yPosition += 5
+      }
+
+      const comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
+      if (comercialSeleccionado) {
+        pdf.text(`Comercial: ${comercialSeleccionado.nombre}`, 20, yPosition)
+        yPosition += 5
+      }
+
+      yPosition += 5
+
+      // Tabla de productos
+      pdf.setFontSize(12)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Detalle de Productos y Servicios', 20, yPosition)
+      yPosition += 7
+
+      // Encabezados de tabla
+      pdf.setFillColor(240, 240, 240)
+      pdf.rect(20, yPosition, 170, 8, 'F')
+      
+      pdf.setFontSize(9)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Descripción', 22, yPosition + 5)
+      pdf.text('Cant.', 120, yPosition + 5)
+      pdf.text('Precio', 140, yPosition + 5)
+      pdf.text('Total', 165, yPosition + 5)
+      
+      yPosition += 10
+
+      // Productos
+      pdf.setFont('helvetica', 'normal')
+      productosList.forEach((item) => {
+        // Verificar si necesitamos nueva página
+        if (yPosition > 270) {
+          pdf.addPage()
+          yPosition = 20
+        }
+
+        if (item.tipo === 'producto') {
+          const producto = item as ProductoItem
+          
+          // Descripción (puede ser larga, dividirla si es necesario)
+          const descripcionLineas = pdf.splitTextToSize(producto.descripcion || producto.producto, 95)
+          const alturaTexto = descripcionLineas.length * 5
+          
+          pdf.text(descripcionLineas, 22, yPosition)
+          pdf.text(producto.cantidad.toString(), 120, yPosition)
+          pdf.text(`Bs ${producto.precio.toFixed(2)}`, 140, yPosition)
+          pdf.text(`Bs ${producto.total.toFixed(2)}`, 165, yPosition)
+          
+          yPosition += Math.max(alturaTexto, 5) + 2
+        } else if (item.tipo === 'nota') {
+          const nota = item as NotaItem
+          pdf.setFont('helvetica', 'italic')
+          const notaLineas = pdf.splitTextToSize(`Nota: ${nota.texto}`, 165)
+          pdf.text(notaLineas, 22, yPosition)
+          yPosition += notaLineas.length * 5 + 2
+          pdf.setFont('helvetica', 'normal')
+        } else if (item.tipo === 'seccion') {
+          const seccion = item as SeccionItem
+          pdf.setFont('helvetica', 'bold')
+          pdf.text(seccion.texto, 22, yPosition)
+          yPosition += 7
+          pdf.setFont('helvetica', 'normal')
+        }
+      })
+
+      // Línea separadora
+      yPosition += 5
+      pdf.setDrawColor(200, 200, 200)
+      pdf.line(20, yPosition, 190, yPosition)
+      yPosition += 8
+
+      // Total
+      pdf.setFontSize(14)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('TOTAL:', 140, yPosition)
+      pdf.text(`Bs ${totalGeneral.toFixed(2)}`, 165, yPosition)
+
+      // Pie de página
+      const footerY = 280
+      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      pdf.rect(0, footerY, 210, 17, 'F')
+      
+      pdf.setTextColor(255, 255, 255)
+      pdf.setFontSize(9)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(`© ${new Date().getFullYear()} Publicidad Vial Imagen | Generado el ${currentDate}`, 105, footerY + 10, { align: 'center' })
+
+      // Descargar PDF
+      const nombreArchivo = `cotizacion-${clienteSeleccionado?.displayName || 'cliente'}-${new Date().toISOString().split('T')[0]}.pdf`
+      pdf.save(nombreArchivo)
+      
+      toast.success("Cotización descargada exitosamente")
+    } catch (error) {
+      console.error("Error generando PDF:", error)
+      toast.error("Error al generar el PDF")
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <Toaster position="top-right" />
+      <div className="min-h-screen bg-gray-50">
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
         {/* Barra de botones */}
@@ -634,98 +837,174 @@ export default function NuevaCotizacionPage() {
             <CardTitle>Información General</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="cliente">Cliente</Label>
-                <Popover open={openClienteCombobox} onOpenChange={(open) => {
-                  setOpenClienteCombobox(open)
-                  if (open) {
-                    setFilteredClientes(todosLosClientes.slice(0, 20))
-                  }
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className={cn(
-                        "w-full justify-between",
-                        !cliente && "text-muted-foreground"
-                      )}
-                    >
-                      <span className="truncate">
-                        {cliente 
-                          ? todosLosClientes.find(c => c.id === cliente)?.displayName || "Seleccionar cliente"
-                          : "Seleccionar cliente"}
-                      </span>
-                      <Check className={cn("ml-2 h-4 w-4 shrink-0", cliente ? "opacity-100" : "opacity-0")} />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command shouldFilter={false} className="overflow-visible">
-                      <CommandInput 
-                        placeholder="Buscar cliente..."
-                        className="h-9 border-0 focus:ring-0"
-                        onValueChange={filtrarClientes}
-                      />
-                      <CommandList>
-                        <CommandEmpty>
-                          {cargandoClientes ? "Cargando..." : "No se encontraron clientes."}
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {filteredClientes.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={c.displayName}
-                              onSelect={() => {
-                                setCliente(c.id)
-                                setOpenClienteCombobox(false)
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
-                              <div className="flex flex-col">
-                                <span className="font-medium">{c.displayName}</span>
-                                {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+            {/* Todos los campos en una sola fila */}
+            <div className="flex gap-4">
+              {/* Grupo de campos de información */}
+              <div className="flex gap-4 flex-1">
+                {/* Cliente */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="cliente">Cliente</Label>
+                  <Popover open={openClienteCombobox} onOpenChange={(open) => {
+                    setOpenClienteCombobox(open)
+                    if (open) {
+                      setFilteredClientes(todosLosClientes.slice(0, 20))
+                    }
+                  }}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-between",
+                          !cliente && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="truncate">
+                          {cliente 
+                            ? todosLosClientes.find(c => c.id === cliente)?.displayName || "Seleccionar cliente"
+                            : "Seleccionar cliente"}
+                        </span>
+                        <Check className={cn("ml-2 h-4 w-4 shrink-0", cliente ? "opacity-100" : "opacity-0")} />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false} className="overflow-visible">
+                        <CommandInput 
+                          placeholder="Buscar cliente..."
+                          className="h-9 border-0 focus:ring-0"
+                          onValueChange={filtrarClientes}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {cargandoClientes ? "Cargando..." : "No se encontraron clientes."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {filteredClientes.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.displayName}
+                                onSelect={() => {
+                                  setCliente(c.id)
+                                  setOpenClienteCombobox(false)
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{c.displayName}</span>
+                                  {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                {/* Comercial */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="vendedor">Comercial</Label>
+                  <Popover open={openComercialCombobox} onOpenChange={(open) => {
+                    setOpenComercialCombobox(open)
+                    if (open) {
+                      setFilteredComerciales(todosLosComerciales.slice(0, 20))
+                    }
+                  }}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-between",
+                          !vendedor && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="truncate">
+                          {vendedor 
+                            ? todosLosComerciales.find(c => c.id === vendedor)?.nombre || "Seleccionar comercial"
+                            : "Seleccionar comercial"}
+                        </span>
+                        <Check className={cn("ml-2 h-4 w-4 shrink-0", vendedor ? "opacity-100" : "opacity-0")} />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false} className="overflow-visible">
+                        <CommandInput 
+                          placeholder="Buscar comercial..."
+                          className="h-9 border-0 focus:ring-0"
+                          onValueChange={filtrarComerciales}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {cargandoComerciales ? "Cargando..." : "No se encontraron comerciales."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {filteredComerciales.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.nombre}
+                                onSelect={() => {
+                                  setVendedor(c.id)
+                                  setOpenComercialCombobox(false)
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{c.nombre}</span>
+                                  {c.email && <span className="text-xs text-gray-500">{c.email}</span>}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                {/* Sucursal */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="sucursal">Sucursal</Label>
+                  <Select value={sucursal} onValueChange={setSucursal}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar sucursal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sucursales.map((sucursal) => (
+                        <SelectItem key={sucursal.id} value={sucursal.id}>
+                          {sucursal.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="sucursal">Sucursal</Label>
-                <Select value={sucursal} onValueChange={setSucursal}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar sucursal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sucursales.map((sucursal) => (
-                      <SelectItem key={sucursal.id} value={sucursal.id}>
-                        {sucursal.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="vendedor">Comercial</Label>
-                <Select value={vendedor} onValueChange={setVendedor}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vendedores.map((vendedor) => (
-                      <SelectItem key={vendedor.id} value={vendedor.id}>
-                        {vendedor.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              {/* Grupo de botones de acción */}
+              <div className="flex gap-4">
+                {/* Descargar OT */}
+                <div className="space-y-2 w-48">
+                  <Label>&nbsp;</Label>
+                  <Button variant="outline" className="w-full">
+                    <Hammer className="w-4 h-4 mr-2" />
+                    Descargar OT
+                  </Button>
+                </div>
+
+                {/* Descargar Cotización */}
+                <div className="space-y-2 w-48">
+                  <Label>&nbsp;</Label>
+                  <Button 
+                    onClick={descargarCotizacionPDF}
+                    className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descargar Cotización
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -814,11 +1093,9 @@ export default function NuevaCotizacionPage() {
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => eliminarProducto(nota.id)}
-                                className="h-8 w-8 p-0 flex items-center justify-center shrink-0"
+                                className="h-8 w-8 p-0 flex items-center justify-center shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
-                                <div className="h-6 w-6 flex items-center justify-center">
-                                  <Trash2 className="w-3 h-3 text-red-500" />
-                                </div>
+                                <Trash2 className="w-3 h-3" />
                               </Button>
                             </div>
                           </td>
@@ -879,11 +1156,9 @@ export default function NuevaCotizacionPage() {
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => eliminarProducto(seccion.id)}
-                                className="h-8 w-8 p-0 flex items-center justify-center shrink-0"
+                                className="h-8 w-8 p-0 flex items-center justify-center shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
-                                <div className="h-6 w-6 flex items-center justify-center">
-                                  <Trash2 className="w-3 h-3 text-red-500" />
-                                </div>
+                                <Trash2 className="w-3 h-3" />
                               </Button>
                             </div>
                           </td>
@@ -1137,18 +1412,50 @@ export default function NuevaCotizacionPage() {
                       </td>
                       
                       <td className="py-2 px-2">
-                        <Select value={producto.impuestos} onValueChange={(value) => actualizarProducto(producto.id, 'impuestos', value)}>
-                          <SelectTrigger className="w-20 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {impuestos.map((impuesto) => (
-                              <SelectItem key={impuesto.id} value={impuesto.id}>
-                                {impuesto.nombre}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex gap-1">
+                          {producto.conIVA && (
+                            <div className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs">
+                              <span>IVA</span>
+                              <button
+                                type="button"
+                                onClick={() => actualizarProducto(producto.id, 'conIVA', false)}
+                                className="hover:text-red-500"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          {!producto.conIVA && (
+                            <button
+                              type="button"
+                              onClick={() => actualizarProducto(producto.id, 'conIVA', true)}
+                              className="text-xs text-gray-400 hover:text-gray-600 underline"
+                            >
+                              + IVA
+                            </button>
+                          )}
+                          {producto.conIT && (
+                            <div className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs">
+                              <span>IT</span>
+                              <button
+                                type="button"
+                                onClick={() => actualizarProducto(producto.id, 'conIT', false)}
+                                className="hover:text-red-500"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          {!producto.conIT && (
+                            <button
+                              type="button"
+                              onClick={() => actualizarProducto(producto.id, 'conIT', true)}
+                              className="text-xs text-gray-400 hover:text-gray-600 underline"
+                            >
+                              + IT
+                            </button>
+                          )}
+                        </div>
                       </td>
                       
                       <td className="py-2 px-2">
@@ -1160,7 +1467,7 @@ export default function NuevaCotizacionPage() {
                           size="sm"
                           onClick={() => eliminarProducto(producto.id)}
                           disabled={productosList.length === 1}
-                              className="h-6 w-6 p-0 flex items-center justify-center"
+                              className="h-6 w-6 p-0 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                               <Trash2 className="w-3 h-3" />
                         </Button>
@@ -1352,5 +1659,6 @@ export default function NuevaCotizacionPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   )
 }

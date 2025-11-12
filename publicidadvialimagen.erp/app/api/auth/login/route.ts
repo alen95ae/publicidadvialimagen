@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { findUserByEmail, signSession } from "@/lib/auth";
 import { createAuthCookie } from "@/lib/auth/cookies";
+import { airtableUpdate } from "@/lib/airtable-rest";
+
+const USERS_TABLE = process.env.AIRTABLE_TABLE_USERS || "Users";
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +27,16 @@ export async function POST(req: Request) {
     const ok = await bcrypt.compare(password, user.fields.PasswordHash);
     console.log("Password comparison result:", ok);
     if (!ok) return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
+
+    // Actualizar último acceso
+    try {
+      await airtableUpdate(USERS_TABLE, user.id, {
+        UltimoAcceso: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error updating last access:", error);
+      // No fallar el login si falla la actualización del último acceso
+    }
 
     const token = await signSession({ id: user.id, email: user.fields.Email, role: user.fields.Rol, name: user.fields.Nombre });
     

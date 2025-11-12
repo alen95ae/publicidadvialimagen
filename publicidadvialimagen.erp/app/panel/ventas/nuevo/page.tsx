@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -109,9 +110,11 @@ interface SeccionItem {
 type ItemLista = ProductoItem | NotaItem | SeccionItem
 
 export default function NuevaCotizacionPage() {
+  const router = useRouter()
   const [cliente, setCliente] = useState("")
   const [sucursal, setSucursal] = useState("")
   const [vendedor, setVendedor] = useState("")
+  const [guardando, setGuardando] = useState(false)
   const [productosList, setProductosList] = useState<ItemLista[]>([
     {
       id: "1",
@@ -686,7 +689,7 @@ export default function NuevaCotizacionPage() {
         
         const productoActualizado = {
           ...producto,
-          producto: item.nombre,
+          producto: `${item.codigo} - ${item.nombre}`,  // Guardar en formato "CODIGO - NOMBRE"
           descripcion: descripcionFinal,
           precio: precioFinal,
           udm: esSoporte ? 'mes' : (item.unidad || 'm²'),
@@ -766,6 +769,141 @@ export default function NuevaCotizacionPage() {
     .filter((item): item is ProductoItem => item.tipo === 'producto')
     .reduce((sum, producto) => sum + producto.total, 0)
 
+  const handleGuardar = async () => {
+    try {
+      // Validaciones
+      if (!cliente) {
+        toast.error("Por favor selecciona un cliente")
+        return
+      }
+      if (!vendedor) {
+        toast.error("Por favor selecciona un vendedor")
+        return
+      }
+      if (!sucursal) {
+        toast.error("Por favor selecciona una sucursal")
+        return
+      }
+
+      // Verificar que haya al menos un producto
+      const productos = productosList.filter((item): item is ProductoItem => item.tipo === 'producto')
+      if (productos.length === 0 || !productos.some(p => p.producto)) {
+        toast.error("Por favor agrega al menos un producto a la cotización")
+        return
+      }
+
+      setGuardando(true)
+
+      // Preparar las líneas de cotización
+      const lineas = productosList.map((item, index) => {
+        if (item.tipo === 'producto') {
+          const producto = item as ProductoItem
+          return {
+            tipo: 'Producto' as const,
+            codigo_producto: producto.producto.split(' - ')[0] || '',
+            nombre_producto: producto.producto.split(' - ')[1] || producto.producto,
+            descripcion: producto.descripcion || '',
+            cantidad: producto.cantidad,
+            ancho: producto.ancho,
+            alto: producto.alto,
+            unidad_medida: producto.udm,
+            precio_unitario: producto.precio,
+            comision_porcentaje: producto.comision,
+            con_iva: producto.conIVA,
+            con_it: producto.conIT,
+            es_soporte: producto.esSoporte || false,
+            orden: index + 1,
+            variantes: producto.variantes ? JSON.stringify(producto.variantes) : '',
+            subtotal_linea: producto.total
+          }
+        } else if (item.tipo === 'nota') {
+          const nota = item as NotaItem
+          return {
+            tipo: 'Nota' as const,
+            descripcion: nota.texto,
+            cantidad: 0,
+            unidad_medida: '',
+            precio_unitario: 0,
+            comision_porcentaje: 0,
+            con_iva: false,
+            con_it: false,
+            es_soporte: false,
+            orden: index + 1,
+            subtotal_linea: 0
+          }
+        } else {
+          const seccion = item as SeccionItem
+          return {
+            tipo: 'Sección' as const,
+            nombre_producto: seccion.texto,
+            cantidad: 0,
+            unidad_medida: '',
+            precio_unitario: 0,
+            comision_porcentaje: 0,
+            con_iva: false,
+            con_it: false,
+            es_soporte: false,
+            orden: index + 1,
+            subtotal_linea: 0
+          }
+        }
+      })
+
+      // Obtener nombres de cliente y vendedor (actualmente guardamos IDs)
+      const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
+      const vendedorSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
+
+      if (!clienteSeleccionado) {
+        toast.error("Cliente no encontrado")
+        return
+      }
+      if (!vendedorSeleccionado) {
+        toast.error("Vendedor no encontrado")
+        return
+      }
+
+      // Preparar la cotización
+      const cotizacionData = {
+        cliente: clienteSeleccionado.displayName || clienteSeleccionado.legalName || '',
+        vendedor: vendedorSeleccionado.nombre || '',
+        sucursal,
+        estado: 'Pendiente' as const,
+        vigencia_dias: 30,
+        lineas
+      }
+
+      console.log('📝 Guardando cotización:', cotizacionData)
+
+      // Enviar a la API
+      const response = await fetch('/api/cotizaciones', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cotizacionData)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Error al guardar la cotización')
+      }
+
+      toast.success(`Cotización ${data.data.cotizacion.codigo} guardada exitosamente`)
+      
+      // Redirigir al listado después de 1 segundo
+      setTimeout(() => {
+        router.push('/panel/ventas/cotizaciones')
+      }, 1000)
+
+    } catch (error) {
+      console.error('Error guardando cotización:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al guardar la cotización')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   const descargarCotizacionPDF = () => {
     try {
       // Validar que haya datos mínimos
@@ -815,9 +953,9 @@ export default function NuevaCotizacionPage() {
         }
       }
 
-      const sucursalSeleccionada = sucursales.find(s => s.id === sucursal)
-      if (sucursalSeleccionada) {
-        pdf.text(`Sucursal: ${sucursalSeleccionada.nombre}`, 20, yPosition)
+      // Sucursal - ahora guardamos el nombre directamente
+      if (sucursal) {
+        pdf.text(`Sucursal: ${sucursal}`, 20, yPosition)
         yPosition += 5
       }
 
@@ -927,12 +1065,20 @@ export default function NuevaCotizacionPage() {
       <main className="container mx-auto px-6 py-8">
         {/* Barra de botones */}
         <div className="flex justify-end gap-4 mb-6">
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => router.push('/panel/ventas/cotizaciones')}
+            disabled={guardando}
+          >
             Descartar
           </Button>
-          <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
+          <Button 
+            onClick={handleGuardar}
+            disabled={guardando}
+            className="bg-[#D54644] hover:bg-[#B03A38] text-white"
+          >
             <Save className="w-4 h-4 mr-2" />
-            Guardar
+            {guardando ? 'Guardando...' : 'Guardar'}
           </Button>
         </div>
         <div className="mb-8">
@@ -1081,9 +1227,9 @@ export default function NuevaCotizacionPage() {
                       <SelectValue placeholder="Seleccionar sucursal" />
                     </SelectTrigger>
                     <SelectContent>
-                      {sucursales.map((sucursal) => (
-                        <SelectItem key={sucursal.id} value={sucursal.id}>
-                          {sucursal.nombre}
+                      {sucursales.map((suc) => (
+                        <SelectItem key={suc.id} value={suc.nombre}>
+                          {suc.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1366,7 +1512,7 @@ export default function NuevaCotizacionPage() {
                                               <Check
                                                 className={cn(
                                                   "mr-2 h-4 w-4",
-                                                  producto.producto === item.nombre ? "opacity-100" : "opacity-0"
+                                                  producto.producto === `${item.codigo} - ${item.nombre}` ? "opacity-100" : "opacity-0"
                                                 )}
                                               />
                                               <span className="text-xs truncate">
@@ -1390,7 +1536,7 @@ export default function NuevaCotizacionPage() {
                                               <Check
                                                 className={cn(
                                                   "mr-2 h-4 w-4",
-                                                  producto.producto === item.nombre ? "opacity-100" : "opacity-0"
+                                                  producto.producto === `${item.codigo} - ${item.nombre}` ? "opacity-100" : "opacity-0"
                                                 )}
                                               />
                                               <span className="text-xs truncate">

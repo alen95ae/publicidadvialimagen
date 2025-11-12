@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { useBillboards } from "@/hooks/use-billboards"
 import { useTranslations } from "@/hooks/use-translations"
-import { createSlug } from "@/lib/url-utils"
+import { createSlug, getBillboardUrl } from "@/lib/url-utils"
 
 // Dynamic import para el mapa
 const LeafletHybridMap = dynamic(
@@ -36,7 +36,7 @@ const LeafletHybridMap = dynamic(
 
 
 // Componente para mostrar soportes similares de la misma ciudad
-function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboards: any[], currentBillboardId: string }) {
+function SimilarSupportsCarousel({ billboards, currentBillboardId, locale }: { billboards: any[], currentBillboardId: string, locale: 'es' | 'en' }) {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { 
       loop: true,
@@ -76,13 +76,15 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
           {similarBillboards.map((billboard) => (
             <div key={billboard.id} className="flex-[0_0_auto] min-w-[280px] max-w-[280px]">
               <Card className="overflow-hidden">
-                <Link href={`/vallas-publicitarias/${billboard.id}`} className="w-full h-[147px] relative block">
+                <Link href={getBillboardUrl(billboard.name, locale)} className="w-full h-[147px] relative block">
                   <Image
                     src={billboard.images?.[0] || "/placeholder.svg"}
                     alt={billboard.name}
                     width={280}
                     height={147}
                     className="h-full w-full object-cover hover:opacity-90 transition-opacity"
+                    sizes="280px"
+                    loading="lazy"
                   />
                 </Link>
                 <CardContent className="p-4">
@@ -118,12 +120,12 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
                         asChild
                       >
                         {billboard.available ? (
-                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                          <Link href={getBillboardUrl(billboard.name, locale)}>
                             <FileText className="mr-1 h-3 w-3" />
                             Cotizar
                           </Link>
                         ) : (
-                          <Link href={`/vallas-publicitarias/${billboard.id}`}>
+                          <Link href={getBillboardUrl(billboard.name, locale)}>
                             <Eye className="mr-1 h-3 w-3" />
                             Ver más
                           </Link>
@@ -171,7 +173,7 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [shouldRedirect, setShouldRedirect] = useState(false)
   const { billboards, loading } = useBillboards()
-  const { t } = useTranslations()
+  const { t, locale } = useTranslations()
   const router = useRouter()
   
   // Scroll al inicio inmediatamente
@@ -607,7 +609,8 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           </h2>
           <SimilarSupportsCarousel 
             billboards={billboards} 
-            currentBillboardId={billboard.id} 
+            currentBillboardId={billboard.id}
+            locale={locale}
           />
         </div>
       </section>

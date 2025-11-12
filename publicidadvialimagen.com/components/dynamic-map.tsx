@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import { createBillboardIcon } from "./billboard-icon"
@@ -169,10 +170,13 @@ export default function DynamicMap({ billboards, selectedCity, isFullscreen = fa
                     {billboard.images && billboard.images.length > 0 && (
                       <div className="flex-1">
                         <div className="relative w-full" style={{ aspectRatio: '222/147' }}>
-                          <img 
+                          <Image 
                             src={billboard.images[0]} 
                             alt={billboard.name}
-                            className="absolute inset-0 w-full h-full object-cover rounded"
+                            fill
+                            className="object-cover rounded"
+                            sizes="125px"
+                            loading="lazy"
                           />
                         </div>
                       </div>

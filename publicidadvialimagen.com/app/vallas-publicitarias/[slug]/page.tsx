@@ -87,7 +87,14 @@ function SimilarSupportsCarousel({ billboards, currentBillboardId }: { billboard
                 </Link>
                 <CardContent className="p-4">
                   <div className="space-y-3">
-                    <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-base text-balance flex-1">{billboard.name}</h3>
+                      {billboard.code && (
+                        <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300 font-mono shrink-0">
+                          {billboard.code}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-end justify-between gap-2">
                       <div className="flex flex-col gap-2 flex-1">
                         <div className="flex items-center gap-2">
@@ -404,17 +411,24 @@ export default function BillboardDetailPage({ params }: BillboardDetailPageProps
           {/* Header */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <Badge className={`${
-                displayData.status === 'Disponible' 
-                  ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-100 hover:text-green-800" 
-                  : displayData.status === 'Reservado'
-                  ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                  : displayData.status === 'Ocupado'
-                  ? "bg-red-100 text-red-800 border-red-200"
-                  : "bg-gray-100 text-gray-800 border-gray-200"
-              } transition-none pointer-events-none`}>
-                {displayData.status || 'No disponible'}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge className={`${
+                  displayData.status === 'Disponible' 
+                    ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-100 hover:text-green-800" 
+                    : displayData.status === 'Reservado'
+                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                    : displayData.status === 'Ocupado'
+                    ? "bg-red-100 text-red-800 border-red-200"
+                    : "bg-gray-100 text-gray-800 border-gray-200"
+                } transition-none pointer-events-none`}>
+                  {displayData.status || 'No disponible'}
+                </Badge>
+                {displayData.code && (
+                  <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300 font-mono">
+                    {displayData.code}
+                  </Badge>
+                )}
+              </div>
             </div>
             
             <h1 className="text-3xl font-bold mb-2">{displayData.name}</h1>

@@ -942,7 +942,14 @@ export default function VallasPublicitariasPage() {
                   </Link>
                   <CardContent className="p-4">
                     <div className="space-y-3">
-                      <h3 className="font-semibold text-base text-balance">{billboard.name}</h3>
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-base text-balance flex-1">{billboard.name}</h3>
+                        {billboard.code && (
+                          <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300 font-mono shrink-0">
+                            {billboard.code}
+                          </Badge>
+                        )}
+                      </div>
                       <div className="flex items-end justify-between gap-2">
                         <div className="flex flex-col gap-2 flex-1">
                           <div className="flex items-center gap-2">

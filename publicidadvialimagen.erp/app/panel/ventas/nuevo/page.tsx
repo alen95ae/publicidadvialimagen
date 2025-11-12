@@ -156,6 +156,103 @@ export default function NuevaCotizacionPage() {
     return subtotal + comisionTotal
   }
 
+  // Función para calcular el precio ajustado según variantes de mano de obra
+  const calcularPrecioConVariantes = async (precioBase: number, item: any, variantes: Record<string, string>): Promise<number> => {
+    // Si no hay variantes, retornar el precio base
+    if (!variantes || Object.keys(variantes).length === 0) {
+      return precioBase
+    }
+
+    // Si no hay receta, retornar el precio base
+    if (!item.receta || !Array.isArray(item.receta) || item.receta.length === 0) {
+      return precioBase
+    }
+
+    try {
+      // Cargar recursos para obtener información de categoría
+      const recursosRes = await fetch('/api/recursos')
+      if (!recursosRes.ok) {
+        return precioBase
+      }
+      const recursosData = await recursosRes.json()
+      const recursos = recursosData.data || []
+
+      // Crear un mapa de recursos por ID para acceso rápido
+      const recursosMap = new Map(recursos.map((r: any) => [r.id, r]))
+
+      let precioAjustado = precioBase
+      let precioManoObraTotal = 0
+
+      // Recorrer la receta para encontrar recursos de mano de obra
+      for (const itemReceta of item.receta) {
+        const recursoId = itemReceta.recurso_id || itemReceta.recursoId
+        if (!recursoId) continue
+
+        const recurso = recursosMap.get(recursoId)
+        if (!recurso) continue
+
+        // Verificar si el recurso es de categoría "Mano de Obra"
+        const categoria = (recurso.categoria || '').toLowerCase().trim()
+        if (categoria !== 'mano de obra') {
+          continue
+        }
+
+        // Buscar si hay una variante que corresponda a este recurso
+        // Las variantes pueden tener el nombre del recurso o un nombre relacionado
+        const nombreRecurso = (recurso.nombre || '').toLowerCase()
+        const codigoRecurso = (recurso.codigo || '').toLowerCase()
+
+        // Buscar variante que coincida con el nombre o código del recurso
+        let varianteEncontrada: { nombre: string; valor: string } | null = null
+        for (const [nombreVariante, valorVariante] of Object.entries(variantes)) {
+          const nombreVarianteLower = nombreVariante.toLowerCase()
+          // Verificar si el nombre de la variante contiene el nombre del recurso o viceversa
+          if (nombreVarianteLower.includes(nombreRecurso) || 
+              nombreRecurso.includes(nombreVarianteLower) ||
+              nombreVarianteLower.includes(codigoRecurso) ||
+              codigoRecurso.includes(nombreVarianteLower)) {
+            varianteEncontrada = { nombre: nombreVariante, valor: valorVariante as string }
+            break
+          }
+        }
+
+        // Si no se encontró variante por nombre, intentar buscar por el nombre del recurso en la receta
+        if (!varianteEncontrada && itemReceta.recurso_nombre) {
+          const recursoNombreReceta = (itemReceta.recurso_nombre || '').toLowerCase()
+          for (const [nombreVariante, valorVariante] of Object.entries(variantes)) {
+            const nombreVarianteLower = nombreVariante.toLowerCase()
+            if (nombreVarianteLower.includes(recursoNombreReceta) || 
+                recursoNombreReceta.includes(nombreVarianteLower)) {
+              varianteEncontrada = { nombre: nombreVariante, valor: valorVariante as string }
+              break
+            }
+          }
+        }
+
+        // Si se encontró una variante y su valor es "no", restar el precio del recurso
+        if (varianteEncontrada) {
+          const valorVariante = varianteEncontrada.valor.toLowerCase().trim()
+          if (valorVariante === 'no') {
+            // Calcular el precio del recurso (cantidad * coste)
+            const cantidadReceta = parseFloat(itemReceta.cantidad) || 0
+            const costeRecurso = parseFloat(recurso.coste) || 0
+            const precioRecurso = cantidadReceta * costeRecurso
+            precioManoObraTotal += precioRecurso
+          }
+        }
+      }
+
+      // Restar el total de manos de obra con valor "no" del precio base
+      precioAjustado = precioBase - precioManoObraTotal
+
+      // Asegurar que el precio no sea negativo
+      return Math.max(0, precioAjustado)
+    } catch (error) {
+      console.error('Error calculando precio con variantes:', error)
+      return precioBase
+    }
+  }
+
   const agregarProducto = () => {
     const nuevoProducto: ProductoItem = {
       id: Date.now().toString(),
@@ -366,6 +463,7 @@ export default function NuevaCotizacionPage() {
           precio: p.precio_venta || 0,
           unidad: p.unidad_medida || 'm²',
           variantes: p.variantes || [],
+          receta: p.receta || [],
           tipo: 'producto'
         })) || []
 
@@ -519,12 +617,14 @@ export default function NuevaCotizacionPage() {
     }
     
     // Si no tiene variantes ni es soporte, continuar normalmente
-    aplicarSeleccionProducto(id, item, {}, '', '', undefined)
+    aplicarSeleccionProducto(id, item, {}, '', '', undefined).catch(err => {
+      console.error('Error aplicando selección de producto:', err)
+    })
     setOpenCombobox(prev => ({ ...prev, [id]: false }))
     setFilteredItems(prev => ({ ...prev, [id]: [] }))
   }
   
-  const aplicarSeleccionProducto = (id: string, item: any, variantes: Record<string, string>, fechaInicio: string, fechaFin: string, mesesAlquiler?: number) => {
+  const aplicarSeleccionProducto = async (id: string, item: any, variantes: Record<string, string>, fechaInicio: string, fechaFin: string, mesesAlquiler?: number) => {
     const esSoporte = item.tipo === 'soporte'
     
     // Generar descripción con variantes o fechas
@@ -565,6 +665,14 @@ export default function NuevaCotizacionPage() {
       descripcionFinal = `[${item.codigo}] ${item.nombre} - ${variantesTexto}`
     }
     
+    // Calcular precio base
+    let precioFinal = item.precio || 0
+    
+    // Si hay variantes y no es soporte, calcular precio ajustado según variantes de mano de obra
+    if (!esSoporte && Object.keys(variantes).length > 0 && item.receta) {
+      precioFinal = await calcularPrecioConVariantes(precioFinal, item, variantes)
+    }
+    
     // Crear un objeto con todas las actualizaciones
     setProductosList(productosList.map(itemLista => {
       if (itemLista.id === id && itemLista.tipo === 'producto') {
@@ -580,7 +688,7 @@ export default function NuevaCotizacionPage() {
           ...producto,
           producto: item.nombre,
           descripcion: descripcionFinal,
-          precio: item.precio || 0,
+          precio: precioFinal,
           udm: esSoporte ? 'mes' : (item.unidad || 'm²'),
           esSoporte: esSoporte,
           dimensionesBloqueadas: esSoporte,
@@ -607,8 +715,8 @@ export default function NuevaCotizacionPage() {
     }))
   }
   
-  const confirmarVariantes = () => {
-    aplicarSeleccionProducto(
+  const confirmarVariantes = async () => {
+    await aplicarSeleccionProducto(
       modalVariantes.productoId,
       modalVariantes.itemData,
       modalVariantes.variantesSeleccionadas,
@@ -619,8 +727,8 @@ export default function NuevaCotizacionPage() {
     setModalVariantes({ open: false, productoId: '', itemData: null, variantesSeleccionadas: {} })
   }
   
-  const confirmarFechasSoporte = () => {
-    aplicarSeleccionProducto(
+  const confirmarFechasSoporte = async () => {
+    await aplicarSeleccionProducto(
       modalFechasSoporte.productoId,
       modalFechasSoporte.itemData,
       {},

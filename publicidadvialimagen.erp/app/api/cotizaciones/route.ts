@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { 
   getCotizaciones, 
   createCotizacion, 
-  createMultipleLineasCotizacion, 
-  generarSiguienteCodigoCotizacion,
-  CotizacionAirtable,
-  LineaCotizacionAirtable
+  generarSiguienteCodigoCotizacion
 } from '@/lib/airtableCotizaciones'
 
 export async function GET(request: NextRequest) {
@@ -73,7 +70,7 @@ export async function POST(request: NextRequest) {
       console.log('🔢 Código generado:', codigo)
     }
 
-    // Extraer líneas del body
+    // Extraer líneas del body (ya vienen en formato ItemLista)
     const lineas = body.lineas || []
     delete body.lineas
 
@@ -83,25 +80,25 @@ export async function POST(request: NextRequest) {
     let totalIT = 0
 
     lineas.forEach((linea: any) => {
-      const lineaSubtotal = linea.subtotal_linea || 0
-      subtotal += lineaSubtotal
+      // Si es producto, tiene subtotal_linea
+      if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
+        const lineaSubtotal = linea.subtotal_linea || 0
+        subtotal += lineaSubtotal
 
-      // Calcular IVA e IT basado en los flags de cada línea
-      if (linea.con_iva) {
-        totalIVA += lineaSubtotal * 0.13
-      }
-      if (linea.con_it) {
-        totalIT += lineaSubtotal * 0.03
+        if (linea.con_iva) {
+          totalIVA += lineaSubtotal * 0.13
+        }
+        if (linea.con_it) {
+          totalIT += lineaSubtotal * 0.03
+        }
       }
     })
 
     const totalFinal = subtotal + totalIVA + totalIT
 
-    // Crear la cotización (encabezado)
+    // Crear la cotización con líneas en JSON
     const nuevaCotizacion = await createCotizacion({
       codigo,
-      // fecha_creacion y fecha_actualizacion son campos computados en Airtable
-      // Airtable los genera automáticamente con Created time y Last modified time
       cliente: body.cliente || '',
       vendedor: body.vendedor || '',
       sucursal: body.sucursal || 'La Paz',
@@ -112,24 +109,17 @@ export async function POST(request: NextRequest) {
       total_final: totalFinal,
       notas_generales: body.notas_generales || '',
       terminos_condiciones: body.terminos_condiciones || '',
-      vigencia_dias: body.vigencia_dias || 30
+      vigencia_dias: body.vigencia_dias || 30,
+      lineas_json: lineas // Guardar directamente como JSON
     })
 
     console.log('✅ Cotización creada correctamente:', nuevaCotizacion.id)
-
-    // Crear las líneas de cotización si existen
-    let lineasCreadas: LineaCotizacionAirtable[] = []
-    if (lineas.length > 0) {
-      console.log(`📝 Creando ${lineas.length} líneas de cotización...`)
-      lineasCreadas = await createMultipleLineasCotizacion(lineas, nuevaCotizacion.id)
-      console.log(`✅ ${lineasCreadas.length} líneas creadas correctamente`)
-    }
 
     return NextResponse.json({
       success: true,
       data: {
         cotizacion: nuevaCotizacion,
-        lineas: lineasCreadas
+        lineas: nuevaCotizacion.lineas_json || []
       }
     })
 

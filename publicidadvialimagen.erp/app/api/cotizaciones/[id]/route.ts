@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { 
   getCotizacionById, 
   updateCotizacion, 
-  deleteCotizacion,
-  getLineasByCotizacionId,
-  createMultipleLineasCotizacion,
-  deleteLineaCotizacion
+  deleteCotizacion
 } from '@/lib/airtableCotizaciones'
 
 export async function GET(
@@ -16,15 +13,12 @@ export async function GET(
     const id = params.id
     console.log('🔍 Obteniendo cotización con ID:', id)
 
-    // Obtener la cotización
-    console.log('📋 Buscando cotización en Airtable...')
+    // Obtener la cotización (ya incluye líneas en JSON)
     const cotizacion = await getCotizacionById(id)
-    console.log('✅ Cotización encontrada:', cotizacion)
+    console.log('✅ Cotización encontrada:', cotizacion.codigo)
 
-    // Obtener las líneas de la cotización
-    console.log('📝 Buscando líneas de cotización...')
-    const lineas = await getLineasByCotizacionId(id)
-    console.log('✅ Líneas obtenidas:', lineas.length)
+    // Las líneas ya vienen en cotizacion.lineas_json
+    const lineas = cotizacion.lineas_json || []
 
     return NextResponse.json({
       success: true,
@@ -35,9 +29,8 @@ export async function GET(
     })
 
   } catch (error) {
-    console.error('❌ Error completo obteniendo cotización:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido al obtener cotización'
-    console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'No stack')
+    console.error('❌ Error obteniendo cotización:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error al obtener cotización'
     
     return NextResponse.json(
       { success: false, error: errorMessage },
@@ -59,24 +52,24 @@ export async function PATCH(
     const lineas = body.lineas
     delete body.lineas
 
-    // NO actualizar fecha_actualizacion - es un campo computado en Airtable
-    // Se actualiza automáticamente
-
-    // Si vienen líneas, eliminar las antiguas y crear las nuevas
+    // Calcular totales si vienen líneas
     if (lineas && lineas.length > 0) {
       let subtotal = 0
       let totalIVA = 0
       let totalIT = 0
 
       lineas.forEach((linea: any) => {
-        const lineaSubtotal = linea.subtotal_linea || 0
-        subtotal += lineaSubtotal
+        // Solo productos tienen subtotal
+        if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
+          const lineaSubtotal = linea.subtotal_linea || 0
+          subtotal += lineaSubtotal
 
-        if (linea.con_iva) {
-          totalIVA += lineaSubtotal * 0.13
-        }
-        if (linea.con_it) {
-          totalIT += lineaSubtotal * 0.03
+          if (linea.con_iva) {
+            totalIVA += lineaSubtotal * 0.13
+          }
+          if (linea.con_it) {
+            totalIT += lineaSubtotal * 0.03
+          }
         }
       })
 
@@ -84,20 +77,10 @@ export async function PATCH(
       body.total_iva = totalIVA
       body.total_it = totalIT
       body.total_final = subtotal + totalIVA + totalIT
-
-      // Eliminar líneas antiguas
-      console.log('🗑️ Eliminando líneas antiguas...')
-      const lineasAntiguas = await getLineasByCotizacionId(id)
-      for (const linea of lineasAntiguas) {
-        await deleteLineaCotizacion(linea.id)
-      }
-
-      // Crear nuevas líneas
-      console.log(`📝 Creando ${lineas.length} nuevas líneas...`)
-      await createMultipleLineasCotizacion(lineas, id)
+      body.lineas_json = lineas // Guardar líneas como JSON
     }
 
-    // Actualizar la cotización
+    // Actualizar la cotización (todo en una sola operación)
     const cotizacionActualizada = await updateCotizacion(id, body)
 
     console.log('✅ Cotización actualizada:', cotizacionActualizada.codigo)
@@ -125,16 +108,7 @@ export async function DELETE(
     const id = params.id
     console.log('🗑️ Eliminando cotización:', id)
 
-    // Obtener las líneas antes de eliminar para eliminarlas también
-    const lineas = await getLineasByCotizacionId(id)
-
-    // Eliminar todas las líneas primero
-    console.log(`🗑️ Eliminando ${lineas.length} líneas...`)
-    for (const linea of lineas) {
-      await deleteLineaCotizacion(linea.id)
-    }
-
-    // Eliminar la cotización
+    // Eliminar la cotización (las líneas están en JSON, se eliminan automáticamente)
     await deleteCotizacion(id)
 
     console.log('✅ Cotización eliminada correctamente')

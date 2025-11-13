@@ -23,8 +23,8 @@ export interface CotizacionAirtable {
   notas_generales?: string
   terminos_condiciones?: string
   vigencia_dias?: number
-  lineas?: string[] // IDs de las líneas relacionadas
-  cantidad_items?: number // Rollup desde Airtable
+  lineas_json?: any[] // Array JSON con todas las líneas (productos, notas, secciones)
+  cantidad_items?: number
 }
 
 export interface CotizacionAirtableFields {
@@ -42,7 +42,7 @@ export interface CotizacionAirtableFields {
   'Notas Generales'?: string
   'Términos y Condiciones'?: string
   'Vigencia (días)'?: number
-  'Líneas'?: string[] // Campo de vinculación
+  'Líneas de Cotización'?: string // Campo Long text con JSON
 }
 
 // ============================================
@@ -108,6 +108,17 @@ export function airtableToCotizacion(record: any): CotizacionAirtable {
   // Usar Fecha Actualización de Airtable (campo computado) para fecha_actualizacion
   const fechaActualizacion = fields['Fecha Actualización'] || record.createdTime || new Date().toISOString()
   
+  // Parsear JSON de líneas
+  let lineasJson: any[] = []
+  if (fields['Líneas de Cotización']) {
+    try {
+      lineasJson = JSON.parse(fields['Líneas de Cotización'])
+    } catch (error) {
+      console.error('Error parseando líneas JSON:', error)
+      lineasJson = []
+    }
+  }
+  
   return {
     id: record.id,
     codigo: fields['Código'] || '',
@@ -124,7 +135,7 @@ export function airtableToCotizacion(record: any): CotizacionAirtable {
     notas_generales: fields['Notas Generales'] || '',
     terminos_condiciones: fields['Términos y Condiciones'] || '',
     vigencia_dias: fields['Vigencia (días)'] || 30,
-    lineas: fields['Líneas'] || [],
+    lineas_json: lineasJson,
     cantidad_items: fields['Cantidad de Items'] || 0
   }
 }
@@ -145,6 +156,11 @@ export function cotizacionToAirtable(cotizacion: Partial<CotizacionAirtable>): P
   // NO enviar Fecha Creación - Airtable usa "Created time" automático
   // NO enviar Fecha Actualización - Airtable usa "Last modified time" automático
   // Estos campos son computados y no se pueden escribir
+
+  // Guardar líneas como JSON en el campo "Líneas de Cotización"
+  if (cotizacion.lineas_json !== undefined) {
+    fields['Líneas de Cotización'] = JSON.stringify(cotizacion.lineas_json)
+  }
 
   // Campos opcionales
   if (cotizacion.notas_generales !== undefined) {

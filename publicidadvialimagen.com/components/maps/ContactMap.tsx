@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { correctCoordsForOSM } from "@/lib/mapUtils";
 
 export default function ContactMap({
   lat,
@@ -78,8 +79,10 @@ export default function ContactMap({
         (window as any)[`mapInstance_${mapId}`] = null;
       }
       
+      // Aplicar corrección para OSM (capa por defecto)
+      const correctedCoords = correctCoordsForOSM(lat, lng)
       map = L.map(mapId, {
-        center: [lat, lng],
+        center: [correctedCoords.lat, correctedCoords.lng],
         zoom: 15,
         zoomControl: true,
         scrollWheelZoom: true,
@@ -102,7 +105,7 @@ export default function ContactMap({
         { maxZoom: 19, attribution: "© Esri" }
       );
 
-      // capa por defecto
+      // capa por defecto (OSM)
       osm.addTo(map);
 
       // selector de capas
@@ -185,8 +188,20 @@ export default function ContactMap({
         iconAnchor: [16, 16],
       });
 
-      // marcador
-      const marker = L.marker([lat, lng], {
+      // Detectar capa activa y ajustar coordenadas
+      let isOSMActive = true // OSM es la capa por defecto
+      
+      // Escuchar cambios de capa
+      map.on('baselayerchange', (e: any) => {
+        isOSMActive = e.name === "📖 OSM"
+        const displayCoords = isOSMActive ? correctCoordsForOSM(lat, lng) : { lat, lng }
+        marker.setLatLng([displayCoords.lat, displayCoords.lng])
+        map.setView([displayCoords.lat, displayCoords.lng], map.getZoom())
+      })
+
+      // marcador (con corrección para OSM inicial)
+      const displayCoords = isOSMActive ? correctCoordsForOSM(lat, lng) : { lat, lng }
+      const marker = L.marker([displayCoords.lat, displayCoords.lng], {
         icon: iconBuilding,
       }).bindPopup(title);
       marker.addTo(map);

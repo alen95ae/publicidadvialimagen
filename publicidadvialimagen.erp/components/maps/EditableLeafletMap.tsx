@@ -110,6 +110,7 @@ export default function EditableLeafletMap({ lat, lng, onChange, height = 400 }:
         (window as any)[`mapInstance_${mapId}`] = null;
       }
       
+      // NO aplicar corrección - usar coordenadas exactas de la base de datos
       const newMap = L.map(mapId, {
         center: [lat, lng],
         zoom: 16,
@@ -146,7 +147,7 @@ export default function EditableLeafletMap({ lat, lng, onChange, height = 400 }:
         }
       );
 
-      // Capa por defecto
+      // Capa por defecto (OSM)
       osm.addTo(newMap);
 
       // Selector de capas (posicionado en topright con margen inferior)
@@ -227,7 +228,17 @@ export default function EditableLeafletMap({ lat, lng, onChange, height = 400 }:
         iconAnchor: [16, 32],
       });
 
-      // Marcador editable
+      // Detectar capa activa
+      let isOSMActive = true // OSM es la capa por defecto
+      
+      // Escuchar cambios de capa - mantener el marcador en el mismo lugar
+      newMap.on('baselayerchange', (e: any) => {
+        isOSMActive = e.name === "📖 OSM"
+        // No mover el marcador ni el mapa cuando cambia la capa
+        // Las coordenadas son las mismas para todas las capas
+      })
+
+      // Marcador editable (sin corrección - coordenadas exactas)
       const newMarker = L.marker([lat, lng], {
         icon: iconBillboard,
         draggable: true
@@ -237,17 +248,29 @@ export default function EditableLeafletMap({ lat, lng, onChange, height = 400 }:
 
       // Evento de click en el mapa
       newMap.on('click', (e) => {
-        const { lat: newLat, lng: newLng } = e.latlng;
-        newMarker.setLatLng([newLat, newLng]);
-        onChangeRef.current({ lat: newLat, lng: newLng });
-        console.log('🎯 Marker moved by click:', { lat: newLat, lng: newLng });
+        const { lat: clickedLat, lng: clickedLng } = e.latlng;
+        // IMPORTANTE: Guardar exactamente donde el usuario hizo click
+        // NO revertir ninguna corrección - las coordenadas son las que el usuario ve
+        newMarker.setLatLng([clickedLat, clickedLng]);
+        onChangeRef.current({ lat: clickedLat, lng: clickedLng });
+        console.log('🎯 Marker moved by click:', { 
+          lat: clickedLat, 
+          lng: clickedLng,
+          isOSM: isOSMActive 
+        });
       });
 
       // Evento de drag del marcador
       newMarker.on('dragend', (e) => {
-        const { lat: newLat, lng: newLng } = e.target.getLatLng();
-        onChangeRef.current({ lat: newLat, lng: newLng });
-        console.log('🎯 Marker drag ended:', { lat: newLat, lng: newLng });
+        const { lat: draggedLat, lng: draggedLng } = e.target.getLatLng();
+        // IMPORTANTE: Guardar exactamente donde quedó el marcador
+        // NO revertir ninguna corrección - las coordenadas son las que el usuario ve
+        onChangeRef.current({ lat: draggedLat, lng: draggedLng });
+        console.log('🎯 Marker drag ended:', { 
+          lat: draggedLat, 
+          lng: draggedLng,
+          isOSM: isOSMActive 
+        });
       });
 
       // Evento de zoom para redimensionar correctamente
@@ -272,6 +295,8 @@ export default function EditableLeafletMap({ lat, lng, onChange, height = 400 }:
   // Actualizar posición del marcador cuando cambian las props
   useEffect(() => {
     if (marker && map) {
+      // Detectar capa activa
+      // NO aplicar corrección - usar coordenadas exactas de la base de datos
       const currentPos = marker.getLatLng();
       if (Math.abs(currentPos.lat - lat) > 0.000001 || Math.abs(currentPos.lng - lng) > 0.000001) {
         console.log('📍 Updating marker position:', { lat, lng });
@@ -279,7 +304,7 @@ export default function EditableLeafletMap({ lat, lng, onChange, height = 400 }:
         map.setView([lat, lng], map.getZoom());
       }
     }
-  }, [lat, lng]);
+  }, [lat, lng, marker, map]);
 
   return (
     <div className={`relative ${isFullscreen ? 'fixed inset-0 z-[9999] bg-white' : ''}`}>

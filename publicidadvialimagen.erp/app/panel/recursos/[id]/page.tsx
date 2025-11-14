@@ -114,6 +114,9 @@ export default function RecursoDetailPage() {
       if (response.ok && result.success !== false && result.data) {
         const data = result.data || result
         console.log('✅ Recurso encontrado:', data)
+        console.log('📦 [FRONTEND] Campo variantes del recurso:', data.variantes)
+        console.log('📦 [FRONTEND] Tipo de variantes:', typeof data.variantes)
+        
         setRecurso(data)
         // Redondear coste a 2 decimales
         const costeRedondeado = data.coste ? Math.round(data.coste * 100) / 100 : 0
@@ -131,20 +134,59 @@ export default function RecursoDetailPage() {
         // Cargar variantes desde el recurso
         let variantesData = []
         if (data.variantes) {
+          console.log('🔍 [FRONTEND] Procesando variantes...')
+          console.log('🔍 [FRONTEND] Tipo de data.variantes:', typeof data.variantes)
+          console.log('🔍 [FRONTEND] data.variantes completo:', JSON.stringify(data.variantes, null, 2))
+          
           if (typeof data.variantes === 'string') {
+            console.log('🔍 [FRONTEND] Variantes es un string, parseando...')
             try {
               const parsed = JSON.parse(data.variantes)
-              variantesData = Array.isArray(parsed) ? parsed : (parsed.variantes || [])
+              console.log('🔍 [FRONTEND] Parsed result:', parsed)
+              if (Array.isArray(parsed)) {
+                variantesData = parsed
+              } else if (parsed && typeof parsed === 'object') {
+                // Si es un objeto con propiedad variantes
+                if (parsed.variantes && Array.isArray(parsed.variantes)) {
+                  variantesData = parsed.variantes
+                } else {
+                  // Si el objeto mismo contiene las variantes directamente
+                  variantesData = []
+                }
+              }
+              console.log('✅ [FRONTEND] Variantes parseadas:', variantesData)
             } catch (e) {
-              console.error('Error parseando variantes:', e)
+              console.error('❌ [FRONTEND] Error parseando variantes:', e)
               variantesData = []
             }
           } else if (Array.isArray(data.variantes)) {
+            console.log('✅ [FRONTEND] Variantes ya es un array')
             variantesData = data.variantes
-          } else if (data.variantes.variantes && Array.isArray(data.variantes.variantes)) {
-            variantesData = data.variantes.variantes
+          } else if (data.variantes && typeof data.variantes === 'object') {
+            // Si es un objeto, intentar extraer el array de variantes
+            if (data.variantes.variantes && Array.isArray(data.variantes.variantes)) {
+              console.log('✅ [FRONTEND] Variantes está en objeto.variantes')
+              variantesData = data.variantes.variantes
+            } else {
+              console.log('⚠️ [FRONTEND] Objeto variantes no tiene estructura esperada')
+              variantesData = []
+            }
           }
+        } else {
+          console.log('⚠️ [FRONTEND] No hay variantes en el recurso')
         }
+        console.log('📦 [FRONTEND] Variantes finales a setear:', JSON.stringify(variantesData, null, 2))
+        console.log('📦 [FRONTEND] Cantidad de variantes:', variantesData.length)
+        // Verificar cada variante
+        variantesData.forEach((v, idx) => {
+          console.log(`📦 [FRONTEND] Variante ${idx}:`, {
+            id: v.id,
+            nombre: v.nombre,
+            modo: v.modo,
+            posibilidades: v.posibilidades,
+            cantidadPosibilidades: v.posibilidades?.length || 0
+          })
+        })
         setVariantes(variantesData)
         
         // Cargar proveedores desde el recurso
@@ -503,6 +545,23 @@ export default function RecursoDetailPage() {
 
   const handleRemovePosibilidad = (posibilidad: string) => {
     setVariantePosibilidades(prev => prev.filter(p => p !== posibilidad))
+  }
+
+  const handleEditColor = (posibilidad: string) => {
+    // Extraer nombre y color hex del formato "nombre:#hex"
+    if (varianteModo === "color" && posibilidad.includes(":")) {
+      const [nombre, colorHex] = posibilidad.split(":")
+      if (colorHex && /^#[0-9A-F]{6}$/i.test(colorHex)) {
+        // Establecer el nombre en el input
+        setVarianteInputValue(nombre)
+        // Actualizar el color picker con el color existente
+        updateColorFromHex(colorHex)
+        // Remover la posibilidad actual (se agregará de nuevo con el color editado)
+        setVariantePosibilidades(prev => prev.filter(p => p !== posibilidad))
+        // Abrir el color picker
+        setOpenColorPicker(true)
+      }
+    }
   }
 
   const handleVarianteInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1196,20 +1255,25 @@ export default function RecursoDetailPage() {
                           key={index}
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm ${
                             isColor 
-                              ? "bg-white border border-gray-300" 
+                              ? "bg-white border border-gray-300 cursor-pointer hover:border-[#D54644] hover:shadow-sm transition-all" 
                               : "bg-red-100 text-[#D54644]"
                           }`}
+                          onClick={isColor ? () => handleEditColor(posibilidad) : undefined}
+                          title={isColor ? "Haz clic para editar el color" : undefined}
                         >
                           {isColor && colorHex && (
                             <div 
-                              className="w-4 h-4 rounded-full border border-gray-300"
+                              className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
                               style={{ backgroundColor: colorHex }}
                             />
                           )}
                           <span>{nombre}</span>
                           <button
                             type="button"
-                            onClick={() => handleRemovePosibilidad(posibilidad)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleRemovePosibilidad(posibilidad)
+                            }}
                             className="ml-1 hover:bg-gray-200 rounded-full p-0.5 transition-colors"
                           >
                             <X className="h-3 w-3" />

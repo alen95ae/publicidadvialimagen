@@ -1,38 +1,37 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { findUserByEmail, signSession } from "@/lib/auth";
+import { findUserByEmail, signSession, updateUserLastAccess } from "@/lib/auth";
 import { createAuthCookie } from "@/lib/auth/cookies";
-import { airtableUpdate } from "@/lib/airtable-rest";
-
-const USERS_TABLE = process.env.AIRTABLE_TABLE_USERS || "Users";
 
 export async function POST(req: Request) {
   try {
     const { email, password, rememberMe } = await req.json();
-    console.log("Login attempt for email:", email, "rememberMe:", rememberMe);
+    console.log('🔐 [Login ERP] Intento de login para:', email, "rememberMe:", rememberMe);
     
     if (!email || !password) {
       return NextResponse.json({ error: "Email y contraseña son obligatorios" }, { status: 400 });
     }
 
     const user = await findUserByEmail(email);
-    console.log("User found:", user ? "Yes" : "No");
-    console.log("User has password hash:", user?.fields?.PasswordHash ? "Yes" : "No");
+    console.log('👤 [Login ERP] Usuario encontrado:', user ? 'Sí' : 'No');
+    console.log('🔑 [Login ERP] Tiene password hash:', user?.fields?.PasswordHash ? 'Sí' : 'No');
+    console.log('📋 [Login ERP] Campos del usuario:', user?.fields ? Object.keys(user.fields) : 'N/A');
     
     if (!user?.fields?.PasswordHash) {
-      console.log("No user or password hash found");
+      console.log('❌ [Login ERP] Credenciales inválidas: usuario no encontrado o sin password');
       return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
     }
 
     const ok = await bcrypt.compare(password, user.fields.PasswordHash);
-    console.log("Password comparison result:", ok);
-    if (!ok) return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
+    console.log('🔐 [Login ERP] Comparación de contraseña:', ok ? 'Correcta' : 'Incorrecta');
+    if (!ok) {
+      console.log('❌ [Login ERP] Credenciales inválidas: contraseña incorrecta');
+      return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
+    }
 
-    // Actualizar último acceso
+    // Actualizar último acceso en Supabase
     try {
-      await airtableUpdate(USERS_TABLE, user.id, {
-        UltimoAcceso: new Date().toISOString(),
-      });
+      await updateUserLastAccess(user.id);
     } catch (error) {
       console.error("Error updating last access:", error);
       // No fallar el login si falla la actualización del último acceso

@@ -497,7 +497,7 @@ export default function ProductoDetailPage() {
         unidad_medida: formData.unidad_medida,
         coste: parseFloat(formData.coste) || 0,
         precio_venta: parseFloat(formData.precio_venta) || 0,
-        cantidad: parseInt(formData.cantidad) || 0,
+        // cantidad no se guarda en Supabase, se calcula desde receta
         mostrar_en_web: formData.mostrar_en_web,
         // Limpiar las variantes antes de guardar (remover recurso_id y recurso_nombre que son solo para tracking)
         variantes: variantes.map(v => {
@@ -979,7 +979,7 @@ export default function ProductoDetailPage() {
         unidad_medida: formData.unidad_medida,
         coste: costValue,
         precio_venta: parseFloat(formData.precio_venta) || 0,
-        cantidad: parseInt(formData.cantidad) || 0,
+        // cantidad no se guarda en Supabase, se calcula desde receta
         mostrar_en_web: formData.mostrar_en_web
       }
 
@@ -1184,7 +1184,7 @@ export default function ProductoDetailPage() {
         unidad_medida: formData.unidad_medida,
         coste: parseFloat(formData.coste) || 0,
         precio_venta: priceValue,
-        cantidad: parseInt(formData.cantidad) || 0,
+        // cantidad no se guarda en Supabase, se calcula desde receta
         mostrar_en_web: formData.mostrar_en_web
       }
 

@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server"
-import { airtable } from "@/lib/airtable"
-import { buildPayload, rowToSupport } from "../helpers"
+import { getSoporteById, updateSoporte, deleteSoporte } from "@/lib/supabaseSoportes"
+import { buildSupabasePayload, rowToSupport } from "../helpers"
 
 export async function GET(_:Request,{ params }:{ params:Promise<{id:string}> }) {
   try{
     const { id } = await params
-    const response = await airtable("Soportes").select({
-      filterByFormula: `RECORD_ID() = '${id}'`
-    }).all()
+    const record = await getSoporteById(id)
     
-    if (!response || response.length === 0) {
+    if (!record) {
       return NextResponse.json({ error:"Soporte no encontrado" }, { status:404 })
     }
     
-    const record = response[0]
-    return NextResponse.json(rowToSupport({ id: record.id, ...record.fields }))
+    // getSoporteById devuelve un Soporte directamente, no con .fields
+    return NextResponse.json(rowToSupport({ id: record.id, ...record }))
   }catch(e){
     console.error('GET soporte exception:', e)
     return NextResponse.json({ error:"Error interno del servidor" }, { status:500 })
@@ -25,6 +23,7 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
   try{
     const { id } = await params
     const body = await req.json()
+    console.log('📝 PUT /api/soportes/[id] - ID recibido:', id, 'tipo:', typeof id)
     console.log('📝 PUT /api/soportes/[id] - Recibido body:', JSON.stringify(body, null, 2))
     console.log('🔍 Google Maps Link en el body:', body.googleMapsLink)
     
@@ -33,68 +32,140 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
       return NextResponse.json({ error:"Código y título son requeridos" }, { status:400 })
     }
     
-    const response = await airtable("Soportes").select({
-      filterByFormula: `RECORD_ID() = '${id}'`
-    }).all()
+    // Convertir ID a número si es necesario (Supabase usa number para id)
+    const soporteId = isNaN(Number(id)) ? id : Number(id)
+    console.log('🔢 ID convertido:', soporteId, 'tipo:', typeof soporteId)
     
-    if (!response || response.length === 0) {
+    const existing = await getSoporteById(String(soporteId))
+    
+    if (!existing) {
+      console.error('❌ Soporte no encontrado con ID:', soporteId)
       return NextResponse.json({ error:"Soporte no encontrado" }, { status:404 })
     }
     
-    const existing = response[0]
-    console.log('📋 Registro existente encontrado:', existing.id)
+    console.log('📋 Registro existente encontrado:', existing.id, 'tipo ID:', typeof existing.id)
     
-    const payload = buildPayload(body, existing.fields)
-    console.log('📤 Payload a enviar a Airtable:', JSON.stringify(payload, null, 2))
-    console.log('🔗 Google Maps Link en payload:', payload['Enlace Google Maps'])
+    // getSoporteById devuelve un Soporte directamente, no con .fields
+    // Usar buildSupabasePayload para convertir a formato Supabase (snake_case)
+    const payload = buildSupabasePayload(body, existing)
+    console.log('📤 Payload a enviar a Supabase:', JSON.stringify(payload, null, 2))
+    console.log('🔗 Google Maps Link en payload:', payload.enlace_maps)
     console.log('📍 Coordenadas en payload:', { 
-      lat: payload['Latitud'], 
-      lng: payload['Longitud'],
-      latType: typeof payload['Latitud'],
-      lngType: typeof payload['Longitud']
+      lat: payload.latitud, 
+      lng: payload.longitud,
+      latType: typeof payload.latitud,
+      lngType: typeof payload.longitud
     })
     
     // Validar coordenadas antes de enviar
-    if (payload['Latitud'] !== undefined && (isNaN(payload['Latitud']) || payload['Latitud'] === null)) {
-      console.warn('⚠️ Latitud inválida, removiendo del payload:', payload['Latitud'])
-      delete payload['Latitud']
+    if (payload.latitud !== undefined && (isNaN(payload.latitud) || payload.latitud === null)) {
+      console.warn('⚠️ Latitud inválida, removiendo del payload:', payload.latitud)
+      delete payload.latitud
     }
-    if (payload['Longitud'] !== undefined && (isNaN(payload['Longitud']) || payload['Longitud'] === null)) {
-      console.warn('⚠️ Longitud inválida, removiendo del payload:', payload['Longitud'])
-      delete payload['Longitud']
+    if (payload.longitud !== undefined && (isNaN(payload.longitud) || payload.longitud === null)) {
+      console.warn('⚠️ Longitud inválida, removiendo del payload:', payload.longitud)
+      delete payload.longitud
     }
     
-    const updated = await airtable("Soportes").update(id, payload)
-    console.log('✅ Soporte actualizado en Airtable:', updated.id)
-    console.log('🔗 Google Maps Link guardado:', updated.fields['Enlace Google Maps'])
+    // Lista de campos válidos en la tabla soportes de Supabase (según el tipo Soporte)
+    const validFields = [
+      'codigo', 'titulo', 'tipo_soporte', 'estado', 'ancho', 'alto',
+      'area_total', 'area_total_calculada', 'iluminacion', 'precio_mensual',
+      'precio_m2_calculado', 'impactos_diarios', 'propietario', 'ciudad', 'pais',
+      'enlace_maps', 'latitud', 'longitud', 'imagen_principal', 'imagen_secundaria_1',
+      'imagen_secundaria_2', 'resumen_ia'
+      // Nota: direccion_notas no está en el tipo Soporte, se omite por ahora
+    ]
     
-    const result = rowToSupport({ id: updated.id, ...updated.fields })
-    console.log('📤 Respuesta al cliente:', {
-      id: result.id,
-      googleMapsLink: result.googleMapsLink,
-      latitude: result.latitude,
-      longitude: result.longitude
+    // Filtrar solo campos válidos y remover undefined
+    const cleanPayload: any = {}
+    validFields.forEach(field => {
+      if (payload[field] !== undefined) {
+        cleanPayload[field] = payload[field]
+      }
     })
     
-    return NextResponse.json(result)
+    // Validar que el payload no esté vacío
+    if (Object.keys(cleanPayload).length === 0) {
+      console.warn('⚠️ Payload vacío después de limpieza, usando datos existentes')
+      return NextResponse.json(rowToSupport({ id: existing.id, ...existing }))
+    }
+    
+    console.log('📤 Payload limpio a enviar:', JSON.stringify(cleanPayload, null, 2))
+    console.log('📊 Campos en payload:', Object.keys(cleanPayload))
+    
+    try {
+      const updated = await updateSoporte(String(soporteId), cleanPayload)
+      console.log('✅ Soporte actualizado en Supabase:', updated.id)
+      console.log('🔗 Google Maps Link guardado:', updated.enlace_maps)
+      
+      // updateSoporte devuelve un Soporte directamente, no con .fields
+      const result = rowToSupport({ id: updated.id, ...updated })
+      console.log('📤 Respuesta al cliente:', {
+        id: result.id,
+        googleMapsLink: result.googleMapsLink,
+        latitude: result.latitude,
+        longitude: result.longitude
+      })
+      
+      return NextResponse.json(result)
+    } catch (updateError: any) {
+      console.error('❌ Error en updateSoporte:', updateError)
+      
+      // Intentar extraer el mensaje de error de Supabase de múltiples formas
+      let errorMessage = 'Error desconocido al actualizar'
+      let errorDetails = ''
+      
+      if (updateError?.message) {
+        errorMessage = updateError.message
+      }
+      if (updateError?.details) {
+        errorDetails = updateError.details
+      }
+      if (updateError?.hint) {
+        errorDetails += (errorDetails ? ' | ' : '') + `Hint: ${updateError.hint}`
+      }
+      if (updateError?.code) {
+        errorMessage = `Error ${updateError.code}: ${errorMessage}`
+      }
+      
+      // Si no hay mensaje, intentar otras formas
+      if (errorMessage === 'Error desconocido al actualizar') {
+        if (typeof updateError === 'string') {
+          errorMessage = updateError
+        } else if (updateError?.error?.message) {
+          errorMessage = updateError.error.message
+        } else {
+          errorMessage = JSON.stringify(updateError)
+        }
+      }
+      
+      const fullError = errorDetails ? `${errorMessage} - ${errorDetails}` : errorMessage
+      console.error('❌ Mensaje de error completo:', fullError)
+      throw new Error(fullError)
+    }
   }catch(e){
     console.error('❌ PUT soporte exception:', e)
-    return NextResponse.json({ error:"Error interno del servidor" }, { status:500 })
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    const errorStack = e instanceof Error ? e.stack : undefined
+    console.error('❌ Error details:', { errorMessage, errorStack })
+    return NextResponse.json({ 
+      error: "Error interno del servidor",
+      details: errorMessage 
+    }, { status:500 })
   }
 }
 
 export async function DELETE(_:Request,{ params }:{ params:Promise<{id:string}> }) {
   try{
     const { id } = await params
-    const response = await airtable("Soportes").select({
-      filterByFormula: `RECORD_ID() = '${id}'`
-    }).all()
+    const existing = await getSoporteById(id)
     
-    if (!response || response.length === 0) {
+    if (!existing) {
       return NextResponse.json({ error:"Soporte no encontrado" }, { status:404 })
     }
     
-    await airtable("Soportes").destroy(id)
+    await deleteSoporte(id)
     return NextResponse.json({ ok:true })
   }catch(e){
     console.error('DELETE soporte exception:', e)

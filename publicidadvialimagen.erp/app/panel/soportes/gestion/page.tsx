@@ -19,6 +19,7 @@ import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monito
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
+import { Toaster } from "sonner"
 
 // Constantes para colores de estado (formato Airtable)
 const STATUS_META = {
@@ -462,22 +463,36 @@ export default function SoportesPage() {
       return
     }
     
-    try {
+    const downloadPromise = async () => {
       const url = `/api/soportes/export/pdf?ids=${ids.join(',')}`
       
-      // Crear un enlace temporal para descargar el PDF
+      // Hacer fetch en lugar de link directo para poder mostrar loading
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        throw new Error('Error al generar el PDF')
+      }
+      
+      // Convertir a blob y descargar
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = url
+      link.href = downloadUrl
       link.download = `catalogo-soportes-${new Date().toISOString().split('T')[0]}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
       
-      toast.success(`Catálogo PDF generado para ${ids.length} soporte(s)`)
-    } catch (error) {
-      console.error('Error generando PDF:', error)
-      toast.error("Error al generar el catálogo PDF")
+      return ids.length
     }
+    
+    // Mostrar toast de carga durante todo el proceso
+    toast.promise(downloadPromise(), {
+      loading: 'Generando catálogo PDF...',
+      success: (count) => `Catálogo PDF generado para ${count} soporte(s)`,
+      error: 'Error al generar el catálogo PDF'
+    })
   }
 
   // Kanban helpers
@@ -610,9 +625,11 @@ export default function SoportesPage() {
   const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosí", "Tarija", "Oruro", "Beni", "Pando"]
 
   return (
-    <div className="p-6">
-      {/* Main Content */}
-      <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
+    <>
+      <Toaster position="top-right" />
+      <div className="p-6">
+        {/* Main Content */}
+        <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800 mb-2">Gestión de Soportes</h1>
           <p className="text-gray-600">Administra los soportes publicitarios disponibles</p>
@@ -1206,5 +1223,6 @@ export default function SoportesPage() {
         )}
       </main>
     </div>
+    </>
   )
 }

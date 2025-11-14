@@ -25,7 +25,8 @@ export async function GET() {
     
     // Primero cargar los soportes para hacer el mapeo de IDs a códigos
     console.log('📋 Cargando soportes para mapeo...')
-    const soportesResult = await airtableList('Soportes', {})
+    const { getAllSoportes } = await import('@/lib/supabaseSoportes')
+    const soportesResult = await getAllSoportes()
     const soportesMap: Record<string, string> = {}
     
     if (soportesResult?.records) {

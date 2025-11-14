@@ -1,5 +1,4 @@
-import { airtableList } from "@/lib/airtable-rest";
-const TABLE = process.env.AIRTABLE_TABLE_SOPORTES || "Soportes";
+import { getAllSoportes } from "@/lib/supabaseSoportes";
 
 function pickLatLng(fields: any) {
   const lat = fields?.Lat ?? fields?.Latitud ?? fields?.Latitude ?? fields?.lat ?? fields?.LAT;
@@ -9,12 +8,12 @@ function pickLatLng(fields: any) {
 }
 
 export async function listSupportsPoints() {
-  const data = await airtableList(TABLE, { pageSize: "200" });
+  const data = await getAllSoportes();
   return (data.records || [])
     .map((r: any) => {
       const { lat, lng } = pickLatLng(r.fields);
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        return { id: r.id, lat, lng, title: r.fields?.Nombre || r.fields?.Titulo || "Soporte" };
+        return { id: r.id, lat, lng, title: r.fields?.Título || r.fields?.Nombre || "Soporte" };
       }
       return null;
     })

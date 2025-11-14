@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "outDir": "../dist",
+    "noEmit": false
+  },
+  "ts-node": {
+    "esm": false,
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
+}
+

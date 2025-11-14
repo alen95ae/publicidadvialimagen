@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getProductoById, updateProducto, deleteProducto } from '@/lib/airtableProductos'
+import { getProductoById, updateProducto, deleteProducto } from '@/lib/supabaseProductos'
 
 export async function GET(
   request: NextRequest,
@@ -50,8 +50,10 @@ export async function PUT(
   } catch (error) {
     console.error('❌ Error actualizando producto:', error)
     const errorMessage = error instanceof Error ? error.message : 'Error al actualizar producto'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error('❌ Error details:', errorDetails)
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { success: false, error: errorMessage, details: errorDetails },
       { status: 500 }
     )
   }

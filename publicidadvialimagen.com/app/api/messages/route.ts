@@ -1,8 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { createMensajeSupabase } from "@/lib/supabaseMensajes";
 
-// 👉 Usa la versión REST directa (sin SDK)
+// 👉 Usa la versión REST directa (sin SDK) - Mantenido para compatibilidad
 const API = "https://api.airtable.com/v0";
 const baseId = process.env.AIRTABLE_BASE_ID!;
 const token = process.env.AIRTABLE_API_KEY!;
@@ -117,30 +118,64 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email es obligatorio" }, { status: 400 });
     }
 
-    // 1️⃣ Crear o actualizar contacto
-    const contactoFields = {
-      Nombre: nombre,
-      Email: email,
-      ["Teléfono"]: telefono,
-      Empresa: empresa,
-    };
-    const upsertRes = await airtableUpsertByEmail(contactoFields);
+    // 1️⃣ Guardar mensaje en Supabase (principal)
+    let mensajeId: string | null = null
+    try {
+      const mensajeSupabase = await createMensajeSupabase({
+        nombre: nombre || '',
+        email: email,
+        telefono: telefono || undefined,
+        empresa: empresa || undefined,
+        mensaje: mensaje,
+        estado: 'NUEVO'
+      })
+      mensajeId = mensajeSupabase.id || null
+      console.log('✅ Mensaje guardado en Supabase:', mensajeId)
+    } catch (error: any) {
+      console.error('❌ Error guardando en Supabase:', error)
+      // Continuar con Airtable como fallback
+    }
 
-    // 2️⃣ Crear mensaje
-    const mensajeFields = {
-      Nombre: nombre,
-      Email: email,
-      ["Teléfono"]: telefono,
-      Empresa: empresa,
-      Mensaje: mensaje,
-      Estado: "NUEVO",
-    };
-    const createRes = await airtableCreateMensaje(mensajeFields);
+    // 2️⃣ Fallback: Crear o actualizar contacto en Airtable (opcional, para compatibilidad)
+    let contactoId: string | null = null
+    try {
+      const contactoFields = {
+        Nombre: nombre,
+        Email: email,
+        ["Teléfono"]: telefono,
+        Empresa: empresa,
+      };
+      const upsertRes = await airtableUpsertByEmail(contactoFields);
+      contactoId = upsertRes?.records?.[0]?.id ?? null;
+    } catch (error: any) {
+      console.error('⚠️ Error en Airtable (no crítico):', error)
+    }
 
-    const contactoId = upsertRes?.records?.[0]?.id ?? null;
-    const mensajeId  = createRes?.records?.[0]?.id ?? null;
+    // 3️⃣ Fallback: Crear mensaje en Airtable (opcional, para compatibilidad)
+    let mensajeAirtableId: string | null = null
+    if (!mensajeId) {
+      try {
+        const mensajeFields = {
+          Nombre: nombre,
+          Email: email,
+          ["Teléfono"]: telefono,
+          Empresa: empresa,
+          Mensaje: mensaje,
+          Estado: "NUEVO",
+        };
+        const createRes = await airtableCreateMensaje(mensajeFields);
+        mensajeAirtableId = createRes?.records?.[0]?.id ?? null;
+      } catch (error: any) {
+        console.error('⚠️ Error creando mensaje en Airtable (no crítico):', error)
+      }
+    }
 
-    return NextResponse.json({ success: true, contactoId, mensajeId });
+    return NextResponse.json({ 
+      success: true, 
+      mensajeId: mensajeId || mensajeAirtableId,
+      contactoId,
+      source: mensajeId ? 'supabase' : 'airtable'
+    });
   } catch (e: any) {
     console.error("Error en /api/messages:", e);
     return NextResponse.json(

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ensureDefaultOwnerId, mapStatusToSupabase } from '../helpers'
-import { getSoportes, createSoporte, updateSoporte, deleteSoporte } from '@/lib/airtableSoportes'
+import { getSoportes, createSoporte, updateSoporte, deleteSoporte, getSoporteById } from '@/lib/supabaseSoportes'
 
 interface BulkRequest {
   ids: string[]
@@ -14,13 +14,11 @@ async function fetchSupportsByIds(ids: string[]) {
   const supports = []
   for (const id of ids) {
     try {
-      const response = await getSoportes({
-        filterByFormula: `RECORD_ID() = '${id}'`
-      })
-      if (response.records?.[0]) {
+      const record = await getSoporteById(id)
+      if (record) {
         supports.push({
-          id: response.records[0].id,
-          ...response.records[0].fields
+          id: record.id,
+          ...record.fields
         })
       }
     } catch (error) {
@@ -36,7 +34,8 @@ async function generateNextCode(prefix: string, startNumber: number) {
     const candidate = `${prefix}-${next}`
     try {
       const response = await getSoportes({
-        filterByFormula: `{Codigo} = '${candidate}'`
+        q: candidate,
+        limit: 1
       })
       if (!response.records?.length) {
         return candidate
@@ -84,26 +83,20 @@ export async function POST(req: Request) {
             newCode = await generateNextCode(prefix, parseInt(num, 10))
           }
 
-          const insertPayload = {
-            codigo: newCode,
-            titulo: `${support.titulo} - copia`,
-            tipo_soporte: support.tipo_soporte,
-            ancho: support.ancho,
-            alto: support.alto,
-            ciudad: support.ciudad,
-            estado: 'disponible',
-            precio_mes: support.precio_mes,
-            impactos_diarios: support.impactos_diarios,
-            ubicacion_url: support.ubicacion_url,
-            foto_url: support.foto_url,
-            foto_url_2: support.foto_url_2,
-            foto_url_3: support.foto_url_3,
-            notas: support.notas,
-            dueno_casa_id: ownerId,
-            empleado_responsable_id: support.empleado_responsable_id,
-            fecha_instalacion: support.fecha_instalacion,
-            fecha_ultimo_mantenimiento: support.fecha_ultimo_mantenimiento,
-            proximo_mantenimiento: support.proximo_mantenimiento,
+          // Convertir campos de formato Airtable a formato Supabase
+          const insertPayload: Record<string, any> = {
+            'Código': newCode,
+            'Título': `${support['Título'] || support.titulo || ''} - copia`,
+            'Tipo de soporte': support['Tipo de soporte'] || support.tipo_soporte || 'Unipolar',
+            'Ancho': support['Ancho'] || support.ancho || null,
+            'Alto': support['Alto'] || support.alto || null,
+            'Ciudad': support['Ciudad'] || support.ciudad || null,
+            'Estado': 'Disponible',
+            'Precio por mes': support['Precio por mes'] || support.precio_mes || null,
+            'Impactos diarios': support['Impactos diarios'] || support.impactos_diarios || null,
+            'Enlace Google Maps': support['Enlace Google Maps'] || support.ubicacion_url || null,
+            'Dirección / Notas': support['Dirección / Notas'] || support.notas || null,
+            'Propietario': support['Propietario'] || support.propietario || null,
           }
 
           try {
@@ -132,7 +125,7 @@ export async function POST(req: Request) {
         }
 
         try {
-          await updateSoporte(ids[0], { 'Codigo': newCode })
+          await updateSoporte(ids[0], { 'Código': newCode })
         } catch (error) {
           console.error('Error updating code:', error)
           return NextResponse.json({ error: 'Error actualizando código' }, { status: 500 })
@@ -142,17 +135,17 @@ export async function POST(req: Request) {
       }
 
       const patch: Record<string, any> = {}
-      if (data?.status) patch.estado = mapStatusToSupabase(data.status)
-      if (data?.type) patch.tipo_soporte = data.type
-      if (data?.title) patch.titulo = data.title
-      if (data?.priceMonth !== undefined) patch.precio_mes = Number(data.priceMonth) || 0
-      if (data?.widthM !== undefined) patch.ancho = Number(data.widthM) || 0
-      if (data?.heightM !== undefined) patch.alto = Number(data.heightM) || 0
-      if (data?.city !== undefined) patch.ciudad = data.city
-      if (data?.impactosDiarios !== undefined) patch.impactos_diarios = Number(data.impactosDiarios) || 0
-      if (data?.googleMapsLink !== undefined) patch.ubicacion_url = data.googleMapsLink
-      if (data?.address !== undefined) patch.notas = data.address
-      if (data?.ownerId !== undefined) patch.dueno_casa_id = data.ownerId
+      if (data?.status) patch['Estado'] = data.status // Mantener formato original, no mapear
+      if (data?.type) patch['Tipo de soporte'] = data.type
+      if (data?.title) patch['Título'] = data.title
+      if (data?.priceMonth !== undefined) patch['Precio por mes'] = Number(data.priceMonth) || 0
+      if (data?.widthM !== undefined) patch['Ancho'] = Number(data.widthM) || 0
+      if (data?.heightM !== undefined) patch['Alto'] = Number(data.heightM) || 0
+      if (data?.city !== undefined) patch['Ciudad'] = data.city
+      if (data?.impactosDiarios !== undefined) patch['Impactos diarios'] = Number(data.impactosDiarios) || 0
+      if (data?.googleMapsLink !== undefined) patch['Enlace Google Maps'] = data.googleMapsLink
+      if (data?.address !== undefined) patch['Dirección / Notas'] = data.address
+      if (data?.owner !== undefined) patch['Propietario'] = data.owner
 
       if (!Object.keys(patch).length) {
         return NextResponse.json({ error: 'Sin campos válidos para actualizar' }, { status: 400 })

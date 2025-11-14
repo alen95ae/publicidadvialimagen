@@ -1,32 +1,33 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { airtable } from "@/lib/airtable";
+import { messagesService } from "@/lib/messages";
 import { airtableList } from "@/lib/airtable-rest";
 
 export async function GET() {
   try {
-    // Obtener mensajes nuevos (estado NUEVO)
+    // Obtener mensajes nuevos (estado NUEVO) desde Supabase
     let mensajes: any[] = [];
     try {
-      const mensajesRecords = await airtable("Mensajes")
-        .select({
-          filterByFormula: "{Estado} = 'NUEVO'",
-          sort: [{ field: "Fecha", direction: "desc" }],
-          maxRecords: 10,
-        })
-        .all();
+      const allMensajes = await messagesService.getMessages();
+      
+      // Filtrar solo los mensajes con estado NUEVO
+      const mensajesNuevos = allMensajes
+        .filter((m) => m.estado === "NUEVO")
+        .slice(0, 10); // Máximo 10
 
-      mensajes = mensajesRecords.map((r: any) => ({
-        id: r.id,
+      mensajes = mensajesNuevos.map((m) => ({
+        id: m.id,
         type: "mensaje" as const,
-        titulo: `Nuevo mensaje de ${r.fields.Nombre || "Sin nombre"}`,
-        mensaje: r.fields.Mensaje || "",
-        fecha: r.fields.Fecha || r.createdTime,
-        link: `/panel/mensajes/${r.id}`,
+        titulo: `Nuevo mensaje de ${m.nombre || "Sin nombre"}`,
+        mensaje: m.mensaje || "",
+        fecha: m.fecha_recepcion || m.created_at || new Date().toISOString(),
+        link: `/panel/mensajes/${m.id}`,
       }));
+      
+      console.log(`✅ Notificaciones: ${mensajes.length} mensajes nuevos desde Supabase`);
     } catch (error) {
-      console.error("Error fetching messages:", error);
+      console.error("Error fetching messages from Supabase:", error);
     }
 
     // Obtener solicitudes nuevas (estado Nueva)

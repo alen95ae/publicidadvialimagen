@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
-import { airtableList, airtableCreate, airtableUpdate, airtableDelete } from "@/lib/airtable-rest";
+import { getAllUsersSupabase, createUserSupabase, updateUserSupabase, getUserByIdSupabase, findUserByEmailSupabase } from "@/lib/supabaseUsers";
+import { getSupabaseServer } from "@/lib/supabaseServer";
+import bcrypt from "bcryptjs";
 
-const USERS_TABLE = process.env.AIRTABLE_TABLE_USERS || "Users";
+const supabase = getSupabaseServer();
 
 // Middleware para verificar que el usuario es administrador
 async function requireAdmin(request: NextRequest) {
@@ -36,52 +38,54 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "";
     const puesto = searchParams.get("puesto") || "";
 
-    // Solo cargar usuarios con rol admin o usuario (no invitados)
-    let filterFormula = `OR({Rol} = "admin", {Rol} = "usuario")`;
-    const filters = [filterFormula];
+    // Obtener todos los usuarios desde Supabase
+    let query = supabase
+      .from('usuarios')
+      .select('*')
+      .in('rol', ['admin', 'usuario']); // Solo admin y usuario, no invitados
 
+    // Aplicar filtros
     if (search) {
-      filters.push(`OR(FIND("${search}", {Nombre}), FIND("${search}", {Email}))`);
+      query = query.or(`nombre.ilike.%${search}%,email.ilike.%${search}%`);
     }
     if (role) {
-      filters.push(`{Rol} = "${role}"`);
+      query = query.eq('rol', role);
+    }
+    if (status === 'activo') {
+      query = query.eq('activo', true);
+    } else if (status === 'inactivo') {
+      query = query.eq('activo', false);
     }
     if (puesto) {
-      filters.push(`{Puesto} = "${puesto}"`);
+      query = query.eq('puesto', puesto);
     }
 
-    if (filters.length > 1) {
-      filterFormula = `AND(${filters.join(", ")})`;
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching users from Supabase:", error);
+      return NextResponse.json({ error: "Error al obtener usuarios" }, { status: 500 });
     }
 
-    const params: Record<string, string> = {
-      pageSize: pageSize.toString(),
-    };
-
-    if (filterFormula) {
-      params.filterByFormula = filterFormula;
-    }
-
-    if (page > 1) {
-      // Para paginación, necesitaríamos implementar offset
-      // Por ahora devolvemos todos los registros
-    }
-
-    const data = await airtableList(USERS_TABLE, params);
+    // Aplicar paginación manualmente
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedUsers = data?.slice(start, end) || [];
     
-    const users = data.records.map((record: any) => ({
+    const users = paginatedUsers.map((record: any) => ({
       id: record.id,
-      nombre: record.fields.Nombre || "",
-      email: record.fields.Email || "",
-      rol: record.fields.Rol || "usuario",
-      puesto: record.fields.Puesto || "",
-      fechaCreacion: record.fields.FechaCreacion || record.createdTime,
-      ultimoAcceso: record.fields.UltimoAcceso || null,
+      nombre: record.nombre || "",
+      email: record.email || "",
+      rol: record.rol || "usuario",
+      puesto: record.puesto || "",
+      fechaCreacion: record.fecha_creacion || record.created_at,
+      ultimoAcceso: record.ultimo_acceso || null,
+      activo: record.activo ?? true,
     }));
 
     return NextResponse.json({
       users,
-      total: data.records.length,
+      total: data?.length || 0,
       page,
       pageSize,
     });
@@ -98,39 +102,40 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { nombre, email, rol, activo = true } = body;
+    const { nombre, email, rol, activo = true, password } = body;
 
     if (!nombre || !email || !rol) {
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
     }
 
     // Verificar si el email ya existe
-    const existingUser = await airtableList(USERS_TABLE, {
-      filterByFormula: `{Email} = "${email}"`,
-      maxRecords: "1",
-    });
-
-    if (existingUser.records.length > 0) {
+    const existingUser = await findUserByEmailSupabase(email);
+    if (existingUser) {
       return NextResponse.json({ error: "El email ya está registrado" }, { status: 400 });
     }
 
-    const userData = {
-      Nombre: nombre,
-      Email: email,
-      Rol: rol,
-      Activo: activo,
-      FechaCreacion: new Date().toISOString(),
-    };
+    // Generar password hash si se proporciona una contraseña
+    let passwordHash = "";
+    if (password) {
+      passwordHash = await bcrypt.hash(password, 10);
+    } else {
+      // Si no se proporciona contraseña, generar una temporal
+      passwordHash = await bcrypt.hash(Math.random().toString(36).slice(-12), 10);
+    }
 
-    const result = await airtableCreate(USERS_TABLE, [{ fields: userData }]);
-    const newUser = result.records[0];
+    const usuario = await createUserSupabase(email, passwordHash, nombre, rol);
+    
+    // Si se especifica activo=false, actualizar
+    if (activo === false) {
+      await updateUserSupabase(usuario.id, { activo: false });
+    }
 
     return NextResponse.json({
-      id: newUser.id,
-      nombre: newUser.fields.Nombre,
-      email: newUser.fields.Email,
-      rol: newUser.fields.Rol,
-      activo: newUser.fields.Activo,
+      id: usuario.id,
+      nombre: usuario.fields.Nombre,
+      email: usuario.fields.Email,
+      rol: usuario.fields.Rol,
+      activo: usuario.fields.Activo,
     });
   } catch (error) {
     console.error("Error creating user:", error);
@@ -145,20 +150,34 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { id, nombre, email, rol, activo, puesto } = body;
+    const { id, nombre, email, rol, activo, puesto, password } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID de usuario requerido" }, { status: 400 });
     }
 
-    const updateData: Record<string, any> = {};
-    if (nombre !== undefined) updateData.Nombre = nombre;
-    if (email !== undefined) updateData.Email = email;
-    if (rol !== undefined) updateData.Rol = rol;
-    if (activo !== undefined) updateData.Activo = activo;
-    if (puesto !== undefined) updateData.Puesto = puesto;
+    const updateData: {
+      nombre?: string;
+      email?: string;
+      rol?: string;
+      activo?: boolean;
+      puesto?: string;
+      password_hash?: string;
+    } = {};
 
-    await airtableUpdate(USERS_TABLE, id, updateData);
+    if (nombre !== undefined) updateData.nombre = nombre;
+    if (email !== undefined) updateData.email = email;
+    if (rol !== undefined) updateData.rol = rol;
+    if (activo !== undefined) updateData.activo = activo;
+    if (puesto !== undefined) updateData.puesto = puesto;
+    if (password) {
+      updateData.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    const updatedUser = await updateUserSupabase(id, updateData);
+    if (!updatedUser) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -180,7 +199,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID de usuario requerido" }, { status: 400 });
     }
 
-    await airtableDelete(USERS_TABLE, id);
+    const { error } = await supabase
+      .from('usuarios')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting user:", error);
+      return NextResponse.json({ error: "Error al eliminar usuario" }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -188,3 +215,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Error al eliminar usuario" }, { status: 500 });
   }
 }
+
+

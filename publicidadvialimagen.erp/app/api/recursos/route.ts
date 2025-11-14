@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRecursosPage, createRecurso } from '@/lib/airtableRecursos'
+import { getRecursosPage, createRecurso } from '@/lib/supabaseRecursos'
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,8 +25,11 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Error en API recursos:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error('❌ Error details:', errorDetails)
     return NextResponse.json(
-      { success: false, error: 'Error interno del servidor' },
+      { success: false, error: errorMessage, details: errorDetails },
       { status: 500 }
     )
   }

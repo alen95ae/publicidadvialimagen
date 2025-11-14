@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { airtable } from '@/lib/airtable'
+import { getSoportes, createSoporte, updateSoporte, getSoporteById } from '@/lib/supabaseSoportes'
 import { buildPayload, processCsvRow } from '../helpers'
 
 export async function POST(request: NextRequest) {
@@ -59,24 +59,22 @@ export async function POST(request: NextRequest) {
         const processedData = processCsvRow(rowData)
         
         // Verificar si ya existe un soporte con este código
-        const existingRecords = await airtable('Soportes').select({
-          filterByFormula: `{Código} = "${processedData.code}"`,
-          maxRecords: 1
-        }).all()
+        const existingResult = await getSoportes({
+          q: processedData.code,
+          limit: 1
+        })
 
-        if (existingRecords.length > 0) {
+        if (existingResult.records.length > 0) {
           // Actualizar registro existente
-          const payload = buildPayload(processedData, existingRecords[0].fields)
-          await airtable('Soportes').update([{
-            id: existingRecords[0].id,
-            fields: payload
-          }])
+          const existing = existingResult.records[0]
+          const payload = buildPayload(processedData, existing.fields)
+          await updateSoporte(existing.id, payload)
           updated++
           console.log(`✅ Actualizado: ${processedData.code}`)
         } else {
           // Crear nuevo registro
           const payload = buildPayload(processedData)
-          await airtable('Soportes').create([{ fields: payload }])
+          await createSoporte(payload)
           created++
           console.log(`✅ Creado: ${processedData.code}`)
         }

@@ -1,36 +1,17 @@
 import { NextResponse } from "next/server";
-import { airtable } from "@/lib/airtable";
+import { messagesService } from "@/lib/messages";
 
 export async function GET() {
   try {
-    console.log("🔍 GET /api/messages - Iniciando consulta a Airtable");
-    console.log("🔍 Variables de entorno:", {
-      hasApiKey: !!process.env.AIRTABLE_API_KEY,
-      hasBaseId: !!process.env.AIRTABLE_BASE_ID,
-      baseId: process.env.AIRTABLE_BASE_ID
-    });
+    console.log("🔍 GET /api/messages - Iniciando consulta a Supabase");
 
-    const records = await airtable("Mensajes").select({
-      sort: [{ field: "Fecha", direction: "desc" }]
-    }).all();
+    const mensajes = await messagesService.getMessages();
 
-    console.log(`✅ Se obtuvieron ${records.length} mensajes de Airtable`);
+    console.log(`✅ Se obtuvieron ${mensajes.length} mensajes de Supabase`);
 
-    const data = records.map((r: any) => ({
-      id: r.id,
-      nombre: r.fields.Nombre || "",
-      email: r.fields.Email || "",
-      telefono: r.fields.Teléfono || "",
-      empresa: r.fields.Empresa || "",
-      mensaje: r.fields.Mensaje || "",
-      fecha_recepcion: r.fields.Fecha || "",
-      estado: r.fields.Estado || "NUEVO",
-    }));
-
-    console.log("✅ Datos procesados correctamente, enviando respuesta JSON");
-    return NextResponse.json(data);
+    return NextResponse.json(mensajes);
   } catch (error) {
-    console.error("❌ Error fetching messages from Airtable:", error);
+    console.error("❌ Error fetching messages from Supabase:", error);
     console.error("❌ Error details:", {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllRecursos, updateRecurso, deleteRecurso } from '@/lib/airtableRecursos'
+import { getAllRecursos, updateRecurso, deleteRecurso } from '@/lib/supabaseRecursos'
 
 export async function POST(request: NextRequest) {
   try {

@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { createSlug } from '@/lib/url-utils';
+import { correctCoordsForOSM } from "@/lib/mapUtils";
 
 export type SupportPoint = {
   id: string;
@@ -35,6 +36,19 @@ export default function LeafletHybridMap({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const isInitializedRef = useRef(false);
 
+  // Función para detectar si OSM está activa
+  const isOSMActive = useCallback((map: L.Map): boolean => {
+    let active = true // Por defecto OSM
+    map.eachLayer((layer: any) => {
+      if (layer instanceof L.TileLayer) {
+        if (layer._url && layer._url.includes('openstreetmap')) {
+          active = true
+        }
+      }
+    })
+    return active
+  }, [])
+
   // Función para añadir marcadores al mapa (memoizada para evitar re-creaciones)
   const addMarkersToMap = useCallback((map: L.Map) => {
     if (!points || points.length === 0) return;
@@ -45,6 +59,9 @@ export default function LeafletHybridMap({
         map.removeLayer(layer);
       }
     });
+    
+    // Detectar si OSM está activa
+    const useOSM = isOSMActive(map)
     
     // Añadir nuevos marcadores
     const iconBillboard = L.icon({
@@ -84,6 +101,9 @@ export default function LeafletHybridMap({
     
     const bounds = L.latLngBounds([]);
     points.forEach((p) => {
+      // Aplicar corrección si OSM está activa
+      const displayCoords = useOSM ? correctCoordsForOSM(p.lat, p.lng) : { lat: p.lat, lng: p.lng }
+      
       const slug = createSlug(p.title || 'Soporte Publicitario')
       // El sistema de i18n funciona con contexto, no con rutas separadas
       const basePath = '/vallas-publicitarias'
@@ -135,11 +155,11 @@ export default function LeafletHybridMap({
         </div>
       `;
       
-      const marker = L.marker([p.lat, p.lng], {
+      const marker = L.marker([displayCoords.lat, displayCoords.lng], {
         icon: p.type === "building" ? iconBuilding : iconBillboard,
       }).bindPopup(popupContent);
       marker.addTo(map);
-      bounds.extend([p.lat, p.lng]);
+      bounds.extend([displayCoords.lat, displayCoords.lng]);
     });
     
     // Ajustar vista si hay puntos
@@ -147,10 +167,12 @@ export default function LeafletHybridMap({
       if (points.length > 1 && !center && !zoom) {
         map.fitBounds(bounds);
       } else if (points.length === 1 && !center && !zoom) {
-        map.setView([points[0].lat, points[0].lng], 15);
+        const firstPoint = points[0]
+        const displayCoords = useOSM ? correctCoordsForOSM(firstPoint.lat, firstPoint.lng) : { lat: firstPoint.lat, lng: firstPoint.lng }
+        map.setView([displayCoords.lat, displayCoords.lng], 15);
       }
     }
-  }, [points, center, zoom, locale]);
+  }, [points, center, zoom, locale, isOSMActive]);
 
   const toggleFullscreen = () => {
     const mapContainer = document.getElementById(mapId);
@@ -278,7 +300,7 @@ export default function LeafletHybridMap({
         { maxZoom: 19, attribution: "© Esri" }
       );
 
-      // capa por defecto
+      // capa por defecto (OSM)
       osm.addTo(map);
 
       // selector de capas
@@ -286,7 +308,13 @@ export default function LeafletHybridMap({
         "📖 OSM": osm,
         "🌍 Satélite": esriSatellite,
       };
-      L.control.layers(baseLayers).addTo(map);
+      const layersControl = L.control.layers(baseLayers);
+      layersControl.addTo(map);
+      
+      // Escuchar cambios de capa y actualizar marcadores
+      map.on('baselayerchange', () => {
+        addMarkersToMap(map);
+      });
 
       // botón de pantalla completa
       const fullscreenButton = L.control({ position: 'topright' });

@@ -3,7 +3,8 @@
 import { useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
+import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl } from "react-leaflet"
+import { correctCoordsForOSM } from "@/lib/mapUtils"
 import { createBillboardIcon } from "./billboard-icon"
 import { getBillboardUrl } from "@/lib/url-utils"
 
@@ -111,21 +112,39 @@ export default function DynamicMap({ billboards, selectedCity, isFullscreen = fa
         className="z-0"
       >
         <MapZIndexController isFullscreen={isFullscreen} />
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="📖 OSM">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="🌍 Satélite">
+            <TileLayer
+              attribution="© Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
         
         {filteredBillboards.map((billboard) => {
-          // Normalizar coordenadas
+          // Normalizar coordenadas y aplicar corrección para OSM (por defecto)
           let position: [number, number] | null = null
           
           if (billboard.coordinates) {
+            let originalLat: number, originalLng: number
             if (Array.isArray(billboard.coordinates)) {
-              position = billboard.coordinates
+              originalLat = billboard.coordinates[0]
+              originalLng = billboard.coordinates[1]
             } else if (billboard.coordinates.lat && billboard.coordinates.lng) {
-              position = [billboard.coordinates.lat, billboard.coordinates.lng]
+              originalLat = billboard.coordinates.lat
+              originalLng = billboard.coordinates.lng
+            } else {
+              return null
             }
+            // Aplicar corrección para OSM (capa por defecto)
+            const corrected = correctCoordsForOSM(originalLat, originalLng)
+            position = [corrected.lat, corrected.lng]
           }
           
           // Solo renderizar si tenemos coordenadas válidas

@@ -122,8 +122,75 @@ export function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude:
   }
 }
 
-/** DB -> UI (Airtable format with accents) */
+// Función para convertir de Supabase (snake_case) al formato del frontend
+export function soporteToSupport(soporte: any) {
+  // Manejar imágenes de Supabase (pueden ser arrays de objetos o strings)
+  const extractImageUrl = (img: any): string | null => {
+    if (!img) return null
+    if (Array.isArray(img) && img.length > 0) {
+      if (img[0]?.url) return img[0].url
+      if (typeof img[0] === 'string') return img[0]
+    }
+    if (typeof img === 'string') return img
+    return null
+  }
+  
+  const images = [
+    extractImageUrl(soporte.imagen_principal),
+    extractImageUrl(soporte.imagen_secundaria_1),
+    extractImageUrl(soporte.imagen_secundaria_2)
+  ].filter(Boolean) as string[]
+  
+  const estado = normalizeEstado(soporte.estado)
+  
+  // Extraer coordenadas del enlace de Google Maps si no están disponibles
+  let latitude = soporte.latitud ?? null
+  let longitude = soporte.longitud ?? null
+  
+  if (!latitude || !longitude) {
+    const googleMapsLink = soporte.enlace_maps
+    if (googleMapsLink) {
+      const coords = extractCoordinatesFromGoogleMapsLink(googleMapsLink)
+      latitude = latitude ?? coords.latitude
+      longitude = longitude ?? coords.longitude
+    }
+  }
+  
+  return {
+    id: soporte.id?.toString() || '',
+    code: soporte.codigo || '',
+    title: soporte.titulo || '',
+    type: normalizeTipo(soporte.tipo_soporte),
+    status: estado,
+    widthM: num(soporte.ancho),
+    heightM: num(soporte.alto),
+    areaM2: num(soporte.area_total || soporte.area_total_calculada),
+    city: soporte.ciudad ?? null,
+    country: soporte.pais ?? 'BO',
+    priceMonth: num(soporte.precio_mensual),
+    impactosDiarios: soporte.impactos_diarios ?? null,
+    googleMapsLink: soporte.enlace_maps ?? null,
+    latitude,
+    longitude,
+    images,
+    iluminacion: soporte.iluminacion ?? null,
+    lighting: soporte.iluminacion === true ? 'Sí' : 'No',
+    address: null,
+    owner: soporte.propietario ?? null,
+    ownerId: null,
+    available: estado === 'Disponible',
+    createdAt: soporte.created_at || new Date().toISOString(),
+    updatedAt: soporte.created_at || new Date().toISOString(),
+  }
+}
+
+/** DB -> UI (Airtable format with accents) - MANTENER PARA COMPATIBILIDAD */
 export function rowToSupport(row:any){
+  // Si ya viene en formato Supabase (snake_case), usar la nueva función
+  if (row.codigo !== undefined || row.titulo !== undefined) {
+    return soporteToSupport(row)
+  }
+  
   // Manejar imágenes de Airtable (arrays de attachments)
   const images = [
     row['Imagen principal']?.[0]?.url,
@@ -176,6 +243,67 @@ export function rowToSupport(row:any){
     createdAt: row['Fecha de creación'] || new Date().toISOString(),
     updatedAt: row['Última actualización'] || new Date().toISOString(),
   }
+}
+
+/** UI -> Supabase (formato snake_case) */
+export function buildSupabasePayload(data: any, existing?: any) {
+  const payload: any = {}
+
+  if (data.code !== undefined) payload.codigo = String(data.code).trim()
+  if (data.title !== undefined) payload.titulo = String(data.title)
+  if (data.type !== undefined) payload.tipo_soporte = normalizeTipo(data.type)
+  else if (existing?.tipo_soporte) payload.tipo_soporte = existing.tipo_soporte
+
+  const w = num(data.widthM ?? existing?.ancho)
+  const h = num(data.heightM ?? existing?.alto)
+  if (w !== null) payload.ancho = w
+  if (h !== null) payload.alto = h
+
+  // Estado normalizado
+  if (data.status !== undefined) {
+    payload.estado = normalizeEstado(data.status)
+  } else if (existing?.estado) {
+    payload.estado = normalizeEstado(existing.estado)
+  }
+
+  if (data.city !== undefined) payload.ciudad = data.city || null
+  if (data.country !== undefined) payload.pais = data.country || 'BO'
+  if (data.priceMonth !== undefined) payload.precio_mensual = num(data.priceMonth)
+  if (data.impactosDiarios !== undefined) payload.impactos_diarios = data.impactosDiarios ?? null
+  if (data.googleMapsLink !== undefined) payload.enlace_maps = data.googleMapsLink || null
+  
+  // Validar y manejar coordenadas correctamente
+  if (data.latitude !== undefined) {
+    const lat = typeof data.latitude === 'number' && !isNaN(data.latitude) ? data.latitude : null
+    if (lat !== null) payload.latitud = lat
+  }
+  if (data.longitude !== undefined) {
+    const lng = typeof data.longitude === 'number' && !isNaN(data.longitude) ? data.longitude : null
+    if (lng !== null) payload.longitud = lng
+  }
+  
+  if (data.iluminacion !== undefined) payload.iluminacion = data.iluminacion === true || data.iluminacion === 'Sí'
+  else if (existing?.iluminacion !== undefined) payload.iluminacion = existing.iluminacion
+  
+  // Nota: direccion_notas no está en el tipo Soporte de Supabase, se omite
+  // if (data.address !== undefined) payload.direccion_notas = data.address || null
+  
+  if (data.owner !== undefined) payload.propietario = data.owner || null
+
+  // Manejar imágenes (formato JSONB array para Supabase)
+  if (data.images !== undefined && Array.isArray(data.images)) {
+    if (data.images[0]) {
+      payload.imagen_principal = [{ url: data.images[0] }]
+    }
+    if (data.images[1]) {
+      payload.imagen_secundaria_1 = [{ url: data.images[1] }]
+    }
+    if (data.images[2]) {
+      payload.imagen_secundaria_2 = [{ url: data.images[2] }]
+    }
+  }
+
+  return payload
 }
 
 /** UI -> Airtable (con nombres de campos en español con tildes) */

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createUser, findUserByEmail, signSession, setSessionCookie } from "@/lib/auth";
+import { updateUserSupabase } from "@/lib/supabaseUsers";
 import { airtableList, airtableUpdate } from "@/lib/airtable-rest";
 
 const TABLE_INV = process.env.AIRTABLE_TABLE_INVITACIONES || "Invitaciones";
@@ -45,10 +46,13 @@ export async function POST(req: Request) {
       }
     }
 
+    // Crear usuario (por defecto con rol "invitado")
     const user = await createUser(email, password, name);
-    // Sobrescribir rol si invitación válida
+    
+    // Si hay invitación válida, actualizar el rol en Supabase
     if (assignedRole !== "invitado") {
-      await airtableUpdate(process.env.AIRTABLE_TABLE_USERS || "Usuarios", user.id, { Rol: assignedRole });
+      await updateUserSupabase(user.id, { rol: assignedRole });
+      user.fields.Rol = assignedRole;
     }
 
     if (invRecordId) {

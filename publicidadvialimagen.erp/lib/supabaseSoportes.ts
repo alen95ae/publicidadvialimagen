@@ -1,0 +1,180 @@
+import { getSupabaseServer } from "@/lib/supabaseServer";
+
+// Tipo base igual a la tabla real de Supabase
+export type Soporte = {
+  id: number;
+  codigo: string | null;
+  titulo: string | null;
+  tipo_soporte: string | null;
+  estado: string | null;
+  ancho: number | null;
+  alto: number | null;
+  area_total: number | null;
+  area_total_calculada: number | null;
+  iluminacion: boolean | null;
+  precio_mensual: number | null;
+  precio_m2_calculado: number | null;
+  impactos_diarios: number | null;
+  propietario: string | null;
+  ciudad: string | null;
+  pais: string | null;
+  enlace_maps: string | null;
+  latitud: number | null;
+  longitud: number | null;
+  imagen_principal: any | null;
+  imagen_secundaria_1: any | null;
+  imagen_secundaria_2: any | null;
+  resumen_ia: string | null;
+  created_at: string;
+};
+
+export async function getSoportes({
+  q = "",
+  status = "",
+  city = "",
+  page = 1,
+  limit = 25,
+}: {
+  q?: string;
+  status?: string;
+  city?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const supabase = getSupabaseServer();
+
+  let query = supabase
+    .from("soportes")
+    .select("*", { count: "exact" });
+
+  // TEXT SEARCH
+  if (q.trim() !== "") {
+    const term = `%${q.trim().toLowerCase()}%`;
+    query = query.or(
+      `codigo.ilike.${term},titulo.ilike.${term},ciudad.ilike.${term},tipo_soporte.ilike.${term}`
+    );
+  }
+
+  // STATUS
+  if (status) {
+    const statuses = status.split(",").map((s) => s.trim());
+    query = query.in("estado", statuses);
+  }
+
+  // CITY
+  if (city) {
+    query = query.ilike("ciudad", `%${city}%`);
+  }
+
+  // PAGINACIÓN
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+
+  return {
+    data: data as Soporte[],
+    count: count || 0,
+  };
+}
+
+export async function getSoporteById(id: string) {
+  const supabase = getSupabaseServer();
+
+  // Convertir ID a número si es posible (Supabase usa number para id)
+  const numericId = isNaN(Number(id)) ? id : Number(id)
+
+  const { data, error } = await supabase
+    .from("soportes")
+    .select("*")
+    .eq("id", numericId)
+    .single();
+
+  if (error) {
+    console.error('❌ Error en getSoporteById:', error)
+    return null
+  }
+
+  return data as Soporte;
+}
+
+export async function createSoporte(body: Partial<Soporte>) {
+  const supabase = getSupabaseServer();
+
+  const { data, error } = await supabase
+    .from("soportes")
+    .insert([body])
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return data as Soporte;
+}
+
+export async function updateSoporte(id: string, body: Partial<Soporte>) {
+  const supabase = getSupabaseServer();
+
+  // Convertir ID a número si es posible (Supabase usa number para id)
+  const numericId = isNaN(Number(id)) ? id : Number(id)
+
+  console.log('📤 updateSoporte - ID original:', id, 'ID convertido:', numericId, 'tipo:', typeof numericId)
+  console.log('📤 updateSoporte - Body:', JSON.stringify(body, null, 2))
+
+  const { data, error } = await supabase
+    .from("soportes")
+    .update(body)
+    .eq("id", numericId)
+    .select()
+    .single();
+
+  if (error) {
+    const errorInfo = {
+      message: error.message || 'Sin mensaje',
+      details: error.details || 'Sin detalles',
+      hint: error.hint || 'Sin hint',
+      code: error.code || 'Sin código'
+    }
+    console.error('❌ Error de Supabase en updateSoporte:', JSON.stringify(errorInfo, null, 2))
+    console.error('❌ Error completo (objeto):', error)
+    
+    // Crear un error más descriptivo
+    const errorMsg = error.message || `Error de Supabase: ${error.code || 'desconocido'}`
+    const supabaseError = new Error(errorMsg)
+    ;(supabaseError as any).details = error.details
+    ;(supabaseError as any).hint = error.hint
+    ;(supabaseError as any).code = error.code
+    throw supabaseError
+  }
+
+  return data as Soporte;
+}
+
+export async function deleteSoporte(id: string) {
+  const supabase = getSupabaseServer();
+
+  const { error } = await supabase
+    .from("soportes")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+
+  return { deleted: true };
+}
+
+export async function getAllSoportes() {
+  const supabase = getSupabaseServer();
+
+  const { data, error } = await supabase
+    .from("soportes")
+    .select("*");
+
+  if (error) throw error;
+
+  return data as Soporte[];
+}

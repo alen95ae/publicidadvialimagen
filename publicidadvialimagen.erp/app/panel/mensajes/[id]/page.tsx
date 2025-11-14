@@ -45,7 +45,10 @@ interface Respuesta {
 // Función para cargar mensaje desde la API
 const loadMensaje = async (id: string): Promise<Message | null> => {
   try {
-    const response = await fetch(`/api/messages/${id}`)
+    const response = await fetch(`/api/messages/${id}`, {
+      cache: 'no-store',
+      next: { revalidate: 0 }
+    })
     if (!response.ok) return null
     
     const data = await response.json()
@@ -119,30 +122,65 @@ export default function MensajeDetailPage() {
     loadData()
   }, [params.id])
 
+  // Función para recargar el mensaje
+  const reloadMensaje = async () => {
+    if (params.id) {
+      setIsLoading(true)
+      setError(null)
+      
+      const mensaje = await loadMensaje(params.id as string)
+      if (mensaje) {
+        setMensajeData(mensaje)
+      } else {
+        setError('No se pudo cargar el mensaje')
+      }
+      
+      setIsLoading(false)
+    }
+  }
+
   const handleCambiarEstado = async (nuevoEstado: string) => {
     if (!mensajeData) return
     
     setIsActualizando(true)
     
     try {
+      console.log('🔄 [Frontend] Cambiando estado a:', nuevoEstado, 'para mensaje:', mensajeData.id);
+      
       const response = await fetch(`/api/messages/${mensajeData.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ estado: nuevoEstado })
+        body: JSON.stringify({ estado: nuevoEstado }),
+        cache: 'no-store'
       })
       
+      console.log('📡 [Frontend] Response status:', response.status);
+      console.log('📡 [Frontend] Response ok:', response.ok);
+      
       if (response.ok) {
-        setMensajeData({ ...mensajeData, estado: nuevoEstado as "NUEVO" | "LEÍDO" | "CONTESTADO" })
+        const responseData = await response.json()
+        console.log('✅ [Frontend] Estado actualizado correctamente:', responseData);
+        // Recargar el mensaje desde Supabase para obtener datos actualizados
+        await reloadMensaje()
       } else {
-        const errorData = await response.json()
-        console.error('Error updating status:', errorData)
-        alert('Error al actualizar el estado')
+        let errorData;
+        try {
+          errorData = await response.json()
+        } catch (e) {
+          errorData = { error: `Error ${response.status}: ${response.statusText}` }
+        }
+        console.error('❌ [Frontend] Error updating status - Status:', response.status);
+        console.error('❌ [Frontend] Error updating status - Data:', errorData);
+        alert(`Error al actualizar el estado: ${errorData.error || errorData.details || 'Error desconocido'}`)
       }
     } catch (error) {
-      console.error('Error updating status:', error)
-      alert('Error al actualizar el estado')
+      console.error('❌ [Frontend] Excepción al actualizar estado:', error);
+      console.error('❌ [Frontend] Error type:', typeof error);
+      console.error('❌ [Frontend] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('❌ [Frontend] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      alert(`Error de conexión al actualizar el estado: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsActualizando(false)
     }

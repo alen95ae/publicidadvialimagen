@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllProductos, updateProducto, deleteProducto } from '@/lib/airtableProductos'
+import { getAllProductos, updateProducto, deleteProducto } from '@/lib/supabaseProductos'
 
 export async function POST(request: NextRequest) {
   try {

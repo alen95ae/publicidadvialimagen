@@ -1,33 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server"
-import { airtable } from "@/lib/airtable"
-import { extractCoordinatesFromGoogleMapsLink, buildPayload, rowToSupport } from "./helpers"
-
-// Función para normalizar nombres de ciudades (manejar acentos y variantes)
-function normalizeCityName(city: string): string[] {
-  const cityMap: Record<string, string[]> = {
-    'La Paz': ['La Paz', 'LaPaz'],
-    'Santa Cruz': ['Santa Cruz', 'Santa Cruz de la Sierra', 'SantaCruz'],
-    'Cochabamba': ['Cochabamba', 'Cocha'],
-    'El Alto': ['El Alto', 'ElAlto'],
-    'Sucre': ['Sucre'],
-    'Potosí': ['Potosí', 'Potosi'],
-    'Tarija': ['Tarija'],
-    'Oruro': ['Oruro'],
-    'Beni': ['Beni', 'Trinidad'],
-    'Pando': ['Pando', 'Cobija']
-  }
-  
-  // Buscar si la ciudad coincide con alguna variante
-  for (const [normalized, variants] of Object.entries(cityMap)) {
-    if (variants.some(v => v.toLowerCase() === city.toLowerCase())) {
-      return variants // Devolver todas las variantes para buscar en Airtable
-    }
-  }
-  
-  return [city] // Si no tiene variantes, devolver como array de un elemento
-}
+import { getSoportes, createSoporte } from "@/lib/supabaseSoportes"
+import { soporteToSupport } from "./helpers"
+import { uploadImage } from "@/lib/supabaseUpload"
 
 export async function GET(request: Request) {
   try {
@@ -41,88 +17,20 @@ export async function GET(request: Request) {
 
     console.log('🔍 Search params:', { query, statusFilter, cityFilter, page, limit })
 
-    // Construir filtros para Airtable
-    let airtableFilter = ''
-    const filterParts = []
-
-    // Filtro de búsqueda por texto (código, título, ciudad, tipo)
-    if (query) {
-      // Limpiar la query
-      const cleanQuery = query.trim()
-      
-      if (cleanQuery.length > 0) {
-        // Usar FIND con LOWER para búsqueda case-insensitive
-        // FIND es más robusto para búsquedas con caracteres especiales
-        const lowerQuery = cleanQuery.toLowerCase()
-        const searchFilter = `OR(
-          FIND("${lowerQuery}", LOWER({Código})) > 0,
-          FIND("${lowerQuery}", LOWER({Título})) > 0,
-          FIND("${lowerQuery}", LOWER({Ciudad})) > 0,
-          FIND("${lowerQuery}", LOWER({Tipo de soporte})) > 0
-        )`
-        filterParts.push(searchFilter)
-      }
-    }
-
-    // Filtro de estado
-    if (statusFilter) {
-      const statuses = statusFilter.split(',').map(s => s.trim())
-      if (statuses.length === 1) {
-        filterParts.push(`{Estado} = "${statuses[0]}"`)
-      } else {
-        const statusFilterStr = statuses.map(status => `{Estado} = "${status}"`).join(', ')
-        filterParts.push(`OR(${statusFilterStr})`)
-      }
-    }
-
-    // Filtro de ciudad (con soporte para variantes y acentos)
-    if (cityFilter) {
-      console.log('🏙️ City filter received:', cityFilter)
-      const cityVariants = normalizeCityName(cityFilter)
-      console.log('🏙️ City variants:', cityVariants)
-      
-      if (cityVariants.length === 1) {
-        const cityFilterStr = `{Ciudad} = "${cityVariants[0]}"`
-        console.log('🏙️ Single city filter:', cityFilterStr)
-        filterParts.push(cityFilterStr)
-      } else {
-        // Si hay múltiples variantes, usar OR
-        const cityFilters = cityVariants.map(v => `{Ciudad} = "${v}"`).join(', ')
-        const cityFilterStr = `OR(${cityFilters})`
-        console.log('🏙️ Multiple city filter:', cityFilterStr)
-        filterParts.push(cityFilterStr)
-      }
-    }
-
-    // Combinar filtros
-    if (filterParts.length > 0) {
-      airtableFilter = filterParts.length === 1 ? filterParts[0] : `AND(${filterParts.join(', ')})`
-    }
-
-    console.log('🔍 Airtable filter:', airtableFilter)
-
-    // Obtener registros con filtros
-    const selectOptions: any = {}
-    if (airtableFilter) {
-      selectOptions.filterByFormula = airtableFilter
-    }
-
-    const records = await airtable("Soportes").select(selectOptions).all()
-
-    const data = records.map((r) => {
-      // Usar la función rowToSupport() que mapea correctamente todos los campos incluido lighting
-      return rowToSupport({
-        id: r.id,
-        ...r.fields
-      })
+    // Obtener datos directamente de Supabase (sin conversiones Airtable)
+    const result = await getSoportes({
+      q: query,
+      status: statusFilter,
+      city: cityFilter,
+      page,
+      limit
     })
 
-    // Aplicar paginación
-    const total = data.length
+    // Convertir directamente de Supabase al formato del frontend
+    const data = result.data.map(soporte => soporteToSupport(soporte))
+
+    const total = result.count || 0
     const totalPages = Math.ceil(total / limit)
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    const paginatedData = data.slice(startIndex, endIndex)
 
     const pagination = {
       page,
@@ -134,38 +42,138 @@ export async function GET(request: Request) {
     }
 
     console.log('📊 Pagination:', pagination)
-    console.log('📊 Data length:', paginatedData.length)
+    console.log('📊 Data length:', data.length)
 
     return NextResponse.json({ 
-      data: paginatedData,
+      data,
       pagination 
     })
   } catch (e: any) {
-    console.error("Error leyendo soportes de Airtable:", e)
-    return NextResponse.json({ error: "No se pudieron obtener los soportes" }, { status: 500 })
+    console.error("Error leyendo soportes de Supabase:", e)
+    console.error("Error stack:", e?.stack)
+    console.error("Error message:", e?.message)
+    console.error("Error details:", JSON.stringify(e, null, 2))
+    return NextResponse.json({ 
+      error: "No se pudieron obtener los soportes",
+      details: process.env.NODE_ENV === 'development' ? e?.message : undefined
+    }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    // Detectar si viene como FormData (con archivos) o JSON
+    const contentType = req.headers.get("content-type") || ""
+    let body: any = {}
+    
+    if (contentType.includes("multipart/form-data")) {
+      // Manejar FormData con archivos
+      const formData = await req.formData()
+      
+      // Extraer campos de texto
+      body.code = formData.get("code")?.toString()
+      body.title = formData.get("title")?.toString()
+      body.type = formData.get("type")?.toString()
+      body.status = formData.get("status")?.toString()
+      body.widthM = formData.get("widthM") ? parseFloat(formData.get("widthM")!.toString()) : null
+      body.heightM = formData.get("heightM") ? parseFloat(formData.get("heightM")!.toString()) : null
+      body.areaM2 = formData.get("areaM2") ? parseFloat(formData.get("areaM2")!.toString()) : null
+      body.lighting = formData.get("lighting")?.toString()
+      body.iluminacion = formData.get("iluminacion") === "true"
+      body.priceMonth = formData.get("priceMonth") ? parseFloat(formData.get("priceMonth")!.toString()) : null
+      body.impactosDiarios = formData.get("impactosDiarios") ? parseInt(formData.get("impactosDiarios")!.toString()) : null
+      body.owner = formData.get("owner")?.toString()
+      body.city = formData.get("city")?.toString()
+      body.country = formData.get("country")?.toString()
+      body.googleMapsLink = formData.get("googleMapsLink")?.toString()
+      body.latitude = formData.get("latitude") ? parseFloat(formData.get("latitude")!.toString()) : null
+      body.longitude = formData.get("longitude") ? parseFloat(formData.get("longitude")!.toString()) : null
+      
+      // Manejar archivos de imágenes
+      const principalFile = formData.get("imagen_principal") as File | null
+      const secundaria1File = formData.get("imagen_secundaria_1") as File | null
+      const secundaria2File = formData.get("imagen_secundaria_2") as File | null
+      
+      // Subir imágenes si existen
+      if (principalFile && principalFile.size > 0) {
+        try {
+          const imagenPrincipalUrl = await uploadImage(principalFile, principalFile.name)
+          body.imagen_principal_url = imagenPrincipalUrl
+        } catch (error) {
+          console.error("Error subiendo imagen principal:", error)
+        }
+      }
+      
+      if (secundaria1File && secundaria1File.size > 0) {
+        try {
+          const imagenSecundaria1Url = await uploadImage(secundaria1File, secundaria1File.name)
+          body.imagen_secundaria_1_url = imagenSecundaria1Url
+        } catch (error) {
+          console.error("Error subiendo imagen secundaria 1:", error)
+        }
+      }
+      
+      if (secundaria2File && secundaria2File.size > 0) {
+        try {
+          const imagenSecundaria2Url = await uploadImage(secundaria2File, secundaria2File.name)
+          body.imagen_secundaria_2_url = imagenSecundaria2Url
+        } catch (error) {
+          console.error("Error subiendo imagen secundaria 2:", error)
+        }
+      }
+    } else {
+      // Manejar JSON simple
+      body = await req.json()
+    }
     
     if (!body.code || !body.title) {
       return NextResponse.json({ error: "Código y título son requeridos" }, { status: 400 })
     }
     
-    // Construir payload con los nombres correctos de Airtable
-    const payload = buildPayload(body)
+    // Construir payload directamente en formato Supabase (nombres reales de columnas)
+    const supabasePayload: any = {
+      codigo: body.code,
+      titulo: body.title,
+      tipo_soporte: body.type || null,
+      estado: body.status || 'Disponible',
+      ancho: body.widthM || null,
+      alto: body.heightM || null,
+      area_total: body.areaM2 || null,
+      iluminacion: body.lighting === 'Sí' || body.iluminacion === true,
+      precio_mensual: body.priceMonth || null,
+      impactos_diarios: body.impactosDiarios || null,
+      propietario: body.owner || null,
+      ciudad: body.city || null,
+      pais: body.country || 'BO',
+      enlace_maps: body.googleMapsLink || null,
+      latitud: body.latitude || null,
+      longitud: body.longitude || null,
+      created_at: new Date().toISOString(),
+    }
     
-    // Crear nuevo soporte en Airtable
-    const record = await airtable("Soportes").create([{ fields: payload }])
+    // Agregar imágenes si se subieron (formato JSONB array)
+    if (body.imagen_principal_url) {
+      supabasePayload.imagen_principal = [{ url: body.imagen_principal_url }]
+    }
+    
+    if (body.imagen_secundaria_1_url) {
+      supabasePayload.imagen_secundaria_1 = [{ url: body.imagen_secundaria_1_url }]
+    }
+    
+    if (body.imagen_secundaria_2_url) {
+      supabasePayload.imagen_secundaria_2 = [{ url: body.imagen_secundaria_2_url }]
+    }
+    
+    // Crear en Supabase
+    const soporte = await createSoporte(supabasePayload)
 
-    return NextResponse.json(rowToSupport({ 
-      id: record[0].id,
-      ...record[0].fields 
-    }), { status: 201 })
+    // Convertir directamente al formato del frontend
+    return NextResponse.json(soporteToSupport(soporte), { status: 201 })
   } catch (e: any) {
-    console.error("Error creando soporte en Airtable:", e)
-    return NextResponse.json({ error: "No se pudo crear el soporte" }, { status: 500 })
+    console.error("Error creando soporte en Supabase:", e)
+    return NextResponse.json({ 
+      error: "No se pudo crear el soporte",
+      details: process.env.NODE_ENV === 'development' ? e?.message : undefined
+    }, { status: 500 })
   }
 }

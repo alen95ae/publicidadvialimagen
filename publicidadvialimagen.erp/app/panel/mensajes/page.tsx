@@ -24,7 +24,8 @@ import {
   XCircle,
   AlertCircle,
   Eye,
-  Trash2
+  Trash2,
+  RefreshCw
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -83,14 +84,19 @@ export default function MensajesPage() {
   const [estadoFilter, setEstadoFilter] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Cargar mensajes desde Airtable
+  // Cargar mensajes desde Supabase
   const loadMensajes = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/messages')
+      // Usar cache: 'no-store' para evitar problemas de caché
+      const response = await fetch('/api/messages', {
+        cache: 'no-store',
+        next: { revalidate: 0 }
+      })
       if (response.ok) {
         const data = await response.json()
         setMensajesList(data)
+        console.log(`✅ Cargados ${data.length} mensajes desde Supabase`)
       } else {
         const errorData = await response.json()
         console.error('Error loading messages:', errorData)
@@ -128,10 +134,12 @@ export default function MensajesPage() {
     if (confirm('¿Estás seguro de que quieres eliminar este mensaje?')) {
       try {
         const response = await fetch(`/api/messages/${id}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          cache: 'no-store'
         })
         if (response.ok) {
-          setMensajesList(mensajesList.filter(m => m.id !== id))
+          // Recargar mensajes para obtener datos actualizados desde Supabase
+          await loadMensajes()
           setSelectedMensajes(selectedMensajes.filter(m => m !== id))
         } else {
           alert('Error al eliminar el mensaje')
@@ -150,12 +158,12 @@ export default function MensajesPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ estado: 'LEÍDO' })
+        body: JSON.stringify({ estado: 'LEÍDO' }),
+        cache: 'no-store'
       })
       if (response.ok) {
-        setMensajesList(mensajesList.map(m => 
-          m.id === id ? { ...m, estado: "LEÍDO" as const } : m
-        ))
+        // Recargar mensajes para obtener datos actualizados desde Supabase
+        await loadMensajes()
       } else {
         alert('Error al actualizar el estado')
       }
@@ -186,9 +194,21 @@ export default function MensajesPage() {
     <div className="p-6">
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Gestión de Mensajes</h1>
-          <p className="text-gray-600">Administra los mensajes recibidos desde los formularios de la web</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">Gestión de Mensajes</h1>
+            <p className="text-gray-600">Administra los mensajes recibidos desde los formularios de la web</p>
+          </div>
+          <Button
+            onClick={loadMensajes}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
         </div>
 
         {/* Actions Bar */}

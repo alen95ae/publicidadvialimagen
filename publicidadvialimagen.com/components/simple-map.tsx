@@ -1,6 +1,7 @@
 "use client"
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
+import { MapContainer, TileLayer, Marker, Popup, LayersControl } from "react-leaflet"
+import { correctCoordsForOSM } from "@/lib/mapUtils"
 import L from "leaflet"
 import { useMemo } from "react"
 import { createBillboardIcon } from "./billboard-icon"
@@ -71,12 +72,22 @@ export default function SimpleMap({ center, zoom = 16, heightClassName = "h-96",
 
   return (
     <div className={`${heightClassName} rounded-lg overflow-hidden shadow-lg border`}> 
-      <MapContainer center={center} zoom={zoom} style={{ height: "100%", width: "100%" }} className="z-0">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <Marker position={center} icon={icon}>
+      <MapContainer center={correctCoordsForOSM(center[0], center[1])} zoom={zoom} style={{ height: "100%", width: "100%" }} className="z-0">
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="📖 OSM">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="🌍 Satélite">
+            <TileLayer
+              attribution="© Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+        <Marker position={correctCoordsForOSM(center[0], center[1])} icon={icon}>
           <Popup>
             {markerTitle ? <h3 className="font-semibold text-sm mb-1">{markerTitle}</h3> : null}
             {markerSubtitle ? <p className="text-xs text-muted-foreground mb-2">{markerSubtitle}</p> : null}

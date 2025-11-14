@@ -234,6 +234,7 @@ export default function PanelHeader() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ estado: "LEÍDO" }),
+          cache: 'no-store'
         })
       } else if (notification.type === "solicitud") {
         // Para solicitudes, usar el código si está disponible, sino extraerlo del link

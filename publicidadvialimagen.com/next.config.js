@@ -19,6 +19,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'v5.airtableusercontent.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'ibmihmfpogmzofvctmjz.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
     ],
   },
   i18n: {

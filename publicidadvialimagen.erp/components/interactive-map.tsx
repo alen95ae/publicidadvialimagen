@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, LayersControl } from 'react-leaflet'
+import { correctCoordsForOSM } from '@/lib/mapUtils'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -56,13 +57,23 @@ export default function InteractiveMap({
         style={{ height: '100%', width: '100%' }}
         className="z-0"
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="📖 OSM">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="🌍 Satélite">
+            <TileLayer
+              attribution="© Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
         
-        {/* Marcador principal */}
-        <Marker position={center}>
+        {/* Marcador principal (con corrección para OSM por defecto) */}
+        <Marker position={correctCoordsForOSM(lat, lng)}>
           <Popup>
             Ubicación seleccionada<br />
             Lat: {lat.toFixed(6)}, Lng: {lng.toFixed(6)}

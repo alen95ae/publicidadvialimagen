@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllRecursos } from '@/lib/airtableRecursos'
+import { getAllRecursos } from '@/lib/supabaseRecursos'
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
 
     console.log('📤 Exportando recursos:', { query, categoria })
 
-    // Obtener todos los recursos de Airtable
+    // Obtener todos los recursos de Supabase
     let recursos = await getAllRecursos()
 
     // Aplicar filtros

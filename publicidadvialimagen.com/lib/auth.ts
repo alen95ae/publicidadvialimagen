@@ -1,9 +1,16 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
-import { airtableList, airtableCreate } from "./airtable-rest";
+import { 
+  findUserByEmailSupabase, 
+  createUserSupabase,
+  updateLastAccessSupabase,
+  type Usuario 
+} from "./supabaseUsers";
+import { airtableList } from "./airtable-rest";
 
 const USERS = process.env.AIRTABLE_TABLE_USERS || "Users";
+
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
 
@@ -12,34 +19,69 @@ export type UserRecord = {
   fields: {
     Email: string;
     PasswordHash?: string;
-    Name?: string;
-    Role?: string; // "admin" | "user"
+    Nombre?: string;
+    Rol?: string;
+    Activo?: boolean;
+    UltimoAcceso?: string;
   };
 };
 
+// Convertir Usuario (Supabase) a UserRecord (compatible con código existente)
+function usuarioToUserRecord(usuario: Usuario): UserRecord {
+  return {
+    id: usuario.id,
+    fields: {
+      Email: usuario.fields.Email,
+      PasswordHash: usuario.fields.PasswordHash,
+      Nombre: usuario.fields.Nombre,
+      Rol: usuario.fields.Rol,
+      Activo: usuario.fields.Activo,
+      UltimoAcceso: usuario.fields.UltimoAcceso,
+    }
+  };
+}
+
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
-  const lower = email.trim().toLowerCase().replace(/'/g, "\\'");
-  const data = await airtableList(USERS, {
-    filterByFormula: `LOWER({Email})='${lower}'`,
-    maxRecords: "1",
-    pageSize: "1",
-  });
-  const rec = data?.records?.[0];
-  return rec ? { id: rec.id, fields: rec.fields } : null;
+  try {
+    console.log('🔍 [Auth] Buscando usuario con email:', email);
+    
+    // Primero intentar en Supabase
+    const usuario = await findUserByEmailSupabase(email);
+    if (usuario) {
+      console.log('✅ [Auth] Usuario encontrado en Supabase:', usuario.id, usuario.fields.Email);
+      return usuarioToUserRecord(usuario);
+    }
+    
+    // Si no se encuentra en Supabase, intentar en Airtable (fallback temporal)
+    console.log('⚠️ [Auth] Usuario no encontrado en Supabase, buscando en Airtable...');
+    const lower = email.trim().toLowerCase().replace(/'/g, "\\'");
+    const data = await airtableList(USERS, {
+      filterByFormula: `LOWER({Email})='${lower}'`,
+      maxRecords: "1",
+      pageSize: "1",
+    });
+    const rec = data?.records?.[0];
+    if (rec) {
+      console.log('✅ [Auth] Usuario encontrado en Airtable (fallback):', rec.id);
+      return { id: rec.id, fields: rec.fields };
+    }
+    
+    console.log('❌ [Auth] Usuario no encontrado ni en Supabase ni en Airtable');
+    return null;
+  } catch (error) {
+    console.error("❌ [Auth] Error finding user by email:", error);
+    return null;
+  }
 }
 
 export async function createUser(email: string, password: string, name?: string) {
   const hash = await bcrypt.hash(password, 10);
-  const payload = {
-    Email: email.trim(),
-    PasswordHash: hash,
-    Nombre: name || "",
-    Rol: "invitado",
-    Activo: true,
-  };
-  const res = await airtableCreate(USERS, [{ fields: payload }]);
-  const rec = res?.records?.[0];
-  return { id: rec.id, fields: rec.fields };
+  const usuario = await createUserSupabase(email, hash, name, "invitado");
+  return usuarioToUserRecord(usuario);
+}
+
+export async function updateUserLastAccess(userId: string) {
+  await updateLastAccessSupabase(userId);
 }
 
 export function signSession(user: { id: string; email: string; role?: string; name?: string }) {

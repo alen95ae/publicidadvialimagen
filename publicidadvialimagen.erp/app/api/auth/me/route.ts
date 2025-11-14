@@ -3,9 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
-import { airtableGet } from "@/lib/airtable-rest";
-
-const USERS_TABLE = process.env.AIRTABLE_TABLE_USERS || "Users";
+import { getUserByIdSupabase } from "@/lib/supabaseUsers";
 
 export async function GET() {
   try {
@@ -13,15 +11,15 @@ export async function GET() {
     if (!token) return NextResponse.json({ user: null });
     const payload = await verifySession(token);
     
-    // Siempre obtener el nombre desde Airtable para tener la información más actualizada
+    // Obtener el nombre desde Supabase para tener la información más actualizada
     let userName = "";
     try {
-      const userRecord = await airtableGet(USERS_TABLE, payload.sub);
-      userName = userRecord.fields?.Nombre || userRecord.fields?.Name || "";
-      console.log("User name from Airtable:", userName, "for user ID:", payload.sub);
+      const userRecord = await getUserByIdSupabase(payload.sub);
+      userName = userRecord?.fields?.Nombre || "";
+      console.log("User name from Supabase:", userName, "for user ID:", payload.sub);
     } catch (error) {
-      console.error("Error fetching user from Airtable:", error);
-      // Fallback al nombre del token si falla Airtable
+      console.error("Error fetching user from Supabase:", error);
+      // Fallback al nombre del token si falla Supabase
       userName = payload.name || "";
     }
     

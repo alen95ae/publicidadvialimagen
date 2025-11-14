@@ -8,7 +8,8 @@
     "lint": "next lint",
     "start": "next start",
     "verify": "node verify-deployment-ready.js",
-    "preinstall": "echo '📦 Instalando dependencias del ERP...'"
+    "preinstall": "echo '📦 Instalando dependencias del ERP...'",
+    "migrate:airtable-images": "ts-node scripts/migrate-airtable-images.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -91,9 +92,11 @@
     "@types/google.maps": "^3.58.1",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22",
+    "@types/node-fetch": "^2.6.11",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "autoprefixer": "^10.4.21",
+    "node-fetch": "^2.7.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "ts-node": "^10.9.2",

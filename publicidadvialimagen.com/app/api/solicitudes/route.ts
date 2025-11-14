@@ -3,10 +3,10 @@ export const revalidate = 0
 
 import { NextRequest, NextResponse } from 'next/server'
 import { airtableCreate, airtableList } from '@/lib/airtable-rest'
+import { getAllSoportes } from '@/lib/supabaseSoportes'
 
 // Configuración de tablas
 const TABLE_SOLICITUDES = process.env.AIRTABLE_TABLE_SOLICITUDES || "Solicitudes"
-const TABLE_SOPORTES = process.env.AIRTABLE_TABLE_SOPORTES || "Soportes"
 
 // Interface para las solicitudes de cotización
 interface SolicitudCotizacion {
@@ -100,9 +100,10 @@ export async function POST(request: NextRequest) {
     let codigoSoporte = soporte; // Por defecto usar el ID recibido
     try {
       console.log('🔍 Buscando código del soporte:', soporte);
-      const soporteData = await airtableList(TABLE_SOPORTES, { filterByFormula: `{ID} = "${soporte}"` });
-      if (soporteData.records && soporteData.records.length > 0) {
-        codigoSoporte = soporteData.records[0].fields['Código'] || soporte;
+      const soportesData = await getAllSoportes();
+      const soporteEncontrado = soportesData.records.find(r => r.id === soporte);
+      if (soporteEncontrado) {
+        codigoSoporte = soporteEncontrado.fields['Código'] || soporte;
         console.log('✅ Código del soporte encontrado:', codigoSoporte);
       } else {
         console.log('⚠️ No se encontró el código del soporte, usando ID recibido:', soporte);

@@ -2,11 +2,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { NextResponse } from 'next/server'
-import Airtable from 'airtable'
-
-// Configurar Airtable
-const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY })
-  .base(process.env.AIRTABLE_BASE_ID!)
+import { getAllSoportes } from '@/lib/supabaseSoportes'
 
 /** Normalizar nombres de ciudades para mantener consistencia en la web */
 function normalizeCityName(ciudad: string | undefined): string {
@@ -100,12 +96,10 @@ export async function GET(req: Request) {
     const minPrice = searchParams.get('minPrice')
     const maxPrice = searchParams.get('maxPrice')
 
-    // Obtener todos los datos de Airtable (sin filtro por estado durante desarrollo)
-    const records = await base("Soportes").select({
-      // TODO: Activar filtro en producción: filterByFormula: `{Estado} = 'Disponible'`
-    }).all()
+    // Obtener todos los datos de Supabase
+    const result = await getAllSoportes()
 
-    const soportes = records.map(r => {
+    const soportes = result.records.map(r => {
       // Extraer coordenadas del enlace de Google Maps
       const googleMapsLink = r.fields['Enlace Google Maps']
       const coords = extractCoordinatesFromGoogleMapsLink(googleMapsLink)
@@ -127,9 +121,10 @@ export async function GET(req: Request) {
         ubicacion_url: googleMapsLink,
         latitud: r.fields['Latitud'] ?? coords.latitude,
         longitud: r.fields['Longitud'] ?? coords.longitude,
-        foto_url: r.fields['Imagen principal']?.[0]?.url,
-        foto_url_2: r.fields['Imagen secundaria 1']?.[0]?.url,
-        foto_url_3: r.fields['Imagen secundaria 2']?.[0]?.url,
+        // Preparado para imágenes: extraer URL del array JSONB
+        foto_url: r.fields['Imagen principal']?.[0]?.url || null,
+        foto_url_2: r.fields['Imagen secundaria 1']?.[0]?.url || null,
+        foto_url_3: r.fields['Imagen secundaria 2']?.[0]?.url || null,
         notas: r.fields['Dirección / Notas'],
         propietario: r.fields['Propietario'],
         descripcion: r.fields['Descripción'],
@@ -252,7 +247,12 @@ export async function GET(req: Request) {
 
   } catch (error) {
     console.error('Error in soportes API:', error)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
+    console.error('Error details:', JSON.stringify(error, null, 2))
+    return NextResponse.json({ 
+      error: 'Error interno del servidor',
+      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+    }, { status: 500 })
   }
 }
 

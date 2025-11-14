@@ -82,7 +82,9 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const forceUpdate = searchParams.get('force') === 'true'
     
-    const records = await airtable("Soportes").select({}).all()
+    const { getAllSoportes, updateSoporte } = await import('@/lib/supabaseSoportes')
+    const result = await getAllSoportes()
+    const records = result.records
     
     // Filtrar solo los que necesitan actualización
     let recordsToProcess = records.filter(r => {
@@ -93,7 +95,7 @@ export async function GET(request: Request) {
       if (!googleMapsLink) return false
       if (forceUpdate) return true
       return !currentLat || !currentLng
-    })
+    }).map(r => ({ id: r.id, fields: r.fields }))
     
     // Limitar cantidad a procesar
     if (limit > 0) {
@@ -131,8 +133,8 @@ export async function GET(request: Request) {
         const coords = extractCoordinatesFromUrl(fullUrl)
         
         if (coords.latitude && coords.longitude) {
-          // Actualizar en Airtable
-          await airtable("Soportes").update(record.id, {
+          // Actualizar en Supabase
+          await updateSoporte(record.id, {
             'Latitud': coords.latitude,
             'Longitud': coords.longitude
           })

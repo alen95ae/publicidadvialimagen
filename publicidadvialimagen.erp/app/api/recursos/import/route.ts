@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { parse } from 'csv-parse/sync'
-import { createRecurso } from '@/lib/airtableRecursos'
+import { createRecurso } from '@/lib/supabaseRecursos'
 
 export async function POST(req: Request) {
   try {
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
           continue
         }
 
-        // Crear recurso en Airtable
+        // Crear recurso en Supabase
         await createRecurso(recursoData)
         created++
 

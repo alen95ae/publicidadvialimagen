@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verify } from "@/lib/auth/jwt";
-import { airtableList, airtableUpdate } from "@/lib/airtable-rest";
-
-const INVITATIONS_TABLE = process.env.AIRTABLE_TABLE_INVITATIONS || "Invitaciones";
+import {
+  findInvitacionByToken,
+  marcarInvitacionComoExpirada,
+  marcarInvitacionComoUsada
+} from "@/lib/supabaseInvitaciones";
 
 // GET /api/ajustes/validar-token - Validar token de invitación
 export async function GET(request: NextRequest) {
@@ -27,42 +29,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token expirado" }, { status: 400 });
     }
 
-    // Buscar la invitación en Airtable
-    const invitation = await airtableList(INVITATIONS_TABLE, {
-      filterByFormula: `{Token} = "${token}"`,
-      maxRecords: "1",
-    });
+    // Buscar la invitación en Supabase
+    const invitation = await findInvitacionByToken(token);
 
-    if (invitation.records.length === 0) {
+    if (!invitation) {
       return NextResponse.json({ error: "Invitación no encontrada" }, { status: 404 });
     }
 
-    const invitationRecord = invitation.records[0];
-    const estado = invitationRecord.fields.Estado;
-
-    if (estado === "usado") {
+    if (invitation.estado === "usado") {
       return NextResponse.json({ error: "Esta invitación ya ha sido utilizada" }, { status: 400 });
     }
 
-    if (estado === "expirado") {
+    if (invitation.estado === "expirado") {
       return NextResponse.json({ error: "Esta invitación ha expirado" }, { status: 400 });
     }
 
     // Verificar fecha de expiración
-    const fechaExpiracion = new Date(invitationRecord.fields.FechaExpiracion);
+    const fechaExpiracion = new Date(invitation.fechaExpiracion);
     if (fechaExpiracion < new Date()) {
       // Marcar como expirado
-      await airtableUpdate(INVITATIONS_TABLE, invitationRecord.id, {
-        Estado: "expirado"
-      });
+      await marcarInvitacionComoExpirada(invitation.id);
       return NextResponse.json({ error: "Esta invitación ha expirado" }, { status: 400 });
     }
 
     return NextResponse.json({
       valido: true,
-      email: invitationRecord.fields.Email,
-      rol: invitationRecord.fields.Rol,
-      fechaExpiracion: invitationRecord.fields.FechaExpiracion,
+      email: invitation.email,
+      rol: invitation.rol,
+      fechaExpiracion: invitation.fechaExpiracion,
     });
   } catch (error) {
     console.error("Error validating token:", error);
@@ -80,28 +74,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Token requerido" }, { status: 400 });
     }
 
-    // Buscar la invitación
-    const invitation = await airtableList(INVITATIONS_TABLE, {
-      filterByFormula: `{Token} = "${token}"`,
-      maxRecords: "1",
-    });
+    // Buscar la invitación en Supabase
+    const invitation = await findInvitacionByToken(token);
 
-    if (invitation.records.length === 0) {
+    if (!invitation) {
       return NextResponse.json({ error: "Invitación no encontrada" }, { status: 404 });
     }
 
-    const invitationRecord = invitation.records[0];
-
     // Marcar como usado
-    await airtableUpdate(INVITATIONS_TABLE, invitationRecord.id, {
-      Estado: "usado",
-      FechaUso: new Date().toISOString(),
-    });
+    await marcarInvitacionComoUsada(invitation.id);
 
     return NextResponse.json({
       success: true,
-      email: invitationRecord.fields.Email,
-      rol: invitationRecord.fields.Rol,
+      email: invitation.email,
+      rol: invitation.rol,
     });
   } catch (error) {
     console.error("Error using token:", error);

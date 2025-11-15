@@ -498,7 +498,7 @@ export default function NuevaCotizacionPage() {
     const cargarClientes = async () => {
       setCargandoClientes(true)
       try {
-        const response = await fetch('/api/contactos?relation=Cliente&limit=1000')
+        const response = await fetch('/api/contactos?relation=Cliente')
         const data = await response.json()
         setTodosLosClientes(data.data || [])
       } catch (error) {
@@ -552,7 +552,7 @@ export default function NuevaCotizacionPage() {
   // Función de filtrado para clientes
   const filtrarClientes = (query: string) => {
     if (!query || query.trim() === '') {
-      setFilteredClientes(todosLosClientes.slice(0, 20))
+      setFilteredClientes(todosLosClientes.slice(0, 50))
       return
     }
     
@@ -561,9 +561,9 @@ export default function NuevaCotizacionPage() {
       const nombre = (cliente.displayName || '').toLowerCase()
       const empresa = (cliente.legalName || '').toLowerCase()
       
-      // Buscar al inicio del nombre o empresa
-      return nombre.startsWith(search) || empresa.startsWith(search)
-    }).slice(0, 15) // Limitar a 15 resultados máximo
+      // Buscar en cualquier parte del nombre o empresa (no solo al inicio)
+      return nombre.includes(search) || empresa.includes(search)
+    }).slice(0, 100) // Limitar a 100 resultados coincidentes
     
     setFilteredClientes(filtered)
   }
@@ -1101,7 +1101,7 @@ export default function NuevaCotizacionPage() {
                   <Popover open={openClienteCombobox} onOpenChange={(open) => {
                     setOpenClienteCombobox(open)
                     if (open) {
-                      setFilteredClientes(todosLosClientes.slice(0, 20))
+                      setFilteredClientes(todosLosClientes.slice(0, 50))
                     }
                   }}>
                     <PopoverTrigger asChild>

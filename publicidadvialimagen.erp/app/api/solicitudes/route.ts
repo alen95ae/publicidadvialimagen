@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { airtableCreate, airtableList, getAllRecords } from '@/lib/airtable-rest'
+import {
+  getAllSolicitudes,
+  createSolicitud,
+  generarSiguienteCodigo
+} from '@/lib/supabaseSolicitudes'
 
 // Interface para las solicitudes de cotización
 interface SolicitudCotizacion {
@@ -18,34 +22,9 @@ interface SolicitudCotizacion {
 }
 
 // Función para generar el siguiente código de solicitud consecutivo
-async function generarSiguienteCodigo(): Promise<string> {
-  try {
-    // Obtener todas las solicitudes existentes desde Airtable
-    const airtableData = await airtableList('Solicitudes')
-    
-    // Filtrar códigos que empiecen con "SC-" y extraer números
-    const codigosSC = airtableData.records
-      .map((record: any) => record.fields['Código'])
-      .filter((codigo: string) => codigo && codigo.startsWith('SC-'))
-      .map((codigo: string) => {
-        const match = codigo.match(/^SC-(\d+)$/)
-        return match ? parseInt(match[1]) : 0
-      })
-      .filter((numero: number) => numero > 0)
-    
-    // Encontrar el siguiente número disponible
-    const siguienteNumero = codigosSC.length > 0 ? Math.max(...codigosSC) + 1 : 1
-    
-    // Formatear con 3 dígitos
-    const numeroFormateado = siguienteNumero.toString().padStart(3, '0')
-    
-    return `SC-${numeroFormateado}`
-    
-  } catch (error) {
-    console.error('Error obteniendo códigos existentes:', error)
-    // Fallback: empezar desde SC-001
-    return 'SC-001'
-  }
+// Ahora usa Supabase
+async function obtenerSiguienteCodigo(): Promise<string> {
+  return await generarSiguienteCodigo()
 }
 
 // Función para formatear fecha y hora actual
@@ -100,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generar el siguiente código consecutivo
-    const codigo = await generarSiguienteCodigo()
+    const codigo = await obtenerSiguienteCodigo()
     
     // Normalizar servicios adicionales
     const serviciosNormalizados = normalizarServiciosAdicionales(
@@ -109,77 +88,41 @@ export async function POST(request: NextRequest) {
     
     console.log('🔧 Servicios originales:', serviciosAdicionales)
     console.log('🔧 Servicios normalizados:', serviciosNormalizados)
-    
-    // Crear la solicitud
-    const solicitud: SolicitudCotizacion = {
-      codigo,
-      fechaCreacion: formatearFechaCreacion(),
-      empresa,
-      contacto,
-      telefono,
-      email,
-      comentarios: comentarios || '',
-      estado: 'Nueva',
-      fechaInicio,
-      mesesAlquiler: parseInt(mesesAlquiler),
-      soporte,
-      serviciosAdicionales: serviciosNormalizados
-    }
 
-    // Guardar en base de datos (Airtable)
-    console.log('Nueva solicitud recibida:', solicitud)
-    
+    // Crear la solicitud en Supabase
     try {
-      // Guardar en Airtable usando la tabla Solicitudes (correcta)
-      console.log('🔍 Intentando guardar en Airtable con datos:', {
-        codigo: solicitud.codigo,
-        empresa: solicitud.empresa,
-        mesesAlquiler: solicitud.mesesAlquiler,
-        soporte: solicitud.soporte
+      const nuevaSolicitud = await createSolicitud(
+        codigo,
+        'Nueva',
+        fechaInicio,
+        parseInt(mesesAlquiler),
+        soporte,
+        serviciosNormalizados,
+        empresa,
+        contacto,
+        telefono,
+        email,
+        comentarios || ''
+      )
+
+      console.log('✅ Solicitud guardada en Supabase:', nuevaSolicitud.codigo)
+
+      return NextResponse.json({
+        success: true,
+        message: 'Solicitud creada exitosamente',
+        solicitud: {
+          codigo: nuevaSolicitud.codigo,
+          fechaCreacion: nuevaSolicitud.fechaCreacion
+        }
       })
-      
-      // Preparar campos para Airtable
-      const fields: any = {
-        'Código': solicitud.codigo,
-        'Empresa': solicitud.empresa,
-        'Contacto': solicitud.contacto,
-        'Email': solicitud.email,
-        'Teléfono': solicitud.telefono,
-        'Comentarios': solicitud.comentarios,
-        'Estado': 'Nueva',
-        'Fecha Inicio': solicitud.fechaInicio,
-        'Meses alquiler': solicitud.mesesAlquiler,
-        'Soporte': solicitud.soporte
-      }
-      
-      // Solo agregar servicios si hay alguno seleccionado
-      if (solicitud.serviciosAdicionales && solicitud.serviciosAdicionales.length > 0) {
-        fields['Servicios adicionales'] = solicitud.serviciosAdicionales
-        console.log('🔧 Agregando servicios adicionales:', solicitud.serviciosAdicionales)
-      }
-      
-      const airtableResponse = await airtableCreate('Solicitudes', [{
-        fields: fields
-      }])
-      
-      console.log('✅ Solicitud guardada en Airtable (tabla Solicitudes):', airtableResponse)
-    } catch (error) {
-      console.error('❌ Error guardando en Airtable:', error)
+    } catch (error: any) {
+      console.error('❌ Error guardando en Supabase:', error)
       console.error('❌ Stack trace:', error.stack)
       return NextResponse.json(
-        { error: 'Error al guardar en Airtable', details: error.message },
+        { error: 'Error al guardar en Supabase', details: error.message },
         { status: 500 }
       )
     }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Solicitud creada exitosamente',
-      solicitud: {
-        codigo: solicitud.codigo,
-        fechaCreacion: solicitud.fechaCreacion
-      }
-    })
 
   } catch (error) {
     console.error('Error al crear solicitud:', error)
@@ -192,100 +135,10 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Leer desde Airtable
-    let solicitudes: SolicitudCotizacion[] = []
-    
-    try {
-      // Leer desde la tabla Solicitudes (correcta)
-      console.log('🔍 Leyendo solicitudes desde Airtable...')
-      const airtableData = await airtableList('Solicitudes')
-      console.log('📊 Records raw de Airtable:', airtableData.records.length)
-      
-      // 1) Trae TODOS los Soportes (304 reg) y construye map ID -> Código
-      const soportesData = await getAllRecords('Soportes')
-      const soportesMap: Record<string, string> = soportesData.records.reduce((acc, rec) => {
-        const id = rec.id // ID Airtable (recXXXX)
-        const codigo = (rec.fields as any)['Código']
-        if (id && codigo) acc[id] = String(codigo)
-        return acc
-      }, {} as Record<string, string>)
-      
-      console.log('[DBG] soportesMap size:', Object.keys(soportesMap).length)
-
-      solicitudes = airtableData.records.map((record: any) => {
-        const soporteId = record.fields['Soporte'] ? 
-          (Array.isArray(record.fields['Soporte']) ? record.fields['Soporte'][0] : record.fields['Soporte']) : ''
-        
-        // 3) Mapea Soporte ID -> Código de forma robusta
-        const mapSoporte = (raw: any) => {
-          if (!raw) return ""
-          const id = Array.isArray(raw) ? raw[0] : raw
-          return soportesMap[id] ?? id // si no está en el map, devuelve el ID como fallback
-        }
-        
-        const soporteCodigo = mapSoporte(record.fields['Soporte'])
-        
-        return {
-          codigo: record.fields['Código'] || '',
-          fechaCreacion: record.fields['Fecha Creación'] ? 
-            new Date(record.fields['Fecha Creación']).toLocaleString('es-BO') : 
-            new Date().toLocaleString('es-BO'),
-          empresa: record.fields['Empresa'] || '',
-          contacto: record.fields['Contacto'] || '',
-          telefono: record.fields['Teléfono'] || '',
-          email: record.fields['Email'] || '',
-          comentarios: record.fields['Comentarios'] || '',
-          estado: record.fields['Estado'] || 'Nueva',
-          fechaInicio: record.fields['Fecha Inicio'] || '',
-          mesesAlquiler: record.fields['Meses alquiler'] || 0,
-          soporte: soporteCodigo,
-          serviciosAdicionales: record.fields['Servicios adicionales'] ? 
-            (Array.isArray(record.fields['Servicios adicionales']) ? 
-              record.fields['Servicios adicionales'] : 
-              record.fields['Servicios adicionales'].split(',').map((s: string) => s.trim()).filter((s: string) => s)) : []
-        }
-      })
-      
-      // Ordenar por fecha de creación (más recientes primero)
-      solicitudes.sort((a, b) => {
-        // Usar el campo original de Airtable para ordenar por fecha real
-        const getFechaOriginal = (solicitud: any) => {
-          // Buscar el record original en airtableData para obtener la fecha real
-          const record = airtableData.records.find((r: any) => r.fields['Código'] === solicitud.codigo)
-          if (record && record.fields['Fecha Creación']) {
-            return new Date(record.fields['Fecha Creación']).getTime()
-          }
-          // Fallback: usar la fecha formateada
-          const fechaNormalizada = solicitud.fechaCreacion.replace(/p\. m\./g, 'PM').replace(/a\. m\./g, 'AM')
-          return new Date(fechaNormalizada).getTime()
-        }
-        
-        const fechaA = getFechaOriginal(a)
-        const fechaB = getFechaOriginal(b)
-        return fechaB - fechaA // Más recientes primero
-      })
-      
-      console.log('✅ Solicitudes cargadas desde Airtable (tabla Solicitudes):', solicitudes.length)
-    } catch (error) {
-      console.error('❌ Error cargando desde Airtable:', error)
-      // Usar datos de ejemplo si falla Airtable
-      solicitudes = [
-        {
-          codigo: "S-001",
-          fechaCreacion: "15/01/2024 09:30",
-          empresa: "Empresa ABC S.A.",
-          contacto: "Juan Pérez",
-          telefono: "+591 2 1234567",
-          email: "juan.perez@empresaabc.com",
-          comentarios: "Solicitud de cotización para vallas publicitarias en zona centro",
-          estado: "Pendiente",
-          fechaInicio: "01/02/2024",
-          mesesAlquiler: 6,
-          soporte: "V-001",
-          serviciosAdicionales: ["Diseño gráfico", "Impresión de lona", "Instalación en valla"]
-        }
-      ]
-    }
+    // Leer desde Supabase
+    console.log('🔍 Leyendo solicitudes desde Supabase...')
+    const solicitudes = await getAllSolicitudes()
+    console.log('✅ Solicitudes cargadas desde Supabase:', solicitudes.length)
 
     return NextResponse.json(solicitudes)
 

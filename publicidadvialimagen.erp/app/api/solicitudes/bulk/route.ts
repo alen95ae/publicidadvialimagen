@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { airtableList, airtableUpdate } from '@/lib/airtable-rest'
+import { updateMultipleSolicitudes } from '@/lib/supabaseSolicitudes'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,33 +15,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Estado requerido para actualizar' }, { status: 400 })
       }
 
-      // Obtener todas las solicitudes para encontrar los IDs de Airtable por código
-      const airtableData = await airtableList('Solicitudes')
-      const codigoToIdMap: Record<string, string> = {}
-      
-      airtableData.records.forEach((record: any) => {
-        const codigo = record.fields['Código']
-        if (codigo) {
-          codigoToIdMap[codigo] = record.id
-        }
+      // Actualizar múltiples solicitudes en Supabase
+      const count = await updateMultipleSolicitudes(ids, {
+        estado: data.estado
       })
-
-      // Actualizar múltiples solicitudes
-      const promises = ids
-        .filter((codigo: string) => codigoToIdMap[codigo]) // Solo procesar códigos que existen
-        .map((codigo: string) => {
-          const airtableId = codigoToIdMap[codigo]
-          return airtableUpdate('Solicitudes', airtableId, {
-            'Estado': data.estado
-          })
-        })
-      
-      await Promise.all(promises)
       
       return NextResponse.json({
         success: true,
-        message: `${promises.length} solicitud(es) actualizada(s) correctamente`,
-        count: promises.length
+        message: `${count} solicitud(es) actualizada(s) correctamente`,
+        count
       })
     }
 

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server"
-import { airtable } from "@/lib/airtable"
+import { getAllContactos, createContacto } from "@/lib/supabaseContactos"
 
 export async function GET(request: Request) {
   try {
@@ -10,84 +10,23 @@ export async function GET(request: Request) {
     const relationFilter = searchParams.get('relation') || ''
     const kindFilter = searchParams.get('kind') || ''
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '100')
+    // Solo aplicar límite si viene explícitamente en la URL
+    const limitParam = searchParams.get('limit')
+    const limit = limitParam ? parseInt(limitParam) : undefined
 
-    console.log('🔍 Contact search params:', { query, relationFilter, page, limit })
+    console.log('🔍 Contact search params:', { query, relationFilter, kindFilter, page, limit: limit || 'sin límite' })
 
-    // Construir filtros para Airtable
-    let airtableFilter = ''
-    const filterParts = []
+    // Obtener contactos de Supabase con filtros
+    const contactos = await getAllContactos({
+      query,
+      relation: relationFilter,
+      kind: kindFilter
+    })
 
-    // Filtro de búsqueda por Nombre, Empresa o Email (case-insensitive y exacto para email)
-    if (query) {
-      const q = query.replace(/"/g, '\\"')
-      const qLower = query.trim().toLowerCase().replace(/"/g, '\\"')
-      const nameSearch = `SEARCH("${q}", {Nombre} & '') > 0`
-      const empresaSearch = `SEARCH("${q}", {Empresa} & '') > 0`
-      const emailEq = `LOWER(TRIM({Email} & '')) = "${qLower}"`
-      const emailContains = `FIND("${qLower}", LOWER({Email} & '')) > 0`
-      filterParts.push(`OR(${nameSearch}, ${empresaSearch}, ${emailEq}, ${emailContains})`)
-    }
-
-    // Filtro de relación
-    if (relationFilter) {
-      const relations = relationFilter.split(',').map(r => r.trim())
-      if (relations.length === 1) {
-        filterParts.push(`{Relación} = "${relations[0]}"`)
-      } else {
-        const relationFilterStr = relations.map(rel => `{Relación} = "${rel}"`).join(', ')
-        filterParts.push(`OR(${relationFilterStr})`)
-      }
-    }
-
-    // Filtro por tipo (kind)
-    if (kindFilter && kindFilter !== 'ALL') {
-      const mapped = kindFilter === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
-      filterParts.push(`{Tipo de Contacto} = "${mapped}"`)
-    }
-
-    // Combinar filtros
-    if (filterParts.length > 0) {
-      airtableFilter = filterParts.length === 1 ? filterParts[0] : `AND(${filterParts.join(', ')})`
-    }
-
-    console.log('🔍 Airtable filter:', airtableFilter)
-
-    // Obtener registros con filtros
-    const selectOptions: any = {}
-    if (airtableFilter) {
-      selectOptions.filterByFormula = airtableFilter
-    }
-
-    const records = await airtable("Contactos").select(selectOptions).all()
-
-    // Debug: mostrar campos disponibles del primer registro
-    if (records.length > 0) {
-      console.log('📋 Campos disponibles en Airtable:', Object.keys(records[0].fields))
-      console.log('📋 Primer registro completo:', records[0].fields)
-    }
-
-    const data = records.map((r) => ({
-      id: r.id,
-      displayName: r.fields['Nombre'] || r.fields['Nombre Comercial'] || r.fields['Nombre Contacto'] || '',
-      legalName: r.fields['Empresa'] || r.fields['Nombre Legal'] || '',
-      kind: r.fields['Tipo de Contacto'] === 'Individual' ? 'INDIVIDUAL' : 'COMPANY',
-      email: r.fields['Email'] || '',
-      phone: r.fields['Teléfono'] || r.fields['Telefono'] || '',
-      taxId: r.fields['NIT'] || r.fields['CIF'] || '',
-      address: r.fields['Dirección'] || r.fields['Direccion'] || '',
-      city: r.fields['Ciudad'] || '',
-      postalCode: r.fields['Código Postal'] || '',
-      country: r.fields['País'] || 'Bolivia',
-      relation: r.fields['Relación'] || 'Cliente',
-      status: 'activo',
-      notes: r.fields['Notas'] || '',
-      createdAt: r.createdTime,
-      updatedAt: r.createdTime
-    }))
+    console.log(`✅ Obtenidos ${contactos.length} contactos de Supabase`)
 
     // Ordenamiento personalizado: números primero, luego letras A-Z, sin nombre al final
-    data.sort((a, b) => {
+    contactos.sort((a, b) => {
       const nameA = (a.displayName || '').trim()
       const nameB = (b.displayName || '').trim()
 
@@ -109,31 +48,49 @@ export async function GET(request: Request) {
       return nameA.localeCompare(nameB, 'es', { numeric: true, sensitivity: 'base' })
     })
 
-    // Aplicar paginación
-    const total = data.length
-    const totalPages = Math.ceil(total / limit)
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    const paginatedData = data.slice(startIndex, endIndex)
+    // Aplicar paginación solo si se especificó un límite
+    const total = contactos.length
+    
+    if (limit) {
+      const totalPages = Math.ceil(total / limit)
+      const startIndex = (page - 1) * limit
+      const endIndex = startIndex + limit
+      const paginatedData = contactos.slice(startIndex, endIndex)
 
-    const pagination = {
-      page,
-      limit,
-      total,
-      totalPages,
-      hasNext: page < totalPages,
-      hasPrev: page > 1
+      const pagination = {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+
+      console.log('📊 Contact pagination:', pagination)
+      console.log('📊 Contact data length:', paginatedData.length)
+
+      return NextResponse.json({ 
+        data: paginatedData,
+        pagination 
+      })
+    } else {
+      // Sin límite, devolver todos los contactos
+      console.log('📊 Devolviendo todos los contactos:', total)
+      
+      return NextResponse.json({ 
+        data: contactos,
+        pagination: {
+          page: 1,
+          limit: total,
+          total,
+          totalPages: 1,
+          hasNext: false,
+          hasPrev: false
+        }
+      })
     }
-
-    console.log('📊 Contact pagination:', pagination)
-    console.log('📊 Contact data length:', paginatedData.length)
-
-    return NextResponse.json({ 
-      data: paginatedData,
-      pagination 
-    })
   } catch (e: any) {
-    console.error("Error leyendo contactos de Airtable:", e)
+    console.error("❌ Error leyendo contactos de Supabase:", e)
     return NextResponse.json({ error: "No se pudieron obtener los contactos" }, { status: 500 })
   }
 }
@@ -148,97 +105,73 @@ export async function POST(req: Request) {
     if (!body.displayName || body.displayName.trim() === '') {
       return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 })
     }
-    
-    // Construir payload para Airtable con validación de campos
-    // Campos disponibles en Airtable: ID, Tipo de Contacto, Nombre, Relación, Email, 
-    // Teléfono, NIT, Dirección, Ciudad, País, Empresa, Sitio Web
-    const payload: any = {
-      'Nombre': body.displayName.trim(),
+
+    // Preparar datos del contacto
+    const contactoData: any = {
+      displayName: body.displayName.trim(),
+      kind: body.kind || 'INDIVIDUAL',
+      relation: body.relation || 'CUSTOMER',
+      country: body.country || 'Bolivia',
+      status: 'activo'
+    }
+
+    // Agregar campos opcionales si existen
+    if (body.legalName && body.legalName.trim()) {
+      contactoData.legalName = body.legalName.trim()
+      contactoData.company = body.legalName.trim()
     }
     
-    // Solo agregar campos que tengan valor para evitar errores de validación
-    // Valores válidos en Airtable: "Individual" y "Compañía"
-    if (body.kind) {
-      payload['Tipo de Contacto'] = body.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
-    }
-    
-    if (body.relation) {
-      // Mapear valores de relación - valores válidos: Cliente, Proveedor, Ambos
-      const relationMap: { [key: string]: string } = {
-        'CUSTOMER': 'Cliente',
-        'SUPPLIER': 'Proveedor', 
-        'BOTH': 'Ambos'
+    if (body.company && body.company.trim()) {
+      contactoData.company = body.company.trim()
+      if (!contactoData.legalName) {
+        contactoData.legalName = body.company.trim()
       }
-      payload['Relación'] = relationMap[body.relation] || 'Cliente'
     }
     
     if (body.email && body.email.trim()) {
-      payload['Email'] = body.email.trim()
+      contactoData.email = body.email.trim()
     }
     
     if (body.phone && body.phone.trim()) {
-      payload['Teléfono'] = body.phone.trim()
+      contactoData.phone = body.phone.trim()
     }
     
     if (body.taxId && body.taxId.trim()) {
-      payload['NIT'] = body.taxId.trim()
+      contactoData.taxId = body.taxId.trim()
     }
     
     if (body.address1 && body.address1.trim()) {
-      payload['Dirección'] = body.address1.trim()
+      contactoData.address = body.address1.trim()
+    } else if (body.address && body.address.trim()) {
+      contactoData.address = body.address.trim()
     }
     
     if (body.city && body.city.trim()) {
-      payload['Ciudad'] = body.city.trim()
+      contactoData.city = body.city.trim()
     }
     
-    if (body.country && body.country.trim()) {
-      payload['País'] = body.country.trim()
+    if (body.postalCode && body.postalCode.trim()) {
+      contactoData.postalCode = body.postalCode.trim()
     }
     
     if (body.website && body.website.trim()) {
-      payload['Sitio Web'] = body.website.trim()
+      contactoData.website = body.website.trim()
     }
     
-    // El campo legalName se mapea a Empresa en Airtable
-    if (body.legalName && body.legalName.trim()) {
-      payload['Empresa'] = body.legalName.trim()
-    }
-    
-    // También guardar el campo company si viene
-    if (body.company && body.company.trim()) {
-      payload['Empresa'] = body.company.trim()
+    if (body.notes && body.notes.trim()) {
+      contactoData.notes = body.notes.trim()
     }
 
-    console.log('🆕 Creando contacto con payload validado:', payload)
+    console.log('🆕 Creando contacto en Supabase:', contactoData)
 
-    // Crear nuevo contacto en Airtable
-    const record = await airtable("Contactos").create([{ fields: payload }])
+    // Crear contacto en Supabase
+    const nuevoContacto = await createContacto(contactoData)
 
-    console.log('✅ Contacto creado exitosamente:', record[0].id)
+    console.log('✅ Contacto creado exitosamente:', nuevoContacto.id)
 
-    return NextResponse.json({
-      id: record[0].id,
-      displayName: record[0].fields['Nombre'] || '',
-      legalName: record[0].fields['Empresa'] || '',
-      company: record[0].fields['Empresa'] || '',
-      kind: record[0].fields['Tipo de Contacto'] === 'Individual' ? 'INDIVIDUAL' : 'COMPANY',
-      email: record[0].fields['Email'] || '',
-      phone: record[0].fields['Teléfono'] || '',
-      taxId: record[0].fields['NIT'] || '',
-      address: record[0].fields['Dirección'] || '',
-      city: record[0].fields['Ciudad'] || '',
-      postalCode: '',
-      country: record[0].fields['País'] || '',
-      website: record[0].fields['Sitio Web'] || '',
-      relation: body.relation || 'CUSTOMER',
-      status: 'activo',
-      notes: '',
-      createdAt: record[0].createdTime,
-      updatedAt: record[0].createdTime
-    }, { status: 201 })
+    return NextResponse.json(nuevoContacto, { status: 201 })
   } catch (e: any) {
-    console.error("❌ Error creando contacto en Airtable:", e)
+    console.error("❌ Error creando contacto en Supabase:", e)
     console.error("❌ Detalles del error:", e.message)
     return NextResponse.json({ 
       error: "No se pudo crear el contacto", 

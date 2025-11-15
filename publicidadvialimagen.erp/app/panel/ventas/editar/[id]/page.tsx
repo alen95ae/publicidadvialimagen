@@ -577,10 +577,10 @@ export default function EditarCotizacionPage() {
     
     setCargandoClientes(true)
     try {
-      const response = await fetch('/api/contactos?relation=Cliente&limit=1000')
+      const response = await fetch('/api/contactos?relation=Cliente')
       const data = await response.json()
       setTodosLosClientes(data.data || [])
-      setFilteredClientes((data.data || []).slice(0, 20))
+      setFilteredClientes((data.data || []).slice(0, 50))
     } catch (error) {
       console.error('Error cargando clientes:', error)
     } finally {
@@ -628,7 +628,7 @@ export default function EditarCotizacionPage() {
   // Función de filtrado para clientes
   const filtrarClientes = (query: string) => {
     if (!query || query.trim() === '') {
-      setFilteredClientes(todosLosClientes.slice(0, 20))
+      setFilteredClientes(todosLosClientes.slice(0, 50))
       return
     }
     
@@ -637,8 +637,9 @@ export default function EditarCotizacionPage() {
       const nombre = (cliente.displayName || '').toLowerCase()
       const empresa = (cliente.legalName || '').toLowerCase()
       
-      return nombre.startsWith(search) || empresa.startsWith(search)
-    }).slice(0, 15)
+      // Buscar en cualquier parte del nombre o empresa (no solo al inicio)
+      return nombre.includes(search) || empresa.includes(search)
+    }).slice(0, 100)
     
     setFilteredClientes(filtered)
   }
@@ -1171,7 +1172,7 @@ export default function EditarCotizacionPage() {
                     if (open) {
                       cargarClientesLazy()
                       if (todosLosClientes.length > 0) {
-                        setFilteredClientes(todosLosClientes.slice(0, 20))
+                        setFilteredClientes(todosLosClientes.slice(0, 50))
                       }
                     }
                   }}>

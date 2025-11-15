@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { airtableList, airtableUpdate } from "@/lib/airtable-rest";
-
-const INVITATIONS_TABLE = process.env.AIRTABLE_TABLE_INVITATIONS || "Invitaciones";
-const INVITATIONS_TABLE_FALLBACK = "Invitations";
+import {
+  findInvitacionByTokenAndEmail,
+  marcarInvitacionComoExpirada,
+  marcarInvitacionComoUsada
+} from "@/lib/supabaseInvitaciones";
 
 // GET - Verificar invitación
 export async function GET(request: NextRequest) {
@@ -14,46 +15,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token y email son requeridos" }, { status: 400 });
     }
 
-    // Buscar la invitación en Airtable
-    let invitationData = await (async () => {
-      try {
-        return await airtableList(INVITATIONS_TABLE, {
-          filterByFormula: `AND({Token} = "${token}", {Email} = "${email}", {Estado} = "pendiente")`,
-          maxRecords: "1"
-        });
-      } catch (e: any) {
-        if (String(e.message || "").includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-          return await airtableList(INVITATIONS_TABLE_FALLBACK, {
-            filterByFormula: `AND({Token} = "${token}", {Email} = "${email}", {Estado} = "pendiente")`,
-            maxRecords: "1"
-          });
-        }
-        throw e;
-      }
-    })();
+    // Buscar la invitación en Supabase
+    const invitation = await findInvitacionByTokenAndEmail(token, email, 'pendiente');
 
-    if (!invitationData.records || invitationData.records.length === 0) {
+    if (!invitation) {
       return NextResponse.json({ error: "Invitación no encontrada o ya utilizada" }, { status: 404 });
     }
 
-    const invitation = invitationData.records[0];
-    const invitationFields = invitation.fields;
-
     // Verificar si la invitación ha expirado
     const now = new Date();
-    const expirationDate = new Date(invitationFields.FechaExpiracion);
+    const expirationDate = new Date(invitation.fechaExpiracion);
     
     if (now > expirationDate) {
-      // Marcar como expirada en Airtable
-      try {
-        await airtableUpdate(INVITATIONS_TABLE, invitation.id, { Estado: "expirado" });
-      } catch (e: any) {
-        if (String(e.message || "").includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-          await airtableUpdate(INVITATIONS_TABLE_FALLBACK, invitation.id, { Estado: "expirado" });
-        } else {
-          throw e;
-        }
-      }
+      // Marcar como expirada en Supabase
+      await marcarInvitacionComoExpirada(invitation.id);
       return NextResponse.json({ error: "La invitación ha expirado" }, { status: 410 });
     }
 
@@ -61,9 +36,9 @@ export async function GET(request: NextRequest) {
       valid: true,
       invitation: {
         id: invitation.id,
-        email: invitationFields.Email,
-        rol: invitationFields.Rol,
-        fechaExpiracion: invitationFields.FechaExpiracion
+        email: invitation.email,
+        rol: invitation.rol,
+        fechaExpiracion: invitation.fechaExpiracion
       }
     });
   } catch (error) {
@@ -81,47 +56,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Token y email son requeridos" }, { status: 400 });
     }
 
-    // Buscar la invitación en Airtable
-    let invitationData = await (async () => {
-      try {
-        return await airtableList(INVITATIONS_TABLE, {
-          filterByFormula: `AND({Token} = "${token}", {Email} = "${email}", {Estado} = "pendiente")`,
-          maxRecords: "1"
-        });
-      } catch (e: any) {
-        if (String(e.message || "").includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-          return await airtableList(INVITATIONS_TABLE_FALLBACK, {
-            filterByFormula: `AND({Token} = "${token}", {Email} = "${email}", {Estado} = "pendiente")`,
-            maxRecords: "1"
-          });
-        }
-        throw e;
-      }
-    })();
+    // Buscar la invitación en Supabase
+    const invitation = await findInvitacionByTokenAndEmail(token, email, 'pendiente');
 
-    if (!invitationData.records || invitationData.records.length === 0) {
+    if (!invitation) {
       return NextResponse.json({ error: "Invitación no encontrada" }, { status: 404 });
     }
 
-    const invitation = invitationData.records[0];
-
-    // Marcar como usada en Airtable
-    const fechaUso = new Date().toISOString().split('T')[0]; // Formato YYYY-MM-DD para Airtable
-    try {
-      await airtableUpdate(INVITATIONS_TABLE, invitation.id, { 
-        Estado: "usado",
-        FechaUso: fechaUso
-      });
-    } catch (e: any) {
-      if (String(e.message || "").includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-        await airtableUpdate(INVITATIONS_TABLE_FALLBACK, invitation.id, { 
-          Estado: "usado",
-          FechaUso: fechaUso
-        });
-      } else {
-        throw e;
-      }
-    }
+    // Marcar como usada en Supabase
+    await marcarInvitacionComoUsada(invitation.id);
 
     return NextResponse.json({ message: "Invitación marcada como usada" });
   } catch (error) {

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { messagesService } from "@/lib/messages";
-import { airtableList } from "@/lib/airtable-rest";
+import { getAllSolicitudes } from "@/lib/supabaseSolicitudes";
 
 export async function GET() {
   try {
@@ -30,30 +30,25 @@ export async function GET() {
       console.error("Error fetching messages from Supabase:", error);
     }
 
-    // Obtener solicitudes nuevas (estado Nueva)
+    // Obtener solicitudes nuevas (estado Nueva) desde Supabase
     let solicitudes: any[] = [];
     try {
-      const solicitudesData = await airtableList("Solicitudes");
-      solicitudes = (solicitudesData.records || [])
-        .filter((record: any) => {
-          const estado = record.fields?.["Estado"] || "";
-          return estado === "Nueva" || estado === "";
-        })
+      const allSolicitudes = await getAllSolicitudes();
+      solicitudes = allSolicitudes
+        .filter((s) => s.estado === "Nueva")
         .slice(0, 10)
-        .map((record: any) => {
-          const codigo = record.fields?.["Código"] || record.id;
-          return {
-            id: record.id, // ID de Airtable para tracking
-            codigo: codigo, // Código para la URL
-            type: "solicitud" as const,
-            titulo: `Nueva solicitud de ${record.fields?.["Empresa"] || "Sin empresa"}`,
-            mensaje: record.fields?.["Comentarios"] || "",
-            fecha: record.fields?.["Fecha Creación"] || record.createdTime,
-            link: `/panel/ventas/solicitudes/${codigo}`,
-          };
-        });
+        .map((s) => ({
+          id: s.id || s.codigo,
+          codigo: s.codigo,
+          type: "solicitud" as const,
+          titulo: `Nueva solicitud de ${s.empresa || "Sin empresa"}`,
+          mensaje: s.comentarios || "",
+          fecha: s.fechaCreacion || new Date().toISOString(),
+          link: `/panel/ventas/solicitudes/${s.codigo}`,
+        }));
+      console.log(`✅ Notificaciones: ${solicitudes.length} solicitudes nuevas desde Supabase`);
     } catch (error) {
-      console.error("Error fetching solicitudes:", error);
+      console.error("Error fetching solicitudes from Supabase:", error);
     }
 
     // Combinar y ordenar por fecha

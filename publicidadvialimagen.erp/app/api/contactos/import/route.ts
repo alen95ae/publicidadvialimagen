@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { airtable } from '@/lib/airtable'
+import { createContacto, updateContacto, findDuplicateContactosByEmail, getAllContactos } from '@/lib/supabaseContactos'
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +34,19 @@ export async function POST(request: NextRequest) {
 
     const errorMessages: string[] = []
 
+    // Obtener todos los contactos existentes para verificar duplicados
+    const existingContactos = await getAllContactos()
+    const contactosByEmail = new Map(
+      existingContactos
+        .filter(c => c.email)
+        .map(c => [c.email.toLowerCase(), c])
+    )
+    const contactosByTaxId = new Map(
+      existingContactos
+        .filter(c => c.taxId)
+        .map(c => [c.taxId.toLowerCase(), c])
+    )
+
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i]
       if (!row.trim()) continue
@@ -58,25 +71,23 @@ export async function POST(request: NextRequest) {
         // Procesar la fila
         const processedData = processCsvRow(rowData)
         
-        // Verificar si ya existe un contacto con este NIT o email
-        const existingRecords = await airtable('Contactos').select({
-          filterByFormula: `OR({NIT} = "${processedData.taxId}", {Email} = "${processedData.email}")`,
-          maxRecords: 1
-        }).all()
+        // Verificar si ya existe un contacto con este email o NIT
+        let existingContacto = null
+        if (processedData.email) {
+          existingContacto = contactosByEmail.get(processedData.email.toLowerCase())
+        }
+        if (!existingContacto && processedData.taxId) {
+          existingContacto = contactosByTaxId.get(processedData.taxId.toLowerCase())
+        }
 
-        if (existingRecords.length > 0) {
+        if (existingContacto) {
           // Actualizar registro existente
-          const payload = buildPayload(processedData, existingRecords[0].fields)
-          await airtable('Contactos').update([{
-            id: existingRecords[0].id,
-            fields: payload
-          }])
+          await updateContacto(existingContacto.id, processedData)
           updated++
           console.log(`✅ Actualizado: ${processedData.displayName}`)
         } else {
           // Crear nuevo registro
-          const payload = buildPayload(processedData)
-          await airtable('Contactos').create([{ fields: payload }])
+          await createContacto(processedData)
           created++
           console.log(`✅ Creado: ${processedData.displayName}`)
         }
@@ -87,6 +98,8 @@ export async function POST(request: NextRequest) {
         errors++
       }
     }
+
+    console.log(`✅ Importación completada: ${created} creados, ${updated} actualizados, ${errors} errores`)
 
     return NextResponse.json({
       success: true,
@@ -111,6 +124,7 @@ function processCsvRow(row: any): any {
   return {
     displayName: row.Nombre || row.nombre || row['Nombre Comercial'] || row.nombre_comercial || '',
     legalName: row.Empresa || row.empresa || '',
+    company: row.Empresa || row.empresa || '',
     kind: (row['Tipo de Contacto'] || row.tipo_contacto || row.Tipo || row.tipo || 'Individual').toLowerCase() === 'individual' ? 'INDIVIDUAL' : 'COMPANY',
     email: row.Email || row.email || '',
     phone: row.Teléfono || row.telefono || row.Telefono || row.telefono || '',
@@ -130,66 +144,15 @@ function mapRelation(relation: string): string {
   const relationMap: { [key: string]: string } = {
     'cliente': 'Cliente',
     'customer': 'Cliente',
+    'CUSTOMER': 'Cliente',
     'proveedor': 'Proveedor',
     'supplier': 'Proveedor',
+    'SUPPLIER': 'Proveedor',
     'ambos': 'Ambos',
-    'both': 'Ambos'
+    'both': 'Ambos',
+    'BOTH': 'Ambos'
   }
   
   const normalized = relation.toLowerCase().trim()
   return relationMap[normalized] || 'Cliente'
-}
-
-/** Construye el payload para Airtable */
-function buildPayload(processedData: any, existingFields?: any): any {
-  const payload: any = {
-    'Nombre': processedData.displayName || '',
-  }
-  
-  // Solo agregar campos que tengan valor
-  if (processedData.kind) {
-    payload['Tipo de Contacto'] = processedData.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
-  }
-  
-  if (processedData.relation) {
-    payload['Relación'] = processedData.relation
-  }
-  
-  if (processedData.email) {
-    payload['Email'] = processedData.email
-  }
-  
-  if (processedData.phone) {
-    payload['Teléfono'] = processedData.phone
-  }
-  
-  if (processedData.taxId) {
-    payload['NIT'] = processedData.taxId
-  }
-  
-  if (processedData.address) {
-    payload['Dirección'] = processedData.address
-  }
-  
-  if (processedData.city) {
-    payload['Ciudad'] = processedData.city
-  }
-  
-  if (processedData.country) {
-    payload['País'] = processedData.country
-  }
-  
-  if (processedData.website) {
-    payload['Sitio Web'] = processedData.website
-  }
-  
-  if (processedData.legalName) {
-    payload['Empresa'] = processedData.legalName
-  }
-  
-  if (processedData.notes) {
-    payload['Notas'] = processedData.notes
-  }
-  
-  return payload
 }

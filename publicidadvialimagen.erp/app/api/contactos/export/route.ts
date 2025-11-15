@@ -1,37 +1,29 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server"
-import { airtable } from "@/lib/airtable"
+import { getAllContactos, findContactoById } from "@/lib/supabaseContactos"
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const idsParam = searchParams.get('ids')
 
-    let records
+    let contactos
 
     if (idsParam) {
       // Exportar solo los contactos con IDs específicos
       const ids = idsParam.split(',').map(id => id.trim()).filter(id => id)
       
-      // Obtener registros por lotes (máximo 10 por lote en Airtable)
-      const batchSize = 10
-      const batches = []
-      for (let i = 0; i < ids.length; i += batchSize) {
-        const batchIds = ids.slice(i, i + batchSize)
-        const batchRecords = await Promise.all(
-          batchIds.map(id => airtable("Contactos").find(id).catch(() => null))
-        )
-        batches.push(...batchRecords.filter(r => r !== null))
-      }
-      records = batches
+      console.log(`📤 Exportando ${ids.length} contactos específicos`)
+      
+      // Obtener contactos por ID
+      const promises = ids.map(id => findContactoById(id))
+      const results = await Promise.all(promises)
+      contactos = results.filter(c => c !== null)
     } else {
       // Exportar TODOS los contactos de la base de datos
-      records = await airtable("Contactos")
-        .select({
-          sort: [{ field: "Nombre", direction: "asc" }]
-        })
-        .all()
+      console.log('📤 Exportando todos los contactos')
+      contactos = await getAllContactos()
     }
 
     // Construir CSV
@@ -54,29 +46,31 @@ export async function GET(request: Request) {
 
     const csvRows = [headers.join(',')]
 
-    for (const record of records) {
-      const fields = record.fields as any
+    for (const contacto of contactos) {
+      const kindDisplay = contacto.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
       const row = [
-        record.id || '',
-        `"${(fields['Nombre'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Tipo de Contacto'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Empresa'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Email'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Teléfono'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['NIT'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Dirección'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Ciudad'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Código Postal'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['País'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Relación'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Sitio Web'] || '').toString().replace(/"/g, '""')}"`,
-        `"${(fields['Notas'] || '').toString().replace(/"/g, '""')}"`
+        contacto.id || '',
+        `"${(contacto.displayName || '').toString().replace(/"/g, '""')}"`,
+        `"${kindDisplay}"`,
+        `"${(contacto.company || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.email || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.phone || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.taxId || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.address || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.city || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.postalCode || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.country || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.relation || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.website || '').toString().replace(/"/g, '""')}"`,
+        `"${(contacto.notes || '').toString().replace(/"/g, '""')}"`
       ]
       csvRows.push(row.join(','))
     }
 
     const csv = csvRows.join('\n')
     const csvWithBOM = '\uFEFF' + csv // BOM para Excel
+
+    console.log(`✅ Exportados ${contactos.length} contactos a CSV`)
 
     return new NextResponse(csvWithBOM, {
       headers: {
@@ -85,8 +79,7 @@ export async function GET(request: Request) {
       },
     })
   } catch (e: any) {
-    console.error("Error exportando contactos:", e)
+    console.error("❌ Error exportando contactos:", e)
     return NextResponse.json({ error: "No se pudieron exportar los contactos" }, { status: 500 })
   }
 }
-

@@ -1,23 +1,24 @@
 import { NextResponse } from "next/server"
-import { airtable } from "@/lib/airtable"
+import { getAllContactos, type Contacto } from "@/lib/supabaseContactos"
 
 export async function GET() {
   try {
-    const records = await airtable("Contactos").select().all()
+    // Obtener todos los contactos de Supabase
+    const contactos = await getAllContactos()
 
     const duplicates: any[] = []
     const processed = new Set<string>()
 
-    for (let i = 0; i < records.length; i++) {
-      const a = records[i]
+    for (let i = 0; i < contactos.length; i++) {
+      const a = contactos[i]
       if (processed.has(a.id)) continue
 
       const group: any[] = []
-      for (let j = i + 1; j < records.length; j++) {
-        const b = records[j]
+      for (let j = i + 1; j < contactos.length; j++) {
+        const b = contactos[j]
         if (processed.has(b.id)) continue
 
-        if (isSimilar(a.fields, b.fields)) {
+        if (isSimilar(a, b)) {
           group.push(b)
           processed.add(b.id)
         }
@@ -32,6 +33,8 @@ export async function GET() {
       }
     }
 
+    console.log(`✅ Encontrados ${duplicates.length} grupos de duplicados`)
+
     return NextResponse.json({ duplicates })
   } catch (error) {
     console.error("❌ Error detecting duplicates:", error)
@@ -39,25 +42,25 @@ export async function GET() {
   }
 }
 
-function toContactSummary(r: any) {
+function toContactSummary(contacto: Contacto) {
   return {
-    id: r.id,
-    displayName: r.fields['Nombre'] || r.fields['Nombre Comercial'] || r.fields['Nombre Contacto'] || '',
-    email: r.fields['Email'] || '',
-    phone: r.fields['Teléfono'] || r.fields['Telefono'] || '',
-    taxId: r.fields['NIT'] || r.fields['CIF'] || '',
+    id: contacto.id,
+    displayName: contacto.displayName || '',
+    email: contacto.email || '',
+    phone: contacto.phone || '',
+    taxId: contacto.taxId || '',
   }
 }
 
-function isSimilar(a: any, b: any): boolean {
-  const nameA = normalizeString(a['Nombre'] || a['Nombre Comercial'] || a['Nombre Contacto'] || '')
-  const nameB = normalizeString(b['Nombre'] || b['Nombre Comercial'] || b['Nombre Contacto'] || '')
-  const emailA = (a['Email'] || '').toLowerCase().trim()
-  const emailB = (b['Email'] || '').toLowerCase().trim()
-  const phoneA = normalizePhone(a['Teléfono'] || a['Telefono'] || '')
-  const phoneB = normalizePhone(b['Teléfono'] || b['Telefono'] || '')
-  const nitA = (a['NIT'] || a['CIF'] || '').trim()
-  const nitB = (b['NIT'] || b['CIF'] || '').trim()
+function isSimilar(a: Contacto, b: Contacto): boolean {
+  const nameA = normalizeString(a.displayName || '')
+  const nameB = normalizeString(b.displayName || '')
+  const emailA = (a.email || '').toLowerCase().trim()
+  const emailB = (b.email || '').toLowerCase().trim()
+  const phoneA = normalizePhone(a.phone || '')
+  const phoneB = normalizePhone(b.phone || '')
+  const nitA = (a.taxId || '').trim()
+  const nitB = (b.taxId || '').trim()
 
   const nameSimilar = nameA.length > 0 && (nameA === nameB || containsSimilar(nameA, nameB))
   const emailSimilar = !!emailA && emailA === emailB
@@ -87,5 +90,3 @@ function containsSimilar(a: string, b: string): boolean {
 function normalizePhone(phone: string): string {
   return String(phone || '').replace(/\D/g, '')
 }
-
-

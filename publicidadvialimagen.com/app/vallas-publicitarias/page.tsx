@@ -835,8 +835,8 @@ export default function VallasPublicitariasPage() {
               <LeafletHybridMap 
                 points={supportPoints} 
                 height={400}
-                center={mapCenter}
-                zoom={mapZoom}
+                center={isFromHomeCity ? mapCenter : undefined}
+                zoom={isFromHomeCity ? mapZoom : undefined}
                 locale={locale}
               />
             )}

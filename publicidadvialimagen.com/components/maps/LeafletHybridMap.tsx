@@ -427,22 +427,13 @@ export default function LeafletHybridMap({
   useEffect(() => {
     if (!mapInstanceRef.current || !isInitializedRef.current) return;
     
-    // Preservar zoom cuando se actualizan los puntos
-    const currentZoom = mapInstanceRef.current.getZoom();
-    const currentCenter = mapInstanceRef.current.getCenter();
-    const shouldPreserveZoom = currentZoom > 6; // Solo preservar si no está en zoom por defecto
+    // Si hay center y zoom props específicos, no ajustar automáticamente
+    // Esto permite que la vista se ajuste cuando no hay restricciones explícitas
+    const shouldAutoFit = !center && !zoom;
     
-    addMarkersToMap(mapInstanceRef.current, shouldPreserveZoom);
-    
-    // Si se preservó el zoom, asegurar que se mantenga
-    if (shouldPreserveZoom) {
-      setTimeout(() => {
-        if (mapInstanceRef.current && mapInstanceRef.current.getZoom() !== currentZoom) {
-          mapInstanceRef.current.setView([currentCenter.lat, currentCenter.lng], currentZoom);
-        }
-      }, 50);
-    }
-  }, [addMarkersToMap]); // Actualizar marcadores cuando cambien los puntos
+    // Solo preservar zoom si hay props específicos de center/zoom
+    addMarkersToMap(mapInstanceRef.current, !shouldAutoFit);
+  }, [addMarkersToMap, center, zoom]); // Actualizar marcadores cuando cambien los puntos, center o zoom
 
   // Gestionar el overflow del body al entrar/salir de pantalla completa
   useEffect(() => {

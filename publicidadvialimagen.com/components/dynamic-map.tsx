@@ -142,9 +142,8 @@ export default function DynamicMap({ billboards, selectedCity, isFullscreen = fa
             } else {
               return null
             }
-            // Aplicar corrección para OSM (capa por defecto)
-            const corrected = correctCoordsForOSM(originalLat, originalLng)
-            position = [corrected.lat, corrected.lng]
+            // Usar coordenadas directas sin corrección
+            position = [originalLat, originalLng]
           }
           
           // Solo renderizar si tenemos coordenadas válidas

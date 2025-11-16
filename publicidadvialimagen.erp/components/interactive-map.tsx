@@ -2,7 +2,6 @@
 
 import React, { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, LayersControl } from 'react-leaflet'
-import { correctCoordsForOSM } from '@/lib/mapUtils'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -72,8 +71,8 @@ export default function InteractiveMap({
           </LayersControl.BaseLayer>
         </LayersControl>
         
-        {/* Marcador principal (con corrección para OSM por defecto) */}
-        <Marker position={correctCoordsForOSM(lat, lng)}>
+        {/* Marcador principal (coordenadas directas) */}
+        <Marker position={center}>
           <Popup>
             Ubicación seleccionada<br />
             Lat: {lat.toFixed(6)}, Lng: {lng.toFixed(6)}

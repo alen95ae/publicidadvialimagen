@@ -1,7 +1,6 @@
 "use client"
 
 import { MapContainer, TileLayer, Marker, Popup, LayersControl } from "react-leaflet"
-import { correctCoordsForOSM } from "@/lib/mapUtils"
 import L from "leaflet"
 import { useMemo } from "react"
 import { createBillboardIcon } from "./billboard-icon"
@@ -72,7 +71,7 @@ export default function SimpleMap({ center, zoom = 16, heightClassName = "h-96",
 
   return (
     <div className={`${heightClassName} rounded-lg overflow-hidden shadow-lg border`}> 
-      <MapContainer center={correctCoordsForOSM(center[0], center[1])} zoom={zoom} style={{ height: "100%", width: "100%" }} className="z-0">
+      <MapContainer center={center} zoom={zoom} style={{ height: "100%", width: "100%" }} className="z-0">
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="📖 OSM">
             <TileLayer
@@ -87,7 +86,7 @@ export default function SimpleMap({ center, zoom = 16, heightClassName = "h-96",
             />
           </LayersControl.BaseLayer>
         </LayersControl>
-        <Marker position={correctCoordsForOSM(center[0], center[1])} icon={icon}>
+        <Marker position={center} icon={icon}>
           <Popup>
             {markerTitle ? <h3 className="font-semibold text-sm mb-1">{markerTitle}</h3> : null}
             {markerSubtitle ? <p className="text-xs text-muted-foreground mb-2">{markerSubtitle}</p> : null}

@@ -3,7 +3,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { createSlug } from '@/lib/url-utils';
-import { correctCoordsForOSM } from "@/lib/mapUtils";
 
 export type SupportPoint = {
   id: string;
@@ -93,8 +92,8 @@ export default function LeafletHybridMap({
     
     const bounds = L.latLngBounds([]);
     points.forEach((p) => {
-      // Aplicar corrección si OSM está activa
-      const displayCoords = useOSM ? correctCoordsForOSM(p.lat, p.lng) : { lat: p.lat, lng: p.lng }
+      // Usar coordenadas directas sin corrección
+      const displayCoords = { lat: p.lat, lng: p.lng }
       
       const slug = createSlug(p.title || 'Soporte Publicitario')
       // El sistema de i18n funciona con contexto, no con rutas separadas
@@ -160,7 +159,7 @@ export default function LeafletHybridMap({
         map.fitBounds(bounds);
       } else if (points.length === 1 && !center && !zoom) {
         const firstPoint = points[0]
-        const displayCoords = useOSM ? correctCoordsForOSM(firstPoint.lat, firstPoint.lng) : { lat: firstPoint.lat, lng: firstPoint.lng }
+        const displayCoords = { lat: firstPoint.lat, lng: firstPoint.lng }
         map.setView([displayCoords.lat, displayCoords.lng], 15);
       }
     } else if (preserveZoom && currentZoom && currentCenter) {

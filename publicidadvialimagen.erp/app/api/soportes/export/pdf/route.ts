@@ -89,6 +89,8 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
           return { bg: [254, 226, 226], text: [153, 27, 27] } // red-100, red-800
         case 'No disponible':
           return { bg: [243, 244, 246], text: [55, 65, 81] } // gray-100, gray-800
+        case 'A Consultar':
+          return { bg: [219, 234, 254], text: [30, 64, 175] } // blue-100, blue-800
         default:
           return { bg: [243, 244, 246], text: [55, 65, 81] } // gray-100, gray-800
       }

@@ -38,7 +38,8 @@ export async function POST(req: Request) {
     }
 
     // Validar columnas requeridas
-    const requiredColumns = ['codigo', 'nombre', 'categoria', 'responsable', 'unidad_medida', 'cantidad', 'coste']
+    // NOTA: cantidad NO se incluye porque no existe en la tabla recursos de Supabase
+    const requiredColumns = ['codigo', 'nombre', 'categoria', 'responsable', 'unidad_medida', 'coste']
     const firstRecord = records[0] as Record<string, any>
     const missingColumns = requiredColumns.filter(col => !(col in firstRecord))
     
@@ -58,15 +59,14 @@ export async function POST(req: Request) {
       try {
         const record = records[i] as Record<string, any>
         
-        // Convertir datos del CSV al formato de Airtable
+        // Convertir datos del CSV al formato de Supabase
+        // NOTA: cantidad y descripcion NO se incluyen porque no existen en la tabla recursos de Supabase
         const recursoData = {
           codigo: record.codigo?.toString().trim() || '',
           nombre: record.nombre?.toString().trim() || '',
-          descripcion: record.descripcion?.toString().trim() || '',
           categoria: (record.categoria?.toString().trim() === 'Mano de Obra' ? 'Mano de Obra' : 'Insumos') as 'Insumos' | 'Mano de Obra',
           responsable: record.responsable?.toString().trim() || '',
           unidad_medida: record.unidad_medida?.toString().trim() || '',
-          cantidad: parseInt(record.cantidad) || 0,
           coste: parseFloat(record.coste) || 0,
           precio_venta: record.precio_venta ? parseFloat(record.precio_venta) : 0,
           fecha_creacion: new Date().toISOString(),

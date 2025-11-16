@@ -7,12 +7,10 @@ export interface RecursoSupabase {
   id: string
   codigo: string
   nombre: string
-  descripcion?: string
   imagen_portada?: string
   categoria: 'Insumos' | 'Mano de Obra'
   responsable: string
   unidad_medida: string
-  cantidad: number
   coste: number
   precio_venta?: number
   variantes?: any[]
@@ -120,12 +118,10 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     id: record.id,
     codigo: record.codigo || '',
     nombre: record.nombre || '',
-    descripcion: record.descripcion || '',
     imagen_portada: imagenPortada,
     categoria: record.categoria || 'Insumos',
     responsable: record.responsable || '',
     unidad_medida: unidadMedida,
-    cantidad: Number(record.cantidad) || 0,
     coste: Number(record.coste) || 0,
     precio_venta: record.precio_venta ? Number(record.precio_venta) : undefined,
     variantes: variantes,
@@ -145,14 +141,11 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
   if (recurso.nombre !== undefined && recurso.nombre !== null) {
     fields.nombre = recurso.nombre
   }
-  if (recurso.descripcion !== undefined && recurso.descripcion !== null) {
-    fields.descripcion = recurso.descripcion || ''
-  }
-  // Guardar imagen_portada en imagen_principal de Supabase (el campo que usa el script de migración)
+  // NOTA: La columna descripcion NO existe en la tabla recursos de Supabase
+  // Guardar imagen_portada en imagen_principal de Supabase (el campo correcto en la BD)
+  // NO guardar en imagen_portada ya que esa columna no existe en Supabase
   if (recurso.imagen_portada !== undefined) {
-    // Guardar en ambos campos para compatibilidad
     fields.imagen_principal = recurso.imagen_portada || null
-    fields.imagen_portada = recurso.imagen_portada || null
   }
   
   if (recurso.categoria !== undefined && recurso.categoria !== null) {
@@ -172,9 +165,9 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
     fields.unidad_medida = unidad
   }
   
-  if (recurso.cantidad !== undefined && recurso.cantidad !== null) {
-    fields.cantidad = Number(recurso.cantidad) || 0
-  }
+  // NOTA: La columna cantidad NO existe en la tabla recursos de Supabase
+  // Se usa control_stock para manejar el stock, no cantidad
+  
   if (recurso.coste !== undefined && recurso.coste !== null) {
     fields.coste = Number(recurso.coste) || 0
   }
@@ -204,6 +197,12 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
       console.error('Error serializando Control de Stock:', e)
       fields.control_stock = {}
     }
+  }
+  
+  // Ignorar proveedores ya que no existe esa columna en la tabla recursos
+  // (solo se usa en productos)
+  if ((recurso as any).proveedores !== undefined) {
+    console.log('⚠️ Campo proveedores ignorado (no existe en tabla recursos)')
   }
   
   return fields
@@ -319,7 +318,10 @@ export async function getRecursoById(id: string) {
 // Crear nuevo recurso
 export async function createRecurso(recurso: Partial<RecursoSupabase>) {
   try {
+    console.log('🆕 createRecurso llamado con:', JSON.stringify(recurso, null, 2))
     const fields = recursoToSupabase(recurso)
+    console.log('📤 Campos que se enviarán a Supabase:', Object.keys(fields))
+    console.log('📤 Campos detallados:', JSON.stringify(fields, null, 2))
     
     const { data, error } = await supabase
       .from('recursos')
@@ -327,11 +329,24 @@ export async function createRecurso(recurso: Partial<RecursoSupabase>) {
       .select()
       .single()
     
-    if (error) throw error
+    if (error) {
+      console.error('❌ Error de Supabase al crear recurso:', error)
+      console.error('   - Code:', error.code)
+      console.error('   - Message:', error.message)
+      console.error('   - Details:', error.details)
+      console.error('   - Hint:', error.hint)
+      console.error('   - Campos enviados:', Object.keys(fields))
+      throw new Error(`Error creando recurso en Supabase: ${error.message}`)
+    }
     
+    console.log('✅ Recurso creado correctamente en Supabase')
     return supabaseToRecurso(data)
   } catch (error) {
-    console.error('Error creando recurso en Supabase:', error)
+    console.error('❌ Error creando recurso en Supabase:', error)
+    if (error instanceof Error) {
+      console.error('   - Mensaje de error:', error.message)
+      console.error('   - Stack:', error.stack)
+    }
     throw error
   }
 }

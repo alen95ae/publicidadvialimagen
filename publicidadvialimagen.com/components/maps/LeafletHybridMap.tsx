@@ -35,23 +35,15 @@ export default function LeafletHybridMap({
   const [mapId] = useState(() => `hybridMap_${Math.random().toString(36).substr(2, 9)}`);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const isInitializedRef = useRef(false);
-
-  // Función para detectar si OSM está activa
-  const isOSMActive = useCallback((map: L.Map): boolean => {
-    let active = true // Por defecto OSM
-    map.eachLayer((layer: any) => {
-      if (layer instanceof L.TileLayer) {
-        if (layer._url && layer._url.includes('openstreetmap')) {
-          active = true
-        }
-      }
-    })
-    return active
-  }, [])
+  const currentLayerRef = useRef<string>("📖 OSM"); // Track current layer
 
   // Función para añadir marcadores al mapa (memoizada para evitar re-creaciones)
-  const addMarkersToMap = useCallback((map: L.Map) => {
+  const addMarkersToMap = useCallback((map: L.Map, preserveZoom: boolean = false) => {
     if (!points || points.length === 0) return;
+    
+    // Preservar zoom y centro actuales si se solicita
+    const currentZoom = preserveZoom ? map.getZoom() : undefined;
+    const currentCenter = preserveZoom ? map.getCenter() : undefined;
     
     // Limpiar marcadores existentes
     map.eachLayer((layer) => {
@@ -60,8 +52,8 @@ export default function LeafletHybridMap({
       }
     });
     
-    // Detectar si OSM está activa
-    const useOSM = isOSMActive(map)
+    // Detectar si OSM está activa usando la referencia actual
+    const useOSM = currentLayerRef.current === "📖 OSM"
     
     // Añadir nuevos marcadores
     const iconBillboard = L.icon({
@@ -162,8 +154,8 @@ export default function LeafletHybridMap({
       bounds.extend([displayCoords.lat, displayCoords.lng]);
     });
     
-    // Ajustar vista si hay puntos
-    if (points.length > 0) {
+    // Ajustar vista si hay puntos (solo si no se debe preservar el zoom)
+    if (points.length > 0 && !preserveZoom) {
       if (points.length > 1 && !center && !zoom) {
         map.fitBounds(bounds);
       } else if (points.length === 1 && !center && !zoom) {
@@ -171,8 +163,11 @@ export default function LeafletHybridMap({
         const displayCoords = useOSM ? correctCoordsForOSM(firstPoint.lat, firstPoint.lng) : { lat: firstPoint.lat, lng: firstPoint.lng }
         map.setView([displayCoords.lat, displayCoords.lng], 15);
       }
+    } else if (preserveZoom && currentZoom && currentCenter) {
+      // Preservar zoom y centro, solo actualizar marcadores
+      // No hacer nada, los marcadores ya están añadidos
     }
-  }, [points, center, zoom, locale, isOSMActive]);
+  }, [points, center, zoom, locale]);
 
   const toggleFullscreen = () => {
     const mapContainer = document.getElementById(mapId);
@@ -311,9 +306,24 @@ export default function LeafletHybridMap({
       const layersControl = L.control.layers(baseLayers);
       layersControl.addTo(map);
       
-      // Escuchar cambios de capa y actualizar marcadores
-      map.on('baselayerchange', () => {
-        addMarkersToMap(map);
+      // Escuchar cambios de capa y actualizar marcadores preservando el zoom
+      map.on('baselayerchange', (e: any) => {
+        // Actualizar la referencia de la capa activa
+        currentLayerRef.current = e.name || "📖 OSM";
+        
+        // Preservar zoom y centro actuales
+        const currentZoom = map.getZoom();
+        const currentCenter = map.getCenter();
+        
+        // Actualizar marcadores preservando el zoom
+        addMarkersToMap(map, true);
+        
+        // Asegurar que el zoom y centro se mantengan
+        setTimeout(() => {
+          if (map.getZoom() !== currentZoom) {
+            map.setView([currentCenter.lat, currentCenter.lng], currentZoom);
+          }
+        }, 50);
       });
 
       // botón de pantalla completa
@@ -418,7 +428,21 @@ export default function LeafletHybridMap({
   useEffect(() => {
     if (!mapInstanceRef.current || !isInitializedRef.current) return;
     
-    addMarkersToMap(mapInstanceRef.current);
+    // Preservar zoom cuando se actualizan los puntos
+    const currentZoom = mapInstanceRef.current.getZoom();
+    const currentCenter = mapInstanceRef.current.getCenter();
+    const shouldPreserveZoom = currentZoom > 6; // Solo preservar si no está en zoom por defecto
+    
+    addMarkersToMap(mapInstanceRef.current, shouldPreserveZoom);
+    
+    // Si se preservó el zoom, asegurar que se mantenga
+    if (shouldPreserveZoom) {
+      setTimeout(() => {
+        if (mapInstanceRef.current && mapInstanceRef.current.getZoom() !== currentZoom) {
+          mapInstanceRef.current.setView([currentCenter.lat, currentCenter.lng], currentZoom);
+        }
+      }, 50);
+    }
   }, [addMarkersToMap]); // Actualizar marcadores cuando cambien los puntos
 
   // Gestionar el overflow del body al entrar/salir de pantalla completa

@@ -27,6 +27,7 @@ const STATUS_META = {
   'Reservado':      { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
   'Ocupado':        { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
   'No disponible':  { label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
+  'A Consultar':    { label: 'A Consultar',   className: 'bg-blue-100 text-blue-800' },
 } as const
 
 // Opciones de tipo

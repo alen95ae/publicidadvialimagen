@@ -318,7 +318,7 @@ export function PriceDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Calculadora de Precios
+            Calculadora de Precios (UFC)
           </DialogTitle>
           <DialogDescription>
             Añade campos y calcula el precio total de tu proyecto

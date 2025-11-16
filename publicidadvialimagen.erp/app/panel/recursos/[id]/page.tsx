@@ -22,13 +22,11 @@ interface Recurso {
   id: string
   codigo: string
   nombre: string
-  descripcion?: string
   imagen_portada?: string
   categoria: string
   responsable: string
   unidad_medida: string
   coste: number
-  cantidad: number
   variantes?: any[]
 }
 
@@ -75,13 +73,11 @@ export default function RecursoDetailPage() {
   const [formData, setFormData] = useState({
     codigo: "",
     nombre: "",
-    descripcion: "",
     imagen_portada: "",
     categoria: "Insumos",
     responsable: "",
     unidad_medida: "unidad",
-    coste: "0",
-    cantidad: "0"
+    coste: "0"
   })
   
   // Estado para códigos existentes (solo para validación en nuevo recurso)
@@ -123,13 +119,11 @@ export default function RecursoDetailPage() {
         setFormData({
           codigo: data.codigo || "",
           nombre: data.nombre || "",
-          descripcion: data.descripcion || "",
           imagen_portada: data.imagen_portada || "",
           categoria: data.categoria || "Insumos",
           responsable: data.responsable || "",
           unidad_medida: data.unidad_medida || "unidad",
-          coste: costeRedondeado.toFixed(2),
-          cantidad: data.cantidad?.toString() || "0"
+          coste: costeRedondeado.toFixed(2)
         })
         // Cargar variantes desde el recurso
         let variantesData = []
@@ -317,13 +311,11 @@ export default function RecursoDetailPage() {
       const dataToSend = {
         codigo: formData.codigo.trim(),
         nombre: formData.nombre.trim(),
-        descripcion: formData.descripcion?.trim() || "",
         imagen_portada: formData.imagen_portada || null,
         categoria: formData.categoria,
         responsable: formData.responsable.trim(),
         unidad_medida: formData.unidad_medida,
         coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
-        cantidad: parseInt(formData.cantidad) || 0,
         variantes: variantes.length > 0 ? variantes : [],
         proveedores: proveedores.length > 0 ? proveedores.map(prov => ({
           empresa: prov.empresa,
@@ -655,13 +647,11 @@ export default function RecursoDetailPage() {
         const dataToSend = {
           codigo: formData.codigo.trim(),
           nombre: formData.nombre.trim(),
-          descripcion: formData.descripcion?.trim() || "",
           imagen_portada: formData.imagen_portada || null,
           categoria: formData.categoria,
           responsable: formData.responsable.trim(),
           unidad_medida: formData.unidad_medida,
           coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
-          cantidad: parseInt(formData.cantidad) || 0,
           variantes: nuevasVariantes,
           proveedores: proveedores.length > 0 ? proveedores.map(prov => ({
             empresa: prov.empresa,
@@ -831,17 +821,6 @@ export default function RecursoDetailPage() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="descripcion">Descripción</Label>
-                      <Textarea
-                        id="descripcion"
-                        value={formData.descripcion}
-                        onChange={(e) => handleChange("descripcion", e.target.value)}
-                        rows={4}
-                        placeholder="Descripción detallada del recurso"
-                      />
-                    </div>
-
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="categoria">Categoría</Label>
@@ -860,16 +839,6 @@ export default function RecursoDetailPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cantidad">Stock</Label>
-                        <Input
-                          id="cantidad"
-                          type="number"
-                          min="0"
-                          value={formData.cantidad}
-                          onChange={(e) => handleChange("cantidad", e.target.value)}
-                        />
                       </div>
                     </div>
 

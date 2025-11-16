@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server"
 import { getSoportes, createSoporte } from "@/lib/supabaseSoportes"
-import { soporteToSupport } from "./helpers"
+import { soporteToSupport, buildSupabasePayload } from "./helpers"
 import { uploadImage } from "@/lib/supabaseUpload"
 
 export async function GET(request: Request) {
@@ -130,28 +130,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Código y título son requeridos" }, { status: 400 })
     }
     
-    // Construir payload directamente en formato Supabase (nombres reales de columnas)
-    const supabasePayload: any = {
-      codigo: body.code,
-      titulo: body.title,
-      tipo_soporte: body.type || null,
-      estado: body.status || 'Disponible',
-      ancho: body.widthM || null,
-      alto: body.heightM || null,
-      area_total: body.areaM2 || null,
-      iluminacion: body.lighting === 'Sí' || body.iluminacion === true,
-      precio_mensual: body.priceMonth || null,
-      impactos_diarios: body.impactosDiarios || null,
-      propietario: body.owner || null,
-      ciudad: body.city || null,
-      pais: body.country || 'BO',
-      enlace_maps: body.googleMapsLink || null,
-      latitud: body.latitude || null,
-      longitud: body.longitude || null,
-      created_at: new Date().toISOString(),
-    }
+    // Usar buildSupabasePayload para construir el payload correctamente
+    // Esto maneja automáticamente las imágenes desde el array 'images'
+    const supabasePayload = buildSupabasePayload(body)
     
-    // Agregar imágenes si se subieron (formato JSONB array)
+    // Agregar created_at para nuevos registros
+    supabasePayload.created_at = new Date().toISOString()
+    
+    // Si hay imágenes subidas desde FormData, agregarlas también
     if (body.imagen_principal_url) {
       supabasePayload.imagen_principal = [{ url: body.imagen_principal_url }]
     }

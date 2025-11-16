@@ -304,7 +304,7 @@ export function CostCalculatorDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5" />
-            Calculadora de Costes
+            Calculadora de Costes (Receta)
           </DialogTitle>
           <DialogDescription>
             Añade recursos y calcula el coste total de tu proyecto

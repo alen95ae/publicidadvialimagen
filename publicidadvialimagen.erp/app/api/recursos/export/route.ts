@@ -26,15 +26,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Crear CSV
+    // NOTA: Cantidad y Descripción NO se incluyen porque no existen en la tabla recursos de Supabase
     const headers = [
       'ID',
       'Código',
       'Nombre',
-      'Descripción',
       'Categoría',
       'Responsable',
       'Unidad de Medida',
-      'Cantidad',
       'Coste',
       'Precio Venta',
       'Fecha Creación',
@@ -48,11 +47,9 @@ export async function GET(request: NextRequest) {
         recurso.id,
         `"${recurso.codigo}"`,
         `"${recurso.nombre}"`,
-        `"${recurso.descripcion || ''}"`,
         `"${recurso.categoria}"`,
         `"${recurso.responsable}"`,
         `"${recurso.unidad_medida}"`,
-        recurso.cantidad,
         recurso.coste,
         recurso.precio_venta || 0,
         `"${recurso.fecha_creacion}"`,

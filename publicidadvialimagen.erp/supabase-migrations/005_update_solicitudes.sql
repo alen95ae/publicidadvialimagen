@@ -76,3 +76,5 @@ COMMENT ON COLUMN solicitudes.telefono IS 'Teléfono de contacto';
 COMMENT ON COLUMN solicitudes.email IS 'Email de contacto';
 COMMENT ON COLUMN solicitudes.comentarios IS 'Comentarios adicionales de la solicitud';
 
+
+

@@ -51,3 +51,5 @@ CREATE TRIGGER update_solicitudes_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_solicitudes_updated_at();
 
+
+

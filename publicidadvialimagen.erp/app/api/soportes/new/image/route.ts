@@ -3,12 +3,8 @@ import { getSupabaseServer } from '@/lib/supabaseServer'
 
 export const runtime = 'nodejs'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
-) {
+export async function POST(request: NextRequest) {
   try {
-    const { id } = await Promise.resolve(params)
     const formData = await request.formData()
     const file = formData.get('file') as File | null
 
@@ -21,7 +17,7 @@ export async function POST(
       name: file.name,
       type: file.type,
       size: file.size,
-      productId: id
+      soporteId: 'new'
     })
 
     // Validar tamaño (máximo 5MB)
@@ -53,7 +49,7 @@ export async function POST(
     const timestamp = Date.now()
     const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const path = `productos/${id || 'new'}/${timestamp}-${sanitizedFilename}`
+    const path = `imagenes/new/${timestamp}-${sanitizedFilename}`
 
     console.log('📤 [UPLOAD] Subiendo a Supabase Storage:', {
       bucket: bucketName,
@@ -80,7 +76,7 @@ export async function POST(
       
       // Si el error es que el archivo ya existe, intentar con un nombre único
       if (uploadError.message.includes('already exists') || uploadError.message.includes('duplicate')) {
-        const uniquePath = `productos/${id || 'new'}/${timestamp}-${Math.random().toString(36).substring(7)}-${sanitizedFilename}`
+        const uniquePath = `imagenes/new/${timestamp}-${Math.random().toString(36).substring(7)}-${sanitizedFilename}`
         const { data: retryData, error: retryError } = await supabase.storage
           .from(bucketName)
           .upload(uniquePath, buffer, {
@@ -139,3 +135,4 @@ export async function POST(
     )
   }
 }
+

@@ -451,10 +451,10 @@ export default function ProductoDetailPage() {
           // Si hay warning, mostrarlo
           if (uploadData.warning) {
             toast.warning(uploadData.warning, { id: 'upload-image' })
-          } else if (imagenMeta?.attachmentId) {
-            toast.success("Imagen subida a Airtable correctamente", { id: 'upload-image' })
           } else if (imagenMeta?.publicUrl) {
-            toast.warning("Imagen guardada localmente (fallback). Configura AIRTABLE_API_KEY para subir directamente a Airtable.", { id: 'upload-image', duration: 5000 })
+            toast.success("Imagen subida a Supabase Storage correctamente", { id: 'upload-image' })
+          } else if (imagenMeta?.attachmentId) {
+            toast.success("Imagen subida correctamente", { id: 'upload-image' })
           } else {
             toast.success("Imagen subida correctamente", { id: 'upload-image' })
           }
@@ -518,12 +518,14 @@ export default function ProductoDetailPage() {
       console.log('📤 dataToSend completo:', JSON.stringify(dataToSend, null, 2))
       console.log('📤 calculadora_de_precios en dataToSend:', dataToSend.calculadora_de_precios)
 
-      if (imagenMeta?.attachmentId) {
-        dataToSend.imagen_attachment_id = imagenMeta.attachmentId
-        dataToSend.imagen_portada = null
-      } else if (imagenMeta?.publicUrl) {
+      // Priorizar publicUrl de Supabase Storage sobre attachmentId de Airtable
+      if (imagenMeta?.publicUrl) {
         dataToSend.imagen_portada = imagenMeta.publicUrl as string
         dataToSend.imagen_attachment_id = null
+      } else if (imagenMeta?.attachmentId) {
+        // Fallback para Airtable (si aún se usa)
+        dataToSend.imagen_attachment_id = imagenMeta.attachmentId
+        dataToSend.imagen_portada = null
       } else {
         if (isNewProduct) {
           if (cleanedImagenUrl) {
@@ -1715,7 +1717,7 @@ export default function ProductoDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calculator className="h-5 w-5" />
-                  Calculadora de Costes
+                  Calculadora de Costes (Receta)
                 </CardTitle>
                 <CardDescription>Añade recursos y calcula el coste total</CardDescription>
               </CardHeader>
@@ -1806,7 +1808,7 @@ export default function ProductoDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  Calculadora de Precios
+                  Calculadora de Precios (UFC)
                 </CardTitle>
                 <CardDescription>Añade campos y calcula el precio total</CardDescription>
               </CardHeader>

@@ -16,7 +16,8 @@ export const ESTADOS_VALIDOS = [
   'Disponible',
   'Reservado',
   'Ocupado',
-  'No disponible'
+  'No disponible',
+  'A Consultar'
 ] as const
 
 export type EstadoValido = typeof ESTADOS_VALIDOS[number]
@@ -55,6 +56,7 @@ export function normalizeEstado(raw?: string): EstadoValido {
   if (['reservado', 'reserved', 'reserva'].includes(v)) return 'Reservado'
   if (['ocupado', 'occupied', 'busy', 'en uso'].includes(v)) return 'Ocupado'
   if (['no disponible', 'no_disponible', 'nodisponible', 'unavailable', 'bloqueado'].includes(v)) return 'No disponible'
+  if (['a consultar', 'a_consultar', 'aconsultar', 'consultar', 'to consult'].includes(v)) return 'A Consultar'
   
   // Buscar coincidencia exacta (case-insensitive)
   const exact = ESTADOS_VALIDOS.find(e => e.toLowerCase() === v)
@@ -178,7 +180,7 @@ export function soporteToSupport(soporte: any) {
     address: null,
     owner: soporte.propietario ?? null,
     ownerId: null,
-    available: estado === 'Disponible',
+    available: estado === 'Disponible' || estado === 'A Consultar',
     createdAt: soporte.created_at || new Date().toISOString(),
     updatedAt: soporte.created_at || new Date().toISOString(),
   }
@@ -239,7 +241,7 @@ export function rowToSupport(row:any){
     address: row['Dirección / Notas'] ?? null,
     owner: row['Propietario'] ?? null,
     ownerId: null, // Airtable no usa IDs de propietario de la misma forma
-    available: estado === 'Disponible',
+    available: estado === 'Disponible' || estado === 'A Consultar',
     createdAt: row['Fecha de creación'] || new Date().toISOString(),
     updatedAt: row['Última actualización'] || new Date().toISOString(),
   }
@@ -439,6 +441,7 @@ export function mapStatusToSupabase(status: string): string {
     'Reservado': 'reserved',
     'Ocupado': 'occupied',
     'No disponible': 'unavailable',
+    'A Consultar': 'to_consult',
     'En mantenimiento': 'maintenance',
     'Mantenimiento': 'maintenance'
   }

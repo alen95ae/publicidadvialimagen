@@ -32,19 +32,21 @@ function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude: number
     const searchPattern = /\/search\/(-?\d+\.?\d*),\+?(-?\d+\.?\d*)/
     const searchMatch = link.match(searchPattern)
     if (searchMatch) {
-      return {
-        latitude: parseFloat(searchMatch[1]),
-        longitude: parseFloat(searchMatch[2])
+      const lat = parseFloat(searchMatch[1])
+      const lng = parseFloat(searchMatch[2])
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng }
       }
     }
     
-    // Patrón 2: @-16.123,-68.456
-    const atPattern = /@(-?\d+\.?\d*),(-?\d+\.?\d*)/
+    // Patrón 2: @-16.123,-68.456 o @-16.123,-68.456,zoom
+    const atPattern = /@(-?\d+\.?\d*),(-?\d+\.?\d*)(?:,(\d+[zm]))?/
     const atMatch = link.match(atPattern)
     if (atMatch) {
-      return {
-        latitude: parseFloat(atMatch[1]),
-        longitude: parseFloat(atMatch[2])
+      const lat = parseFloat(atMatch[1])
+      const lng = parseFloat(atMatch[2])
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng }
       }
     }
     
@@ -52,9 +54,10 @@ function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude: number
     const qPattern = /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/
     const qMatch = link.match(qPattern)
     if (qMatch) {
-      return {
-        latitude: parseFloat(qMatch[1]),
-        longitude: parseFloat(qMatch[2])
+      const lat = parseFloat(qMatch[1])
+      const lng = parseFloat(qMatch[2])
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng }
       }
     }
     
@@ -62,9 +65,10 @@ function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude: number
     const llPattern = /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/
     const llMatch = link.match(llPattern)
     if (llMatch) {
-      return {
-        latitude: parseFloat(llMatch[1]),
-        longitude: parseFloat(llMatch[2])
+      const lat = parseFloat(llMatch[1])
+      const lng = parseFloat(llMatch[2])
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng }
       }
     }
     
@@ -72,14 +76,38 @@ function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude: number
     const dPattern = /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/
     const dMatch = link.match(dPattern)
     if (dMatch) {
-      return {
-        latitude: parseFloat(dMatch[1]),
-        longitude: parseFloat(dMatch[2])
+      const lat = parseFloat(dMatch[1])
+      const lng = parseFloat(dMatch[2])
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng }
+      }
+    }
+    
+    // Patrón 6: place_id o place/ con coordenadas en la URL
+    const placePattern = /place\/[^/]+\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/
+    const placeMatch = link.match(placePattern)
+    if (placeMatch) {
+      const lat = parseFloat(placeMatch[1])
+      const lng = parseFloat(placeMatch[2])
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng }
+      }
+    }
+    
+    // Patrón 7: /data=!4m2!3m1!1s... con coordenadas en parámetros
+    const dataPattern = /data=.*?(-?\d+\.?\d*),(-?\d+\.?\d*)/
+    const dataMatch = link.match(dataPattern)
+    if (dataMatch) {
+      const lat = parseFloat(dataMatch[1])
+      const lng = parseFloat(dataMatch[2])
+      if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+        return { latitude: lat, longitude: lng }
       }
     }
     
     return { latitude: null, longitude: null }
   } catch (error) {
+    console.error('Error extrayendo coordenadas de enlace:', link, error)
     return { latitude: null, longitude: null }
   }
 }
@@ -106,6 +134,15 @@ export async function GET(req: Request) {
       
       // Log para debug de tipos de soporte
       console.log(`🔍 Soporte ${r.fields['Código']}: tipo_soporte = "${r.fields['Tipo de soporte']}"`)
+      
+      // Log para debug de coordenadas
+      const hasStoredCoords = r.fields['Latitud'] && r.fields['Longitud']
+      const hasExtractedCoords = coords.latitude && coords.longitude
+      if (googleMapsLink && !hasStoredCoords && !hasExtractedCoords) {
+        console.warn(`⚠️ Soporte ${r.fields['Código']}: Tiene enlace Google Maps pero no se pudieron extraer coordenadas:`, googleMapsLink.substring(0, 100))
+      } else if (googleMapsLink && !hasStoredCoords && hasExtractedCoords) {
+        console.log(`✅ Soporte ${r.fields['Código']}: Coordenadas extraídas del enlace: ${coords.latitude}, ${coords.longitude}`)
+      }
       
       const soporte = {
         id: r.id,
@@ -180,9 +217,15 @@ export async function GET(req: Request) {
       
       // Usar coordenadas reales si están disponibles, si no usar las de la ciudad
       let coordinates: { lat: number, lng: number } | undefined = undefined
-      if (soporte.latitud && soporte.longitud) {
+      if (soporte.latitud && soporte.longitud && 
+          !isNaN(soporte.latitud) && !isNaN(soporte.longitud) &&
+          Math.abs(soporte.latitud) <= 90 && Math.abs(soporte.longitud) <= 180) {
         coordinates = { lat: soporte.latitud, lng: soporte.longitud }
       } else {
+        // Log si no tiene coordenadas válidas
+        if (soporte.ubicacion_url && !soporte.latitud && !soporte.longitud) {
+          console.warn(`⚠️ Soporte ${soporte.codigo} (${soporte.titulo}): Tiene enlace Google Maps pero no coordenadas válidas. Usando coordenadas de ciudad: ${normalizedCity}`)
+        }
         const cityCoords = getCoordinatesFromCity(normalizedCity)
         if (cityCoords) {
           coordinates = { lat: cityCoords[0], lng: cityCoords[1] }
@@ -227,7 +270,7 @@ export async function GET(req: Request) {
         })(),
         description: soporte.descripcion || '',
         status: soporte.estado || 'Disponible',
-        available: soporte.estado === 'Disponible',
+        available: soporte.estado === 'Disponible' || soporte.estado === 'A Consultar',
         availableMonths: generateAvailableMonths(),
         features: getFeaturesFromType(soporte.tipo_soporte),
         coordinates,

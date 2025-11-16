@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator } from "lucide-react"
+import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, ImageIcon } from "lucide-react"
 import { toast } from "sonner"
 import SupportMap from "@/components/support-map"
 import dynamic from "next/dynamic";
@@ -32,6 +32,7 @@ const STATUS_META = {
   'Reservado':      { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
   'Ocupado':        { label: 'Ocupado',       className: 'bg-red-100 text-red-800' },
   'No disponible':  { label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
+  'A Consultar':    { label: 'A Consultar',   className: 'bg-blue-100 text-blue-800' },
 } as const
 
 interface Support {
@@ -71,6 +72,11 @@ export default function SoporteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [uploadingImages, setUploadingImages] = useState({
+    principal: false,
+    secundaria1: false,
+    secundaria2: false
+  })
   const [formData, setFormData] = useState({
     code: "",
     title: "",
@@ -81,7 +87,12 @@ export default function SoporteDetailPage() {
     areaM2: "",
     iluminacion: null as boolean | null,
     owner: "",
-    images: [] as string[],
+    imagen_principal: "" as string,
+    imagen_secundaria_1: "" as string,
+    imagen_secundaria_2: "" as string,
+    imagen_principal_file: null as File | null,
+    imagen_secundaria_1_file: null as File | null,
+    imagen_secundaria_2_file: null as File | null,
     googleMapsLink: "",
     latitude: null as number | null,
     longitude: null as number | null,
@@ -131,6 +142,8 @@ export default function SoporteDetailPage() {
           googleMapsLink = generateGoogleMapsLink(defaultLat, defaultLng)
         }
 
+        // Extraer imágenes del array o de campos separados
+        const images = data.images || []
         setFormData({
           code: data.code || "",
           title: data.title || "",
@@ -141,7 +154,12 @@ export default function SoporteDetailPage() {
           areaM2: data.areaM2?.toString() || "",
           iluminacion: data.iluminacion ?? null,
           owner: data.owner || "",
-          images: data.images || [],
+          imagen_principal: images[0] || data.imagen_principal || "",
+          imagen_secundaria_1: images[1] || data.imagen_secundaria_1 || "",
+          imagen_secundaria_2: images[2] || data.imagen_secundaria_2 || "",
+          imagen_principal_file: null,
+          imagen_secundaria_1_file: null,
+          imagen_secundaria_2_file: null,
           googleMapsLink,
           latitude,
           longitude,
@@ -193,6 +211,80 @@ export default function SoporteDetailPage() {
     })
   }
 
+  // Handlers para subir imágenes
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>, imageType: 'principal' | 'secundaria1' | 'secundaria2') => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no puede superar los 5MB")
+      e.target.value = ''
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error("El archivo debe ser una imagen (JPG, PNG, GIF)")
+      e.target.value = ''
+      return
+    }
+
+    // Mostrar preview local
+    const previewUrl = URL.createObjectURL(file)
+    
+    // Actualizar estado de carga
+    setUploadingImages(prev => ({ ...prev, [imageType === 'principal' ? 'principal' : imageType === 'secundaria1' ? 'secundaria1' : 'secundaria2']: true }))
+    
+    try {
+      toast.loading("Subiendo imagen...", { id: `upload-${imageType}` })
+      
+      const imageFormData = new FormData()
+      imageFormData.append('file', file)
+      
+      const uploadResponse = await fetch(`/api/soportes/${id || 'new'}/image`, {
+        method: 'POST',
+        body: imageFormData
+      })
+
+      const uploadData = await uploadResponse.json()
+
+      if (!uploadResponse.ok || !uploadData.success) {
+        throw new Error(uploadData.error || 'Error subiendo la imagen')
+      }
+
+      const publicUrl = uploadData.data.publicUrl
+      
+      // Actualizar formData con la URL pública
+      const fieldName = imageType === 'principal' ? 'imagen_principal' : imageType === 'secundaria1' ? 'imagen_secundaria_1' : 'imagen_secundaria_2'
+      const fileFieldName = imageType === 'principal' ? 'imagen_principal_file' : imageType === 'secundaria1' ? 'imagen_secundaria_1_file' : 'imagen_secundaria_2_file'
+      
+      setFormData(prev => ({
+        ...prev,
+        [fieldName]: publicUrl,
+        [fileFieldName]: file
+      }))
+
+      toast.success("Imagen subida correctamente", { id: `upload-${imageType}` })
+    } catch (error) {
+      console.error(`Error subiendo imagen ${imageType}:`, error)
+      toast.error(error instanceof Error ? error.message : "Error subiendo la imagen", { id: `upload-${imageType}` })
+      URL.revokeObjectURL(previewUrl)
+    } finally {
+      setUploadingImages(prev => ({ ...prev, [imageType === 'principal' ? 'principal' : imageType === 'secundaria1' ? 'secundaria1' : 'secundaria2']: false }))
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoveImage = (imageType: 'principal' | 'secundaria1' | 'secundaria2') => {
+    const fieldName = imageType === 'principal' ? 'imagen_principal' : imageType === 'secundaria1' ? 'imagen_secundaria_1' : 'imagen_secundaria_2'
+    const fileFieldName = imageType === 'principal' ? 'imagen_principal_file' : imageType === 'secundaria1' ? 'imagen_secundaria_1_file' : 'imagen_secundaria_2_file'
+    
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: "",
+      [fileFieldName]: null
+    }))
+  }
+
 
   const handleSave = async () => {
     if (!formData.code || !formData.title) {
@@ -204,8 +296,16 @@ export default function SoporteDetailPage() {
     
     try {
       // Preparar datos para envío, convirtiendo strings vacíos a null donde corresponda
+      // Construir array de imágenes para compatibilidad con buildSupabasePayload
+      const imagesArray = [
+        formData.imagen_principal || null,
+        formData.imagen_secundaria_1 || null,
+        formData.imagen_secundaria_2 || null
+      ].filter(Boolean) as string[]
+      
       const dataToSend = {
         ...formData,
+        images: imagesArray, // Para compatibilidad con buildSupabasePayload
         widthM: formData.widthM ? parseFloat(formData.widthM) : null,
         heightM: formData.heightM ? parseFloat(formData.heightM) : null,
         areaM2: formData.areaM2 ? parseFloat(formData.areaM2) : null,
@@ -219,6 +319,11 @@ export default function SoporteDetailPage() {
         country: formData.country || null,
         owner: formData.owner || null,
       }
+      
+      // Remover campos de archivos del payload (no se envían al servidor)
+      delete (dataToSend as any).imagen_principal_file
+      delete (dataToSend as any).imagen_secundaria_1_file
+      delete (dataToSend as any).imagen_secundaria_2_file
 
       console.log('💾 Saving support with data:', {
         googleMapsLink: dataToSend.googleMapsLink,
@@ -861,47 +966,190 @@ export default function SoporteDetailPage() {
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="images">Imágenes del soporte (máximo 3, 5MB cada una)</Label>
-                    <div className="space-y-3">
-                      {formData.images.map((image, index) => (
-                        <div key={index} className="flex items-center gap-3">
-                          <div className="relative h-24 w-40">
-                            <Image 
-                              src={image} 
-                              alt={`preview ${index + 1}`} 
-                              fill
-                              className="object-cover rounded-md border"
-                              sizes="160px"
-                              loading="lazy"
-                            />
+                  <div className="space-y-4">
+                    <Label>Imágenes del soporte (máximo 3, 5MB cada una)</Label>
+                    
+                    {/* Imagen Principal */}
+                    <div className="space-y-2">
+                      <Label htmlFor="imagen_principal" className="text-sm font-medium">Imagen Principal</Label>
+                      <div className="flex items-center gap-3">
+                        {formData.imagen_principal ? (
+                          <div className="relative group">
+                            <div className="relative h-24 w-40 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100">
+                              <Image 
+                                src={formData.imagen_principal} 
+                                alt="Imagen principal" 
+                                fill
+                                className="object-cover"
+                                sizes="160px"
+                                loading="lazy"
+                              />
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1 opacity-90 hover:opacity-100 h-6 px-2"
+                              onClick={() => handleRemoveImage('principal')}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
                           </div>
-                          <Button variant="outline" onClick={() => {
-                            const newImages = formData.images.filter((_, i) => i !== index)
-                            handleChange("images", newImages)
-                          }}>Quitar</Button>
-                        </div>
-                      ))}
-                      {formData.images.length < 3 && (
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0]
-                            if (!f) return
-                            if (f.size > 5 * 1024 * 1024) {
-                              toast.error("La imagen no puede superar los 5MB")
-                              return
+                        ) : (
+                          <div className="aspect-square w-24 flex flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">
+                            <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
+                            <p className="text-xs text-gray-500">Sin imagen</p>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <input
+                            id="imagen_principal"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'principal')}
+                            className="hidden"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={uploadingImages.principal}
+                            onClick={() => {
+                              const input = document.getElementById('imagen_principal') as HTMLInputElement
+                              input?.click()
+                            }}
+                          >
+                            <ImageIcon className="w-4 h-4 mr-2" />
+                            {uploadingImages.principal 
+                              ? 'Subiendo...' 
+                              : formData.imagen_principal 
+                                ? 'Cambiar imagen' 
+                                : 'Seleccionar imagen'
                             }
-                            const fd = new FormData()
-                            fd.set('file', f)
-                            const r = await fetch('/api/uploads', { method: 'POST', body: fd })
-                            const { url } = await r.json()
-                            handleChange("images", [...formData.images, url])
-                          }} 
-                        />
-                      )}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Imagen Secundaria 1 */}
+                    <div className="space-y-2">
+                      <Label htmlFor="imagen_secundaria_1" className="text-sm font-medium">Imagen Secundaria 1</Label>
+                      <div className="flex items-center gap-3">
+                        {formData.imagen_secundaria_1 ? (
+                          <div className="relative group">
+                            <div className="relative h-24 w-40 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100">
+                              <Image 
+                                src={formData.imagen_secundaria_1} 
+                                alt="Imagen secundaria 1" 
+                                fill
+                                className="object-cover"
+                                sizes="160px"
+                                loading="lazy"
+                              />
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1 opacity-90 hover:opacity-100 h-6 px-2"
+                              onClick={() => handleRemoveImage('secundaria1')}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="aspect-square w-24 flex flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">
+                            <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
+                            <p className="text-xs text-gray-500">Sin imagen</p>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <input
+                            id="imagen_secundaria_1"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'secundaria1')}
+                            className="hidden"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={uploadingImages.secundaria1}
+                            onClick={() => {
+                              const input = document.getElementById('imagen_secundaria_1') as HTMLInputElement
+                              input?.click()
+                            }}
+                          >
+                            <ImageIcon className="w-4 h-4 mr-2" />
+                            {uploadingImages.secundaria1 
+                              ? 'Subiendo...' 
+                              : formData.imagen_secundaria_1 
+                                ? 'Cambiar imagen' 
+                                : 'Seleccionar imagen'
+                            }
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Imagen Secundaria 2 */}
+                    <div className="space-y-2">
+                      <Label htmlFor="imagen_secundaria_2" className="text-sm font-medium">Imagen Secundaria 2</Label>
+                      <div className="flex items-center gap-3">
+                        {formData.imagen_secundaria_2 ? (
+                          <div className="relative group">
+                            <div className="relative h-24 w-40 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100">
+                              <Image 
+                                src={formData.imagen_secundaria_2} 
+                                alt="Imagen secundaria 2" 
+                                fill
+                                className="object-cover"
+                                sizes="160px"
+                                loading="lazy"
+                              />
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1 opacity-90 hover:opacity-100 h-6 px-2"
+                              onClick={() => handleRemoveImage('secundaria2')}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="aspect-square w-24 flex flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">
+                            <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
+                            <p className="text-xs text-gray-500">Sin imagen</p>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <input
+                            id="imagen_secundaria_2"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageChange(e, 'secundaria2')}
+                            className="hidden"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={uploadingImages.secundaria2}
+                            onClick={() => {
+                              const input = document.getElementById('imagen_secundaria_2') as HTMLInputElement
+                              input?.click()
+                            }}
+                          >
+                            <ImageIcon className="w-4 h-4 mr-2" />
+                            {uploadingImages.secundaria2 
+                              ? 'Subiendo...' 
+                              : formData.imagen_secundaria_2 
+                                ? 'Cambiar imagen' 
+                                : 'Seleccionar imagen'
+                            }
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <p className="text-xs text-gray-500">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
                   </div>
                 </>
               ) : (

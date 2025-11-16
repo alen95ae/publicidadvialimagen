@@ -150,11 +150,10 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
   if (producto.descripcion !== undefined && producto.descripcion !== null) {
     fields.descripcion = String(producto.descripcion).trim() || ''
   }
-  // Guardar imagen_portada en imagen_principal de Supabase (el campo que usa el script de migración)
+  // Guardar imagen_portada en imagen_principal de Supabase (el campo correcto en la BD)
+  // NO guardar en imagen_portada ya que esa columna no existe en Supabase
   if (producto.imagen_portada !== undefined) {
-    // Guardar en ambos campos para compatibilidad
     fields.imagen_principal = producto.imagen_portada || null
-    fields.imagen_portada = producto.imagen_portada || null
   }
   
   if (producto.categoria !== undefined && producto.categoria !== null) {

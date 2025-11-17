@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server"
-import { findContactoById, updateContacto, deleteContacto } from "@/lib/supabaseContactos"
+import { findContactoById, updateContacto, deleteContacto, type Contacto } from "@/lib/supabaseContactos"
 
 // GET - Obtener un contacto por ID
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id } = await params
+    // Manejar tanto Next.js 15 (Promise) como versiones anteriores
+    const { id } = params instanceof Promise ? await params : params
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID de contacto requerido" },
+        { status: 400 }
+      )
+    }
 
     const contact = await findContactoById(id)
 
@@ -19,11 +27,14 @@ export async function GET(
     }
 
     return NextResponse.json(contact)
-  } catch (error) {
-    console.error("Error fetching contact:", error)
+  } catch (error: any) {
+    console.error("❌ Error obteniendo contacto:", error.message)
     return NextResponse.json(
-      { error: "No se pudo obtener el contacto" },
-      { status: 404 }
+      { 
+        error: "No se pudo obtener el contacto",
+        details: error.message 
+      },
+      { status: 500 }
     )
   }
 }
@@ -31,55 +42,49 @@ export async function GET(
 // PUT - Actualizar un contacto
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id } = await params
+    // Manejar tanto Next.js 15 (Promise) como versiones anteriores
+    const { id } = params instanceof Promise ? await params : params
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID de contacto requerido" },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
+    console.log(`📝 PUT /api/contactos/${id} - Body recibido:`, Object.keys(body))
 
-    console.log('📝 Actualizando contacto:', id, body)
-
-    const updateData: any = {}
-
-    // Mapear todos los campos posibles
-    if (body.displayName !== undefined) updateData.displayName = body.displayName
-    if (body.legalName !== undefined) {
-      updateData.legalName = body.legalName
-      updateData.company = body.legalName
+    // Mapear address1 a address si viene del frontend
+    const dataToUpdate: Partial<Contacto> = { ...body }
+    if (body.address1 !== undefined) {
+      dataToUpdate.address = body.address1
+      delete (dataToUpdate as any).address1
     }
-    if (body.company !== undefined) {
-      updateData.company = body.company
-      if (!updateData.legalName) {
-        updateData.legalName = body.company
-      }
-    }
-    if (body.kind !== undefined) updateData.kind = body.kind
-    if (body.email !== undefined) updateData.email = body.email
-    if (body.phone !== undefined) updateData.phone = body.phone
-    if (body.taxId !== undefined) updateData.taxId = body.taxId
-    if (body.address !== undefined) updateData.address = body.address
-    if (body.city !== undefined) updateData.city = body.city
-    if (body.postalCode !== undefined) updateData.postalCode = body.postalCode
-    if (body.country !== undefined) updateData.country = body.country
-    if (body.relation !== undefined) updateData.relation = body.relation
-    if (body.notes !== undefined) updateData.notes = body.notes
-    if (body.website !== undefined) updateData.website = body.website
 
-    // Actualizar el registro en Supabase
-    const updated = await updateContacto(id, updateData)
+    // Pasar el body directamente a updateContacto, que usará contactoToSupabase para mapear correctamente
+    const updated = await updateContacto(id, dataToUpdate)
 
     if (!updated) {
+      console.log(`⚠️ PUT /api/contactos/${id} - Contacto no encontrado o no se pudo actualizar`)
       return NextResponse.json(
-        { error: "No se pudo actualizar el contacto" },
+        { error: "Contacto no encontrado" },
         { status: 404 }
       )
     }
 
+    console.log(`✅ PUT /api/contactos/${id} - Contacto actualizado correctamente`)
     return NextResponse.json(updated)
   } catch (error: any) {
-    console.error("Error updating contact:", error)
+    console.error(`❌ Error actualizando contacto ${id}:`, error.message)
     return NextResponse.json(
-      { error: "No se pudo actualizar el contacto", details: error.message },
+      { 
+        error: "Error actualizando contacto",
+        details: error.message 
+      },
       { status: 500 }
     )
   }
@@ -88,53 +93,49 @@ export async function PUT(
 // PATCH - Actualización parcial de un contacto
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id } = await params
+    // Manejar tanto Next.js 15 (Promise) como versiones anteriores
+    const { id } = params instanceof Promise ? await params : params
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID de contacto requerido" },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
+    console.log(`📝 PATCH /api/contactos/${id} - Body recibido:`, Object.keys(body))
 
-    const updateData: any = {}
-
-    // Mapear solo los campos que vienen en el body
-    if (body.displayName !== undefined) updateData.displayName = body.displayName
-    if (body.legalName !== undefined) {
-      updateData.legalName = body.legalName
-      updateData.company = body.legalName
+    // Mapear address1 a address si viene del frontend
+    const dataToUpdate: Partial<Contacto> = { ...body }
+    if (body.address1 !== undefined) {
+      dataToUpdate.address = body.address1
+      delete (dataToUpdate as any).address1
     }
-    if (body.company !== undefined) {
-      updateData.company = body.company
-      if (!updateData.legalName) {
-        updateData.legalName = body.company
-      }
-    }
-    if (body.kind !== undefined) updateData.kind = body.kind
-    if (body.email !== undefined) updateData.email = body.email
-    if (body.phone !== undefined) updateData.phone = body.phone
-    if (body.taxId !== undefined) updateData.taxId = body.taxId
-    if (body.address !== undefined) updateData.address = body.address
-    if (body.city !== undefined) updateData.city = body.city
-    if (body.postalCode !== undefined) updateData.postalCode = body.postalCode
-    if (body.country !== undefined) updateData.country = body.country
-    if (body.relation !== undefined) updateData.relation = body.relation
-    if (body.notes !== undefined) updateData.notes = body.notes
-    if (body.website !== undefined) updateData.website = body.website
 
-    // Actualizar el registro en Supabase
-    const updated = await updateContacto(id, updateData)
+    // Pasar el body directamente a updateContacto, que usará contactoToSupabase para mapear correctamente
+    const updated = await updateContacto(id, dataToUpdate)
 
     if (!updated) {
+      console.log(`⚠️ PATCH /api/contactos/${id} - Contacto no encontrado o no se pudo actualizar`)
       return NextResponse.json(
-        { error: "No se pudo actualizar el contacto" },
+        { error: "Contacto no encontrado" },
         { status: 404 }
       )
     }
 
+    console.log(`✅ PATCH /api/contactos/${id} - Contacto actualizado correctamente`)
     return NextResponse.json({ success: true, id: updated.id })
   } catch (error: any) {
-    console.error("Error updating contact:", error)
+    console.error(`❌ Error actualizando contacto ${id} (PATCH):`, error.message)
     return NextResponse.json(
-      { error: "No se pudo actualizar el contacto", details: error.message },
+      { 
+        error: "No se pudo actualizar el contacto",
+        details: error.message 
+      },
       { status: 500 }
     )
   }
@@ -143,10 +144,18 @@ export async function PATCH(
 // DELETE - Eliminar un contacto
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { id } = await params
+    // Manejar tanto Next.js 15 (Promise) como versiones anteriores
+    const { id } = params instanceof Promise ? await params : params
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID de contacto requerido" },
+        { status: 400 }
+      )
+    }
 
     const eliminado = await deleteContacto(id)
 
@@ -158,10 +167,13 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error deleting contact:", error)
+  } catch (error: any) {
+    console.error("❌ Error eliminando contacto:", error.message)
     return NextResponse.json(
-      { error: "No se pudo eliminar el contacto" },
+      { 
+        error: "No se pudo eliminar el contacto",
+        details: error.message 
+      },
       { status: 500 }
     )
   }

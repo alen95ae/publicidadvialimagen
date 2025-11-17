@@ -18,7 +18,7 @@ export type SoporteRow = {
   propietario?: string
   ciudad?: string
   pais?: string
-  enlace_google_maps?: string
+  enlace_maps?: string // Campo correcto en Supabase
   latitud?: number
   longitud?: number
   imagen_principal?: any // JSONB array - preparado para futuras imágenes
@@ -65,7 +65,7 @@ export function supabaseRowToAirtableFormat(row: SoporteRow): any {
     'Propietario': row.propietario || null,
     'Ciudad': row.ciudad || null,
     'País': row.pais || 'BO',
-    'Enlace Google Maps': row.enlace_google_maps || null,
+    'Enlace Google Maps': row.enlace_maps || null, // Mapear desde enlace_maps
     'Latitud': row.latitud || null,
     'Longitud': row.longitud || null,
     // Preparado para imágenes: convertir JSONB a formato Airtable

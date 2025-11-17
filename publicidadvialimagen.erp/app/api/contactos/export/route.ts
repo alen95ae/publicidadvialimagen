@@ -2,6 +2,17 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server"
 import { getAllContactos, findContactoById } from "@/lib/supabaseContactos"
+import { getUserByIdSupabase } from "@/lib/supabaseUsers"
+
+// Función para escapar CSV correctamente (maneja tildes, ñ y caracteres especiales)
+function escapeCSV(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return ''
+  const str = String(value)
+  // Escapar comillas dobles duplicándolas
+  const escaped = str.replace(/"/g, '""')
+  // Envolver en comillas para manejar comas, saltos de línea, etc.
+  return `"${escaped}"`
+}
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +37,26 @@ export async function GET(request: Request) {
       contactos = await getAllContactos()
     }
 
-    // Construir CSV
+    // Obtener todos los comerciales para mapear IDs a nombres
+    const salesOwnerIds = new Set<string>()
+    contactos.forEach(c => {
+      if (c.salesOwnerId) {
+        salesOwnerIds.add(c.salesOwnerId)
+      }
+    })
+
+    const salesOwnersMap: Record<string, string> = {}
+    if (salesOwnerIds.size > 0) {
+      const promises = Array.from(salesOwnerIds).map(async (id) => {
+        const user = await getUserByIdSupabase(id)
+        if (user) {
+          salesOwnersMap[id] = user.nombre || user.email || ''
+        }
+      })
+      await Promise.all(promises)
+    }
+
+    // Construir CSV con todos los campos del listado
     const headers = [
       "ID",
       "Nombre",
@@ -37,45 +67,62 @@ export async function GET(request: Request) {
       "NIT",
       "Dirección",
       "Ciudad",
-      "Código Postal",
       "País",
       "Relación",
       "Sitio Web",
+      "Comercial",
       "Notas"
     ]
 
-    const csvRows = [headers.join(',')]
+    const csvRows: string[] = []
+    
+    // Agregar headers
+    csvRows.push(headers.map(h => escapeCSV(h)).join(','))
 
+    // Agregar filas de datos
     for (const contacto of contactos) {
       const kindDisplay = contacto.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
+      const relationDisplay = contacto.relation === 'CUSTOMER' ? 'Cliente' 
+        : contacto.relation === 'SUPPLIER' ? 'Proveedor'
+        : contacto.relation === 'BOTH' ? 'Ambos'
+        : contacto.relation || ''
+      const comercialName = contacto.salesOwnerId && salesOwnersMap[contacto.salesOwnerId] 
+        ? salesOwnersMap[contacto.salesOwnerId] 
+        : ''
+
       const row = [
-        contacto.id || '',
-        `"${(contacto.displayName || '').toString().replace(/"/g, '""')}"`,
-        `"${kindDisplay}"`,
-        `"${(contacto.company || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.email || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.phone || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.taxId || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.address || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.city || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.postalCode || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.country || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.relation || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.website || '').toString().replace(/"/g, '""')}"`,
-        `"${(contacto.notes || '').toString().replace(/"/g, '""')}"`
+        escapeCSV(contacto.id),
+        escapeCSV(contacto.displayName),
+        escapeCSV(kindDisplay),
+        escapeCSV(contacto.company),
+        escapeCSV(contacto.email),
+        escapeCSV(contacto.phone),
+        escapeCSV(contacto.taxId),
+        escapeCSV(contacto.address),
+        escapeCSV(contacto.city),
+        escapeCSV(contacto.country),
+        escapeCSV(relationDisplay),
+        escapeCSV(contacto.website),
+        escapeCSV(comercialName),
+        escapeCSV(contacto.notes)
       ]
       csvRows.push(row.join(','))
     }
 
     const csv = csvRows.join('\n')
-    const csvWithBOM = '\uFEFF' + csv // BOM para Excel
+    // BOM UTF-8 para Excel y otros programas
+    const csvWithBOM = '\uFEFF' + csv
 
     console.log(`✅ Exportados ${contactos.length} contactos a CSV`)
 
-    return new NextResponse(csvWithBOM, {
+    // Convertir a Buffer con encoding UTF-8 explícito
+    const csvBuffer = Buffer.from(csvWithBOM, 'utf-8')
+
+    return new NextResponse(csvBuffer, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="contactos_${new Date().toISOString().split('T')[0]}.csv"`,
+        'Content-Encoding': 'utf-8',
       },
     })
   } catch (e: any) {

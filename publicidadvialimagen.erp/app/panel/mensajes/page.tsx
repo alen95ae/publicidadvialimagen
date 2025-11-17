@@ -28,6 +28,8 @@ import {
   RefreshCw
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
+import { Toaster } from "sonner"
 
 // Tipos para los mensajes
 interface Message {
@@ -83,6 +85,8 @@ export default function MensajesPage() {
   const [mensajesList, setMensajesList] = useState<Message[]>([])
   const [estadoFilter, setEstadoFilter] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [editedMessages, setEditedMessages] = useState<Record<string, Partial<Message>>>({})
+  const [savingChanges, setSavingChanges] = useState(false)
 
   // Cargar mensajes desde Supabase
   const loadMensajes = async () => {
@@ -151,25 +155,165 @@ export default function MensajesPage() {
     }
   }
 
-  const handleMarcarComoLeido = async (id: string) => {
+  // Cambiar estado inline (para un solo mensaje)
+  const handleEstadoChange = (id: string, newEstado: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
+    setEditedMessages(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        estado: newEstado
+      }
+    }))
+  }
+
+  // Cambiar estado masivo (para múltiples mensajes)
+  const handleBulkEstadoChange = (newEstado: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
+    const updates: Record<string, Partial<Message>> = {}
+    selectedMensajes.forEach(id => {
+      updates[id] = {
+        ...(editedMessages[id] || {}),
+        estado: newEstado
+      }
+    })
+    setEditedMessages(prev => ({ ...prev, ...updates }))
+    toast.info(`Estado actualizado para ${selectedMensajes.length} mensaje(s)`)
+  }
+
+  // Guardar cambios
+  const handleSaveChanges = async () => {
+    if (Object.keys(editedMessages).length === 0) return
+
     try {
-      const response = await fetch(`/api/messages/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ estado: 'LEÍDO' }),
-        cache: 'no-store'
-      })
-      if (response.ok) {
-        // Recargar mensajes para obtener datos actualizados desde Supabase
-        await loadMensajes()
+      setSavingChanges(true)
+      const count = Object.keys(editedMessages).length
+
+      // Si hay un solo mensaje, usar PATCH individual
+      if (count === 1) {
+        const [id] = Object.keys(editedMessages)
+        const changes = editedMessages[id]
+        
+        if (changes.estado) {
+          const response = await fetch(`/api/messages/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: changes.estado }),
+            cache: 'no-store'
+          })
+          
+          if (!response.ok) {
+            throw new Error('Error al actualizar mensaje')
+          }
+        }
       } else {
-        alert('Error al actualizar el estado')
+        // Si hay múltiples, usar bulk update
+        const ids = Object.keys(editedMessages)
+        const estados = ids.map(id => editedMessages[id].estado)
+        
+        // Agrupar por estado para hacer updates más eficientes
+        const estadosUnicos = [...new Set(estados.filter(Boolean))]
+        
+        for (const estado of estadosUnicos) {
+          const idsConEsteEstado = ids.filter(id => editedMessages[id].estado === estado)
+          
+          if (idsConEsteEstado.length > 0 && estado) {
+            const response = await fetch('/api/messages/bulk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ids: idsConEsteEstado,
+                action: 'update',
+                data: { estado }
+              })
+            })
+            
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new Error(errorData.error || 'Error al actualizar mensajes')
+            }
+          }
+        }
+      }
+
+      setEditedMessages({})
+      setSelectedMensajes([])
+      await loadMensajes()
+      toast.success(`${count} mensaje(s) actualizado(s)`)
+    } catch (error) {
+      console.error('Error al guardar cambios:', error)
+      toast.error("Error al guardar cambios")
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  // Descartar cambios
+  const handleDiscardChanges = () => {
+    setEditedMessages({})
+    toast.info("Cambios descartados")
+  }
+
+  // Exportar mensajes a CSV
+  const handleExport = async () => {
+    try {
+      const estadoParam = estadoFilter.length > 0 ? estadoFilter.join(',') : 'all'
+      const url = `/api/messages/export?estado=${estadoParam}`
+      
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        throw new Error('Error al exportar mensajes')
+      }
+      
+      // Convertir a blob y descargar
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = `mensajes_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+      
+      toast.success(`Mensajes exportados correctamente`)
+    } catch (error) {
+      console.error('Error exportando mensajes:', error)
+      toast.error('Error al exportar mensajes')
+    }
+  }
+
+  // Eliminar mensajes seleccionados
+  const handleBulkDelete = async () => {
+    if (selectedMensajes.length === 0) {
+      toast.error("Selecciona al menos un mensaje para eliminar")
+      return
+    }
+
+    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedMensajes.length} mensaje(s)?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/messages/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedMensajes,
+          action: 'delete'
+        })
+      })
+
+      if (response.ok) {
+        await loadMensajes()
+        setSelectedMensajes([])
+        toast.success(`${selectedMensajes.length} mensaje(s) eliminado(s)`)
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || 'Error al eliminar los mensajes')
       }
     } catch (error) {
-      console.error('Error updating message:', error)
-      alert('Error al actualizar el estado')
+      console.error('Error eliminando mensajes:', error)
+      toast.error('Error de conexión')
     }
   }
 
@@ -246,7 +390,7 @@ export default function MensajesPage() {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleExport}>
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
               </Button>
@@ -263,6 +407,78 @@ export default function MensajesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Barra azul unificada de acciones masivas */}
+            {(selectedMensajes.length > 0 || Object.keys(editedMessages).length > 0) && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {selectedMensajes.length > 0 && (
+                      <span className="text-sm font-medium text-blue-800">
+                        {selectedMensajes.length} seleccionado{selectedMensajes.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                    
+                    {/* Solo mostrar desplegable cuando hay más de 1 mensaje seleccionado */}
+                    {selectedMensajes.length > 1 && (
+                      <Select
+                        value=""
+                        onValueChange={(value: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
+                          handleBulkEstadoChange(value)
+                        }}
+                      >
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Cambiar estado..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(ESTADOS_META).map(([key, meta]) => (
+                            <SelectItem key={key} value={key}>
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                                {meta.label}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {Object.keys(editedMessages).length > 0 && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          onClick={handleSaveChanges}
+                          disabled={savingChanges}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedMessages).length})`}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleDiscardChanges}
+                        >
+                          Descartar
+                        </Button>
+                      </>
+                    )}
+                    
+                    {selectedMensajes.length > 0 && (
+                      <Button 
+                        size="sm" 
+                        onClick={handleBulkDelete}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Eliminar{selectedMensajes.length > 1 ? ` (${selectedMensajes.length})` : ''}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="text-center">
@@ -327,10 +543,35 @@ export default function MensajesPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge className={`${getEstadoColor(mensaje.estado)} flex items-center gap-1 w-fit`}>
-                          {getEstadoIcon(mensaje.estado)}
-                          {mensaje.estado.replace('_', ' ')}
-                        </Badge>
+                        {selectedMensajes.length === 1 && selectedMensajes.includes(mensaje.id) ? (
+                          // Edición inline cuando solo hay un mensaje seleccionado
+                          <Select
+                            value={editedMessages[mensaje.id]?.estado || mensaje.estado}
+                            onValueChange={(value: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
+                              handleEstadoChange(mensaje.id, value)
+                            }}
+                          >
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(ESTADOS_META).map(([key, meta]) => (
+                                <SelectItem key={key} value={key}>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                                    {meta.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          // Vista normal cuando no está seleccionado o hay múltiples seleccionados
+                          <Badge className={`${getEstadoColor(editedMessages[mensaje.id]?.estado || mensaje.estado)} flex items-center gap-1 w-fit`}>
+                            {getEstadoIcon(editedMessages[mensaje.id]?.estado || mensaje.estado)}
+                            {(editedMessages[mensaje.id]?.estado || mensaje.estado).replace('_', ' ')}
+                          </Badge>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1">
@@ -359,6 +600,7 @@ export default function MensajesPage() {
           </CardContent>
         </Card>
       </main>
+      <Toaster />
     </div>
   )
 }

@@ -12,7 +12,6 @@ import {
   Eye,
   MoreHorizontal,
   Download,
-  Upload,
   CheckCircle,
   XCircle,
   Copy,
@@ -52,14 +51,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -205,8 +196,6 @@ export default function InventarioPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [openImport, setOpenImport] = useState(false)
-  const [importLoading, setImportLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -631,17 +620,19 @@ export default function InventarioPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `inventario_${new Date().toISOString().split('T')[0]}.csv`
+        const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+        a.download = `productos_${fecha}.csv`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
+        toast.success('Productos exportados correctamente')
       } else {
-        alert('Error al exportar los datos')
+        toast.error('Error al exportar los datos')
       }
     } catch (error) {
       console.error('Error al exportar:', error)
-      alert('Error al exportar los datos')
+      toast.error('Error al exportar los datos')
     }
   }
 
@@ -788,47 +779,6 @@ export default function InventarioPage() {
   }
 
 
-  // Función para manejar la importación de CSV
-  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    console.log('Iniciando importación de CSV:', file.name, file.size)
-    setImportLoading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('/api/inventario/import', {
-        method: 'POST',
-        body: formData
-      })
-
-      console.log('Respuesta del servidor:', response.status, response.statusText)
-      const result = await response.json()
-      console.log('Resultado:', result)
-      
-      if (response.ok) {
-        alert(`Importación completada: ${result.created} creados, ${result.updated} actualizados${result.errors > 0 ? `, ${result.errors} errores` : ''}`)
-        if (result.errorMessages && result.errorMessages.length > 0) {
-          console.log('Errores detallados:', result.errorMessages)
-          alert(`Errores encontrados:\n${result.errorMessages.slice(0, 5).join('\n')}`)
-        }
-        await fetchItems(currentPage)
-        setOpenImport(false)
-      } else {
-        console.error('Error en la respuesta:', result)
-        alert(`Error: ${result.error || 'Error desconocido'}`)
-      }
-    } catch (error) {
-      console.error('Error al importar:', error)
-      alert(`Error al importar el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
-    } finally {
-      setImportLoading(false)
-      // Limpiar el input
-      event.target.value = ''
-    }
-  }
 
   return (
     <div className="p-6">
@@ -876,31 +826,6 @@ export default function InventarioPage() {
                     <Download className="h-4 w-4 mr-2" />
                     Exportar
                   </Button>
-                  <Dialog open={openImport} onOpenChange={setOpenImport}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Importar
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Importar inventario (CSV)</DialogTitle>
-                        <DialogDescription>
-                          Columnas: codigo, nombre, descripcion, categoria, cantidad, unidad_medida, coste, precio_venta, responsable, disponibilidad
-                          <br/>
-                          <a href="/api/inventario/import/template" className="underline">Descargar plantilla</a>
-                        </DialogDescription>
-                      </DialogHeader>
-                      <input 
-                        type="file" 
-                        accept=".csv,text/csv" 
-                        onChange={handleCsvImport}
-                        disabled={importLoading}
-                      />
-                      {importLoading && <p>Importando...</p>}
-                    </DialogContent>
-                  </Dialog>
                   <Button 
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={handleNewProduct}
@@ -1388,3 +1313,4 @@ export default function InventarioPage() {
     </div>
   )
 }
+

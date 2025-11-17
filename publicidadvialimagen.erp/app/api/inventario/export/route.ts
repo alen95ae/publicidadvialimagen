@@ -1,80 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-// Datos de ejemplo (en producción vendría de una base de datos)
-const inventarioItems = [
-  {
-    id: 1,
-    codigo: "INV-001",
-    nombre: "Soporte Publicitario 6x3",
-    responsable: "Juan Pérez",
-    unidad_medida: "unidad",
-    coste: 150.00,
-    precio_venta: 250.00,
-    categoria: "Displays",
-    cantidad: 25,
-    disponibilidad: "Disponible",
-  },
-  {
-    id: 2,
-    codigo: "INV-002", 
-    nombre: "Banner Vinilo 2x1",
-    responsable: "María García",
-    unidad_medida: "m²",
-    coste: 45.00,
-    precio_venta: 75.00,
-    categoria: "Impresion digital",
-    cantidad: 0,
-    disponibilidad: "Agotado"
-  },
-  {
-    id: 3,
-    codigo: "INV-003",
-    nombre: "Estructura Metálica Base",
-    responsable: "Carlos López",
-    unidad_medida: "unidad",
-    coste: 320.00,
-    precio_venta: 450.00,
-    categoria: "Categoria general",
-    cantidad: 8,
-    disponibilidad: "Bajo Stock"
-  },
-  {
-    id: 4,
-    codigo: "INV-004",
-    nombre: "Tornillos Anclaje M8",
-    responsable: "Ana Martínez",
-    unidad_medida: "kg",
-    coste: 12.50,
-    precio_venta: 18.00,
-    categoria: "Insumos",
-    cantidad: 150,
-    disponibilidad: "Disponible"
-  },
-  {
-    id: 5,
-    codigo: "INV-005",
-    nombre: "Servicio de Corte Láser",
-    responsable: "Pedro Ruiz",
-    unidad_medida: "hora",
-    coste: 25.00,
-    precio_venta: 40.00,
-    categoria: "Corte y grabado",
-    cantidad: 0,
-    disponibilidad: "Disponible"
-  },
-  {
-    id: 6,
-    codigo: "INV-006",
-    nombre: "Instalación Publicitaria",
-    responsable: "Laura Sánchez",
-    unidad_medida: "hora",
-    coste: 30.00,
-    precio_venta: 50.00,
-    categoria: "Mano de obra",
-    cantidad: 0,
-    disponibilidad: "Disponible"
-  }
-]
+import { getAllProductos } from '@/lib/supabaseProductos'
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,73 +7,93 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || ''
     const categoria = searchParams.get('categoria') || ''
 
-    console.log('📤 Export inventario params:', { query, categoria })
+    console.log('📤 Export productos params:', { query, categoria })
 
-    // Filtrar items
-    let filteredItems = inventarioItems
+    // Obtener todos los productos de Supabase
+    let productos = await getAllProductos()
 
+    // Aplicar filtros
     if (query) {
-      filteredItems = filteredItems.filter(item => 
+      productos = productos.filter(item => 
         item.codigo.toLowerCase().includes(query.toLowerCase()) ||
         item.nombre.toLowerCase().includes(query.toLowerCase()) ||
-        item.categoria.toLowerCase().includes(query.toLowerCase())
+        item.categoria?.toLowerCase().includes(query.toLowerCase())
       )
     }
 
     if (categoria) {
-      filteredItems = filteredItems.filter(item => 
-        item.categoria === categoria
+      productos = productos.filter(item => 
+        item.categoria?.toLowerCase().trim() === categoria.toLowerCase().trim()
       )
     }
 
-    // Crear CSV
+    // Función para escapar CSV correctamente
+    const escapeCSV = (value: string | number | boolean | null | undefined): string => {
+      if (value === null || value === undefined) return '""'
+      const str = String(value)
+      // Reemplazar comillas dobles por dos comillas dobles (estándar CSV)
+      const escaped = str.replace(/"/g, '""')
+      // Envolver en comillas para manejar comas, saltos de línea, etc.
+      return `"${escaped}"`
+    }
+
+    // Crear CSV con todas las columnas de la lista
     const headers = [
       'Código',
       'Nombre',
-      'Responsable',
-      'Unidad de Medida',
-      'Coste (Bs)',
-      'Precio Venta (Bs)',
-      '% Utilidad',
       'Categoría',
-      'Cantidad',
+      'Unidad',
+      'Coste',
+      'Precio Venta',
+      '% Utilidad',
+      'Stock',
+      'Mostrar en Web',
+      'Responsable',
+      'Descripción',
       'Disponibilidad'
     ]
 
     const csvRows = [headers.join(',')]
 
-    filteredItems.forEach(item => {
+    productos.forEach(item => {
       const utilidad = item.coste === 0 ? 0 : ((item.precio_venta - item.coste) / item.coste) * 100
       
       const row = [
-        `"${item.codigo}"`,
-        `"${item.nombre}"`,
-        `"${item.responsable}"`,
-        `"${item.unidad_medida}"`,
+        escapeCSV(item.codigo),
+        escapeCSV(item.nombre),
+        escapeCSV(item.categoria),
+        escapeCSV(item.unidad_medida),
         item.coste.toFixed(2),
         item.precio_venta.toFixed(2),
         utilidad.toFixed(1),
-        `"${item.categoria}"`,
         item.cantidad,
-        `"${item.disponibilidad}"`
+        item.mostrar_en_web ? 'Sí' : 'No',
+        escapeCSV(item.responsable),
+        escapeCSV(item.descripcion),
+        escapeCSV(item.disponibilidad)
       ]
       csvRows.push(row.join(','))
     })
 
-    const csvContent = csvRows.join('\n')
+    const csv = csvRows.join('\n')
+    // Agregar BOM (Byte Order Mark) para que Excel reconozca UTF-8 correctamente
+    // Esto es crucial para que las tildes y ñ se muestren correctamente
+    const csvWithBOM = '\uFEFF' + csv
 
-    console.log('📊 CSV generated:', { rows: csvRows.length - 1 })
+    console.log('📊 CSV productos generado:', { rows: productos.length })
 
-    return new NextResponse(csvContent, {
+    const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+    
+    return new NextResponse(csvWithBOM, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="inventario_${new Date().toISOString().split('T')[0]}.csv"`
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="productos_${fecha}.csv"`
       }
     })
 
   } catch (error) {
-    console.error('❌ Error en export inventario:', error)
+    console.error('❌ Error en export productos:', error)
     return NextResponse.json(
       { success: false, error: 'Error al exportar datos' },
       { status: 500 }

@@ -23,7 +23,9 @@ import {
   GripVertical,
   X,
   Hammer,
-  FileText
+  FileText,
+  CheckCircle,
+  XCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import jsPDF from 'jspdf'
@@ -79,7 +81,8 @@ interface ProductoItem {
   id: string
   tipo: 'producto'
   producto: string
-  imagen?: string
+  imagen?: string // URL de la imagen (para mostrar preview o URL de Supabase)
+  imagenFile?: File // Archivo temporal que se subirá al guardar
   descripcion: string
   cantidad: number
   ancho: number
@@ -93,6 +96,7 @@ interface ProductoItem {
   total: number
   esSoporte?: boolean
   dimensionesBloqueadas?: boolean
+  variantes?: Record<string, string> | null
 }
 
 interface NotaItem {
@@ -113,8 +117,11 @@ export default function NuevaCotizacionPage() {
   const router = useRouter()
   const [cliente, setCliente] = useState("")
   const [sucursal, setSucursal] = useState("")
+  const [vigencia, setVigencia] = useState("30")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
+  const [cotizacionId, setCotizacionId] = useState<string>("")
+  const [estadoCotizacion, setEstadoCotizacion] = useState<"Pendiente" | "Aprobada" | "Rechazada" | "Vencida">("Pendiente")
   const [productosList, setProductosList] = useState<ItemLista[]>([
     {
       id: "1",
@@ -365,7 +372,8 @@ export default function NuevaCotizacionPage() {
   }
 
   const actualizarProducto = (id: string, campo: keyof ProductoItem, valor: any) => {
-    setProductosList(productosList.map(item => {
+    // Usar forma funcional de setState para preservar referencias a URLs blob
+    setProductosList(prevList => prevList.map(item => {
       if (item.id === id && item.tipo === 'producto') {
         const producto = item as ProductoItem
         // No permitir cambiar ancho/alto si están bloqueadas (dimensiones de soporte)
@@ -528,6 +536,27 @@ export default function NuevaCotizacionPage() {
     
     cargarComerciales()
   }, [])
+
+  // Cleanup: Revocar URLs blob al desmontar el componente
+  useEffect(() => {
+    return () => {
+      // Revocar todas las URLs blob cuando el componente se desmonte
+      setProductosList(currentList => {
+        const blobUrls: string[] = []
+        currentList.forEach((item) => {
+          if (item.tipo === 'producto') {
+            const producto = item as ProductoItem
+            if (producto.imagen && producto.imagen.startsWith('blob:')) {
+              blobUrls.push(producto.imagen)
+            }
+          }
+        })
+        // Revocar todas las URLs blob
+        blobUrls.forEach(url => URL.revokeObjectURL(url))
+        return currentList // No cambiar el estado, solo limpiar URLs
+      })
+    }
+  }, []) // Solo al desmontar
 
   // Función de filtrado preciso: busca solo al inicio del código o nombre
   const filtrarItems = (productoId: string, searchValue: string) => {
@@ -769,7 +798,7 @@ export default function NuevaCotizacionPage() {
     .filter((item): item is ProductoItem => item.tipo === 'producto')
     .reduce((sum, producto) => sum + producto.total, 0)
 
-  const handleGuardar = async () => {
+  const handleGuardar = async (redirigir: boolean = true) => {
     try {
       // Validaciones
       if (!cliente) {
@@ -794,6 +823,36 @@ export default function NuevaCotizacionPage() {
 
       setGuardando(true)
 
+      // Primero subir todas las imágenes nuevas
+      for (const producto of productos) {
+        if (producto.imagenFile) {
+          try {
+            const formData = new FormData()
+            formData.append('file', producto.imagenFile)
+            
+            const response = await fetch('/api/cotizaciones/image', {
+              method: 'POST',
+              body: formData
+            })
+            
+            const data = await response.json()
+            
+            if (data.success && data.data.publicUrl) {
+              // Actualizar el producto con la URL de Supabase
+              actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
+              actualizarProducto(producto.id, 'imagenFile', undefined)
+            } else {
+              throw new Error(data.error || 'Error al subir la imagen')
+            }
+          } catch (error) {
+            console.error('Error subiendo imagen:', error)
+            toast.error(`Error al subir imagen del producto ${producto.producto}`)
+            setGuardando(false)
+            return
+          }
+        }
+      }
+
       // Preparar las líneas de cotización
       const lineas = productosList.map((item, index) => {
         if (item.tipo === 'producto') {
@@ -806,6 +865,7 @@ export default function NuevaCotizacionPage() {
             cantidad: producto.cantidad,
             ancho: producto.ancho,
             alto: producto.alto,
+            total_m2: producto.totalM2,
             unidad_medida: producto.udm,
             precio_unitario: producto.precio,
             comision_porcentaje: producto.comision,
@@ -813,7 +873,8 @@ export default function NuevaCotizacionPage() {
             con_it: producto.conIT,
             es_soporte: producto.esSoporte || false,
             orden: index + 1,
-            variantes: producto.variantes ? JSON.stringify(producto.variantes) : '',
+            imagen: producto.imagen || null,
+            variantes: producto.variantes || null,
             subtotal_linea: producto.total
           }
         } else if (item.tipo === 'nota') {
@@ -868,7 +929,7 @@ export default function NuevaCotizacionPage() {
         vendedor: vendedorSeleccionado.nombre || '',
         sucursal,
         estado: 'Pendiente' as const,
-        vigencia_dias: 30,
+        vigencia_dias: parseInt(vigencia) || 30,
         lineas
       }
 
@@ -889,16 +950,233 @@ export default function NuevaCotizacionPage() {
         throw new Error(data.error || 'Error al guardar la cotización')
       }
 
-      toast.success(`Cotización ${data.data.cotizacion.codigo} guardada exitosamente`)
+      // Guardar el ID de la cotización creada para poder actualizar el estado
+      const cotizacionCreada = data.data.cotizacion
+      setCotizacionId(cotizacionCreada.id)
+      setEstadoCotizacion('Pendiente')
+
+      toast.success(`Cotización ${cotizacionCreada.codigo} guardada exitosamente`)
       
-      // Redirigir al listado después de 1 segundo
-      setTimeout(() => {
-        router.push('/panel/ventas/cotizaciones')
-      }, 1000)
+      // Solo redirigir si se solicita explícitamente
+      if (redirigir) {
+        setTimeout(() => {
+          router.push('/panel/ventas/cotizaciones')
+        }, 1000)
+      }
 
     } catch (error) {
       console.error('Error guardando cotización:', error)
       toast.error(error instanceof Error ? error.message : 'Error al guardar la cotización')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  // Estado para el modal de confirmación de aprobación
+  const [modalAprobacion, setModalAprobacion] = useState<{
+    open: boolean
+    soportesInfo: Array<{
+      soporte: { codigo: string | null; titulo: string | null }
+      fechaInicio: string
+      fechaFin: string
+      meses: number
+      importe: number
+    }>
+    cargando: boolean
+  }>({
+    open: false,
+    soportesInfo: [],
+    cargando: false
+  })
+
+  // Función para cargar información de soportes antes de aprobar
+  const cargarSoportesParaAprobacion = async () => {
+    if (!cotizacionId) {
+      toast.error("Debes guardar la cotización primero")
+      return
+    }
+
+    try {
+      setModalAprobacion(prev => ({ ...prev, cargando: true, open: false }))
+      
+      const response = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`)
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Error al obtener información de soportes')
+      }
+
+      if (data.data.soportesInfo && data.data.soportesInfo.length > 0) {
+        // Hay soportes, mostrar modal de confirmación
+        setModalAprobacion({
+          open: true,
+          soportesInfo: data.data.soportesInfo,
+          cargando: false
+        })
+      } else {
+        // No hay soportes, aprobar directamente sin modal
+        await confirmarAprobacionSinSoportes()
+      }
+    } catch (error) {
+      console.error('Error cargando información de soportes:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al cargar información de soportes')
+      setModalAprobacion(prev => ({ ...prev, cargando: false, open: false }))
+    }
+  }
+
+  // Función para aprobar sin soportes (sin modal)
+  const confirmarAprobacionSinSoportes = async () => {
+    if (!cotizacionId) {
+      toast.error("Debes guardar la cotización primero")
+      return
+    }
+
+    try {
+      setGuardando(true)
+      
+      // Primero guardar la cotización (sin redirigir)
+      await handleGuardar(false)
+      
+      // Esperar un momento para que se actualice el estado
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Luego actualizar el estado a Aprobada
+      const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ estado: 'Aprobada' })
+      })
+
+      const dataEstado = await responseEstado.json()
+
+      if (!responseEstado.ok || !dataEstado.success) {
+        throw new Error(dataEstado.error || 'Error al actualizar el estado')
+      }
+
+      setEstadoCotizacion('Aprobada')
+      toast.success('Cotización guardada y aprobada exitosamente')
+    } catch (error) {
+      console.error('Error aprobando cotización:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al aprobar la cotización')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  // Función para confirmar la aprobación y crear alquileres (desde el modal)
+  const confirmarAprobacion = async () => {
+    if (!cotizacionId) {
+      toast.error("Debes guardar la cotización primero")
+      return
+    }
+
+    try {
+      setGuardando(true)
+      setModalAprobacion(prev => ({ ...prev, open: false }))
+      
+      // Primero guardar la cotización (sin redirigir)
+      await handleGuardar(false)
+      
+      // Esperar un momento para que se actualice el estado
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Luego actualizar el estado de la cotización a Aprobada
+      const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ estado: 'Aprobada' })
+      })
+
+      const dataEstado = await responseEstado.json()
+
+      if (!responseEstado.ok || !dataEstado.success) {
+        throw new Error(dataEstado.error || 'Error al actualizar el estado')
+      }
+
+      // Crear alquileres para los soportes
+      const soportesInfo = modalAprobacion.soportesInfo
+      if (soportesInfo.length > 0) {
+        const responseAlquileres = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+
+        const dataAlquileres = await responseAlquileres.json()
+
+        if (!responseAlquileres.ok || !dataAlquileres.success) {
+          // Revertir el estado de la cotización si falla la creación de alquileres
+          await fetch(`/api/cotizaciones/${cotizacionId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ estado: estadoCotizacion })
+          })
+          throw new Error(dataAlquileres.error || 'Error al crear alquileres')
+        }
+
+        toast.success(`Cotización guardada, aprobada y ${dataAlquileres.data.alquileresCreados.length} alquiler(es) creado(s) exitosamente`)
+      } else {
+        toast.success('Cotización guardada y aprobada exitosamente')
+      }
+
+      setEstadoCotizacion('Aprobada')
+    } catch (error) {
+      console.error('Error aprobando cotización:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al aprobar la cotización')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  // Función para actualizar el estado de la cotización
+  const actualizarEstado = async (nuevoEstado: "Aprobada" | "Rechazada") => {
+    try {
+      // Si no hay cotizacionId, guardar primero (sin redirigir)
+      if (!cotizacionId) {
+        await handleGuardar(false)
+        // Esperar un momento para que se actualice el estado
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+      
+      if (nuevoEstado === "Aprobada") {
+        // Si se aprueba, cargar información de soportes (sin guardar todavía)
+        // El guardado se hará cuando se confirme en el modal
+        await cargarSoportesParaAprobacion()
+      } else {
+        // Si se rechaza, guardar primero y luego actualizar estado
+        if (cotizacionId) {
+          await handleGuardar(false)
+        }
+        
+        setGuardando(true)
+        
+        const response = await fetch(`/api/cotizaciones/${cotizacionId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ estado: nuevoEstado })
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Error al actualizar el estado')
+        }
+
+        setEstadoCotizacion(nuevoEstado)
+        toast.success(`Cotización guardada y marcada como ${nuevoEstado}`)
+      }
+    } catch (error) {
+      console.error('Error actualizando estado:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar el estado')
     } finally {
       setGuardando(false)
     }
@@ -1088,177 +1366,209 @@ export default function NuevaCotizacionPage() {
         {/* Información General */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Información General</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Información General</CardTitle>
+              {/* Botones de estado */}
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => actualizarEstado("Rechazada")}
+                  disabled={guardando || !cotizacionId || estadoCotizacion === "Rechazada"}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Rechazada
+                </Button>
+                <Button 
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => actualizarEstado("Aprobada")}
+                  disabled={guardando || !cotizacionId || estadoCotizacion === "Aprobada"}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Aprobada
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Todos los campos en una sola fila */}
+            {/* Todos los campos y botones de descarga en una sola fila */}
             <div className="flex gap-4">
-              {/* Grupo de campos de información */}
-              <div className="flex gap-4 flex-1">
-                {/* Cliente */}
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="cliente">Cliente</Label>
-                  <Popover open={openClienteCombobox} onOpenChange={(open) => {
-                    setOpenClienteCombobox(open)
-                    if (open) {
-                      setFilteredClientes(todosLosClientes.slice(0, 50))
-                    }
-                  }}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className={cn(
-                          "w-full justify-between",
-                          !cliente && "text-muted-foreground"
-                        )}
-                      >
-                        <span className="truncate">
-                          {cliente 
-                            ? todosLosClientes.find(c => c.id === cliente)?.displayName || "Seleccionar cliente"
-                            : "Seleccionar cliente"}
-                        </span>
-                        <Check className={cn("ml-2 h-4 w-4 shrink-0", cliente ? "opacity-100" : "opacity-0")} />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0" align="start">
-                      <Command shouldFilter={false} className="overflow-visible">
-                        <CommandInput 
-                          placeholder="Buscar cliente..."
-                          className="h-9 border-0 focus:ring-0"
-                          onValueChange={filtrarClientes}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {cargandoClientes ? "Cargando..." : "No se encontraron clientes."}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {filteredClientes.map((c) => (
-                              <CommandItem
-                                key={c.id}
-                                value={c.displayName}
-                                onSelect={() => {
-                                  setCliente(c.id)
-                                  setOpenClienteCombobox(false)
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{c.displayName}</span>
-                                  {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                
-                {/* Comercial */}
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="vendedor">Comercial</Label>
-                  <Popover open={openComercialCombobox} onOpenChange={(open) => {
-                    setOpenComercialCombobox(open)
-                    if (open) {
-                      setFilteredComerciales(todosLosComerciales.slice(0, 20))
-                    }
-                  }}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className={cn(
-                          "w-full justify-between",
-                          !vendedor && "text-muted-foreground"
-                        )}
-                      >
-                        <span className="truncate">
-                          {vendedor 
-                            ? todosLosComerciales.find(c => c.id === vendedor)?.nombre || "Seleccionar comercial"
-                            : "Seleccionar comercial"}
-                        </span>
-                        <Check className={cn("ml-2 h-4 w-4 shrink-0", vendedor ? "opacity-100" : "opacity-0")} />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0" align="start">
-                      <Command shouldFilter={false} className="overflow-visible">
-                        <CommandInput 
-                          placeholder="Buscar comercial..."
-                          className="h-9 border-0 focus:ring-0"
-                          onValueChange={filtrarComerciales}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {cargandoComerciales ? "Cargando..." : "No se encontraron comerciales."}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {filteredComerciales.map((c) => (
-                              <CommandItem
-                                key={c.id}
-                                value={c.nombre}
-                                onSelect={() => {
-                                  setVendedor(c.id)
-                                  setOpenComercialCombobox(false)
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{c.nombre}</span>
-                                  {c.email && <span className="text-xs text-gray-500">{c.email}</span>}
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                
-                {/* Sucursal */}
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="sucursal">Sucursal</Label>
-                  <Select value={sucursal} onValueChange={setSucursal}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar sucursal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sucursales.map((suc) => (
-                        <SelectItem key={suc.id} value={suc.nombre}>
-                          {suc.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Cliente */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="cliente">Cliente</Label>
+                <Popover open={openClienteCombobox} onOpenChange={(open) => {
+                  setOpenClienteCombobox(open)
+                  if (open) {
+                    setFilteredClientes(todosLosClientes.slice(0, 50))
+                  }
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className={cn(
+                        "w-full justify-between",
+                        !cliente && "text-muted-foreground"
+                      )}
+                    >
+                      <span className="truncate">
+                        {cliente 
+                          ? todosLosClientes.find(c => c.id === cliente)?.displayName || "Seleccionar cliente"
+                          : "Seleccionar cliente"}
+                      </span>
+                      <Check className={cn("ml-2 h-4 w-4 shrink-0", cliente ? "opacity-100" : "opacity-0")} />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command shouldFilter={false} className="overflow-visible">
+                      <CommandInput 
+                        placeholder="Buscar cliente..."
+                        className="h-9 border-0 focus:ring-0"
+                        onValueChange={filtrarClientes}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {cargandoClientes ? "Cargando..." : "No se encontraron clientes."}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {filteredClientes.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.displayName}
+                              onSelect={() => {
+                                setCliente(c.id)
+                                setOpenClienteCombobox(false)
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col">
+                                <span className="font-medium">{c.displayName}</span>
+                                {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              {/* Comercial */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="vendedor">Comercial</Label>
+                <Popover open={openComercialCombobox} onOpenChange={(open) => {
+                  setOpenComercialCombobox(open)
+                  if (open) {
+                    setFilteredComerciales(todosLosComerciales.slice(0, 20))
+                  }
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className={cn(
+                        "w-full justify-between",
+                        !vendedor && "text-muted-foreground"
+                      )}
+                    >
+                      <span className="truncate">
+                        {vendedor 
+                          ? todosLosComerciales.find(c => c.id === vendedor)?.nombre || "Seleccionar comercial"
+                          : "Seleccionar comercial"}
+                      </span>
+                      <Check className={cn("ml-2 h-4 w-4 shrink-0", vendedor ? "opacity-100" : "opacity-0")} />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command shouldFilter={false} className="overflow-visible">
+                      <CommandInput 
+                        placeholder="Buscar comercial..."
+                        className="h-9 border-0 focus:ring-0"
+                        onValueChange={filtrarComerciales}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {cargandoComerciales ? "Cargando..." : "No se encontraron comerciales."}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {filteredComerciales.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.nombre}
+                              onSelect={() => {
+                                setVendedor(c.id)
+                                setOpenComercialCombobox(false)
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col">
+                                <span className="font-medium">{c.nombre}</span>
+                                {c.email && <span className="text-xs text-gray-500">{c.email}</span>}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              {/* Sucursal */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="sucursal">Sucursal</Label>
+                <Select value={sucursal} onValueChange={setSucursal}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sucursales.map((suc) => (
+                      <SelectItem key={suc.id} value={suc.nombre}>
+                        {suc.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Grupo de botones de acción */}
-              <div className="flex gap-4">
-                {/* Descargar OT */}
-                <div className="space-y-2 w-48">
-                  <Label>&nbsp;</Label>
-                  <Button variant="outline" className="w-full">
-                    <Hammer className="w-4 h-4 mr-2" />
-                    Descargar OT
-                  </Button>
-                </div>
+              {/* Validez */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="vigencia">Validez</Label>
+                <Select value={vigencia} onValueChange={setVigencia}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar validez" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">7 días</SelectItem>
+                    <SelectItem value="15">15 días</SelectItem>
+                    <SelectItem value="30">30 días</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {/* Descargar Cotización */}
-                <div className="space-y-2 w-48">
-                  <Label>&nbsp;</Label>
-                  <Button 
-                    onClick={descargarCotizacionPDF}
-                    className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Descargar Cotización
-                  </Button>
-                </div>
+              {/* Descargar OT */}
+              <div className="space-y-2 w-48">
+                <Label>&nbsp;</Label>
+                <Button variant="outline" className="w-full">
+                  <Hammer className="w-4 h-4 mr-2" />
+                  Descargar OT
+                </Button>
+              </div>
+
+              {/* Descargar Cotización */}
+              <div className="space-y-2 w-48">
+                <Label>&nbsp;</Label>
+                <Button 
+                  onClick={descargarCotizacionPDF}
+                  className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Descargar Cotización
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -1555,9 +1865,76 @@ export default function NuevaCotizacionPage() {
                       </td>
                       
                       <td className="py-2 px-2">
-                        <Button variant="outline" size="sm" className="w-8 h-8 p-0">
-                          <Camera className="w-3 h-3" />
-                        </Button>
+                        <div className="relative w-16 h-16 border border-gray-300 rounded-md overflow-hidden bg-gray-50 flex items-center justify-center">
+                          {producto.imagen ? (
+                            <>
+                              <img 
+                                src={producto.imagen} 
+                                alt="Producto" 
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Si la imagen blob falla, intentar recrear la URL si tenemos el File
+                                  const productoConFile = productosList.find(
+                                    (item): item is ProductoItem => 
+                                      item.id === producto.id && 
+                                      item.tipo === 'producto' &&
+                                      !!(item as ProductoItem).imagenFile
+                                  ) as ProductoItem | undefined
+                                  
+                                  if (productoConFile?.imagenFile) {
+                                    const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
+                                    actualizarProducto(producto.id, 'imagen', newBlobUrl)
+                                  } else {
+                                    // Si no hay File, ocultar la imagen
+                                    e.currentTarget.style.display = 'none'
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Si es una URL temporal (blob), revocarla
+                                  if (producto.imagen && producto.imagen.startsWith('blob:')) {
+                                    URL.revokeObjectURL(producto.imagen)
+                                  }
+                                  actualizarProducto(producto.id, 'imagen', undefined)
+                                  actualizarProducto(producto.id, 'imagenFile', undefined)
+                                }}
+                                className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-red-600"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <label className="cursor-pointer w-full h-full flex items-center justify-center">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  
+                                  // Validar tamaño (máximo 5MB)
+                                  const maxSize = 5 * 1024 * 1024 // 5MB
+                                  if (file.size > maxSize) {
+                                    toast.error('Tamaño máximo de 5MB superado')
+                                    e.target.value = '' // Limpiar el input
+                                    return
+                                  }
+                                  
+                                  // Crear URL temporal para preview
+                                  const previewUrl = URL.createObjectURL(file)
+                                  
+                                  // Guardar el File y la URL temporal
+                                  actualizarProducto(producto.id, 'imagenFile', file)
+                                  actualizarProducto(producto.id, 'imagen', previewUrl)
+                                }}
+                              />
+                              <Camera className="w-5 h-5 text-gray-400" />
+                            </label>
+                          )}
+                        </div>
                       </td>
                       
                       <td className="py-2 px-2">
@@ -1908,6 +2285,84 @@ export default function NuevaCotizacionPage() {
               disabled={!modalFechasSoporte.fechaInicio || !modalFechasSoporte.fechaFin}
             >
               Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación de aprobación con alquileres */}
+      <Dialog open={modalAprobacion.open} onOpenChange={(open) => !open && setModalAprobacion(prev => ({ ...prev, open: false }))}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>¿Seguro que quiere aprobar esta cotización?</DialogTitle>
+            <DialogDescription>
+              Se efectuarán las siguientes órdenes de alquiler:
+            </DialogDescription>
+          </DialogHeader>
+          
+          {modalAprobacion.soportesInfo.length > 0 ? (
+            <div className="max-h-[400px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3 font-medium">Soporte</th>
+                    <th className="text-left py-2 px-3 font-medium">Fechas</th>
+                    <th className="text-right py-2 px-3 font-medium">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modalAprobacion.soportesInfo.map((info, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="py-2 px-3">
+                        <div>
+                          <div className="font-medium">{info.soporte.codigo}</div>
+                          <div className="text-xs text-gray-500">{info.soporte.titulo}</div>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="text-xs">
+                          <div>Inicio: {new Date(info.fechaInicio).toLocaleDateString('es-ES')}</div>
+                          <div>Fin: {new Date(info.fechaFin).toLocaleDateString('es-ES')}</div>
+                          <div className="text-gray-500">({info.meses} mes{info.meses !== 1 ? 'es' : ''})</div>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <div className="font-medium">
+                          Bs {info.importe.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-4 text-center text-gray-500">
+              No hay soportes en esta cotización
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setModalAprobacion(prev => ({ ...prev, open: false }))}
+              disabled={guardando}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmarAprobacion}
+              disabled={guardando || modalAprobacion.cargando}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {guardando ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                'Confirmar y Aprobar'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

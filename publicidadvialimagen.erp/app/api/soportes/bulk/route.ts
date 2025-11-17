@@ -1,51 +1,10 @@
 import { NextResponse } from 'next/server'
-import { ensureDefaultOwnerId, mapStatusToSupabase } from '../helpers'
-import { getSoportes, createSoporte, updateSoporte, deleteSoporte, getSoporteById } from '@/lib/supabaseSoportes'
+import { getSoportes, updateSoporte, deleteSoporte } from '@/lib/supabaseSoportes'
 
 interface BulkRequest {
   ids: string[]
-  action: 'delete' | 'update' | 'duplicate'
+  action: 'delete' | 'update'
   data?: any
-}
-
-const CODE_REGEX = /^([A-Z]+)-(\d+)$/
-
-async function fetchSupportsByIds(ids: string[]) {
-  const supports = []
-  for (const id of ids) {
-    try {
-      const record = await getSoporteById(id)
-      if (record) {
-        supports.push({
-          id: record.id,
-          ...record.fields
-        })
-      }
-    } catch (error) {
-      console.error(`Error fetching support ${id}:`, error)
-    }
-  }
-  return supports
-}
-
-async function generateNextCode(prefix: string, startNumber: number) {
-  let next = startNumber + 1
-  while (true) {
-    const candidate = `${prefix}-${next}`
-    try {
-      const response = await getSoportes({
-        q: candidate,
-        limit: 1
-      })
-      if (!response.records?.length) {
-        return candidate
-      }
-      next += 1
-    } catch (error) {
-      console.error('Error checking code uniqueness:', error)
-      return candidate
-    }
-  }
 }
 
 export async function POST(req: Request) {
@@ -67,50 +26,6 @@ export async function POST(req: Request) {
         }
       }
       return NextResponse.json({ ok: true, count: deletedCount })
-    }
-
-    if (action === 'duplicate') {
-      const supports = await fetchSupportsByIds(ids)
-      const ownerId = supports[0]?.dueno_casa_id || (await ensureDefaultOwnerId())
-      let duplicated = 0
-
-      for (const support of supports) {
-        try {
-          let newCode = `${support.codigo}-${Date.now().toString().slice(-4)}`
-          const match = support.codigo?.match(CODE_REGEX)
-          if (match) {
-            const [, prefix, num] = match
-            newCode = await generateNextCode(prefix, parseInt(num, 10))
-          }
-
-          // Convertir campos de formato Airtable a formato Supabase
-          const insertPayload: Record<string, any> = {
-            'Código': newCode,
-            'Título': `${support['Título'] || support.titulo || ''} - copia`,
-            'Tipo de soporte': support['Tipo de soporte'] || support.tipo_soporte || 'Unipolar',
-            'Ancho': support['Ancho'] || support.ancho || null,
-            'Alto': support['Alto'] || support.alto || null,
-            'Ciudad': support['Ciudad'] || support.ciudad || null,
-            'Estado': 'Disponible',
-            'Precio por mes': support['Precio por mes'] || support.precio_mes || null,
-            'Impactos diarios': support['Impactos diarios'] || support.impactos_diarios || null,
-            'Enlace Google Maps': support['Enlace Google Maps'] || support.ubicacion_url || null,
-            'Dirección / Notas': support['Dirección / Notas'] || support.notas || null,
-            'Propietario': support['Propietario'] || support.propietario || null,
-          }
-
-          try {
-            await createSoporte(insertPayload)
-            duplicated += 1
-          } catch (error) {
-            console.error(`Error duplicating support ${support.codigo}:`, error)
-          }
-        } catch (dupError) {
-          console.error(`Error duplicando ${support.codigo}:`, dupError)
-        }
-      }
-
-      return NextResponse.json({ ok: true, duplicated })
     }
 
     if (action === 'update') {
@@ -143,8 +58,10 @@ export async function POST(req: Request) {
       if (data?.heightM !== undefined) patch['Alto'] = Number(data.heightM) || 0
       if (data?.city !== undefined) patch['Ciudad'] = data.city
       if (data?.impactosDiarios !== undefined) patch['Impactos diarios'] = Number(data.impactosDiarios) || 0
-      if (data?.googleMapsLink !== undefined) patch['Enlace Google Maps'] = data.googleMapsLink
-      if (data?.address !== undefined) patch['Dirección / Notas'] = data.address
+      if (data?.googleMapsLink !== undefined) patch['Enlace Google Maps'] = data.googleMapsLink || null
+      if (data?.address !== undefined) patch['Dirección / Notas'] = data.address || null
+      if (data?.latitude !== undefined) patch['Latitud'] = Number(data.latitude) || null
+      if (data?.longitude !== undefined) patch['Longitud'] = Number(data.longitude) || null
       if (data?.owner !== undefined) patch['Propietario'] = data.owner
 
       if (!Object.keys(patch).length) {

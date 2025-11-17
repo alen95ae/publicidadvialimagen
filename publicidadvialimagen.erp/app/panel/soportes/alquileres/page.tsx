@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,28 +21,33 @@ import {
   DollarSign
 } from "lucide-react"
 import { toast } from "sonner"
+import { Toaster } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Interface para los datos de alquileres
 interface Alquiler {
   id: string
   codigo: string
+  cotizacion_id: string
   inicio: string
-  cliente: string
-  vendedor: string
-  total: number
-  estado: 'Activo' | 'Finalizado' | 'Cancelado' | 'Pendiente'
+  fin: string
+  meses: number | null
+  cliente: string | null
+  vendedor: string | null
+  total: number | null
+  estado: 'activo' | 'reservado' | 'proximo' | 'finalizado'
 }
 
-// Estados válidos para alquileres
+// Estados válidos para alquileres con colores
 const ESTADOS_ALQUILER = {
-  'Activo': { label: 'Activo', className: 'bg-green-100 text-green-800' },
-  'Finalizado': { label: 'Finalizado', className: 'bg-blue-100 text-blue-800' },
-  'Cancelado': { label: 'Cancelado', className: 'bg-red-100 text-red-800' },
-  'Pendiente': { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
+  'activo': { label: 'Activo', className: 'bg-green-100 text-green-800' },
+  'reservado': { label: 'Reservado', className: 'bg-yellow-100 text-yellow-800' },
+  'proximo': { label: 'Próximo', className: 'bg-purple-100 text-purple-800' },
+  'finalizado': { label: 'Finalizado', className: 'bg-gray-100 text-gray-800' },
 } as const
 
 export default function AlquileresPage() {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAlquileres, setSelectedAlquileres] = useState<string[]>([])
   const [alquileres, setAlquileres] = useState<Alquiler[]>([])
@@ -57,45 +63,50 @@ export default function AlquileresPage() {
     hasPrev: false,
   })
 
-  // Datos de ejemplo (simulando API)
-  useEffect(() => {
-    const mockAlquileres: Alquiler[] = [
-      {
-        id: "1",
-        codigo: "ALQ-001",
-        inicio: "2024-01-15",
-        cliente: "Empresa ABC",
-        vendedor: "Juan Pérez",
-        total: 2500,
-        estado: "Activo"
-      },
-      {
-        id: "2",
-        codigo: "ALQ-002",
-        inicio: "2024-02-01",
-        cliente: "Comercial XYZ",
-        vendedor: "María García",
-        total: 1800,
-        estado: "Finalizado"
-      },
-      {
-        id: "3",
-        codigo: "ALQ-003",
-        inicio: "2024-02-15",
-        cliente: "Tienda 123",
-        vendedor: "Carlos López",
-        total: 3200,
-        estado: "Pendiente"
+  // Cargar alquileres desde la API
+  const loadAlquileres = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch('/api/alquileres', {
+        cache: 'no-store',
+        next: { revalidate: 0 }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setAlquileres(data.data || [])
+          setPagination(prev => ({
+            ...prev,
+            total: data.count || 0,
+            totalPages: Math.ceil((data.count || 0) / prev.limit)
+          }))
+          console.log(`✅ Cargados ${data.data?.length || 0} alquileres`)
+        } else {
+          throw new Error(data.error || 'Error al cargar alquileres')
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error al cargar alquileres')
       }
-    ]
-    
-    setAlquileres(mockAlquileres)
-    setLoading(false)
+    } catch (error) {
+      console.error('Error loading alquileres:', error)
+      setError(error instanceof Error ? error.message : 'Error de conexión al cargar alquileres')
+      toast.error('Error al cargar los alquileres')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadAlquileres()
   }, [])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedAlquileres(alquileres.map(a => a.id))
+      setSelectedAlquileres(filteredAlquileres.map(a => a.id))
     } else {
       setSelectedAlquileres([])
     }
@@ -109,23 +120,15 @@ export default function AlquileresPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de que quieres eliminar este alquiler?")) return
-    
-    try {
-      // Simular eliminación
-      setAlquileres(alquileres.filter(a => a.id !== id))
-      toast.success("Alquiler eliminado correctamente")
-    } catch (error) {
-      toast.error("Error al eliminar el alquiler")
-    }
+  const handleEdit = (cotizacionId: string) => {
+    router.push(`/panel/ventas/editar/${cotizacionId}`)
   }
 
   // Filtrar alquileres
   const filteredAlquileres = alquileres.filter(alquiler =>
     alquiler.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    alquiler.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    alquiler.vendedor.toLowerCase().includes(searchTerm.toLowerCase())
+    (alquiler.cliente && alquiler.cliente.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (alquiler.vendedor && alquiler.vendedor.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   const formatDate = (dateString: string) => {
@@ -173,7 +176,7 @@ export default function AlquileresPage() {
               Exportar
             </Button>
             
-            <Link href="/panel/soportes/alquileres/nuevo">
+            <Link href="/panel/ventas/nuevo">
               <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Alquiler
@@ -220,6 +223,8 @@ export default function AlquileresPage() {
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Código</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Inicio</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Fin</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Meses</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Cliente</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Vendedor</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Total</th>
@@ -230,7 +235,7 @@ export default function AlquileresPage() {
                   <tbody>
                     {filteredAlquileres.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-gray-500">
+                        <td colSpan={9} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron alquileres con ese criterio de búsqueda' : 'No hay alquileres disponibles'}
                         </td>
                       </tr>
@@ -256,17 +261,26 @@ export default function AlquileresPage() {
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             <div className="flex items-center gap-1 text-sm">
-                              <User className="w-3 h-3" />
-                              {alquiler.cliente}
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(alquiler.fin)}
                             </div>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <span className="text-sm">{alquiler.vendedor}</span>
+                            <span className="text-sm">{alquiler.meses || '-'}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1 text-sm">
+                              <User className="w-3 h-3" />
+                              {alquiler.cliente || '-'}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className="text-sm">{alquiler.vendedor || '-'}</span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <DollarSign className="w-3 h-3" />
-                              <span className="font-medium">Bs {formatPrice(alquiler.total)}</span>
+                              <span className="font-medium">Bs {alquiler.total ? formatPrice(alquiler.total) : '0.00'}</span>
                             </div>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
@@ -276,20 +290,14 @@ export default function AlquileresPage() {
                           </td>
                           <td className="py-2 px-3">
                             <div className="flex gap-2">
-                              <Button variant="ghost" size="sm" title="Ver alquiler">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" title="Editar alquiler">
-                                <Edit className="w-4 h-4" />
-                              </Button>
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                onClick={() => handleDelete(alquiler.id)}
-                                className="text-red-600 hover:text-red-700"
-                                title="Eliminar alquiler"
+                                title="Editar cotización"
+                                onClick={() => handleEdit(alquiler.cotizacion_id)}
+                                className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Edit className="w-4 h-4" />
                               </Button>
                             </div>
                           </td>
@@ -303,6 +311,7 @@ export default function AlquileresPage() {
           </CardContent>
         </Card>
       </main>
+      <Toaster />
     </div>
   )
 }

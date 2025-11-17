@@ -270,9 +270,10 @@ export function buildSupabasePayload(data: any, existing?: any) {
 
   if (data.city !== undefined) payload.ciudad = data.city || null
   if (data.country !== undefined) payload.pais = data.country || 'BO'
-  if (data.priceMonth !== undefined) payload.precio_mensual = num(data.priceMonth)
+  if (data.priceMonth !== undefined) payload.precio_mes = num(data.priceMonth)
   if (data.impactosDiarios !== undefined) payload.impactos_diarios = data.impactosDiarios ?? null
   if (data.googleMapsLink !== undefined) payload.enlace_maps = data.googleMapsLink || null
+  if (data.description !== undefined) payload.descripcion = data.description || null
   
   // Validar y manejar coordenadas correctamente
   if (data.latitude !== undefined) {

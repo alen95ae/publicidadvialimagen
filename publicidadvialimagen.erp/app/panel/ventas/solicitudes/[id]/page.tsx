@@ -186,6 +186,16 @@ export default function SolicitudDetailPage() {
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="max-w-4xl mx-auto">
+          {/* Botón Volver */}
+          <div className="mb-4 flex justify-end">
+            <Link href="/panel/ventas/solicitudes">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver a Solicitudes
+              </Button>
+            </Link>
+          </div>
+
           {/* Solicitud Original */}
           <Card className="mb-6">
             <CardHeader>

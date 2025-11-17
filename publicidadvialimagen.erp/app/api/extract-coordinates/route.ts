@@ -82,20 +82,37 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const forceUpdate = searchParams.get('force') === 'true'
     
-    const { getAllSoportes, updateSoporte } = await import('@/lib/supabaseSoportes')
-    const result = await getAllSoportes()
-    const records = result.records
+    const { getSupabaseServer } = await import('@/lib/supabaseServer')
+    const supabase = getSupabaseServer()
+    
+    // Obtener todos los soportes directamente de Supabase
+    const { data: soportes, error } = await supabase
+      .from('soportes')
+      .select('*')
+    
+    if (error) {
+      console.error('Error obteniendo soportes:', error)
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+    
+    if (!soportes || soportes.length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        total: 0,
+        message: 'No hay soportes para procesar'
+      })
+    }
     
     // Filtrar solo los que necesitan actualización
-    let recordsToProcess = records.filter(r => {
-      const currentLat = r.fields['Latitud'] as number | undefined
-      const currentLng = r.fields['Longitud'] as number | undefined
-      const googleMapsLink = r.fields['Enlace Google Maps'] as string
+    let recordsToProcess = soportes.filter(s => {
+      const currentLat = s.latitud
+      const currentLng = s.longitud
+      const googleMapsLink = s.enlace_maps // Campo correcto en Supabase
       
       if (!googleMapsLink) return false
       if (forceUpdate) return true
       return !currentLat || !currentLng
-    }).map(r => ({ id: r.id, fields: r.fields }))
+    })
     
     // Limitar cantidad a procesar
     if (limit > 0) {
@@ -103,7 +120,7 @@ export async function GET(request: Request) {
     }
     
     const results = {
-      total: records.length,
+      total: soportes.length,
       toProcess: recordsToProcess.length,
       processed: 0,
       updated: 0,
@@ -114,9 +131,9 @@ export async function GET(request: Request) {
     
     console.log(`🔍 Procesando ${recordsToProcess.length} soportes...`)
     
-    for (const record of recordsToProcess) {
-      const code = record.fields['Código'] as string
-      const googleMapsLink = record.fields['Enlace Google Maps'] as string
+    for (const soporte of recordsToProcess) {
+      const code = soporte.codigo as string
+      const googleMapsLink = soporte.enlace_maps as string // Campo correcto en Supabase
       
       results.processed++
       console.log(`  [${results.processed}/${recordsToProcess.length}] Procesando ${code}...`)
@@ -133,11 +150,18 @@ export async function GET(request: Request) {
         const coords = extractCoordinatesFromUrl(fullUrl)
         
         if (coords.latitude && coords.longitude) {
-          // Actualizar en Supabase
-          await updateSoporte(record.id, {
-            'Latitud': coords.latitude,
-            'Longitud': coords.longitude
-          })
+          // Actualizar en Supabase directamente
+          const { error: updateError } = await supabase
+            .from('soportes')
+            .update({
+              latitud: coords.latitude,
+              longitud: coords.longitude
+            })
+            .eq('id', soporte.id)
+          
+          if (updateError) {
+            throw new Error(`Error actualizando: ${updateError.message}`)
+          }
           
           results.updated++
           results.details.push({

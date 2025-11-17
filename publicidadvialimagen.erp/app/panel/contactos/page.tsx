@@ -12,9 +12,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Upload, Users, Merge, AlertTriangle } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 interface Contact {
@@ -31,6 +32,7 @@ interface Contact {
   relation: string
   status: string
   notes?: string
+  salesOwnerId?: string | null
   createdAt?: string
   updatedAt?: string
   kind?: string
@@ -51,13 +53,12 @@ export default function ContactosPage() {
   const [allContactIds, setAllContactIds] = useState<string[]>([])
   const [editedContacts, setEditedContacts] = useState<Record<string, Partial<Contact>>>({})
   const [savingChanges, setSavingChanges] = useState(false)
-  const [openImport, setOpenImport] = useState(false)
-  const [importLoading, setImportLoading] = useState(false)
   const [duplicates, setDuplicates] = useState<any[]>([])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [duplicatesLoading, setDuplicatesLoading] = useState(false)
   const [selectedPrimary, setSelectedPrimary] = useState<Record<number, string>>({})
   const [currentPage, setCurrentPage] = useState(1)
+  const [salesOwners, setSalesOwners] = useState<Record<string, string>>({})
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 100,
@@ -74,7 +75,25 @@ export default function ContactosPage() {
 
   useEffect(() => {
     fetchContacts(1)
+    fetchSalesOwners()
   }, [filters])
+
+  const fetchSalesOwners = async () => {
+    try {
+      const response = await fetch("/api/ajustes/usuarios?puesto=Comercial&pageSize=100")
+      if (response.ok) {
+        const data = await response.json()
+        const users = data.users || []
+        const ownersMap: Record<string, string> = {}
+        users.forEach((user: any) => {
+          ownersMap[user.id] = user.nombre || user.name || ""
+        })
+        setSalesOwners(ownersMap)
+      }
+    } catch (error) {
+      console.error("Error fetching sales owners:", error)
+    }
+  }
 
   const fetchContacts = async (page: number = currentPage) => {
     try {
@@ -260,6 +279,30 @@ export default function ContactosPage() {
     }
   }
 
+  const handleBulkSalesOwnerChange = async (salesOwnerId: string) => {
+    if (selectedContacts.size === 0) return
+
+    try {
+      const count = selectedContacts.size
+      const value = salesOwnerId === "none" ? null : salesOwnerId
+      const promises = Array.from(selectedContacts).map(id =>
+        fetch(`/api/contactos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ salesOwnerId: value })
+        })
+      )
+
+      await Promise.all(promises)
+      setSelectedContacts(new Set())
+      setSelectAllMode('none')
+      fetchContacts()
+      toast.success(`Comercial actualizado para ${count} contacto(s)`)
+    } catch (error) {
+      toast.error("Error al actualizar comerciales")
+    }
+  }
+
   // Edición inline: actualizar campo de un contacto
   const handleFieldChange = (contactId: string, field: keyof Contact, value: any) => {
     setEditedContacts(prev => ({
@@ -318,64 +361,6 @@ export default function ContactosPage() {
     toast.info(`Campo ${field} actualizado para ${selectedContacts.size} contacto(s)`)
   }
 
-  // Función para manejar la importación de CSV
-  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setImportLoading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('/api/contactos/import', {
-        method: 'POST',
-        body: formData
-      })
-
-      // Verificar si la respuesta es JSON válido
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text()
-        console.error('Respuesta no es JSON:', text)
-        toast.error('Error: Respuesta del servidor no válida')
-        return
-      }
-
-      const result = await response.json()
-      
-      if (response.ok && result.success) {
-        toast.success(`Importación completada: ${result.created} creados, ${result.updated} actualizados${result.skipped > 0 ? `, ${result.skipped} saltados` : ''}${result.errors > 0 ? `, ${result.errors} errores` : ''}`)
-        if (result.errorMessages && result.errorMessages.length > 0) {
-          console.log('Errores:', result.errorMessages)
-          // Mostrar algunos errores en el toast si hay muchos
-          if (result.errorMessages.length > 3) {
-            toast.error(`Algunos errores: ${result.errorMessages.slice(0, 3).join(', ')}...`)
-          }
-        }
-        fetchContacts()
-        setOpenImport(false)
-      } else {
-        toast.error(`Error: ${result.error || 'Error desconocido'}`)
-        if (result.details) {
-          console.error('Detalles del error:', result.details)
-        }
-      }
-    } catch (error) {
-      console.error('Error al importar:', error)
-      if (error instanceof SyntaxError && error.message.includes('JSON')) {
-        toast.error('Error: Respuesta del servidor no válida. Verifica que el archivo CSV tenga el formato correcto.')
-      } else {
-        toast.error('Error al importar el archivo')
-      }
-    } finally {
-      setImportLoading(false)
-      // Limpiar el input
-      event.target.value = ''
-    }
-  }
-
-  
 
   // Duplicados: detectar
   const detectDuplicates = async () => {
@@ -559,31 +544,6 @@ export default function ContactosPage() {
                 <Users className="w-4 h-4 mr-2" />
                 {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
               </Button>
-              <Dialog open={openImport} onOpenChange={setOpenImport}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Importar
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Importar contactos (CSV)</DialogTitle>
-                    <DialogDescription>
-                      Columnas: Nombre, Tipo de Contacto, Empresa, Email, Teléfono, NIT, Dirección, Ciudad, Código Postal, País, Relación, Sitio Web, Notas
-                      <br/>
-                      <a href="/api/contactos/import/template" className="underline">Descargar plantilla</a>
-                    </DialogDescription>
-                  </DialogHeader>
-                  <input 
-                    type="file" 
-                    accept=".csv,text/csv" 
-                    onChange={handleCsvImport}
-                    disabled={importLoading}
-                  />
-                  {importLoading && <p>Importando...</p>}
-                </DialogContent>
-              </Dialog>
               <Button variant="outline" onClick={handleExport}>
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
@@ -618,6 +578,17 @@ export default function ContactosPage() {
                       <SelectItem value="Ambos">Ambos</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select onValueChange={handleBulkSalesOwnerChange}>
+                    <SelectTrigger className="h-8 w-48">
+                      <SelectValue placeholder="Comercial" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin asignar</SelectItem>
+                      {Object.entries(salesOwners).map(([id, name]) => (
+                        <SelectItem key={id} value={id}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex gap-2">
                   {Object.keys(editedContacts).length > 0 && (
@@ -641,16 +612,14 @@ export default function ContactosPage() {
                   )}
                   <Button 
                     variant="outline" 
-                    size="sm" 
                     onClick={handleExportSelected}
-                    className="text-green-600 hover:text-green-700"
                   >
-                    <Download className="w-4 h-4 mr-1" />
+                    <Download className="w-4 h-4 mr-2" />
                     Exportar selección
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                      <Button size="sm" className="bg-[#D54644] hover:bg-[#B73E3A] text-white">
                         <Trash2 className="w-4 h-4 mr-1" />
                         Eliminar
                       </Button>
@@ -775,7 +744,7 @@ export default function ContactosPage() {
                     <TableHead>NIT</TableHead>
                     <TableHead>Teléfono</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Ciudad</TableHead>
+                    <TableHead>Comercial</TableHead>
                     <TableHead>Relación</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -857,12 +826,12 @@ export default function ContactosPage() {
                             contact.taxId || "-"
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="font-mono text-sm">
                           {selectedContacts.has(contact.id) ? (
                             <Input
                               value={editedContacts[contact.id]?.phone ?? contact.phone ?? ''}
                               onChange={(e) => handleFieldChange(contact.id, 'phone', e.target.value)}
-                              className="h-8"
+                              className="h-8 font-mono"
                             />
                           ) : (
                             contact.phone || "-"
@@ -881,14 +850,39 @@ export default function ContactosPage() {
                         </TableCell>
                         <TableCell>
                           {selectedContacts.has(contact.id) ? (
-                            <Input
-                              value={editedContacts[contact.id]?.city ?? contact.city ?? ''}
-                              onChange={(e) => handleFieldChange(contact.id, 'city', e.target.value)}
-                              className="h-8"
-                              placeholder="Ciudad"
-                            />
+                            <Select 
+                              value={editedContacts[contact.id]?.salesOwnerId ?? contact.salesOwnerId ?? 'none'}
+                              onValueChange={(value) => handleFieldChange(contact.id, 'salesOwnerId', value === 'none' ? null : value)}
+                            >
+                              <SelectTrigger className="h-8 w-40">
+                                <SelectValue placeholder="Comercial" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sin asignar</SelectItem>
+                                {Object.entries(salesOwners).map(([id, name]) => (
+                                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            contact.city || "-"
+                            contact.salesOwnerId && salesOwners[contact.salesOwnerId] ? (
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-6 w-6">
+                                  <AvatarImage src="" alt={salesOwners[contact.salesOwnerId]} />
+                                  <AvatarFallback className="bg-[#D54644] text-white text-[10px] font-medium">
+                                    {salesOwners[contact.salesOwnerId]
+                                      .split(" ")
+                                      .map(n => n[0])
+                                      .join("")
+                                      .toUpperCase()
+                                      .slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm text-gray-900">{salesOwners[contact.salesOwnerId]}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )
                           )}
                         </TableCell>
                         <TableCell>

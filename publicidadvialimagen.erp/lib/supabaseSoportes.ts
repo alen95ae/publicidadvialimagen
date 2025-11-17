@@ -24,6 +24,7 @@ export type Soporte = {
   imagen_principal: any | null;
   imagen_secundaria_1: any | null;
   imagen_secundaria_2: any | null;
+  descripcion: string | null;
   resumen_ia: string | null;
   created_at: string;
 };

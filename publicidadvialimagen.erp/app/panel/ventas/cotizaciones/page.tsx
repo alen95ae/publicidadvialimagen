@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   Handshake, 
   Plus, 
@@ -33,8 +34,28 @@ interface Cotizacion {
   vendedor: string
   sucursal: string
   total_final: number
-  estado: "Pendiente" | "En Proceso" | "Aprobada" | "Rechazada"
+  estado: "Pendiente" | "Aprobada" | "Rechazada" | "Vencida"
+  subtotal?: number
+  total_iva?: number
+  total_it?: number
+  vigencia?: number
+  cantidad_items?: number
+  lineas_cotizacion?: number
 }
+
+interface Vendedor {
+  id: string
+  nombre: string
+  email?: string
+}
+
+// Constantes para colores de estado (similar a soportes)
+const ESTADO_META = {
+  'Aprobada': { label: 'Aprobada', className: 'bg-green-100 text-green-800' },
+  'Rechazada': { label: 'Rechazada', className: 'bg-red-100 text-red-800' },
+  'Pendiente': { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
+  'Vencida': { label: 'Vencida', className: 'bg-gray-100 text-gray-800' },
+} as const
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
@@ -42,10 +63,10 @@ const getEstadoColor = (estado: string) => {
       return "bg-green-100 text-green-800"
     case "Rechazada":
       return "bg-red-100 text-red-800"
-    case "En Proceso":
-      return "bg-blue-100 text-blue-800"
     case "Pendiente":
       return "bg-yellow-100 text-yellow-800"
+    case "Vencida":
+      return "bg-gray-100 text-gray-800"
     default:
       return "bg-gray-100 text-gray-800"
   }
@@ -57,10 +78,10 @@ const getEstadoIcon = (estado: string) => {
       return <CheckCircle className="w-4 h-4" />
     case "Rechazada":
       return <XCircle className="w-4 h-4" />
-    case "En Proceso":
-      return <Clock className="w-4 h-4" />
     case "Pendiente":
       return <AlertCircle className="w-4 h-4" />
+    case "Vencida":
+      return <Clock className="w-4 h-4" />
     default:
       return <AlertCircle className="w-4 h-4" />
   }
@@ -71,6 +92,11 @@ export default function CotizacionesPage() {
   const [selectedCotizaciones, setSelectedCotizaciones] = useState<string[]>([])
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [filtroVendedor, setFiltroVendedor] = useState<string>("all")
+  const [filtroSucursal, setFiltroSucursal] = useState<string>("all")
+  const [filtroEstado, setFiltroEstado] = useState<string>("all")
+  const [exporting, setExporting] = useState(false)
 
   // Función para obtener iniciales del vendedor
   const getInitials = (nombre: string) => {
@@ -104,10 +130,22 @@ export default function CotizacionesPage() {
     }
   }
 
-  // Cargar cotizaciones desde la API
+  // Cargar cotizaciones y vendedores desde la API
   useEffect(() => {
     fetchCotizaciones()
+    fetchVendedores()
   }, [])
+
+  // Cargar vendedores para el filtro
+  const fetchVendedores = async () => {
+    try {
+      const response = await fetch('/api/ajustes/usuarios?puesto=Comercial&pageSize=100')
+      const data = await response.json()
+      setVendedores(data.users || [])
+    } catch (error) {
+      console.error('Error fetching vendedores:', error)
+    }
+  }
 
   const fetchCotizaciones = async () => {
     try {
@@ -144,11 +182,57 @@ export default function CotizacionesPage() {
     }
   }
 
-  const filteredCotizaciones = cotizaciones.filter(cotizacion =>
-    cotizacion.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cotizacion.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cotizacion.vendedor.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Obtener sucursales únicas para el filtro
+  const sucursalesUnicas = Array.from(new Set(cotizaciones.map(c => c.sucursal).filter(Boolean)))
+
+  // Filtrar cotizaciones
+  const filteredCotizaciones = cotizaciones.filter(cotizacion => {
+    // Filtro de búsqueda (código, cliente, vendedor)
+    const matchesSearch = !searchTerm || 
+      cotizacion.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cotizacion.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cotizacion.vendedor.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // Filtro por vendedor
+    const matchesVendedor = filtroVendedor === "all" || cotizacion.vendedor === filtroVendedor
+    
+    // Filtro por sucursal
+    const matchesSucursal = filtroSucursal === "all" || cotizacion.sucursal === filtroSucursal
+    
+    // Filtro por estado
+    const matchesEstado = filtroEstado === "all" || cotizacion.estado === filtroEstado
+    
+    return matchesSearch && matchesVendedor && matchesSucursal && matchesEstado
+  })
+
+  // Función para exportar a CSV
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      const response = await fetch('/api/cotizaciones/export')
+      
+      if (!response.ok) {
+        throw new Error('Error al exportar cotizaciones')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `cotizaciones_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast.success('Cotizaciones exportadas correctamente')
+    } catch (error) {
+      console.error('Error exporting:', error)
+      toast.error('Error al exportar cotizaciones')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <>
@@ -164,33 +248,85 @@ export default function CotizacionesPage() {
 
         {/* Actions Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex flex-col gap-4">
+            {/* Primera fila: Buscador y botones */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar cotizaciones..."
+                  placeholder="Buscar por código, cliente o vendedor..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 w-64"
                 />
               </div>
-              <Button variant="outline" size="sm">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtros
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              <Link href="/panel/ventas/nuevo">
-                <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nueva Cotización
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={exporting || cotizaciones.length === 0}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting ? 'Exportando...' : 'Exportar'}
                 </Button>
-              </Link>
+                <Link href="/panel/ventas/nuevo">
+                  <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nueva Cotización
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            {/* Segunda fila: Filtros */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Filtro por Vendedor */}
+              <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
+                <SelectTrigger className="w-48 [&>span]:text-black">
+                  <SelectValue placeholder="Vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  {vendedores.map((v) => (
+                    <SelectItem key={v.id} value={v.nombre}>
+                      {v.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Filtro por Sucursal */}
+              <Select value={filtroSucursal} onValueChange={setFiltroSucursal}>
+                <SelectTrigger className="w-48 [&>span]:text-black">
+                  <SelectValue placeholder="Sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las sucursales</SelectItem>
+                  {sucursalesUnicas.map((suc) => (
+                    <SelectItem key={suc} value={suc}>
+                      {suc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Filtro por Estado */}
+              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                <SelectTrigger className="w-48 [&>span]:text-black">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  {Object.entries(ESTADO_META).map(([key, meta]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                        {meta.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

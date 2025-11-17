@@ -26,6 +26,8 @@ import {
   Eye,
   Trash2
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast, Toaster } from "sonner"
 
 // Datos de ejemplo para las solicitudes de cotización
 const solicitudes = [
@@ -127,12 +129,22 @@ const getEstadoIcon = (estado: string) => {
   }
 }
 
+// Estados para filtros
+const ESTADOS_META = {
+  Nueva: { label: "Nueva", className: "bg-blue-100 text-blue-800" },
+  Pendiente: { label: "Pendiente", className: "bg-yellow-100 text-yellow-800" },
+  Cotizada: { label: "Cotizada", className: "bg-green-100 text-green-800" }
+}
+
 export default function SolicitudesPage() {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSolicitudes, setSelectedSolicitudes] = useState<string[]>([])
   const [solicitudesList, setSolicitudesList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [estadoFilter, setEstadoFilter] = useState<string[]>([])
+  const [editedSolicitudes, setEditedSolicitudes] = useState<Record<string, any>>({})
+  const [savingChanges, setSavingChanges] = useState(false)
 
   // Cargar solicitudes desde la API
   const loadSolicitudes = async () => {
@@ -330,64 +342,261 @@ export default function SolicitudesPage() {
     }
   }
 
-  const filteredSolicitudes = solicitudesList.filter(solicitud =>
-    solicitud.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    solicitud.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    solicitud.contacto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    solicitud.comentarios.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    solicitud.soporte.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Manejar cambio de estado inline
+  const handleEstadoChange = (codigo: string, nuevoEstado: string) => {
+    setEditedSolicitudes(prev => ({
+      ...prev,
+      [codigo]: { estado: nuevoEstado }
+    }))
+  }
+
+  // Manejar cambio de estado masivo
+  const handleBulkEstadoChange = (nuevoEstado: string) => {
+    const updates: Record<string, any> = {}
+    selectedSolicitudes.forEach(codigo => {
+      updates[codigo] = { estado: nuevoEstado }
+    })
+    setEditedSolicitudes(prev => ({ ...prev, ...updates }))
+  }
+
+  // Guardar cambios
+  const handleSaveChanges = async () => {
+    try {
+      setSavingChanges(true)
+      const codigos = Object.keys(editedSolicitudes)
+      const updates = Object.values(editedSolicitudes)[0] // Todos tienen el mismo estado
+
+      const response = await fetch('/api/solicitudes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: codigos,
+          action: 'update',
+          data: updates
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`${result.count} solicitud(es) actualizada(s)`)
+        setEditedSolicitudes({})
+        setSelectedSolicitudes([])
+        await loadSolicitudes()
+      } else {
+        toast.error('Error al guardar los cambios')
+      }
+    } catch (error) {
+      console.error('Error guardando cambios:', error)
+      toast.error('Error al guardar los cambios')
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  // Descartar cambios
+  const handleDiscardChanges = () => {
+    setEditedSolicitudes({})
+  }
+
+  // Eliminar solicitudes masivamente
+  const handleBulkDelete = async () => {
+    if (!confirm(`¿Estás seguro de eliminar ${selectedSolicitudes.length} solicitud(es)?`)) return
+
+    try {
+      setSavingChanges(true)
+      const response = await fetch('/api/solicitudes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedSolicitudes,
+          action: 'delete'
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`${result.count} solicitud(es) eliminada(s)`)
+        setSelectedSolicitudes([])
+        setEditedSolicitudes({})
+        await loadSolicitudes()
+      } else {
+        toast.error('Error al eliminar solicitudes')
+      }
+    } catch (error) {
+      console.error('Error eliminando solicitudes:', error)
+      toast.error('Error al eliminar solicitudes')
+    } finally {
+      setSavingChanges(false)
+    }
+  }
+
+  // Exportar solicitudes
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (estadoFilter && estadoFilter.length > 0) params.set('estado', estadoFilter.join(','))
+      
+      const response = await fetch(`/api/solicitudes/export?${params.toString()}`)
+      
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const fecha = new Date().toISOString().split('T')[0]
+        a.download = `solicitudes_${fecha}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success('Solicitudes exportadas correctamente')
+      } else {
+        toast.error('Error al exportar los datos')
+      }
+    } catch (error) {
+      console.error('Error al exportar:', error)
+      toast.error('Error al exportar')
+    }
+  }
+
+  const filteredSolicitudes = solicitudesList.filter(solicitud => {
+    const matchesSearch = solicitud.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      solicitud.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      solicitud.contacto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      solicitud.comentarios.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      solicitud.soporte.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesEstado = estadoFilter.length === 0 || estadoFilter.includes(solicitud.estado)
+    
+    return matchesSearch && matchesEstado
+  })
 
   return (
-    <div className="p-6">
-      {/* Main Content */}
-      <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Solicitudes de Cotización</h1>
-          <p className="text-gray-600">Gestiona las solicitudes de cotización de clientes</p>
-        </div>
+    <>
+      <Toaster position="top-right" />
+      <div className="p-6">
+        {/* Main Content */}
+        <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">Solicitudes de Cotización</h1>
+            <p className="text-gray-600">Gestiona las solicitudes de cotización de clientes</p>
+          </div>
 
-        {/* Actions Bar */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Buscar solicitudes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
-                />
-              </div>
-              <Button variant="outline" size="sm">
-                <Filter className="w-4 h-4 mr-2" />
-                Filtros
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              {selectedSolicitudes.length > 0 && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleEliminarSeleccionadas}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+          {/* Actions Bar */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Buscar solicitudes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-64"
+                  />
+                </div>
+                <Select
+                  value={estadoFilter.length ? estadoFilter.join(',') : 'all'}
+                  onValueChange={(value) => setEstadoFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Eliminar ({selectedSolicitudes.length})
+                  <SelectTrigger className="max-w-48">
+                    <Filter className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {Object.entries(ESTADOS_META).map(([key, meta]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                          {meta.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar
                 </Button>
-              )}
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
-                <Plus className="w-4 h-4 mr-2" />
-                Nueva Solicitud
-              </Button>
+              </div>
             </div>
           </div>
-        </div>
+
+          {/* Ventana azul de edición masiva */}
+          {(selectedSolicitudes.length > 0 || Object.keys(editedSolicitudes).length > 0) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  {selectedSolicitudes.length === 1 ? (
+                    <p className="text-sm text-blue-900 font-medium">
+                      1 solicitud seleccionada
+                    </p>
+                  ) : selectedSolicitudes.length > 1 ? (
+                    <>
+                      <p className="text-sm text-blue-900 font-medium">
+                        {selectedSolicitudes.length} solicitudes seleccionadas
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-blue-900">Cambiar estado a:</span>
+                        <Select
+                          onValueChange={(value) => handleBulkEstadoChange(value)}
+                        >
+                          <SelectTrigger className="w-[140px] h-8 bg-white">
+                            <SelectValue placeholder="Seleccionar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Nueva">Nueva</SelectItem>
+                            <SelectItem value="Pendiente">Pendiente</SelectItem>
+                            <SelectItem value="Cotizada">Cotizada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-blue-900 font-medium">
+                      Cambios pendientes
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {Object.keys(editedSolicitudes).length > 0 && (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveChanges}
+                        disabled={savingChanges}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedSolicitudes).length})`}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDiscardChanges}
+                        disabled={savingChanges}
+                      >
+                        Descartar
+                      </Button>
+                    </>
+                  )}
+                  {selectedSolicitudes.length > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={handleBulkDelete}
+                      disabled={savingChanges}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Eliminar{selectedSolicitudes.length > 1 ? ` (${selectedSolicitudes.length})` : ''}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
         {/* Solicitudes Table */}
         <Card>
@@ -454,10 +663,26 @@ export default function SolicitudesPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge className={`${getEstadoColor(solicitud.estado)} flex items-center gap-1 w-fit`}>
-                          {getEstadoIcon(solicitud.estado)}
-                          {solicitud.estado}
-                        </Badge>
+                        {selectedSolicitudes.length === 1 && selectedSolicitudes.includes(solicitud.codigo) ? (
+                          <Select
+                            value={editedSolicitudes[solicitud.codigo]?.estado || solicitud.estado}
+                            onValueChange={(value) => handleEstadoChange(solicitud.codigo, value)}
+                          >
+                            <SelectTrigger className="w-[140px] h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Nueva">Nueva</SelectItem>
+                              <SelectItem value="Pendiente">Pendiente</SelectItem>
+                              <SelectItem value="Cotizada">Cotizada</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge className={`${getEstadoColor(editedSolicitudes[solicitud.codigo]?.estado || solicitud.estado)} flex items-center gap-1 w-fit`}>
+                            {getEstadoIcon(editedSolicitudes[solicitud.codigo]?.estado || solicitud.estado)}
+                            {editedSolicitudes[solicitud.codigo]?.estado || solicitud.estado}
+                          </Badge>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
@@ -501,7 +726,8 @@ export default function SolicitudesPage() {
             )}
           </CardContent>
         </Card>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   )
 }

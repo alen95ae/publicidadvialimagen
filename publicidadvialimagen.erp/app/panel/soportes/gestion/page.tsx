@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Copy, Upload, LayoutGrid, List, ArrowUpDown } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Upload, LayoutGrid, List, ArrowUpDown, X } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
@@ -85,7 +85,75 @@ export default function SoportesPage() {
   const [sortColumn, setSortColumn] = useState<"code" | "title" | null>(null)
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   
+  // Estado para saber si ya se cargaron los filtros desde sessionStorage
+  const [filtrosCargados, setFiltrosCargados] = useState(false)
+  
   const router = useRouter()
+
+  // Guardar filtros en sessionStorage cuando cambien
+  useEffect(() => {
+    if (!filtrosCargados) return // No guardar en la primera carga
+    
+    const filtros = {
+      q: searchQuery,
+      statusFilter,
+      cityFilter,
+      sortColumn,
+      sortDirection
+    }
+    sessionStorage.setItem('soportes_filtros', JSON.stringify(filtros))
+  }, [searchQuery, statusFilter, cityFilter, sortColumn, sortDirection, filtrosCargados])
+
+  // Cargar filtros desde sessionStorage al inicio
+  useEffect(() => {
+    try {
+      const filtrosGuardados = sessionStorage.getItem('soportes_filtros')
+      if (filtrosGuardados) {
+        const filtros = JSON.parse(filtrosGuardados)
+        setQ(filtros.q || "")
+        setSearchQuery(filtros.q || "")
+        setStatusFilter(filtros.statusFilter || [])
+        setCityFilter(filtros.cityFilter || "")
+        setSortColumn(filtros.sortColumn || null)
+        setSortDirection(filtros.sortDirection || "asc")
+      }
+    } catch (error) {
+      console.error('Error cargando filtros desde sessionStorage:', error)
+    } finally {
+      setFiltrosCargados(true)
+    }
+  }, [])
+  
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setQ("")
+    setSearchQuery("")
+    setStatusFilter([])
+    setCityFilter("")
+    setSortColumn(null)
+    setSortDirection("asc")
+    sessionStorage.removeItem('soportes_filtros')
+  }
+  
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'estado' | 'ciudad' | 'orden') => {
+    switch (tipo) {
+      case 'busqueda':
+        setQ("")
+        setSearchQuery("")
+        break
+      case 'estado':
+        setStatusFilter([])
+        break
+      case 'ciudad':
+        setCityFilter("")
+        break
+      case 'orden':
+        setSortColumn(null)
+        setSortDirection("asc")
+        break
+    }
+  }
 
   const fetchSupports = async (query = "", page: number = currentPage) => {
     try {
@@ -348,29 +416,6 @@ export default function SoportesPage() {
     toast.success(`${ids.length} soportes eliminados`)
   }
 
-  async function bulkDuplicate() {
-    const ids = Object.keys(selected).filter(id => selected[id])
-    
-    try {
-      const response = await api('/api/soportes/bulk', {
-        method: 'POST',
-        body: JSON.stringify({ ids, action: 'duplicate' })
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        fetchSupports()
-        setSelected({})
-        toast.success(`${result.duplicated} soportes duplicados correctamente`)
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || 'Error al duplicar los soportes')
-      }
-    } catch (error) {
-      console.error('Error duplicando soportes:', error)
-      toast.error('Error de conexión')
-    }
-  }
 
   // Edición inline: actualizar campo de un soporte
   const handleFieldChange = (supportId: string, field: keyof Support, value: any) => {
@@ -583,28 +628,82 @@ export default function SoportesPage() {
   }
 
   // Función para exportar a CSV
-  const handleCsvExport = () => {
+  const handleCsvExport = async () => {
+    const toastId = 'csv-export'
     try {
-      // Construir CSV con todos los soportes actuales
-      const headers = ['Código', 'Título', 'Tipo', 'Estado', 'Ciudad', 'Ancho', 'Alto', 'Precio/Mes', 'Propietario']
-      const rows = supportsArray.map(s => [
+      toast.loading('Obteniendo todos los soportes...', { id: toastId })
+      
+      // Obtener TODOS los soportes de la base de datos sin paginación ni filtros
+      const params = new URLSearchParams()
+      // No aplicar filtros para exportar TODOS los soportes
+      params.set('page', '1')
+      params.set('limit', '100000') // Límite muy alto para obtener todos
+      
+      const response = await api(`/api/soportes?${params}`)
+      
+      if (!response.ok) {
+        throw new Error('Error al obtener los soportes')
+      }
+      
+      const result = await response.json()
+      const allSupportsData = result.data || []
+      
+      // Construir CSV con todas las columnas del listado
+      const headers = [
+        'Código',
+        'Título',
+        'Tipo de soporte',
+        'Ciudad',
+        'País',
+        'Ancho (m)',
+        'Alto (m)',
+        'Área (m²)',
+        'Precio/Mes',
+        'Precio por m²',
+        'Coste de producción',
+        'Estado',
+        'Propietario',
+        'Empresa'
+      ]
+      
+      const rows = allSupportsData.map((s: Support) => [
         s.code || '',
         s.title || '',
         s.type || '',
-        s.status || '',
         s.city || '',
+        s.country || 'BO',
         s.widthM || '',
         s.heightM || '',
+        s.areaM2 || '',
         s.priceMonth || '',
-        s.owner || ''
+        s.pricePerM2 || '',
+        s.productionCost || '',
+        s.status || '',
+        s.owner || '',
+        s.company?.name || ''
       ])
       
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      ].join('\n')
+      // Función para escapar valores CSV correctamente
+      const escapeCsvValue = (value: any): string => {
+        const str = String(value ?? '')
+        // Si contiene comillas, comas o saltos de línea, envolver en comillas y escapar comillas dobles
+        if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+          return `"${str.replace(/"/g, '""')}"`
+        }
+        return str
+      }
       
-      // Crear blob y descargar
+      // Construir contenido CSV con UTF-8 BOM para que las tildes y ñ se vean correctamente
+      const csvRows = [
+        headers.map(escapeCsvValue).join(','),
+        ...rows.map(row => row.map(escapeCsvValue).join(','))
+      ]
+      
+      // Agregar BOM UTF-8 al inicio del CSV
+      const BOM = '\uFEFF'
+      const csvContent = BOM + csvRows.join('\n')
+      
+      // Crear blob con UTF-8
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const link = document.createElement('a')
       const url = URL.createObjectURL(blob)
@@ -614,10 +713,13 @@ export default function SoportesPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      URL.revokeObjectURL(url)
       
-      toast.success('CSV exportado correctamente')
+      toast.dismiss(toastId)
+      toast.success(`CSV exportado correctamente (${allSupportsData.length} soportes)`)
     } catch (error) {
       console.error('Error al exportar CSV:', error)
+      toast.dismiss(toastId)
       toast.error('Error al exportar el archivo')
     }
   }
@@ -639,6 +741,80 @@ export default function SoportesPage() {
         {/* Search and Actions */}
         <Card className="mb-6">
           <CardContent className="pt-6">
+            {/* Etiquetas de filtros activos */}
+            {(searchQuery || statusFilter.length > 0 || cityFilter || sortColumn) && (
+              <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
+                {searchQuery && (
+                  <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Búsqueda:</span>
+                    <span className="text-gray-700">{searchQuery}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('busqueda')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {statusFilter.length > 0 && statusFilter.map((status) => (
+                  <div key={status} className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Estado:</span>
+                    <span className="text-gray-700">{STATUS_META[status as keyof typeof STATUS_META]?.label || status}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter(statusFilter.filter(s => s !== status))
+                      }}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                
+                {cityFilter && (
+                  <div className="flex items-center gap-1 bg-purple-100 hover:bg-purple-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Ciudad:</span>
+                    <span className="text-gray-700">{cityFilter}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('ciudad')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {sortColumn && (
+                  <div className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Orden:</span>
+                    <span className="text-gray-700">
+                      {sortColumn === 'code' ? 'Código' : 'Título'} ({sortDirection === 'asc' ? 'A-Z' : 'Z-A'})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('orden')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Botón para limpiar todos */}
+                <button
+                  type="button"
+                  onClick={limpiarTodosFiltros}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+                >
+                  Limpiar todo
+                </button>
+              </div>
+            )}
+            
             <div className="flex flex-wrap gap-2 items-center">
               {/* Buscador */}
               <div className="relative">
@@ -647,6 +823,11 @@ export default function SoportesPage() {
                   placeholder="Buscar código, título, ciudad..."
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setSearchQuery(q)
+                    }
+                  }}
                   className="pl-9 w-64"
                 />
               </div>
@@ -844,13 +1025,6 @@ export default function SoportesPage() {
                           Descartar
                         </Button>
                       </>
-                    )}
-                    
-                    {singleSelected && (
-                      <Button variant="outline" size="sm" onClick={bulkDuplicate}>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Duplicar
-                      </Button>
                     )}
                     
                     <Button 

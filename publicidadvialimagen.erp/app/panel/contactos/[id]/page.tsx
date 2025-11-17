@@ -30,7 +30,6 @@ export default function EditarContactoPage() {
     kind: "COMPANY" as "INDIVIDUAL" | "COMPANY",
     relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH",
     displayName: "",
-    legalName: "",
     company: "",
     taxId: "",
     phone: "",
@@ -60,7 +59,6 @@ export default function EditarContactoPage() {
           kind: data.kind || "COMPANY",
           relation: data.relation || "CUSTOMER",
           displayName: data.displayName || "",
-          legalName: data.legalName || "",
           company: data.company || "",
           taxId: data.taxId || "",
           phone: data.phone || "",
@@ -85,10 +83,15 @@ export default function EditarContactoPage() {
 
   const fetchSalesOwners = async () => {
     try {
-      const response = await fetch("/api/users")
+      const response = await fetch("/api/ajustes/usuarios?puesto=Comercial&pageSize=100")
       if (response.ok) {
-        const users = await response.json()
-        setSalesOwners(users.filter((user: any) => user.role !== "ADMIN"))
+        const data = await response.json()
+        const users = data.users || []
+        setSalesOwners(users.map((user: any) => ({
+          id: user.id,
+          name: user.nombre || user.name || "",
+          email: user.email || ""
+        })))
       }
     } catch (error) {
       console.error("Error fetching sales owners:", error)
@@ -210,19 +213,6 @@ export default function EditarContactoPage() {
                     required
                   />
                 </div>
-
-                {/* Empresa - solo para empresas */}
-                {formData.kind === "COMPANY" && (
-                  <div>
-                    <Label htmlFor="legalName">Empresa</Label>
-                    <Input
-                      id="legalName"
-                      value={formData.legalName}
-                      onChange={(e) => handleChange("legalName", e.target.value)}
-                      placeholder="Nombre de la empresa"
-                    />
-                  </div>
-                )}
 
                 {/* Empresa */}
                 <div>

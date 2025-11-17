@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server"
-import { getAllContactos, createContacto } from "@/lib/supabaseContactos"
+import { getAllContactos, createContacto, type Contacto } from "@/lib/supabaseContactos"
 
 export async function GET(request: Request) {
   try {
@@ -14,16 +14,12 @@ export async function GET(request: Request) {
     const limitParam = searchParams.get('limit')
     const limit = limitParam ? parseInt(limitParam) : undefined
 
-    console.log('🔍 Contact search params:', { query, relationFilter, kindFilter, page, limit: limit || 'sin límite' })
-
     // Obtener contactos de Supabase con filtros
     const contactos = await getAllContactos({
       query,
       relation: relationFilter,
       kind: kindFilter
     })
-
-    console.log(`✅ Obtenidos ${contactos.length} contactos de Supabase`)
 
     // Ordenamiento personalizado: números primero, luego letras A-Z, sin nombre al final
     contactos.sort((a, b) => {
@@ -66,17 +62,12 @@ export async function GET(request: Request) {
         hasPrev: page > 1
       }
 
-      console.log('📊 Contact pagination:', pagination)
-      console.log('📊 Contact data length:', paginatedData.length)
-
       return NextResponse.json({ 
         data: paginatedData,
         pagination 
       })
     } else {
       // Sin límite, devolver todos los contactos
-      console.log('📊 Devolviendo todos los contactos:', total)
-      
       return NextResponse.json({ 
         data: contactos,
         pagination: {
@@ -99,83 +90,86 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     
-    console.log('📥 Datos recibidos:', body)
-    
     // Validar campos requeridos
-    if (!body.displayName || body.displayName.trim() === '') {
-      return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 })
+    if (!body.displayName || typeof body.displayName !== 'string' || body.displayName.trim() === '') {
+      return NextResponse.json(
+        { error: "El nombre es requerido" },
+        { status: 400 }
+      )
     }
 
-    // Preparar datos del contacto
-    const contactoData: any = {
+    // Preparar datos del contacto con validación
+    const contactoData: Partial<Contacto> = {
       displayName: body.displayName.trim(),
-      kind: body.kind || 'INDIVIDUAL',
+      kind: (body.kind === 'COMPANY' ? 'COMPANY' : 'INDIVIDUAL') as 'INDIVIDUAL' | 'COMPANY',
       relation: body.relation || 'CUSTOMER',
-      country: body.country || 'Bolivia',
-      status: 'activo'
+      country: body.country || 'Bolivia'
     }
 
-    // Agregar campos opcionales si existen
-    if (body.legalName && body.legalName.trim()) {
-      contactoData.legalName = body.legalName.trim()
-      contactoData.company = body.legalName.trim()
-    }
-    
-    if (body.company && body.company.trim()) {
+    // Agregar campos opcionales solo si tienen valor
+    if (body.company && typeof body.company === 'string' && body.company.trim()) {
       contactoData.company = body.company.trim()
-      if (!contactoData.legalName) {
-        contactoData.legalName = body.company.trim()
-      }
     }
     
-    if (body.email && body.email.trim()) {
+    if (body.email && typeof body.email === 'string' && body.email.trim()) {
       contactoData.email = body.email.trim()
     }
     
-    if (body.phone && body.phone.trim()) {
+    if (body.phone && typeof body.phone === 'string' && body.phone.trim()) {
       contactoData.phone = body.phone.trim()
     }
     
-    if (body.taxId && body.taxId.trim()) {
+    if (body.taxId && typeof body.taxId === 'string' && body.taxId.trim()) {
       contactoData.taxId = body.taxId.trim()
     }
     
-    if (body.address1 && body.address1.trim()) {
+    // Mapear address1 a address
+    if (body.address1 && typeof body.address1 === 'string' && body.address1.trim()) {
       contactoData.address = body.address1.trim()
-    } else if (body.address && body.address.trim()) {
+    } else if (body.address && typeof body.address === 'string' && body.address.trim()) {
       contactoData.address = body.address.trim()
     }
     
-    if (body.city && body.city.trim()) {
+    if (body.city && typeof body.city === 'string' && body.city.trim()) {
       contactoData.city = body.city.trim()
     }
     
-    if (body.postalCode && body.postalCode.trim()) {
+    if (body.postalCode && typeof body.postalCode === 'string' && body.postalCode.trim()) {
       contactoData.postalCode = body.postalCode.trim()
     }
     
-    if (body.website && body.website.trim()) {
+    if (body.website && typeof body.website === 'string' && body.website.trim()) {
       contactoData.website = body.website.trim()
     }
     
-    if (body.notes && body.notes.trim()) {
-      contactoData.notes = body.notes.trim()
+    // Notas: aceptar string vacío
+    if (body.notes !== undefined) {
+      contactoData.notes = typeof body.notes === 'string' ? body.notes : String(body.notes || '')
     }
 
-    console.log('🆕 Creando contacto en Supabase:', contactoData)
+    // Sales Owner ID: mapear a comercial en Supabase
+    if (body.salesOwnerId !== undefined) {
+      contactoData.salesOwnerId = body.salesOwnerId === 'none' || body.salesOwnerId === null ? null : body.salesOwnerId
+    }
 
     // Crear contacto en Supabase
     const nuevoContacto = await createContacto(contactoData)
 
-    console.log('✅ Contacto creado exitosamente:', nuevoContacto.id)
-
+    // Devolver el contacto creado en el formato esperado por el frontend
     return NextResponse.json(nuevoContacto, { status: 201 })
   } catch (e: any) {
-    console.error("❌ Error creando contacto en Supabase:", e)
-    console.error("❌ Detalles del error:", e.message)
-    return NextResponse.json({ 
-      error: "No se pudo crear el contacto", 
-      details: e.message 
-    }, { status: 500 })
+    // Log detallado del error para debugging
+    console.error("❌ Error en POST /api/contactos:")
+    console.error("   Mensaje:", e.message)
+    console.error("   Stack:", e.stack)
+    
+    // Devolver error con mensaje claro
+    return NextResponse.json(
+      { 
+        error: "No se pudo crear el contacto",
+        details: e.message || "Error desconocido"
+      },
+      { status: 500 }
+    )
   }
 }

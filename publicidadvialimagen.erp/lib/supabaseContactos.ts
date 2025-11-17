@@ -2,7 +2,7 @@ import { getSupabaseServer } from './supabaseServer'
 
 const supabase = getSupabaseServer()
 
-// Interfaz para el contacto en Supabase
+// Interfaz para el contacto en Supabase (alineada con el esquema real)
 export interface ContactoSupabase {
   id: string
   nombre: string
@@ -14,10 +14,10 @@ export interface ContactoSupabase {
   nit?: string | null
   direccion?: string | null
   ciudad?: string | null
-  codigo_postal?: string | null
   pais?: string | null
   sitio_web?: string | null
   notas?: string | null
+  comercial?: string | null
   fecha_creacion?: string
   fecha_actualizacion?: string
   created_at?: string
@@ -42,6 +42,7 @@ export interface Contacto {
   website: string
   status: string
   notes: string
+  salesOwnerId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -49,7 +50,7 @@ export interface Contacto {
 /**
  * Convertir contacto de Supabase al formato esperado por el frontend
  */
-function supabaseToContacto(record: ContactoSupabase): Contacto {
+export function supabaseToContacto(record: ContactoSupabase): Contacto {
   return {
     id: record.id,
     displayName: record.nombre || '',
@@ -61,12 +62,13 @@ function supabaseToContacto(record: ContactoSupabase): Contacto {
     taxId: record.nit || '',
     address: record.direccion || '',
     city: record.ciudad || '',
-    postalCode: record.codigo_postal || '',
+    postalCode: '',
     country: record.pais || 'Bolivia',
     relation: record.relacion || 'Cliente',
     website: record.sitio_web || '',
     status: 'activo',
     notes: record.notas || '',
+    salesOwnerId: record.comercial || null,
     createdAt: record.created_at || record.fecha_creacion || new Date().toISOString(),
     updatedAt: record.updated_at || record.fecha_actualizacion || new Date().toISOString()
   }
@@ -74,27 +76,22 @@ function supabaseToContacto(record: ContactoSupabase): Contacto {
 
 /**
  * Convertir del formato frontend a Supabase
+ * Mapea correctamente todos los campos según la estructura real de la tabla
  */
-function contactoToSupabase(contacto: Partial<Contacto>): Partial<ContactoSupabase> {
+export function contactoToSupabase(contacto: Partial<Contacto>): Partial<ContactoSupabase> {
   const supabaseData: Partial<ContactoSupabase> = {}
 
-  if (contacto.displayName !== undefined) supabaseData.nombre = contacto.displayName
+  // Campo requerido: nombre
+  if (contacto.displayName !== undefined) {
+    supabaseData.nombre = contacto.displayName.trim()
+  }
+
+  // Campo requerido: tipo_contacto (con valor por defecto)
   if (contacto.kind !== undefined) {
     supabaseData.tipo_contacto = contacto.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
   }
-  if (contacto.legalName !== undefined) supabaseData.empresa = contacto.legalName || null
-  if (contacto.company !== undefined) supabaseData.empresa = contacto.company || null
-  if (contacto.email !== undefined) supabaseData.email = contacto.email || null
-  if (contacto.phone !== undefined) supabaseData.telefono = contacto.phone || null
-  if (contacto.taxId !== undefined) supabaseData.nit = contacto.taxId || null
-  if (contacto.address !== undefined) supabaseData.direccion = contacto.address || null
-  if (contacto.city !== undefined) supabaseData.ciudad = contacto.city || null
-  if (contacto.postalCode !== undefined) supabaseData.codigo_postal = contacto.postalCode || null
-  if (contacto.country !== undefined) supabaseData.pais = contacto.country || null
-  if (contacto.website !== undefined) supabaseData.sitio_web = contacto.website || null
-  if (contacto.notes !== undefined) supabaseData.notas = contacto.notes || null
-  
-  // Mapear la relación
+
+  // Campo requerido: relacion (con valor por defecto)
   if (contacto.relation !== undefined) {
     const relationMap: { [key: string]: 'Cliente' | 'Proveedor' | 'Ambos' } = {
       'CUSTOMER': 'Cliente',
@@ -105,6 +102,51 @@ function contactoToSupabase(contacto: Partial<Contacto>): Partial<ContactoSupaba
       'Ambos': 'Ambos'
     }
     supabaseData.relacion = relationMap[contacto.relation] || 'Cliente'
+  }
+
+  // Campos opcionales (nullable)
+  if (contacto.company !== undefined) {
+    supabaseData.empresa = contacto.company?.trim() || null
+  }
+  
+  if (contacto.email !== undefined) {
+    supabaseData.email = contacto.email?.trim() || null
+  }
+  
+  if (contacto.phone !== undefined) {
+    supabaseData.telefono = contacto.phone?.trim() || null
+  }
+  
+  if (contacto.taxId !== undefined) {
+    supabaseData.nit = contacto.taxId?.trim() || null
+  }
+  
+  if (contacto.address !== undefined) {
+    supabaseData.direccion = contacto.address?.trim() || null
+  }
+  
+  if (contacto.city !== undefined) {
+    supabaseData.ciudad = contacto.city?.trim() || null
+  }
+  
+  if (contacto.country !== undefined) {
+    supabaseData.pais = contacto.country?.trim() || null
+  }
+  
+  if (contacto.website !== undefined) {
+    supabaseData.sitio_web = contacto.website?.trim() || null
+  }
+  
+  if (contacto.notes !== undefined) {
+    // Guardar notas: string vacío se guarda como string vacío, null/undefined como null
+    supabaseData.notas = contacto.notes === null || contacto.notes === undefined 
+      ? null 
+      : String(contacto.notes)
+  }
+
+  // Mapear salesOwnerId del frontend a comercial en Supabase
+  if (contacto.salesOwnerId !== undefined) {
+    supabaseData.comercial = contacto.salesOwnerId || null
   }
 
   return supabaseData
@@ -236,8 +278,6 @@ export async function getAllContactos(options?: {
  * Buscar contacto por ID
  */
 export async function findContactoById(id: string): Promise<Contacto | null> {
-  console.log('🔍 Buscando contacto por ID:', id)
-
   const { data, error } = await supabase
     .from('contactos')
     .select('*')
@@ -251,52 +291,77 @@ export async function findContactoById(id: string): Promise<Contacto | null> {
   }
 
   if (!data) {
-    console.log('⚠️ Contacto no encontrado:', id)
     return null
   }
 
-  console.log('✅ Contacto encontrado:', data.nombre, 'ID:', data.id)
   return supabaseToContacto(data as ContactoSupabase)
 }
 
 /**
  * Crear nuevo contacto
+ * Valida campos requeridos y asegura valores por defecto según la estructura de la tabla
  */
 export async function createContacto(contactoData: Partial<Contacto>): Promise<Contacto> {
   const now = new Date().toISOString()
 
-  // Validar campos requeridos
+  // Validar campo requerido: nombre
   if (!contactoData.displayName || contactoData.displayName.trim() === '') {
     throw new Error('El nombre es requerido')
   }
 
+  // Convertir datos del frontend al formato de Supabase
   const supabaseData = contactoToSupabase(contactoData)
   
-  // Asegurar que tiene nombre
-  if (!supabaseData.nombre) {
+  // Validar que el nombre se mapeó correctamente
+  if (!supabaseData.nombre || supabaseData.nombre.trim() === '') {
     throw new Error('El nombre es requerido')
   }
 
-  // Valores por defecto
+  // Asegurar valores por defecto para campos NOT NULL según la estructura de la tabla
+  // tipo_contacto: NOT NULL DEFAULT 'Individual'
   if (!supabaseData.tipo_contacto) {
     supabaseData.tipo_contacto = 'Individual'
   }
+
+  // relacion: NOT NULL DEFAULT 'Cliente'
   if (!supabaseData.relacion) {
     supabaseData.relacion = 'Cliente'
   }
+
+  // pais: DEFAULT 'Bolivia' (aunque no es NOT NULL, es bueno tener un valor por defecto)
   if (!supabaseData.pais) {
     supabaseData.pais = 'Bolivia'
   }
 
-  const insertData = {
-    ...supabaseData,
+  // Preparar datos para insertar
+  // Los campos fecha_creacion y fecha_actualizacion tienen DEFAULT NOW()
+  // pero los incluimos explícitamente para tener control
+  const insertData: any = {
+    nombre: supabaseData.nombre,
+    tipo_contacto: supabaseData.tipo_contacto,
+    relacion: supabaseData.relacion,
+    pais: supabaseData.pais,
     fecha_creacion: now,
-    fecha_actualizacion: now,
-    created_at: now,
-    updated_at: now
+    fecha_actualizacion: now
   }
 
-  console.log('📋 Datos a insertar en Supabase:', JSON.stringify(insertData, null, 2))
+  // Agregar campos opcionales solo si tienen valor (solo columnas que existen en la tabla)
+  if (supabaseData.empresa !== undefined) insertData.empresa = supabaseData.empresa
+  if (supabaseData.email !== undefined) insertData.email = supabaseData.email
+  if (supabaseData.telefono !== undefined) insertData.telefono = supabaseData.telefono
+  if (supabaseData.nit !== undefined) insertData.nit = supabaseData.nit
+  if (supabaseData.direccion !== undefined) insertData.direccion = supabaseData.direccion
+  if (supabaseData.ciudad !== undefined) insertData.ciudad = supabaseData.ciudad
+  if (supabaseData.sitio_web !== undefined) insertData.sitio_web = supabaseData.sitio_web
+  if (supabaseData.notas !== undefined) insertData.notas = supabaseData.notas
+  if (supabaseData.comercial !== undefined) insertData.comercial = supabaseData.comercial
+
+  console.log('📋 Insertando contacto en Supabase:', {
+    nombre: insertData.nombre,
+    tipo_contacto: insertData.tipo_contacto,
+    relacion: insertData.relacion,
+    campos_opcionales: Object.keys(insertData).filter(k => !['nombre', 'tipo_contacto', 'relacion', 'pais', 'fecha_creacion', 'fecha_actualizacion', 'created_at', 'updated_at'].includes(k))
+  })
 
   const { data, error } = await supabase
     .from('contactos')
@@ -305,18 +370,19 @@ export async function createContacto(contactoData: Partial<Contacto>): Promise<C
     .single()
 
   if (error) {
-    console.error('❌ Error creating contacto:', error)
-    console.error('   Error code:', error.code)
-    console.error('   Error message:', error.message)
-    console.error('   Error details:', error.details)
-    throw new Error(`Error creating contacto: ${error.message}`)
+    console.error('❌ Error creando contacto en Supabase:')
+    console.error('   Code:', error.code)
+    console.error('   Message:', error.message)
+    console.error('   Details:', error.details)
+    console.error('   Hint:', error.hint)
+    throw new Error(`Error al crear contacto: ${error.message}${error.details ? ` (${error.details})` : ''}`)
   }
 
   if (!data) {
-    throw new Error('No data returned after creating contacto')
+    throw new Error('No se recibieron datos después de crear el contacto')
   }
 
-  console.log('✅ Contacto creado exitosamente:', data.id)
+  console.log('✅ Contacto creado exitosamente - ID:', data.id, 'Nombre:', data.nombre)
   return supabaseToContacto(data as ContactoSupabase)
 }
 
@@ -327,23 +393,27 @@ export async function updateContacto(
   id: string,
   updates: Partial<Contacto>
 ): Promise<Contacto | null> {
-  // Primero verificar que existe el contacto
-  const contactoExistente = await findContactoById(id)
-  
-  if (!contactoExistente) {
-    console.log('⚠️ Contacto no encontrado para actualizar:', id)
-    return null
-  }
-
+  // Convertir updates del frontend al formato de Supabase
   const supabaseUpdates = contactoToSupabase(updates)
   
+  // Construir updateData solo con columnas que existen en la tabla
   const updateData: any = {
     ...supabaseUpdates,
-    fecha_actualizacion: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    fecha_actualizacion: new Date().toISOString()
   }
 
-  console.log('📝 Actualizando contacto:', id, updateData)
+  // Eliminar cualquier campo que no exista en la tabla (por seguridad)
+  const validColumns = [
+    'nombre', 'tipo_contacto', 'relacion', 'empresa', 'email', 'telefono',
+    'nit', 'direccion', 'ciudad', 'pais', 'sitio_web', 'notas', 'comercial',
+    'fecha_creacion', 'fecha_actualizacion', 'created_at', 'updated_at'
+  ]
+  
+  Object.keys(updateData).forEach(key => {
+    if (!validColumns.includes(key)) {
+      delete updateData[key]
+    }
+  })
 
   const { data, error } = await supabase
     .from('contactos')
@@ -353,13 +423,15 @@ export async function updateContacto(
     .single()
 
   if (error) {
-    console.error('❌ Error updating contacto:', error)
+    console.error('❌ Error updating contacto:', { id, error: error.message, code: error.code })
     return null
   }
 
-  if (!data) return null
+  // Si no hay data, el contacto no existe o no se actualizó
+  if (!data) {
+    return null
+  }
 
-  console.log('✅ Contacto actualizado exitosamente:', id)
   return supabaseToContacto(data as ContactoSupabase)
 }
 
@@ -367,11 +439,10 @@ export async function updateContacto(
  * Eliminar contacto
  */
 export async function deleteContacto(id: string): Promise<boolean> {
-  // Primero verificar que existe el contacto
+  // Verificar que existe el contacto
   const contacto = await findContactoById(id)
   
   if (!contacto) {
-    console.log('⚠️ Contacto no encontrado para eliminar:', id)
     return false
   }
 
@@ -386,13 +457,7 @@ export async function deleteContacto(id: string): Promise<boolean> {
   }
 
   // Verificar que realmente se eliminó algo
-  if (count === 0) {
-    console.log('⚠️ No se eliminó ningún contacto (count = 0):', id)
-    return false
-  }
-
-  console.log('✅ Contacto eliminado correctamente:', id, 'count:', count)
-  return true
+  return count !== null && count > 0
 }
 
 /**

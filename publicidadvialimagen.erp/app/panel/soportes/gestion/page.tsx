@@ -85,14 +85,44 @@ export default function SoportesPage() {
   const [sortColumn, setSortColumn] = useState<"code" | "title" | null>(null)
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   
-  // Estado para saber si ya se cargaron los filtros desde sessionStorage
-  const [filtrosCargados, setFiltrosCargados] = useState(false)
+  // Estado para controlar si es la primera carga del componente
+  const [esPrimeraCarga, setEsPrimeraCarga] = useState(true)
   
   const router = useRouter()
 
-  // Guardar filtros en sessionStorage cuando cambien
+  // Cargar filtros desde sessionStorage al montar el componente
   useEffect(() => {
-    if (!filtrosCargados) return // No guardar en la primera carga
+    console.log('🔄 Cargando filtros desde sessionStorage...')
+    try {
+      const filtrosGuardados = sessionStorage.getItem('soportes_filtros')
+      if (filtrosGuardados) {
+        const filtros = JSON.parse(filtrosGuardados)
+        console.log('📦 Filtros cargados:', filtros)
+        setQ(filtros.q || "")
+        setSearchQuery(filtros.q || "")
+        setStatusFilter(filtros.statusFilter || [])
+        setCityFilter(filtros.cityFilter || "")
+        setSortColumn(filtros.sortColumn || null)
+        setSortDirection(filtros.sortDirection || "asc")
+      } else {
+        console.log('ℹ️ No hay filtros guardados')
+      }
+    } catch (error) {
+      console.error('❌ Error cargando filtros desde sessionStorage:', error)
+    }
+    
+    // Pequeño delay para marcar que ya no es la primera carga
+    // Esto evita que se guarden los filtros mientras se están cargando
+    setTimeout(() => {
+      setEsPrimeraCarga(false)
+    }, 100)
+  }, []) // Se ejecuta en cada montaje del componente
+
+  // Guardar filtros en sessionStorage cuando cambien (excepto en la primera carga)
+  useEffect(() => {
+    if (esPrimeraCarga) {
+      return // No guardar durante la carga inicial
+    }
     
     const filtros = {
       q: searchQuery,
@@ -101,31 +131,14 @@ export default function SoportesPage() {
       sortColumn,
       sortDirection
     }
+    
+    console.log('💾 Guardando filtros en sessionStorage:', filtros)
     sessionStorage.setItem('soportes_filtros', JSON.stringify(filtros))
-  }, [searchQuery, statusFilter, cityFilter, sortColumn, sortDirection, filtrosCargados])
-
-  // Cargar filtros desde sessionStorage al inicio
-  useEffect(() => {
-    try {
-      const filtrosGuardados = sessionStorage.getItem('soportes_filtros')
-      if (filtrosGuardados) {
-        const filtros = JSON.parse(filtrosGuardados)
-        setQ(filtros.q || "")
-        setSearchQuery(filtros.q || "")
-        setStatusFilter(filtros.statusFilter || [])
-        setCityFilter(filtros.cityFilter || "")
-        setSortColumn(filtros.sortColumn || null)
-        setSortDirection(filtros.sortDirection || "asc")
-      }
-    } catch (error) {
-      console.error('Error cargando filtros desde sessionStorage:', error)
-    } finally {
-      setFiltrosCargados(true)
-    }
-  }, [])
+  }, [searchQuery, statusFilter, cityFilter, sortColumn, sortDirection, esPrimeraCarga])
   
   // Función para limpiar todos los filtros
   const limpiarTodosFiltros = () => {
+    console.log('🧹 Limpiando todos los filtros')
     setQ("")
     setSearchQuery("")
     setStatusFilter([])
@@ -137,6 +150,7 @@ export default function SoportesPage() {
   
   // Función para eliminar un filtro específico
   const eliminarFiltro = (tipo: 'busqueda' | 'estado' | 'ciudad' | 'orden') => {
+    console.log('🗑️ Eliminando filtro:', tipo)
     switch (tipo) {
       case 'busqueda':
         setQ("")
@@ -153,6 +167,7 @@ export default function SoportesPage() {
         setSortDirection("asc")
         break
     }
+    // Los cambios se guardarán automáticamente por el useEffect de guardado
   }
 
   const fetchSupports = async (query = "", page: number = currentPage) => {

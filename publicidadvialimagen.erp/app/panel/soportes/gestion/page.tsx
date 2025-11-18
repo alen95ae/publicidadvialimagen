@@ -85,56 +85,45 @@ export default function SoportesPage() {
   const [sortColumn, setSortColumn] = useState<"code" | "title" | null>(null)
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   
-  // Estado para controlar si es la primera carga del componente
-  const [esPrimeraCarga, setEsPrimeraCarga] = useState(true)
+  // Estado para controlar cuándo los filtros están cargados
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
   
   const router = useRouter()
 
-  // Cargar filtros desde sessionStorage al montar el componente
+  // 1) Cargar los filtros una sola vez al montar
   useEffect(() => {
-    console.log('🔄 Cargando filtros desde sessionStorage...')
-    try {
-      const filtrosGuardados = sessionStorage.getItem('soportes_filtros')
-      if (filtrosGuardados) {
-        const filtros = JSON.parse(filtrosGuardados)
-        console.log('📦 Filtros cargados:', filtros)
-        setQ(filtros.q || "")
-        setSearchQuery(filtros.q || "")
-        setStatusFilter(filtros.statusFilter || [])
-        setCityFilter(filtros.cityFilter || "")
-        setSortColumn(filtros.sortColumn || null)
-        setSortDirection(filtros.sortDirection || "asc")
-      } else {
-        console.log('ℹ️ No hay filtros guardados')
+    const saved = sessionStorage.getItem("soportes_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setQ(f.q ?? "")
+        setSearchQuery(f.q ?? "")
+        setStatusFilter(f.statusFilter ?? [])
+        setCityFilter(f.cityFilter ?? "")
+        setSortColumn(f.sortColumn ?? null)
+        setSortDirection(f.sortDirection ?? "asc")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
       }
-    } catch (error) {
-      console.error('❌ Error cargando filtros desde sessionStorage:', error)
     }
     
-    // Pequeño delay para marcar que ya no es la primera carga
-    // Esto evita que se guarden los filtros mientras se están cargando
-    setTimeout(() => {
-      setEsPrimeraCarga(false)
-    }, 100)
-  }, []) // Se ejecuta en cada montaje del componente
+    // Garantizamos que SOLO ahora los filtros están listos
+    setFiltersLoaded(true)
+  }, [])
 
-  // Guardar filtros en sessionStorage cuando cambien (excepto en la primera carga)
+  // 2) Guardar los filtros cuando cambien
   useEffect(() => {
-    if (esPrimeraCarga) {
-      return // No guardar durante la carga inicial
-    }
+    if (!filtersLoaded) return
     
-    const filtros = {
+    sessionStorage.setItem("soportes_filtros", JSON.stringify({
       q: searchQuery,
       statusFilter,
       cityFilter,
       sortColumn,
       sortDirection
-    }
-    
-    console.log('💾 Guardando filtros en sessionStorage:', filtros)
-    sessionStorage.setItem('soportes_filtros', JSON.stringify(filtros))
-  }, [searchQuery, statusFilter, cityFilter, sortColumn, sortDirection, esPrimeraCarga])
+    }))
+  }, [searchQuery, statusFilter, cityFilter, sortColumn, sortDirection, filtersLoaded])
   
   // Función para limpiar todos los filtros
   const limpiarTodosFiltros = () => {
@@ -227,33 +216,20 @@ export default function SoportesPage() {
     }
   }
 
-  // Debounce para la búsqueda
+  // 3) Fetch centralizado (un único useEffect)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchQuery(q)
-    }, 300) // 300ms de delay
-
-    return () => clearTimeout(timer)
-  }, [q])
-
-  // Efecto para hacer la búsqueda cuando cambie searchQuery
-  useEffect(() => {
+    if (!filtersLoaded) return
+    
     fetchSupports(searchQuery, 1)
-  }, [searchQuery, statusFilter, cityFilter])
-  
-  // Efecto para recargar cuando cambie el ordenamiento
+  }, [searchQuery, statusFilter, cityFilter, sortColumn, sortDirection, filtersLoaded])
+
+  // 4) Debounce sin interferir con la carga inicial
   useEffect(() => {
-    if (sortColumn) {
-      // Cuando se activa el ordenamiento, cargar todos los datos
-      fetchSupports(searchQuery, 1)
-      setCurrentPage(1)
-    } else {
-      // Si se desactiva el ordenamiento, limpiar allSupports y volver a paginación normal
-      setAllSupports([])
-      // No recargar aquí para evitar loops, se recargará cuando cambien los filtros
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortColumn, sortDirection])
+    if (!filtersLoaded) return
+    
+    const timer = setTimeout(() => setSearchQuery(q), 300)
+    return () => clearTimeout(timer)
+  }, [q, filtersLoaded])
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estás seguro de que quieres eliminar este soporte?")) return

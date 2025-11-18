@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server"
+import { NextResponse, NextRequest } from "next/server"
 import { getSoporteById } from "@/lib/supabaseSoportes"
 import { rowToSupport } from "../../helpers"
 import jsPDF from 'jspdf'
@@ -8,10 +8,14 @@ import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
     const ids = url.searchParams.get('ids')
+    
+    // Obtener el email del parámetro de URL (igual que en cotizaciones)
+    const userEmail = url.searchParams.get('email') || undefined
+    console.log('📧 Email recibido como parámetro:', userEmail)
     
     if (!ids) {
       return NextResponse.json({ error: "IDs de soportes requeridos" }, { status: 400 })
@@ -43,7 +47,7 @@ export async function GET(request: Request) {
     }
 
     // Generar PDF
-    const pdf = await generatePDF(supports)
+    const pdf = await generatePDF(supports, userEmail)
     
     // Configurar headers para descarga
     const headers = new Headers()
@@ -57,26 +61,17 @@ export async function GET(request: Request) {
   }
 }
 
-async function generatePDF(supports: any[]): Promise<Buffer> {
+async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer> {
   try {
+    console.log('📄 Generando PDF catálogo con email:', userEmail)
     const currentDate = new Date().toLocaleDateString('es-ES')
+    const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
     
     // Configuración de colores
-    const primaryColor = [213, 70, 68] // #D54644
+    const primaryColor: [number, number, number] = [213, 70, 68] // #D54644
     
     let yPosition = 20
-    
-    // Función para agregar pie de página
-    const addFooter = (pdf: jsPDF) => {
-      const footerY = 200 // Bajado al fondo de la hoja (210mm - 12mm = 198mm, pero 200 para estar seguro)
-      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.rect(0, footerY, 297, 12, 'F') // Mantiene el mismo tamaño de 12mm
-      
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(9)
-      pdf.text(`© ${new Date().getFullYear()} Publicidad Vial Imagen | Generado el ${currentDate}`, 148.5, footerY + 7, { align: 'center' })
-    }
 
     // Función para obtener colores del estado (igual que en la web)
     const getStatusColors = (status: string) => {
@@ -96,12 +91,21 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
       }
     }
 
+    // Cargar el logo para la marca de agua (una sola vez)
+    let logoBase64Watermark: string | null = null
+    try {
+      const logoPath = path.join(process.cwd(), 'public', 'logo.jpg')
+      const logoBuffer = fs.readFileSync(logoPath)
+      logoBase64Watermark = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
+    } catch (error) {
+      console.log('Error cargando logo para marca de agua:', error)
+    }
+
     // Agregar cada soporte (una página por soporte)
     for (let index = 0; index < supports.length; index++) {
       const support = supports[index]
       // Nueva página para cada soporte (excepto el primero)
       if (index > 0) {
-        addFooter(pdf) // Agregar pie de página antes de nueva página
         pdf.addPage()
       }
       
@@ -505,56 +509,75 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
       
       // Línea separadora
       pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.line(20, yPosition, 277, yPosition)
+      pdf.line(15, yPosition, 282, yPosition)
       yPosition += 15 // Aumentado de 10 a 15 para más espacio
       
-      // Información del espacio en 3 columnas (compactada)
-      pdf.setFontSize(9) // Reducido de 10 a 9
-      pdf.setTextColor(0, 0, 0)
-      pdf.setFont('helvetica', 'normal')
+      // Tabla con 4 columnas y 3 filas (más grande)
+      const tableX = 15
+      const tableWidth = 267 // 297 - 30 (márgenes más pequeños)
+      const tableY = yPosition
+      const colWidths = [66, 66, 66, 69] // 4 columnas más anchas
+      const rowHeight = 16 // Altura de cada fila más grande
+      const numRows = 3
       
-      // Primera columna (izquierda)
-      const col1X = 20
-      const col1Fields = [
-        `Código: ${support.code}`,
-        `Ciudad: ${support.city}`,
-        `Zona: `, // En blanco de momento
-        `Período de alquiler: Mensual` // Siempre "Mensual"
+      // Configurar estilos de tabla
+      pdf.setLineWidth(0.2)
+      pdf.setDrawColor(180, 180, 180)
+      
+      // Preparar datos para la tabla (4 columnas x 3 filas)
+      const tableData = [
+        [
+          `Código: ${support.code}`,
+          `Medidas: ${support.widthM}m × ${support.heightM}m`,
+          `Divisa: Bs`,
+          `Impactos diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`
+        ],
+        [
+          `Ciudad: ${support.city}`,
+          `Sustrato de impresión: Lona`,
+          `Costo de alquiler: ${support.priceMonth?.toLocaleString() || 'N/A'} Bs`,
+          `Período de alquiler: Mensual`
+        ],
+        [
+          `Tipo de soporte: ${support.type}`,
+          `Iluminación: ${support.lighting || 'No'}`,
+          `Zona: `,
+          `Costo de Producción: `
+        ]
       ]
       
-      // Segunda columna (centro)
-      const col2X = 120
-      const col2Fields = [
-        `Medidas: ${support.widthM}m × ${support.heightM}m`,
-        `Sustrato de impresión: Lona`, // Siempre "Lona"
-        `Tipo de soporte: ${support.type}`,
-        `Iluminación: ${support.lighting || 'No'}`
-      ]
+      // Dibujar tabla con bordes
+      for (let row = 0; row < numRows; row++) {
+        let currentX = tableX
+        
+        for (let col = 0; col < 4; col++) {
+          const cellX = currentX
+          const cellY = tableY + row * rowHeight
+          
+          // Fondo blanco y borde en una sola operación
+          pdf.setFillColor(255, 255, 255)
+          pdf.setDrawColor(180, 180, 180)
+          pdf.setLineWidth(0.2)
+          pdf.rect(cellX, cellY, colWidths[col], rowHeight, 'FD') // FD = Fill and Draw
+          
+          // Texto (más grande)
+          pdf.setTextColor(0, 0, 0)
+          pdf.setFontSize(11) // Aumentado de 9 a 11
+          pdf.setFont('helvetica', 'normal')
+          
+          // Ajustar texto si es muy largo
+          const text = tableData[row][col]
+          const maxWidth = colWidths[col] - 4
+          const textLines = pdf.splitTextToSize(text, maxWidth)
+          const textY = cellY + (rowHeight / 2) + 3 // Ajustado para centrar mejor
+          
+          pdf.text(textLines, cellX + 3, textY)
+          
+          currentX += colWidths[col]
+        }
+      }
       
-      // Tercera columna (derecha)
-      const col3X = 220
-      const col3Fields = [
-        `Divisa: Bs`, // Siempre "Bs"
-        `Impactos diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`,
-        `Costo de Producción: `, // En blanco de momento
-        `Costo de alquiler: ${support.priceMonth?.toLocaleString() || 'N/A'} Bs`
-      ]
-      
-      // Dibujar las 3 columnas con espaciado compacto
-      const lineSpacing = 16 // Aumentado de 14 a 16 para más espacio
-      col1Fields.forEach((field, i) => {
-        pdf.text(field, col1X, yPosition + i * lineSpacing)
-      })
-      
-      col2Fields.forEach((field, i) => {
-        pdf.text(field, col2X, yPosition + i * lineSpacing)
-      })
-      
-      col3Fields.forEach((field, i) => {
-        pdf.text(field, col3X, yPosition + i * lineSpacing)
-      })
-      
-      yPosition += col1Fields.length * lineSpacing + 15
+      yPosition += numRows * rowHeight + 15
       
       // Información adicional si hay espacio
       if (yPosition < 150) {
@@ -574,8 +597,92 @@ async function generatePDF(supports: any[]): Promise<Buffer> {
       }
     }
     
-    // Agregar pie de página final
-    addFooter(pdf)
+    // Agregar footers con paginación y marca de agua a todas las páginas
+    const totalPages = pdf.getNumberOfPages()
+    const footerY = 200 // Para formato landscape (210mm - 10mm)
+    const pageWidth = 297 // Ancho de página landscape
+    
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i)
+      
+      // Agregar marca de agua diagonal con el logo ANTES del footer (por encima de todo)
+      if (logoBase64Watermark) {
+        // Guardar el estado actual
+        pdf.saveGraphicsState()
+        
+        // Establecer opacidad al 25% (más transparente)
+        pdf.setGState(new pdf.GState({ opacity: 0.25 }))
+        
+        // Calcular dimensiones para la marca de agua
+        const pageHeight = 210 // A4 landscape alto
+        const aspectRatio = 24 / 5.5
+        
+        // Hacer el logo MUCHO más grande (aproximadamente 260mm de ancho)
+        const watermarkWidth = 260
+        const watermarkHeight = watermarkWidth / aspectRatio
+        
+        // Centrar exactamente en la diagonal (esquina inferior izquierda a superior derecha)
+        // El centro de la página es el punto medio de la diagonal
+        const centerX = pageWidth / 2 + 30  // Más a la derecha (148.5 + 30 = 178.5mm)
+        const centerY = pageHeight / 2 // 105mm - centro exacto de la diagonal
+        
+        // Calcular el ángulo exacto de la diagonal de la página
+        // Para ir de esquina inferior izquierda (0, 210) a superior derecha (297, 0)
+        const angle = Math.atan(pageHeight / pageWidth) * (180 / Math.PI) // ≈ 35.32 grados
+        
+        // Marca de agua (posicionada más abajo y ajustada)
+        const centerY2 = centerY + 50 // 50mm más abajo (un poco más arriba que antes)
+        pdf.addImage(
+          logoBase64Watermark, 
+          'JPEG', 
+          centerX - watermarkWidth / 2, 
+          centerY2 - watermarkHeight / 2, 
+          watermarkWidth, 
+          watermarkHeight,
+          undefined,
+          'NONE',
+          angle // Ángulo de rotación diagonal
+        )
+        
+        // Restaurar el estado gráfico
+        pdf.restoreGraphicsState()
+      }
+      
+      // Fondo rojo del footer
+      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      pdf.rect(0, footerY, pageWidth, 12, 'F')
+      
+      // Texto en blanco
+      pdf.setTextColor(255, 255, 255)
+      pdf.setFontSize(9)
+      pdf.setFont('helvetica', 'normal')
+      
+      // Distribuir el footer con separadores (igual que en cotización)
+      // Izquierda: © 2025 Publicidad Vial Imagen
+      pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerY + 7)
+      
+      // Separador 1 (entre izquierda y centro)
+      pdf.text('|', 75, footerY + 7)
+      
+      // Centro (centrado en la página): publicidadvialimagen.com
+      pdf.text('publicidadvialimagen.com', pageWidth / 2, footerY + 7, { align: 'center' })
+      
+      // Separador 2 (entre centro y derecha)
+      pdf.text('|', 220, footerY + 7)
+      
+      // Derecha (antes de la paginación): email (si existe)
+      if (userEmail && userEmail.trim() !== '') {
+        pdf.text(userEmail, 225, footerY + 7)
+      }
+      
+      // Separador 3 (entre email y paginación) - solo si hay email
+      if (userEmail && userEmail.trim() !== '') {
+        pdf.text('|', 270, footerY + 7)
+      }
+      
+      // Extremo derecho: Paginación
+      pdf.text(`${i}/${totalPages}`, pageWidth - 5, footerY + 7, { align: 'right' })
+    }
     
     return Buffer.from(pdf.output('arraybuffer'))
   } catch (error) {

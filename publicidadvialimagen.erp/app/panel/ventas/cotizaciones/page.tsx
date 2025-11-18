@@ -21,10 +21,12 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  FileText
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
 
 interface Cotizacion {
   id: string
@@ -97,6 +99,7 @@ export default function CotizacionesPage() {
   const [filtroSucursal, setFiltroSucursal] = useState<string>("all")
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [exporting, setExporting] = useState(false)
+  const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
 
   // Función para obtener iniciales del vendedor
   const getInitials = (nombre: string) => {
@@ -234,6 +237,124 @@ export default function CotizacionesPage() {
     }
   }
 
+  // Función para descargar PDF de una cotización
+  const handleDescargarPDF = async (cotizacionId: string, codigo: string) => {
+    try {
+      setDescargandoPDF(cotizacionId)
+      
+      // Obtener los datos completos de la cotización
+      const response = await fetch(`/api/cotizaciones/${cotizacionId}`)
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar la cotización')
+      }
+      
+      const data = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Error al cargar cotización')
+      }
+      
+      const cotizacion = data.data.cotizacion
+      const lineas = data.data.lineas || []
+      
+      // Obtener el email del vendedor
+      let vendedorEmail: string | undefined = undefined
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      
+      try {
+        const userResponse = await fetch(`/api/ajustes/usuarios?pageSize=1000`)
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          let vendedor
+          
+          // Buscar por ID (UUID) o por nombre
+          if (cotizacion.vendedor && uuidRegex.test(cotizacion.vendedor)) {
+            vendedor = userData.users?.find((u: any) => u.id === cotizacion.vendedor)
+          } else if (cotizacion.vendedor) {
+            // Buscar por nombre
+            vendedor = userData.users?.find((u: any) => 
+              u.nombre?.toLowerCase().includes(cotizacion.vendedor.toLowerCase())
+            )
+          }
+          
+          if (vendedor) {
+            vendedorEmail = vendedor.email
+            console.log('✅ Email del vendedor encontrado:', vendedorEmail)
+          } else {
+            console.log('⚠️ No se encontró vendedor, obteniendo usuario actual')
+            // Si no se encuentra, usar el usuario actual
+            const currentUserRes = await fetch('/api/auth/me')
+            if (currentUserRes.ok) {
+              const currentUserData = await currentUserRes.json()
+              if (currentUserData.success && currentUserData.user) {
+                vendedorEmail = currentUserData.user.email
+                console.log('✅ Email del usuario actual:', vendedorEmail)
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error obteniendo email del vendedor:', error)
+      }
+      
+      // Convertir líneas al formato esperado por el generador de PDF
+      const productos = lineas.map((linea: any, index: number) => {
+        if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
+          return {
+            id: linea.id || `${index + 1}`,
+            tipo: 'producto' as const,
+            producto: linea.nombre_producto || linea.producto || '',
+            descripcion: linea.descripcion || '',
+            cantidad: linea.cantidad || 1,
+            ancho: linea.ancho || 0,
+            alto: linea.alto || 0,
+            totalM2: linea.total_m2 || 0,
+            udm: linea.unidad_medida || 'm²',
+            precio: linea.precio_unitario || 0,
+            comision: linea.comision_porcentaje || 0,
+            conIVA: linea.con_iva !== undefined ? linea.con_iva : true,
+            conIT: linea.con_it !== undefined ? linea.con_it : true,
+            total: linea.subtotal_linea || 0,
+            esSoporte: linea.es_soporte || false,
+            dimensionesBloqueadas: linea.es_soporte || false,
+            imagen: linea.imagen_url || linea.imagen || undefined
+          }
+        } else if (linea.tipo === 'Nota' || linea.tipo === 'nota') {
+          return {
+            id: linea.id || `${index + 1}`,
+            tipo: 'nota' as const,
+            texto: linea.texto || linea.descripcion || ''
+          }
+        } else {
+          return {
+            id: linea.id || `${index + 1}`,
+            tipo: 'seccion' as const,
+            texto: linea.texto || linea.nombre_producto || ''
+          }
+        }
+      })
+      
+      // Generar el PDF
+      await generarPDFCotizacion({
+        codigo: cotizacion.codigo || codigo,
+        cliente: cotizacion.cliente || '',
+        sucursal: cotizacion.sucursal || '',
+        vendedor: cotizacion.vendedor || '',
+        vendedorEmail: vendedorEmail,
+        productos: productos,
+        totalGeneral: cotizacion.total_final || 0
+      })
+      
+      toast.success('PDF descargado correctamente')
+    } catch (error) {
+      console.error('Error descargando PDF:', error)
+      toast.error('Error al descargar el PDF')
+    } finally {
+      setDescargandoPDF(null)
+    }
+  }
+
   return (
     <>
       <Toaster position="top-right" />
@@ -359,7 +480,7 @@ export default function CotizacionesPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4">
+                      <th className="text-left py-3 px-4 w-12">
                         <Checkbox
                           checked={selectedCotizaciones.length === cotizaciones.length && cotizaciones.length > 0}
                           onCheckedChange={handleSelectAll}
@@ -372,32 +493,32 @@ export default function CotizacionesPage() {
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Sucursal</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Total</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Estado</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Acciones</th>
+                      <th className="text-center py-3 px-4 font-medium text-gray-900">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCotizaciones.map((cotizacion) => (
                       <tr key={cotizacion.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 w-12 align-middle">
                           <Checkbox
                             checked={selectedCotizaciones.includes(cotizacion.id)}
                             onCheckedChange={(checked) => handleSelectCotizacion(cotizacion.id, checked as boolean)}
                           />
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
                             {cotizacion.codigo}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <span className="text-sm text-gray-600">
                             {new Date(cotizacion.fecha_creacion).toLocaleDateString('es-ES')}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <span className="text-sm text-gray-900">{cotizacion.cliente}</span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
                               <AvatarImage src="" alt={cotizacion.vendedor} />
@@ -408,22 +529,36 @@ export default function CotizacionesPage() {
                             <span className="text-sm text-gray-900">{cotizacion.vendedor}</span>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <span className="text-sm text-gray-600">{cotizacion.sucursal}</span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <span className="font-semibold text-green-600">
                             Bs {cotizacion.total_final.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle">
                           <Badge className={`${getEstadoColor(cotizacion.estado)} flex items-center gap-1 w-fit`}>
                             {getEstadoIcon(cotizacion.estado)}
                             {cotizacion.estado}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-middle text-center">
                           <div className="flex items-center justify-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Descargar Cotización"
+                              onClick={() => handleDescargarPDF(cotizacion.id, cotizacion.codigo)}
+                              disabled={descargandoPDF === cotizacion.id}
+                              className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
+                            >
+                              {descargandoPDF === cotizacion.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <FileText className="w-4 h-4" />
+                              )}
+                            </Button>
                             <Link href={`/panel/ventas/editar/${cotizacion.id}`}>
                               <Button 
                                 variant="ghost" 

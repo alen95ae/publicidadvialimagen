@@ -29,9 +29,9 @@ import {
   XCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import jsPDF from 'jspdf'
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
 
 const sucursales = [
   { id: "1", nombre: "La Paz" },
@@ -51,7 +51,7 @@ interface ProductoItem {
   alto: number
   totalM2: number
   udm: string
-  precio: number
+  precio: number // Precio por m² o precio base
   comision: number
   conIVA: boolean
   conIT: boolean
@@ -537,6 +537,7 @@ export default function EditarCotizacionPage() {
               id: linea.id || `${index + 1}`,
               tipo: 'producto' as const,
               producto: linea.producto || '',
+              imagen: linea.imagen_url || linea.imagen,
               descripcion: linea.descripcion || '',
               cantidad: linea.cantidad || 1,
               ancho: linea.ancho || 0,
@@ -623,7 +624,8 @@ export default function EditarCotizacionPage() {
           unidad: 'mes',
           ancho: s.widthM || 0,
           alto: s.heightM || 0,
-          tipo: 'soporte'
+          tipo: 'soporte',
+          imagenPrincipal: s.images && s.images.length > 0 ? s.images[0] : null
         })) || []
 
         setTodosLosItems([...productosList, ...soportesList])
@@ -808,6 +810,13 @@ export default function EditarCotizacionPage() {
       precioFinal = await calcularPrecioConVariantes(precioFinal, item, variantes)
     }
     
+    // Si es soporte, cargar la imagen principal del soporte
+    let imagenUrl: string | undefined = undefined
+    
+    if (esSoporte && item.imagenPrincipal) {
+      imagenUrl = item.imagenPrincipal
+    }
+    
     setProductosList(productosList.map(itemLista => {
       if (itemLista.id === id && itemLista.tipo === 'producto') {
         const producto = itemLista as ProductoItem
@@ -817,7 +826,7 @@ export default function EditarCotizacionPage() {
         
         const cantidad = esSoporte && mesesAlquiler ? mesesAlquiler : (producto.cantidad || 1)
         
-        const productoActualizado = {
+        const productoActualizado: ProductoItem = {
           ...producto,
           producto: `${item.codigo} - ${item.nombre}`,
           descripcion: descripcionFinal,
@@ -829,6 +838,11 @@ export default function EditarCotizacionPage() {
           alto: alto,
           totalM2: totalM2,
           cantidad: cantidad
+        }
+        
+        // Cargar imagen del soporte si está disponible
+        if (esSoporte && imagenUrl) {
+          productoActualizado.imagen = imagenUrl
         }
         
         productoActualizado.total = calcularTotal(
@@ -1282,141 +1296,66 @@ export default function EditarCotizacionPage() {
     }
   }
 
-  const descargarCotizacionPDF = () => {
+  const descargarCotizacionPDF = async () => {
     try {
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
         return
       }
 
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const primaryColor: [number, number, number] = [213, 70, 68]
-      const currentDate = new Date().toLocaleDateString('es-ES')
-      
-      let yPosition = 20
-
-      // Encabezado
-      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.rect(0, 0, 210, 40, 'F')
-      
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(24)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('COTIZACIÓN', 105, 20, { align: 'center' })
-      
-      pdf.setFontSize(10)
-      pdf.setFont('helvetica', 'normal')
-      pdf.text(`Fecha: ${currentDate}`, 105, 30, { align: 'center' })
-
-      yPosition = 50
-
-      // Información del cliente
-      pdf.setTextColor(0, 0, 0)
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('Información del Cliente', 20, yPosition)
-      
-      yPosition += 7
-      pdf.setFontSize(10)
-      pdf.setFont('helvetica', 'normal')
-      
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
-      if (clienteSeleccionado) {
-        pdf.text(`Cliente: ${clienteSeleccionado.displayName}`, 20, yPosition)
-        yPosition += 5
-        if (clienteSeleccionado.legalName) {
-          pdf.text(`Empresa: ${clienteSeleccionado.legalName}`, 20, yPosition)
-          yPosition += 5
-        }
-      }
-
-      if (sucursal) {
-        pdf.text(`Sucursal: ${sucursal}`, 20, yPosition)
-        yPosition += 5
-      }
-
-      const comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
-      if (comercialSeleccionado) {
-        pdf.text(`Comercial: ${comercialSeleccionado.nombre}`, 20, yPosition)
-        yPosition += 5
-      }
-
-      yPosition += 5
-
-      // Tabla de productos
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('Detalle de Productos y Servicios', 20, yPosition)
-      yPosition += 7
-
-      pdf.setFillColor(240, 240, 240)
-      pdf.rect(20, yPosition, 170, 8, 'F')
       
-      pdf.setFontSize(9)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('Descripción', 22, yPosition + 5)
-      pdf.text('Cant.', 120, yPosition + 5)
-      pdf.text('Precio', 140, yPosition + 5)
-      pdf.text('Total', 165, yPosition + 5)
+      console.log('🔍 Buscando vendedor:', vendedor)
+      console.log('🔍 Total comerciales:', todosLosComerciales.length)
       
-      yPosition += 10
-
-      pdf.setFont('helvetica', 'normal')
-      productosList.forEach((item) => {
-        if (yPosition > 270) {
-          pdf.addPage()
-          yPosition = 20
+      // Buscar comercial por ID (UUID) o por nombre
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
+      
+      // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
+      if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
+        console.log('🔍 Buscando por nombre:', vendedor)
+        comercialSeleccionado = todosLosComerciales.find(c => 
+          c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+        )
+      }
+      
+      // Si aún no se encuentra, obtener el usuario actual de la sesión
+      if (!comercialSeleccionado) {
+        console.log('🔍 Obteniendo usuario actual de la sesión')
+        try {
+          const currentUserRes = await fetch('/api/auth/me')
+          if (currentUserRes.ok) {
+            const currentUserData = await currentUserRes.json()
+            if (currentUserData.success && currentUserData.user) {
+              comercialSeleccionado = {
+                id: currentUserData.user.id,
+                nombre: currentUserData.user.nombre,
+                email: currentUserData.user.email,
+                rol: currentUserData.user.rol,
+                puesto: currentUserData.user.puesto
+              }
+              console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
+            }
+          }
+        } catch (error) {
+          console.error('Error obteniendo usuario actual:', error)
         }
+      }
 
-        if (item.tipo === 'producto') {
-          const producto = item as ProductoItem
-          
-          const descripcionLineas = pdf.splitTextToSize(producto.descripcion || producto.producto, 95)
-          const alturaTexto = descripcionLineas.length * 5
-          
-          pdf.text(descripcionLineas, 22, yPosition)
-          pdf.text(producto.cantidad.toString(), 120, yPosition)
-          pdf.text(`Bs ${producto.precio.toFixed(2)}`, 140, yPosition)
-          pdf.text(`Bs ${producto.total.toFixed(2)}`, 165, yPosition)
-          
-          yPosition += Math.max(alturaTexto, 5) + 2
-        } else if (item.tipo === 'nota') {
-          const nota = item as NotaItem
-          pdf.setFont('helvetica', 'italic')
-          const notaLineas = pdf.splitTextToSize(`Nota: ${nota.texto}`, 165)
-          pdf.text(notaLineas, 22, yPosition)
-          yPosition += notaLineas.length * 5 + 2
-          pdf.setFont('helvetica', 'normal')
-        } else if (item.tipo === 'seccion') {
-          const seccion = item as SeccionItem
-          pdf.setFont('helvetica', 'bold')
-          pdf.text(seccion.texto, 22, yPosition)
-          yPosition += 7
-          pdf.setFont('helvetica', 'normal')
-        }
+      console.log('📧 Comercial final seleccionado:', comercialSeleccionado)
+      console.log('📧 Email del comercial:', comercialSeleccionado?.email)
+
+      await generarPDFCotizacion({
+        codigo: codigoCotizacion || 'SIN-CODIGO',
+        cliente: clienteSeleccionado?.displayName || cliente,
+        clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
+        sucursal: sucursal || '',
+        vendedor: comercialSeleccionado?.nombre || vendedor,
+        vendedorEmail: comercialSeleccionado?.email || undefined,
+        productos: productosList,
+        totalGeneral: totalGeneral
       })
-
-      yPosition += 5
-      pdf.setDrawColor(200, 200, 200)
-      pdf.line(20, yPosition, 190, yPosition)
-      yPosition += 8
-
-      pdf.setFontSize(14)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('TOTAL:', 140, yPosition)
-      pdf.text(`Bs ${totalGeneral.toFixed(2)}`, 165, yPosition)
-
-      const footerY = 280
-      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.rect(0, footerY, 210, 17, 'F')
-      
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(9)
-      pdf.setFont('helvetica', 'normal')
-      pdf.text(`© ${new Date().getFullYear()} Publicidad Vial Imagen | Generado el ${currentDate}`, 105, footerY + 10, { align: 'center' })
-
-      const nombreArchivo = `cotizacion-${clienteSeleccionado?.displayName || 'cliente'}-${new Date().toISOString().split('T')[0]}.pdf`
-      pdf.save(nombreArchivo)
       
       toast.success("Cotización descargada exitosamente")
     } catch (error) {

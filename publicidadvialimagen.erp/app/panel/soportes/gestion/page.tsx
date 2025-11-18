@@ -501,10 +501,36 @@ export default function SoportesPage() {
     }
     
     const downloadPromise = async () => {
-      const url = `/api/soportes/export/pdf?ids=${ids.join(',')}`
+      // Obtener el email del usuario actual (igual que en cotizaciones)
+      let userEmail = ''
+      try {
+        const userResponse = await fetch('/api/auth/me')
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          if (userData.success && userData.user) {
+            userEmail = userData.user.email || ''
+            console.log('📧 Email del usuario obtenido:', userEmail)
+          }
+        }
+      } catch (error) {
+        console.error('Error obteniendo email del usuario:', error)
+      }
+      
+      // Construir URL con IDs y email
+      const params = new URLSearchParams({
+        ids: ids.join(',')
+      })
+      
+      if (userEmail) {
+        params.append('email', userEmail)
+      }
+      
+      const url = `/api/soportes/export/pdf?${params.toString()}`
       
       // Hacer fetch en lugar de link directo para poder mostrar loading
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        credentials: 'include'
+      })
       
       if (!response.ok) {
         throw new Error('Error al generar el PDF')

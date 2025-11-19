@@ -12,6 +12,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { ArrowLeft, Save, MapPin, Calculator, ImageIcon, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import dynamic from 'next/dynamic'
@@ -60,11 +64,20 @@ export default function NuevoSoportePage() {
     longitude: -68.1500 as number | null,
     address: "",
     city: "",
+    zona: "",
     country: "BO",
     impactosDiarios: "",
     priceMonth: "",
+    sustrato_id: null as string | null,
+    sustrato_nombre: "" as string,
     available: true
   })
+  
+  // Estado para el buscador de sustrato
+  const [openSustrato, setOpenSustrato] = useState(false)
+  const [todosLosProductos, setTodosLosProductos] = useState<any[]>([])
+  const [cargandoProductos, setCargandoProductos] = useState(false)
+  const [filteredProductos, setFilteredProductos] = useState<any[]>([])
 
   // Cálculos automáticos
   const widthM = Number(formData.widthM) || 0
@@ -75,6 +88,78 @@ export default function NuevoSoportePage() {
   useEffect(() => {
     setFormData(prev => ({ ...prev, areaM2: areaM2.toString() }))
   }, [areaM2])
+
+  // Cargar productos para el sustrato y establecer el por defecto
+  useEffect(() => {
+    const cargarProductos = async () => {
+      setCargandoProductos(true)
+      try {
+        const response = await fetch('/api/inventario?limit=1000')
+        const data = await response.json()
+        
+        const productosList = (data.data || []).map((p: any) => ({
+          id: p.id,
+          codigo: p.codigo,
+          nombre: p.nombre,
+          precio_venta: p.precio_venta || 0
+        }))
+        
+        setTodosLosProductos(productosList)
+        setFilteredProductos(productosList.slice(0, 20))
+        
+        // Buscar y establecer el sustrato por defecto: "LONA 13 Oz + IMPRESIÓN"
+        const sustratoDefault = productosList.find((p: any) => {
+          const nombreUpper = (p.nombre || '').toUpperCase()
+          return nombreUpper.includes('LONA') && 
+                 nombreUpper.includes('13') && 
+                 (nombreUpper.includes('OZ') || nombreUpper.includes('OZ.')) &&
+                 (nombreUpper.includes('IMPRESIÓN') || nombreUpper.includes('IMPRESION'))
+        })
+        
+        if (sustratoDefault) {
+          setFormData(prev => ({
+            ...prev,
+            sustrato_id: sustratoDefault.id,
+            sustrato_nombre: `${sustratoDefault.codigo} - ${sustratoDefault.nombre}`
+          }))
+        }
+      } catch (error) {
+        console.error('Error cargando productos:', error)
+      } finally {
+        setCargandoProductos(false)
+      }
+    }
+    
+    cargarProductos()
+  }, [])
+
+  // Filtrar productos
+  const filtrarProductos = (searchValue: string) => {
+    if (!searchValue || searchValue.trim() === '') {
+      setFilteredProductos(todosLosProductos.slice(0, 20))
+      return
+    }
+
+    const search = searchValue.toLowerCase().trim()
+    const filtered = todosLosProductos.filter((item: any) => {
+      const codigo = (item.codigo || '').toLowerCase()
+      const nombre = (item.nombre || '').toLowerCase()
+      return codigo.startsWith(search) || nombre.startsWith(search)
+    }).slice(0, 15)
+    
+    setFilteredProductos(filtered)
+  }
+
+  // Seleccionar sustrato
+  const seleccionarSustrato = (producto: any) => {
+    setFormData(prev => ({
+      ...prev,
+      sustrato_id: producto.id,
+      sustrato_nombre: `${producto.codigo} - ${producto.nombre}`
+    }))
+    setOpenSustrato(false)
+    setFilteredProductos(todosLosProductos.slice(0, 20))
+  }
 
   // Función para expandir enlaces cortos usando una API externa
   const expandShortUrl = async (shortUrl: string): Promise<string | null> => {
@@ -342,8 +427,10 @@ export default function NuevoSoportePage() {
         longitude: formData.longitude,
         address: formData.address || null,
         city: formData.city || null,
+        zona: formData.zona || null,
         country: formData.country || null,
         owner: formData.owner || null,
+        sustrato_id: formData.sustrato_id || null,
       }
       
       // Remover campos de archivos del payload (no se envían al servidor)
@@ -533,7 +620,188 @@ export default function NuevoSoportePage() {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="sustrato">Seleccionar sustrato</Label>
+                  <Popover open={openSustrato} onOpenChange={(open) => {
+                    setOpenSustrato(open)
+                    if (open) {
+                      setFilteredProductos(todosLosProductos.slice(0, 20))
+                    }
+                  }}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-start",
+                          !formData.sustrato_nombre && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="truncate">
+                          {formData.sustrato_nombre || "Buscar producto sustrato..."}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false}>
+                        <CommandInput 
+                          placeholder="Escribe código o nombre..."
+                          className="h-9 border-0 focus:ring-0"
+                          onValueChange={filtrarProductos}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {cargandoProductos ? "Cargando..." : "No se encontraron productos."}
+                          </CommandEmpty>
+                          {filteredProductos.length > 0 && (
+                            <CommandGroup heading="Productos">
+                              {filteredProductos.map((producto: any) => (
+                                <CommandItem
+                                  key={producto.id}
+                                  value={`${producto.codigo} ${producto.nombre}`}
+                                  onSelect={() => seleccionarSustrato(producto)}
+                                  className="cursor-pointer"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      formData.sustrato_id === producto.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="text-xs truncate">
+                                    [{producto.codigo}] {producto.nombre}
+                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </CardContent>
+            </Card>
 
+            {/* Ubicación */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Ubicación</CardTitle>
+                <CardDescription>Información de localización</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="address">Descripción</Label>
+                  <Textarea
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) => handleChange("address", e.target.value)}
+                    placeholder="Descripción del soporte"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">Ciudad</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => handleChange("city", e.target.value)}
+                      placeholder="Zamora"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="country">País</Label>
+                    <Input
+                      id="country"
+                      value={formData.country}
+                      onChange={(e) => handleChange("country", e.target.value)}
+                      placeholder="BO"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="zona">Zona</Label>
+                  <Input
+                    id="zona"
+                    value={formData.zona}
+                    onChange={(e) => handleChange("zona", e.target.value)}
+                    placeholder="Zona norte, centro, etc."
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
+                  <Input
+                    id="googleMapsLink"
+                    type="url"
+                    value={formData.googleMapsLink}
+                    onChange={(e) => handleChange("googleMapsLink", e.target.value)}
+                    placeholder="Pega aquí el enlace de Google Maps..."
+                  />
+                  <p className="text-xs text-gray-500">
+                    💡 Pega cualquier enlace de Google Maps y las coordenadas se extraerán automáticamente
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Ubicación en el mapa</Label>
+                  <EditableLeafletMap
+                    lat={formData.latitude || -16.5000}
+                    lng={formData.longitude || -68.1500}
+                    onChange={(coords) => {
+                      console.log('🎯 Map coordinates changed:', coords);
+                      const newGoogleMapsLink = `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15`;
+                      console.log('🔗 Generated new Google Maps link:', newGoogleMapsLink);
+                      
+                      setFormData(prev => ({
+                        ...prev,
+                        latitude: coords.lat,
+                        longitude: coords.lng,
+                        googleMapsLink: newGoogleMapsLink
+                      }));
+                      
+                      toast.success(`Ubicación actualizada: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+                    }}
+                    height={420}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Precios */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Precios</CardTitle>
+                <CardDescription>Información de tarifas</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="impactosDiarios">Impactos Diarios</Label>
+                  <Input
+                    id="impactosDiarios"
+                    type="number"
+                    value={formData.impactosDiarios}
+                    onChange={(e) => handleChange("impactosDiarios", e.target.value)}
+                    placeholder="1000"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="priceMonth">Precio por Mes (€)</Label>
+                  <Input
+                    id="priceMonth"
+                    type="number"
+                    step="0.01"
+                    value={formData.priceMonth}
+                    onChange={(e) => handleChange("priceMonth", e.target.value)}
+                    placeholder="450.00"
+                  />
+                </div>
+                
                 <div className="space-y-4">
                   <Label>Imágenes del soporte (máximo 3, 5MB cada una)</Label>
                   
@@ -718,133 +986,6 @@ export default function NuevoSoportePage() {
                   </div>
                   
                   <p className="text-xs text-gray-500">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Ubicación */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Ubicación</CardTitle>
-                <CardDescription>Información de localización</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="address">Dirección</Label>
-                  <Textarea
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => handleChange("address", e.target.value)}
-                    placeholder="Calle Principal, 123"
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">Ciudad</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => handleChange("city", e.target.value)}
-                      placeholder="Zamora"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="country">País</Label>
-                    <Input
-                      id="country"
-                      value={formData.country}
-                      onChange={(e) => handleChange("country", e.target.value)}
-                      placeholder="BO"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
-                  <Input
-                    id="googleMapsLink"
-                    type="url"
-                    value={formData.googleMapsLink}
-                    onChange={(e) => handleChange("googleMapsLink", e.target.value)}
-                    placeholder="Pega aquí el enlace de Google Maps..."
-                  />
-                  <p className="text-xs text-gray-500">
-                    💡 Pega cualquier enlace de Google Maps y las coordenadas se extraerán automáticamente
-                  </p>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Ubicación en el mapa</Label>
-                  <EditableLeafletMap
-                    lat={formData.latitude || -16.5000}
-                    lng={formData.longitude || -68.1500}
-                    onChange={(coords) => {
-                      console.log('🎯 Map coordinates changed:', coords);
-                      const newGoogleMapsLink = `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=15`;
-                      console.log('🔗 Generated new Google Maps link:', newGoogleMapsLink);
-                      
-                      setFormData(prev => ({
-                        ...prev,
-                        latitude: coords.lat,
-                        longitude: coords.lng,
-                        googleMapsLink: newGoogleMapsLink
-                      }));
-                      
-                      toast.success(`Ubicación actualizada: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
-                    }}
-                    height={420}
-                  />
-                  <div className="text-sm mt-2 text-gray-600">
-                    <div>Lat: {(formData.latitude || -16.5000).toFixed(6)} | Lng: {(formData.longitude || -68.1500).toFixed(6)}</div>
-                    {formData.googleMapsLink && (
-                      <div className="mt-1">
-                        <span className="text-xs text-gray-500">Enlace generado:</span>
-                        <a 
-                          href={formData.googleMapsLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 text-xs ml-1"
-                        >
-                          {formData.googleMapsLink}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Precios */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Precios</CardTitle>
-                <CardDescription>Información de tarifas</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="impactosDiarios">Impactos Diarios</Label>
-                  <Input
-                    id="impactosDiarios"
-                    type="number"
-                    value={formData.impactosDiarios}
-                    onChange={(e) => handleChange("impactosDiarios", e.target.value)}
-                    placeholder="1000"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="priceMonth">Precio por Mes (€)</Label>
-                  <Input
-                    id="priceMonth"
-                    type="number"
-                    step="0.01"
-                    value={formData.priceMonth}
-                    onChange={(e) => handleChange("priceMonth", e.target.value)}
-                    placeholder="450.00"
-                  />
                 </div>
               </CardContent>
             </Card>

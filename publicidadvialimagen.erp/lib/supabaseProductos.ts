@@ -1,4 +1,5 @@
 import { getSupabaseServer } from './supabaseServer'
+import { normalizeText } from './utils'
 
 // Usar el cliente del servidor que bypassa RLS
 const supabase = getSupabaseServer()
@@ -300,9 +301,10 @@ export async function getProductosPage(page: number = 1, pageSize: number = 25, 
       .from('productos')
       .select('*', { count: 'exact' })
     
-    // Aplicar filtros
+    // Aplicar filtros (normalizado sin tildes)
     if (query) {
-      queryBuilder = queryBuilder.or(`codigo.ilike.%${query}%,nombre.ilike.%${query}%,categoria.ilike.%${query}%`)
+      const normalizedQuery = normalizeText(query)
+      queryBuilder = queryBuilder.or(`codigo.ilike.%${normalizedQuery}%,nombre.ilike.%${normalizedQuery}%,categoria.ilike.%${normalizedQuery}%`)
     }
     
     if (categoria) {

@@ -1,4 +1,5 @@
 import { airtable } from '@/lib/airtable'
+import { getAllProductos } from '@/lib/supabaseProductos'
 
 export const TIPOS_OFICIALES = [
   'Unipolar',
@@ -166,8 +167,15 @@ export function soporteToSupport(soporte: any) {
     status: estado,
     widthM: num(soporte.ancho),
     heightM: num(soporte.alto),
-    areaM2: num(soporte.area_total || soporte.area_total_calculada),
+    areaM2: (() => {
+      // SIEMPRE recalcular desde ancho × alto (ignorar valor guardado que puede estar incorrecto)
+      const ancho = num(soporte.ancho) || 0
+      const alto = num(soporte.alto) || 0
+      // Calcular área: ancho × alto
+      return ancho > 0 && alto > 0 ? ancho * alto : null
+    })(),
     city: soporte.ciudad ?? null,
+    zona: soporte.zona ?? null,
     country: soporte.pais ?? 'BO',
     priceMonth: num(soporte.precio_mensual),
     impactosDiarios: soporte.impactos_diarios ?? null,
@@ -177,8 +185,9 @@ export function soporteToSupport(soporte: any) {
     images,
     iluminacion: soporte.iluminacion ?? null,
     lighting: soporte.iluminacion === true ? 'Sí' : 'No',
-    address: null,
+    address: soporte.descripcion ?? null,
     owner: soporte.propietario ?? null,
+    sustrato_id: soporte.sustrato ?? null,
     ownerId: null,
     available: estado === 'Disponible' || estado === 'A Consultar',
     createdAt: soporte.created_at || new Date().toISOString(),
@@ -248,7 +257,7 @@ export function rowToSupport(row:any){
 }
 
 /** UI -> Supabase (formato snake_case) */
-export function buildSupabasePayload(data: any, existing?: any) {
+export async function buildSupabasePayload(data: any, existing?: any) {
   const payload: any = {}
 
   if (data.code !== undefined) payload.codigo = String(data.code).trim()
@@ -260,6 +269,18 @@ export function buildSupabasePayload(data: any, existing?: any) {
   const h = num(data.heightM ?? existing?.alto)
   if (w !== null) payload.ancho = w
   if (h !== null) payload.alto = h
+  
+  // Calcular área total: ancho × alto
+  if (w !== null && h !== null) {
+    const areaCalculada = w * h
+    payload.area_total_calculada = areaCalculada
+    // También actualizar area_total si viene en data
+    if (data.areaM2 !== undefined) {
+      payload.area_total = num(data.areaM2) ?? areaCalculada
+    } else {
+      payload.area_total = areaCalculada
+    }
+  }
 
   // Estado normalizado
   if (data.status !== undefined) {
@@ -270,10 +291,29 @@ export function buildSupabasePayload(data: any, existing?: any) {
 
   if (data.city !== undefined) payload.ciudad = data.city || null
   if (data.country !== undefined) payload.pais = data.country || 'BO'
-  if (data.priceMonth !== undefined) payload.precio_mes = num(data.priceMonth)
+  if (data.priceMonth !== undefined) payload.precio_mensual = num(data.priceMonth)
   if (data.impactosDiarios !== undefined) payload.impactos_diarios = data.impactosDiarios ?? null
   if (data.googleMapsLink !== undefined) payload.enlace_maps = data.googleMapsLink || null
   if (data.description !== undefined) payload.descripcion = data.description || null
+  if (data.address !== undefined) payload.descripcion = data.address || null
+  if (data.zona !== undefined) payload.zona = data.zona || null
+  
+  // Sustrato: usar el seleccionado o el por defecto
+  if (data.sustrato_id !== undefined && data.sustrato_id !== null && data.sustrato_id !== '') {
+    payload.sustrato = data.sustrato_id
+    console.log('✅ Usando sustrato seleccionado:', data.sustrato_id)
+  } else {
+    // Si no hay sustrato seleccionado, usar el por defecto
+    console.log('🔍 No hay sustrato seleccionado, buscando sustrato por defecto...')
+    const sustratoDefaultId = await getSustratoDefaultId()
+    if (sustratoDefaultId) {
+      payload.sustrato = sustratoDefaultId
+      console.log('✅ Usando sustrato por defecto:', sustratoDefaultId)
+    } else {
+      console.warn('⚠️ No se pudo obtener sustrato por defecto, dejando null')
+      payload.sustrato = null
+    }
+  }
   
   // Validar y manejar coordenadas correctamente
   if (data.latitude !== undefined) {
@@ -287,9 +327,6 @@ export function buildSupabasePayload(data: any, existing?: any) {
   
   if (data.iluminacion !== undefined) payload.iluminacion = data.iluminacion === true || data.iluminacion === 'Sí'
   else if (existing?.iluminacion !== undefined) payload.iluminacion = existing.iluminacion
-  
-  // Nota: direccion_notas no está en el tipo Soporte de Supabase, se omite
-  // if (data.address !== undefined) payload.direccion_notas = data.address || null
   
   if (data.owner !== undefined) payload.propietario = data.owner || null
 
@@ -448,4 +485,44 @@ export function mapStatusToSupabase(status: string): string {
   }
   
   return statusMap[status] || 'unknown'
+}
+
+/** Obtener el ID del sustrato por defecto: "LONA 13 Oz + IMPRESIÓN" */
+export async function getSustratoDefaultId(): Promise<string | null> {
+  try {
+    console.log('🔍 Buscando sustrato por defecto: LONA 13 Oz + IMPRESIÓN')
+    // Obtener TODOS los productos para buscar sin límites de paginación
+    const allProductos = await getAllProductos()
+    console.log(`📦 Total productos encontrados: ${allProductos.length}`)
+    
+    // Buscar el producto por nombre (búsqueda flexible)
+    const producto = allProductos.find((p: any) => {
+      const nombreUpper = (p.nombre || '').toUpperCase()
+      const codigoUpper = (p.codigo || '').toUpperCase()
+      
+      // Buscar en nombre o código
+      const match = (nombreUpper.includes('LONA') || codigoUpper.includes('LONA')) && 
+                    (nombreUpper.includes('13') || codigoUpper.includes('13')) && 
+                    (nombreUpper.includes('OZ') || nombreUpper.includes('OZ.') || codigoUpper.includes('OZ')) &&
+                    (nombreUpper.includes('IMPRESIÓN') || nombreUpper.includes('IMPRESION') || nombreUpper.includes('IMPRESION'))
+      
+      if (match) {
+        console.log(`✅ Producto sustrato encontrado: ${p.codigo} - ${p.nombre} (ID: ${p.id})`)
+      }
+      
+      return match
+    })
+    
+    if (!producto) {
+      console.warn('⚠️ No se encontró el producto sustrato por defecto. Productos disponibles:')
+      allProductos.slice(0, 10).forEach((p: any) => {
+        console.log(`   - ${p.codigo} - ${p.nombre}`)
+      })
+    }
+    
+    return producto?.id || null
+  } catch (error) {
+    console.error('❌ Error obteniendo sustrato por defecto:', error)
+    return null
+  }
 }

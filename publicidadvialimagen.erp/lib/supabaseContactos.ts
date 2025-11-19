@@ -1,4 +1,5 @@
 import { getSupabaseServer } from './supabaseServer'
+import { normalizeText } from './utils'
 
 const supabase = getSupabaseServer()
 
@@ -170,9 +171,9 @@ export async function getAllContactos(options?: {
         .select('*')
         .order('nombre', { ascending: true })
 
-      // Aplicar filtros
+      // Aplicar filtros (normalizado sin tildes)
       if (options?.query && options.query.trim()) {
-        const searchTerm = options.query.trim().toLowerCase()
+        const searchTerm = normalizeText(options.query.trim())
         queryBuilder = queryBuilder.or(
           `nombre.ilike.%${searchTerm}%,empresa.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`
         )
@@ -221,9 +222,9 @@ export async function getAllContactos(options?: {
         .order('nombre', { ascending: true })
         .range(from, from + batchSize - 1)
 
-      // Aplicar filtros
+      // Aplicar filtros (normalizado sin tildes)
       if (options?.query && options.query.trim()) {
-        const searchTerm = options.query.trim().toLowerCase()
+        const searchTerm = normalizeText(options.query.trim())
         queryBuilder = queryBuilder.or(
           `nombre.ilike.%${searchTerm}%,empresa.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`
         )

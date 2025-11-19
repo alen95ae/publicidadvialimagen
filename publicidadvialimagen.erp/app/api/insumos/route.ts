@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { includesIgnoreAccents } from '@/lib/utils'
 
 // Datos de ejemplo para los insumos (en producción vendría de una base de datos)
 const insumosItems = [
@@ -129,9 +130,9 @@ export async function GET(request: NextRequest) {
 
     if (query) {
       filteredItems = filteredItems.filter(item => 
-        item.codigo.toLowerCase().includes(query.toLowerCase()) ||
-        item.nombre.toLowerCase().includes(query.toLowerCase()) ||
-        item.categoria.toLowerCase().includes(query.toLowerCase())
+        includesIgnoreAccents(item.codigo, query) ||
+        includesIgnoreAccents(item.nombre, query) ||
+        includesIgnoreAccents(item.categoria, query)
       )
     }
 

@@ -47,7 +47,7 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
     
     // getSoporteById devuelve un Soporte directamente, no con .fields
     // Usar buildSupabasePayload para convertir a formato Supabase (snake_case)
-    const payload = buildSupabasePayload(body, existing)
+    const payload = await buildSupabasePayload(body, existing)
     console.log('📤 Payload a enviar a Supabase:', JSON.stringify(payload, null, 2))
     console.log('🔗 Google Maps Link en payload:', payload.enlace_maps)
     console.log('📍 Coordenadas en payload:', { 
@@ -71,10 +71,9 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
     const validFields = [
       'codigo', 'titulo', 'tipo_soporte', 'estado', 'ancho', 'alto',
       'area_total', 'area_total_calculada', 'iluminacion', 'precio_mensual',
-      'precio_m2_calculado', 'impactos_diarios', 'propietario', 'ciudad', 'pais',
+      'precio_m2_calculado', 'impactos_diarios', 'propietario', 'ciudad', 'zona', 'pais',
       'enlace_maps', 'latitud', 'longitud', 'imagen_principal', 'imagen_secundaria_1',
-      'imagen_secundaria_2', 'resumen_ia'
-      // Nota: direccion_notas no está en el tipo Soporte, se omite por ahora
+      'imagen_secundaria_2', 'resumen_ia', 'descripcion', 'sustrato'
     ]
     
     // Filtrar solo campos válidos y remover undefined

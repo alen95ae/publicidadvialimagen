@@ -13,6 +13,10 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, ImageIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -52,6 +56,7 @@ interface Support {
   longitude: number | null
   address: string | null
   city: string | null
+  zona: string | null
   country: string | null
   impactosDiarios: number | null
   priceMonth: number | null
@@ -98,11 +103,20 @@ export default function SoporteDetailPage() {
     longitude: null as number | null,
     address: "",
     city: "",
+    zona: "",
     country: "",
     impactosDiarios: "",
     priceMonth: "",
+    sustrato_id: null as string | null,
+    sustrato_nombre: "" as string,
     available: true
   })
+  
+  // Estado para el buscador de sustrato
+  const [openSustrato, setOpenSustrato] = useState(false)
+  const [todosLosProductos, setTodosLosProductos] = useState<any[]>([])
+  const [cargandoProductos, setCargandoProductos] = useState(false)
+  const [filteredProductos, setFilteredProductos] = useState<any[]>([])
 
   useEffect(() => {
     if (id) {
@@ -144,6 +158,22 @@ export default function SoporteDetailPage() {
 
         // Extraer imágenes del array o de campos separados
         const images = data.images || []
+        
+        // Cargar nombre del sustrato si existe sustrato_id
+        let sustratoNombre = ""
+        if (data.sustrato_id) {
+          try {
+            const productoRes = await fetch(`/api/inventario/${data.sustrato_id}`)
+            if (productoRes.ok) {
+              const productoData = await productoRes.json()
+              const producto = productoData.data || productoData
+              sustratoNombre = `${producto.codigo} - ${producto.nombre}`
+            }
+          } catch (error) {
+            console.error('Error cargando producto sustrato:', error)
+          }
+        }
+        
         setFormData({
           code: data.code || "",
           title: data.title || "",
@@ -165,9 +195,12 @@ export default function SoporteDetailPage() {
           longitude,
           address: data.address || "",
           city: data.city || "",
+          zona: data.zona || "",
           country: data.country || "",
           impactosDiarios: data.impactosDiarios?.toString() || "",
           priceMonth: data.priceMonth?.toString() || "",
+          sustrato_id: data.sustrato_id || null,
+          sustrato_nombre: sustratoNombre,
           available: data.available ?? true
         })
       } else {
@@ -192,6 +225,82 @@ export default function SoporteDetailPage() {
       setFormData(prev => ({ ...prev, areaM2: areaM2.toString() }))
     }
   }, [areaM2, editing])
+
+  // Cargar productos para el sustrato
+  useEffect(() => {
+    const cargarProductos = async () => {
+      setCargandoProductos(true)
+      try {
+        const response = await fetch('/api/inventario?limit=1000')
+        const data = await response.json()
+        
+        const productosList = (data.data || []).map((p: any) => ({
+          id: p.id,
+          codigo: p.codigo,
+          nombre: p.nombre,
+          precio_venta: p.precio_venta || 0
+        }))
+        
+        setTodosLosProductos(productosList)
+        setFilteredProductos(productosList.slice(0, 20))
+      } catch (error) {
+        console.error('Error cargando productos:', error)
+      } finally {
+        setCargandoProductos(false)
+      }
+    }
+    
+    cargarProductos()
+  }, [])
+  
+  // Establecer sustrato por defecto si no hay uno seleccionado (solo una vez después de cargar productos)
+  useEffect(() => {
+    if (todosLosProductos.length > 0 && !formData.sustrato_id && editing) {
+      const sustratoDefault = todosLosProductos.find((p: any) => {
+        const nombreUpper = (p.nombre || '').toUpperCase()
+        return nombreUpper.includes('LONA') && 
+               nombreUpper.includes('13') && 
+               (nombreUpper.includes('OZ') || nombreUpper.includes('OZ.')) &&
+               (nombreUpper.includes('IMPRESIÓN') || nombreUpper.includes('IMPRESION'))
+      })
+      
+      if (sustratoDefault) {
+        setFormData(prev => ({
+          ...prev,
+          sustrato_id: sustratoDefault.id,
+          sustrato_nombre: `${sustratoDefault.codigo} - ${sustratoDefault.nombre}`
+        }))
+      }
+    }
+  }, [todosLosProductos.length, editing]) // Solo cuando se cargan los productos o se entra en modo edición
+
+  // Filtrar productos
+  const filtrarProductos = (searchValue: string) => {
+    if (!searchValue || searchValue.trim() === '') {
+      setFilteredProductos(todosLosProductos.slice(0, 20))
+      return
+    }
+
+    const search = searchValue.toLowerCase().trim()
+    const filtered = todosLosProductos.filter((item: any) => {
+      const codigo = (item.codigo || '').toLowerCase()
+      const nombre = (item.nombre || '').toLowerCase()
+      return codigo.startsWith(search) || nombre.startsWith(search)
+    }).slice(0, 15)
+    
+    setFilteredProductos(filtered)
+  }
+
+  // Seleccionar sustrato
+  const seleccionarSustrato = (producto: any) => {
+    setFormData(prev => ({
+      ...prev,
+      sustrato_id: producto.id,
+      sustrato_nombre: `${producto.codigo} - ${producto.nombre}`
+    }))
+    setOpenSustrato(false)
+    setFilteredProductos(todosLosProductos.slice(0, 20))
+  }
 
   // Función para generar Google Maps link desde coordenadas
   const generateGoogleMapsLink = (lat: number, lng: number): string => {
@@ -316,8 +425,10 @@ export default function SoporteDetailPage() {
         longitude: formData.longitude,
         address: formData.address || null,
         city: formData.city || null,
+        zona: formData.zona || null,
         country: formData.country || null,
         owner: formData.owner || null,
+        sustrato_id: formData.sustrato_id || null,
       }
       
       // Remover campos de archivos del payload (no se envían al servidor)
@@ -459,7 +570,7 @@ export default function SoporteDetailPage() {
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="text-red-600 hover:text-red-700">
+                    <Button className="bg-[#D54644] hover:bg-[#B03A38]">
                       <Trash2 className="w-4 h-4 mr-2" />
                       Eliminar
                     </Button>
@@ -733,6 +844,67 @@ export default function SoporteDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sustrato">Seleccionar sustrato</Label>
+                    <Popover open={openSustrato} onOpenChange={(open) => {
+                      setOpenSustrato(open)
+                      if (open) {
+                        setFilteredProductos(todosLosProductos.slice(0, 20))
+                      }
+                    }}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-start",
+                            !formData.sustrato_nombre && "text-muted-foreground"
+                          )}
+                        >
+                          <span className="truncate">
+                            {formData.sustrato_nombre || "Buscar producto sustrato..."}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput 
+                            placeholder="Escribe código o nombre..."
+                            className="h-9 border-0 focus:ring-0"
+                            onValueChange={filtrarProductos}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {cargandoProductos ? "Cargando..." : "No se encontraron productos."}
+                            </CommandEmpty>
+                            {filteredProductos.length > 0 && (
+                              <CommandGroup heading="Productos">
+                                {filteredProductos.map((producto: any) => (
+                                  <CommandItem
+                                    key={producto.id}
+                                    value={`${producto.codigo} ${producto.nombre}`}
+                                    onSelect={() => seleccionarSustrato(producto)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.sustrato_id === producto.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span className="text-xs truncate">
+                                      [{producto.codigo}] {producto.nombre}
+                                    </span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </>
               ) : (
                 <>
@@ -806,6 +978,16 @@ export default function SoporteDetailPage() {
                   </div>
                   
                   <div className="space-y-2">
+                    <Label htmlFor="zona">Zona</Label>
+                    <Input
+                      id="zona"
+                      value={formData.zona}
+                      onChange={(e) => handleChange("zona", e.target.value)}
+                      placeholder="Zona norte, centro, etc."
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
                     <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
                     <GmapsLinkPaste 
                       onCoords={(coords) => {
@@ -856,22 +1038,6 @@ export default function SoporteDetailPage() {
                       }}
                       height={420}
                     />
-                    <div className="text-sm mt-2 text-gray-600">
-                      <div>Lat: {(formData.latitude || -16.5000).toFixed(6)} | Lng: {(formData.longitude || -68.1500).toFixed(6)}</div>
-                      {formData.googleMapsLink && (
-                        <div className="mt-1">
-                          <span className="text-xs text-gray-500">Enlace generado:</span>
-                          <a 
-                            href={formData.googleMapsLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 underline ml-1"
-                          >
-                            {formData.googleMapsLink.substring(0, 50)}...
-                          </a>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </>
               ) : (
@@ -890,6 +1056,11 @@ export default function SoporteDetailPage() {
                       <Label className="text-sm font-medium text-gray-700">País</Label>
                       <p>{support.country || "No especificado"}</p>
                     </div>
+                  </div>
+                  
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Zona</Label>
+                    <p>{support.zona || "No especificada"}</p>
                   </div>
                   
                   {support.googleMapsLink && (

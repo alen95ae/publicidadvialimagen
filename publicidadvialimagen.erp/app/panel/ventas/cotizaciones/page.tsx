@@ -35,14 +35,14 @@ interface Cotizacion {
   cliente: string
   vendedor: string
   sucursal: string
-  total_final: number
+  total_final: number | null
   estado: "Pendiente" | "Aprobada" | "Rechazada" | "Vencida"
-  subtotal?: number
-  total_iva?: number
-  total_it?: number
-  vigencia?: number
-  cantidad_items?: number
-  lineas_cotizacion?: number
+  subtotal?: number | null
+  total_iva?: number | null
+  total_it?: number | null
+  vigencia?: number | null
+  cantidad_items?: number | null
+  lineas_cotizacion?: number | null
 }
 
 interface Vendedor {
@@ -100,6 +100,15 @@ export default function CotizacionesPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [exporting, setExporting] = useState(false)
   const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 100,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  })
 
   // Función para obtener iniciales del vendedor
   const getInitials = (nombre: string) => {
@@ -135,9 +144,18 @@ export default function CotizacionesPage() {
 
   // Cargar cotizaciones y vendedores desde la API
   useEffect(() => {
-    fetchCotizaciones()
     fetchVendedores()
   }, [])
+
+  // Recargar cotizaciones cuando cambien los filtros (resetear a página 1)
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filtroVendedor, filtroSucursal, filtroEstado, searchTerm])
+
+  // Recargar cotizaciones cuando cambie la página o los filtros
+  useEffect(() => {
+    fetchCotizaciones(currentPage)
+  }, [currentPage, filtroVendedor, filtroSucursal, filtroEstado, searchTerm])
 
   // Cargar vendedores para el filtro
   const fetchVendedores = async () => {
@@ -150,14 +168,27 @@ export default function CotizacionesPage() {
     }
   }
 
-  const fetchCotizaciones = async () => {
+  const fetchCotizaciones = async (page: number = currentPage) => {
     try {
       setIsLoading(true)
-      const response = await fetch('/api/cotizaciones?pageSize=100')
+      const params = new URLSearchParams()
+      params.set('page', page.toString())
+      params.set('pageSize', '100')
+      
+      if (filtroEstado !== 'all') {
+        params.set('estado', filtroEstado)
+      }
+      if (searchTerm) {
+        params.set('cliente', searchTerm)
+      }
+      
+      const response = await fetch(`/api/cotizaciones?${params.toString()}`)
       const data = await response.json()
       
       if (data.success) {
         setCotizaciones(data.data)
+        setPagination(data.pagination || pagination)
+        setCurrentPage(page)
       } else {
         toast.error('Error al cargar cotizaciones')
       }
@@ -166,6 +197,23 @@ export default function CotizacionesPage() {
       toast.error('Error al cargar cotizaciones')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Funciones de paginación
+  const handlePageChange = (page: number) => {
+    fetchCotizaciones(page)
+  }
+
+  const handlePrevPage = () => {
+    if (pagination.hasPrev) {
+      handlePageChange(currentPage - 1)
+    }
+  }
+
+  const handleNextPage = () => {
+    if (pagination.hasNext) {
+      handlePageChange(currentPage + 1)
     }
   }
 
@@ -188,13 +236,13 @@ export default function CotizacionesPage() {
   // Obtener sucursales únicas para el filtro
   const sucursalesUnicas = Array.from(new Set(cotizaciones.map(c => c.sucursal).filter(Boolean)))
 
-  // Filtrar cotizaciones
+  // Filtrar cotizaciones (solo filtros del frontend, la paginación se hace en el backend)
   const filteredCotizaciones = cotizaciones.filter(cotizacion => {
-    // Filtro de búsqueda (código, cliente, vendedor)
+    // Filtro de búsqueda (código, cliente, vendedor) - solo si no se está usando búsqueda en backend
     const matchesSearch = !searchTerm || 
       cotizacion.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cotizacion.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cotizacion.vendedor.toLowerCase().includes(searchTerm.toLowerCase())
+      cotizacion.vendedor?.toLowerCase().includes(searchTerm.toLowerCase())
     
     // Filtro por vendedor
     const matchesVendedor = filtroVendedor === "all" || cotizacion.vendedor === filtroVendedor
@@ -202,7 +250,7 @@ export default function CotizacionesPage() {
     // Filtro por sucursal
     const matchesSucursal = filtroSucursal === "all" || cotizacion.sucursal === filtroSucursal
     
-    // Filtro por estado
+    // Filtro por estado (ya se aplica en el backend)
     const matchesEstado = filtroEstado === "all" || cotizacion.estado === filtroEstado
     
     return matchesSearch && matchesVendedor && matchesSucursal && matchesEstado
@@ -457,7 +505,7 @@ export default function CotizacionesPage() {
           <CardHeader>
             <CardTitle>Listado de Cotizaciones</CardTitle>
             <CardDescription>
-              {isLoading ? 'Cargando...' : `${filteredCotizaciones.length} cotizaciones encontradas`}
+              {isLoading ? 'Cargando...' : `${pagination.total} cotizaciones encontradas`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -534,7 +582,7 @@ export default function CotizacionesPage() {
                         </td>
                         <td className="py-3 px-4 align-middle">
                           <span className="font-semibold text-green-600">
-                            Bs {cotizacion.total_final.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            Bs {Number(cotizacion.total_final || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                           </span>
                         </td>
                         <td className="py-3 px-4 align-middle">
@@ -584,6 +632,63 @@ export default function CotizacionesPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Paginación */}
+            {pagination.totalPages > 1 && (
+              <div className="flex justify-center mt-8">
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handlePrevPage}
+                    disabled={!pagination.hasPrev || isLoading}
+                  >
+                    Anterior
+                  </Button>
+                  
+                  {/* Mostrar páginas */}
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        disabled={isLoading}
+                        className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleNextPage}
+                    disabled={!pagination.hasNext || isLoading}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+                
+                {/* Información de paginación */}
+                <div className="ml-4 text-sm text-gray-600">
+                  Mostrando {((currentPage - 1) * 100) + 1} - {Math.min(currentPage * 100, pagination.total)} de {pagination.total} items
+                </div>
               </div>
             )}
           </CardContent>

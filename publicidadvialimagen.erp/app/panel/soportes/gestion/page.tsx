@@ -742,7 +742,8 @@ export default function SoportesPage() {
   }
 
   // Lista fija de ciudades (las mismas que en la web)
-  const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosí", "Tarija", "Oruro", "Beni", "Pando"]
+  // Nota: "Potosi" sin tilde para que funcione el filtro correctamente
+  const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosi", "Tarija", "Oruro", "Beni", "Pando"]
 
   return (
     <>

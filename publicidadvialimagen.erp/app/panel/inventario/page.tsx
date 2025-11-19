@@ -54,6 +54,7 @@ import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { includesIgnoreAccents } from "@/lib/utils"
 
 // Tipo para los items del inventario
 interface InventoryItem {
@@ -263,15 +264,15 @@ export default function InventarioPage() {
   const [bulkAction, setBulkAction] = useState<string>("")
   const [bulkValue, setBulkValue] = useState<string>("")
   
-  // Filtrar items basado en búsqueda y categoría
+  // Filtrar items basado en búsqueda y categoría (ignorando tildes)
   const filteredItems = items.filter(item => {
     const matchesSearch = searchTerm === "" || 
-      item.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      includesIgnoreAccents(item.codigo, searchTerm) ||
+      includesIgnoreAccents(item.nombre, searchTerm)
     
-    // Comparación case-insensitive para categoría
+    // Comparación case-insensitive para categoría (ignorando tildes)
     const matchesCategory = selectedCategory === "" || 
-      item.categoria?.toLowerCase().trim() === selectedCategory.toLowerCase().trim()
+      (item.categoria && includesIgnoreAccents(item.categoria, selectedCategory))
     
     return matchesSearch && matchesCategory
   })

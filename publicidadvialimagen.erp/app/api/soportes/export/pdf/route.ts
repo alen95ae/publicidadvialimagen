@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse, NextRequest } from "next/server"
 import { getSoporteById } from "@/lib/supabaseSoportes"
-import { rowToSupport } from "../../helpers"
+import { getProductoById } from "@/lib/supabaseProductos"
+import { rowToSupport, getSustratoDefaultId } from "../../helpers"
 import jsPDF from 'jspdf'
 import fs from 'fs'
 import path from 'path'
@@ -35,6 +36,29 @@ export async function GET(request: NextRequest) {
             id: record.id,
             ...record
           })
+          
+          // Cargar producto sustrato si existe, o usar el por defecto
+          let sustratoId = record.sustrato
+          if (!sustratoId) {
+            // Si no hay sustrato, usar el por defecto
+            sustratoId = await getSustratoDefaultId()
+          }
+          
+          if (sustratoId) {
+            try {
+              const producto = await getProductoById(sustratoId)
+              support.sustrato_precio_venta = producto.precio_venta || 0
+              support.sustrato_nombre = `${producto.codigo} - ${producto.nombre}`
+            } catch (error) {
+              console.error(`Error cargando producto sustrato ${sustratoId}:`, error)
+              support.sustrato_precio_venta = 0
+              support.sustrato_nombre = 'LONA 13 Oz + IMPRESIÓN'
+            }
+          } else {
+            support.sustrato_precio_venta = 0
+            support.sustrato_nombre = 'LONA 13 Oz + IMPRESIÓN'
+          }
+          
           supports.push(support)
         }
       } catch (error) {
@@ -528,21 +552,29 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
       const tableData = [
         [
           `Código: ${support.code}`,
-          `Medidas: ${support.widthM}m × ${support.heightM}m`,
-          `Divisa: Bs`,
-          `Impactos diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`
-        ],
-        [
-          `Ciudad: ${support.city}`,
+          `Tipo de soporte: ${support.type}`,
           `Sustrato de impresión: Lona`,
-          `Costo de alquiler: ${support.priceMonth?.toLocaleString() || 'N/A'} Bs`,
           `Período de alquiler: Mensual`
         ],
         [
-          `Tipo de soporte: ${support.type}`,
+          `Ciudad: ${support.city}`,
+          `Medidas: ${support.widthM}m × ${support.heightM}m`,
+          `Divisa: Bs`,
+          `Costo de Producción: ${(() => {
+            // SIEMPRE recalcular área desde ancho × alto (ignorar valor guardado)
+            const areaCalculada = (support.widthM || 0) * (support.heightM || 0)
+            const areaFinal = areaCalculada > 0 ? areaCalculada : (support.areaM2 || 0)
+            if (support.sustrato_precio_venta && areaFinal > 0) {
+              return (support.sustrato_precio_venta * areaFinal).toLocaleString('es-ES', { maximumFractionDigits: 2 })
+            }
+            return 'N/A'
+          })()} Bs`
+        ],
+        [
+          `Zona: ${support.zona || 'N/A'}`,
           `Iluminación: ${support.lighting || 'No'}`,
-          `Zona: `,
-          `Costo de Producción: `
+          `Impactos diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`,
+          `Costo de alquiler: ${support.priceMonth?.toLocaleString() || 'N/A'} Bs`
         ]
       ]
       

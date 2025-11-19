@@ -132,7 +132,7 @@ export async function POST(req: Request) {
     
     // Usar buildSupabasePayload para construir el payload correctamente
     // Esto maneja automáticamente las imágenes desde el array 'images'
-    const supabasePayload = buildSupabasePayload(body)
+    const supabasePayload = await buildSupabasePayload(body)
     
     // Agregar created_at para nuevos registros
     supabasePayload.created_at = new Date().toISOString()

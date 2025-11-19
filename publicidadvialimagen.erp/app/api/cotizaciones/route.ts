@@ -28,11 +28,22 @@ export async function GET(request: NextRequest) {
     console.log('📊 Cotizaciones data length:', result.data.length)
     console.log('📊 Cotizaciones count:', result.count)
 
+    const total = result.count || 0
+    const totalPages = Math.ceil(total / pageSize)
+
+    const pagination = {
+      page,
+      limit: pageSize,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
+    }
+
     return NextResponse.json({
       success: true,
       data: result.data,
-      count: result.count,
-      hasMore: result.data.length === pageSize
+      pagination
     })
 
   } catch (error) {

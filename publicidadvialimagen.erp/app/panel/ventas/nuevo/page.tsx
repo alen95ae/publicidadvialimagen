@@ -1924,7 +1924,7 @@ export default function NuevaCotizacionPage() {
                       
                       <td className="py-2 px-2">
                         <div className="flex items-center gap-1 h-8">
-                          <span className="font-medium text-xs">{producto.totalM2.toFixed(2)}</span>
+                          <span className="font-medium text-xs">{Number(producto.totalM2 || 0).toFixed(2)}</span>
                           <div className="flex items-center justify-center h-6 w-6">
                             <Calculator className="w-3 h-3 text-red-500" />
                           </div>
@@ -2019,7 +2019,7 @@ export default function NuevaCotizacionPage() {
                       
                       <td className="py-2 px-2">
                         <div className="flex items-center gap-1 h-8">
-                          <span className="font-medium text-xs">Bs {producto.total.toFixed(2)}</span>
+                          <span className="font-medium text-xs">Bs {Number(producto.total || 0).toFixed(2)}</span>
                           <div className="flex items-center justify-center h-6 w-6">
                         <Button 
                           variant="ghost" 
@@ -2061,7 +2061,7 @@ export default function NuevaCotizacionPage() {
               <div className="flex justify-between items-center">
                 <span className="text-sm font-semibold">Total General:</span>
                 <span className="text-lg font-bold text-[#D54644]">
-                  Bs {totalGeneral.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  Bs {Number(totalGeneral || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -2256,7 +2256,7 @@ export default function NuevaCotizacionPage() {
                       </td>
                       <td className="py-2 px-3 text-right">
                         <div className="font-medium">
-                          Bs {info.importe.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          Bs {Number(info.importe || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </td>
                     </tr>

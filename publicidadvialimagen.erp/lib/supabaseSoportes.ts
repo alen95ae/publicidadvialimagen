@@ -1,4 +1,5 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
+import { normalizeText } from "./utils";
 
 // Tipo base igual a la tabla real de Supabase
 export type Soporte = {
@@ -17,6 +18,7 @@ export type Soporte = {
   impactos_diarios: number | null;
   propietario: string | null;
   ciudad: string | null;
+  zona: string | null;
   pais: string | null;
   enlace_maps: string | null;
   latitud: number | null;
@@ -25,6 +27,7 @@ export type Soporte = {
   imagen_secundaria_1: any | null;
   imagen_secundaria_2: any | null;
   descripcion: string | null;
+  sustrato: string | null;
   resumen_ia: string | null;
   created_at: string;
 };
@@ -48,9 +51,11 @@ export async function getSoportes({
     .from("soportes")
     .select("*", { count: "exact" });
 
-  // TEXT SEARCH
+  // TEXT SEARCH (normalizado sin tildes)
   if (q.trim() !== "") {
-    const term = `%${q.trim().toLowerCase()}%`;
+    const term = `%${normalizeText(q.trim())}%`;
+    // Nota: Supabase no tiene una función nativa para ignorar tildes,
+    // así que normalizamos el término de búsqueda antes de enviarlo
     query = query.or(
       `codigo.ilike.${term},titulo.ilike.${term},ciudad.ilike.${term},tipo_soporte.ilike.${term}`
     );
@@ -62,9 +67,10 @@ export async function getSoportes({
     query = query.in("estado", statuses);
   }
 
-  // CITY
+  // CITY (normalizado sin tildes)
   if (city) {
-    query = query.ilike("ciudad", `%${city}%`);
+    const normalizedCity = normalizeText(city);
+    query = query.ilike("ciudad", `%${normalizedCity}%`);
   }
 
   // PAGINACIÓN
@@ -106,13 +112,26 @@ export async function getSoporteById(id: string) {
 export async function createSoporte(body: Partial<Soporte>) {
   const supabase = getSupabaseServer();
 
+  console.log("🆕 createSoporte - Payload recibido:", JSON.stringify(body, null, 2));
+  console.log("🆕 createSoporte - Campos incluidos:", Object.keys(body));
+
   const { data, error } = await supabase
     .from("soportes")
     .insert([body])
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("❌ Error de Supabase en createSoporte:", {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    throw error;
+  }
+
+  console.log("✅ Soporte creado exitosamente:", data?.id);
 
   return data as Soporte;
 }

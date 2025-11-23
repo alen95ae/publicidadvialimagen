@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +12,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Layers,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
@@ -146,11 +148,12 @@ interface SoportePlanificacion {
 }
 
 export default function PlanificacionPage() {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [año, setAño] = useState(new Date().getFullYear())
   const [filtroVendedor, setFiltroVendedor] = useState("all")
   const [filtroEstado, setFiltroEstado] = useState("all")
-  const [agrupador, setAgrupador] = useState<"ninguno" | "vendedor" | "cliente" | "soporte" | "estado" | "ciudad">("ninguno")
+  const [agrupador, setAgrupador] = useState<"ninguno" | "vendedor" | "cliente" | "estado" | "ciudad">("ninguno")
   const [soportesPlanificacion, setSoportesPlanificacion] = useState<SoportePlanificacion[]>([])
   const [vendedoresUnicos, setVendedoresUnicos] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -324,22 +327,19 @@ export default function PlanificacionPage() {
       
       switch (agrupador) {
         case "vendedor":
-          // Agrupar por vendedor del primer alquiler (o todos los vendedores únicos)
-          const vendedores = [...new Set(soporte.alquileres.map(a => a.vendedor).filter(Boolean))]
-          grupoKey = vendedores.length > 0 ? vendedores.join(", ") : "Sin vendedor"
+          // Agrupar por el primer vendedor encontrado (no hacer combinaciones)
+          const primerVendedor = soporte.alquileres.find(a => a.vendedor)?.vendedor
+          grupoKey = primerVendedor || "Sin vendedor"
           break
         case "cliente":
-          // Agrupar por cliente del primer alquiler (o todos los clientes únicos)
-          const clientes = [...new Set(soporte.alquileres.map(a => a.cliente).filter(Boolean))]
-          grupoKey = clientes.length > 0 ? clientes.join(", ") : "Sin cliente"
-          break
-        case "soporte":
-          grupoKey = soporte.codigo
+          // Agrupar por el primer cliente encontrado (no hacer combinaciones)
+          const primerCliente = soporte.alquileres.find(a => a.cliente)?.cliente
+          grupoKey = primerCliente || "Sin cliente"
           break
         case "estado":
-          // Agrupar por estado del primer alquiler (o todos los estados únicos)
-          const estados = [...new Set(soporte.alquileres.map(a => a.estado).filter(Boolean))]
-          grupoKey = estados.length > 0 ? estados.join(", ") : "Sin estado"
+          // Agrupar por el primer estado encontrado (no hacer combinaciones)
+          const primerEstado = soporte.alquileres.find(a => a.estado)?.estado
+          grupoKey = primerEstado || "Sin estado"
           break
         case "ciudad":
           grupoKey = soporte.ciudad || "Sin ciudad"
@@ -497,14 +497,14 @@ export default function PlanificacionPage() {
 
               {/* Agrupador */}
               <Select value={agrupador} onValueChange={(value) => setAgrupador(value as typeof agrupador)}>
-                <SelectTrigger className="w-48 [&>span]:text-black">
-                  <SelectValue placeholder="Agrupar por" />
+                <SelectTrigger className="w-48 [&>span]:text-black !pl-9 !pr-3 relative">
+                  <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                  <SelectValue placeholder="Agrupar" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ninguno">Sin agrupación</SelectItem>
+                  <SelectItem value="ninguno">Agrupar</SelectItem>
                   <SelectItem value="vendedor">Vendedor</SelectItem>
                   <SelectItem value="cliente">Cliente</SelectItem>
-                  <SelectItem value="soporte">Soporte</SelectItem>
                   <SelectItem value="estado">Estado</SelectItem>
                   <SelectItem value="ciudad">Ciudad</SelectItem>
                 </SelectContent>
@@ -667,6 +667,12 @@ export default function PlanificacionPage() {
                                               top: `${reserva.fila * alturaFila + 4}px`, // Posición según la fila asignada
                                               height: `${alturaFila - 8}px`, // Altura de la barra (con padding)
                                               zIndex: 10
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              if (reserva.cotizacion_id) {
+                                                router.push(`/panel/ventas/editar/${reserva.cotizacion_id}`)
+                                              }
                                             }}
                                           >
                                             <div className="font-medium truncate leading-tight">

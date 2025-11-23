@@ -272,11 +272,12 @@ export async function buildSupabasePayload(data: any, existing?: any) {
   
   // Calcular área total: ancho × alto
   if (w !== null && h !== null) {
-    const areaCalculada = w * h
+    const areaCalculada = parseFloat((w * h).toFixed(2))
     payload.area_total_calculada = areaCalculada
     // También actualizar area_total si viene en data
     if (data.areaM2 !== undefined) {
-      payload.area_total = num(data.areaM2) ?? areaCalculada
+      const areaFromData = num(data.areaM2)
+      payload.area_total = areaFromData !== null ? parseFloat(areaFromData.toFixed(2)) : areaCalculada
     } else {
       payload.area_total = areaCalculada
     }

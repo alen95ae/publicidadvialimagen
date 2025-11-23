@@ -347,12 +347,20 @@ export default function CotizacionesPage() {
       }
       
       // Convertir líneas al formato esperado por el generador de PDF
+      // DETECCIÓN MEJORADA: Si tiene campos de producto, es un PRODUCTO (compatibilidad con Odoo)
       const productos = lineas.map((linea: any, index: number) => {
-        if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
+        const tieneCamposProducto = (linea.nombre_producto || linea.codigo_producto) && 
+                                    (linea.cantidad > 0 || linea.ancho || linea.alto || 
+                                     (linea.subtotal_linea && linea.subtotal_linea > 0) || 
+                                     (linea.precio_unitario && linea.precio_unitario > 0))
+        
+        if (tieneCamposProducto || linea.tipo === 'Producto' || linea.tipo === 'producto') {
           return {
             id: linea.id || `${index + 1}`,
             tipo: 'producto' as const,
-            producto: linea.nombre_producto || linea.producto || '',
+            producto: linea.codigo_producto && linea.nombre_producto
+              ? `${linea.codigo_producto} - ${linea.nombre_producto}`
+              : linea.nombre_producto || linea.producto || '',
             descripcion: linea.descripcion || '',
             cantidad: linea.cantidad || 1,
             ancho: linea.ancho || 0,
@@ -360,7 +368,7 @@ export default function CotizacionesPage() {
             totalM2: linea.total_m2 || 0,
             udm: linea.unidad_medida || 'm²',
             precio: linea.precio_unitario || 0,
-            comision: linea.comision_porcentaje || 0,
+            comision: linea.comision_porcentaje || linea.comision || 0,
             conIVA: linea.con_iva !== undefined ? linea.con_iva : true,
             conIT: linea.con_it !== undefined ? linea.con_it : true,
             total: linea.subtotal_linea || 0,
@@ -374,7 +382,36 @@ export default function CotizacionesPage() {
             tipo: 'nota' as const,
             texto: linea.texto || linea.descripcion || ''
           }
+        } else if (linea.tipo === 'Sección' || linea.tipo === 'Seccion' || linea.tipo === 'seccion') {
+          return {
+            id: linea.id || `${index + 1}`,
+            tipo: 'seccion' as const,
+            texto: linea.texto || linea.nombre_producto || ''
+          }
         } else {
+          // Fallback: Si tiene nombre_producto, tratar como producto
+          if (linea.nombre_producto) {
+            return {
+              id: linea.id || `${index + 1}`,
+              tipo: 'producto' as const,
+              producto: linea.nombre_producto,
+              descripcion: linea.descripcion || '',
+              cantidad: linea.cantidad || 1,
+              ancho: linea.ancho || 0,
+              alto: linea.alto || 0,
+              totalM2: linea.total_m2 || 0,
+              udm: linea.unidad_medida || 'm²',
+              precio: linea.precio_unitario || 0,
+              comision: linea.comision_porcentaje || linea.comision || 0,
+              conIVA: linea.con_iva !== undefined ? linea.con_iva : true,
+              conIT: linea.con_it !== undefined ? linea.con_it : true,
+              total: linea.subtotal_linea || 0,
+              esSoporte: linea.es_soporte || false,
+              dimensionesBloqueadas: linea.es_soporte || false,
+              imagen: linea.imagen_url || linea.imagen || undefined
+            }
+          }
+          // Último recurso: sección
           return {
             id: linea.id || `${index + 1}`,
             tipo: 'seccion' as const,

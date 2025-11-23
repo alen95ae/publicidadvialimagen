@@ -299,31 +299,48 @@ export async function deleteCotizacion(id: string) {
   return { success: true };
 }
 
-// Generar siguiente código de cotización
+// Generar siguiente código de cotización en formato COT-MM-AA-00000
 export async function generarSiguienteCodigoCotizacion(): Promise<string> {
   try {
+    // Obtener mes y año actual
+    const ahora = new Date();
+    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0'); // 01-12
+    const año = ahora.getFullYear().toString().slice(-2); // Últimos 2 dígitos del año
+    
+    // Obtener todas las cotizaciones
     const result = await getCotizaciones({ limit: 10000 });
     const cotizaciones = result.data;
 
-    if (cotizaciones.length === 0) {
-      return "COT-001";
-    }
-
-    // Extraer números de los códigos
+    // Filtrar cotizaciones con el formato COT-MM-AA-XXXXX del mes/año actual
+    const patronActual = new RegExp(`^COT-${mes}-${año}-(\\d+)$`);
     const numeros = cotizaciones
       .map((c) => {
-        const match = c.codigo.match(/COT-(\d+)/);
-        return match ? parseInt(match[1], 10) : 0;
+        if (!c.codigo) return null;
+        const match = c.codigo.match(patronActual);
+        return match ? parseInt(match[1], 10) : null;
       })
-      .filter((n) => !isNaN(n));
+      .filter((n) => n !== null && !isNaN(n!)) as number[];
 
-    const maxNumero = Math.max(...numeros, 0);
-    const siguiente = maxNumero + 1;
+    // Número inicial mínimo: 1500
+    const numeroInicial = 1500;
+    
+    // Si no hay cotizaciones del mes/año actual, empezar desde 1500
+    // Si hay cotizaciones, usar el máximo entre el número máximo encontrado + 1 y 1500
+    const siguiente = numeros.length > 0 
+      ? Math.max(Math.max(...numeros) + 1, numeroInicial)
+      : numeroInicial;
 
-    return `COT-${siguiente.toString().padStart(3, "0")}`;
+    // Formatear con 5 dígitos
+    const numeroFormateado = siguiente.toString().padStart(5, '0');
+
+    return `COT-${mes}-${año}-${numeroFormateado}`;
   } catch (error) {
     console.error("Error generando código de cotización:", error);
-    return "COT-001";
+    // Fallback: retornar código con formato nuevo pero número 01500
+    const ahora = new Date();
+    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0');
+    const año = ahora.getFullYear().toString().slice(-2);
+    return `COT-${mes}-${año}-01500`;
   }
 }
 

@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Interface para los datos de alquileres
 interface Alquiler {
@@ -32,6 +33,7 @@ interface Alquiler {
   inicio: string
   fin: string
   meses: number | null
+  soporte_codigo?: string | null
   cliente: string | null
   vendedor: string | null
   total: number | null
@@ -53,6 +55,10 @@ export default function AlquileresPage() {
   const [alquileres, setAlquileres] = useState<Alquiler[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [filtroVendedor, setFiltroVendedor] = useState<string>("all")
+  const [filtroEstado, setFiltroEstado] = useState<string>("all")
+  const [vendedoresUnicos, setVendedoresUnicos] = useState<string[]>([])
+  const [exporting, setExporting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -64,12 +70,27 @@ export default function AlquileresPage() {
   })
 
   // Cargar alquileres desde la API
-  const loadAlquileres = async () => {
+  const loadAlquileres = async (page: number = currentPage) => {
     try {
       setLoading(true)
       setError(null)
       
-      const response = await fetch('/api/alquileres', {
+      const params = new URLSearchParams()
+      params.set('page', page.toString())
+      params.set('pageSize', '50')
+      
+      // Búsqueda general en múltiples campos
+      if (searchTerm) {
+        params.set('search', searchTerm)
+      }
+      if (filtroVendedor !== 'all') {
+        params.set('vendedor', filtroVendedor)
+      }
+      if (filtroEstado !== 'all') {
+        params.set('estado', filtroEstado)
+      }
+      
+      const response = await fetch(`/api/alquileres?${params.toString()}`, {
         cache: 'no-store',
         next: { revalidate: 0 }
       })
@@ -78,11 +99,17 @@ export default function AlquileresPage() {
         const data = await response.json()
         if (data.success) {
           setAlquileres(data.data || [])
-          setPagination(prev => ({
-            ...prev,
-            total: data.count || 0,
-            totalPages: Math.ceil((data.count || 0) / prev.limit)
-          }))
+          setPagination(data.pagination || pagination)
+          setCurrentPage(page)
+          
+          // Actualizar lista única de vendedores para el filtro (de los alquileres)
+          const nuevosVendedores = Array.from(new Set((data.data || []).map((a: Alquiler) => a.vendedor).filter(Boolean))) as string[]
+          
+          setVendedoresUnicos(prev => {
+            const combined = [...new Set([...prev, ...nuevosVendedores])]
+            return combined.sort()
+          })
+          
           console.log(`✅ Cargados ${data.data?.length || 0} alquileres`)
         } else {
           throw new Error(data.error || 'Error al cargar alquileres')
@@ -100,13 +127,55 @@ export default function AlquileresPage() {
     }
   }
 
+  // Cargar vendedores del sistema
+  const fetchVendedoresSistema = async () => {
+    try {
+      const response = await fetch('/api/ajustes/usuarios?puesto=Comercial&pageSize=100')
+      const data = await response.json()
+      if (data.users) {
+        const vendedoresSistema = data.users.map((u: any) => u.nombre).filter(Boolean) as string[]
+        setVendedoresUnicos(prev => {
+          const combined = [...new Set([...prev, ...vendedoresSistema])]
+          return combined.sort()
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching vendedores del sistema:', error)
+    }
+  }
+
   useEffect(() => {
-    loadAlquileres()
+    fetchVendedoresSistema()
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, filtroVendedor, filtroEstado])
+
+  useEffect(() => {
+    loadAlquileres(currentPage)
+  }, [currentPage, searchTerm, filtroVendedor, filtroEstado])
+
+  // Funciones de paginación
+  const handlePageChange = (page: number) => {
+    loadAlquileres(page)
+  }
+
+  const handlePrevPage = () => {
+    if (pagination.hasPrev) {
+      handlePageChange(currentPage - 1)
+    }
+  }
+
+  const handleNextPage = () => {
+    if (pagination.hasNext) {
+      handlePageChange(currentPage + 1)
+    }
+  }
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedAlquileres(filteredAlquileres.map(a => a.id))
+      setSelectedAlquileres(alquileres.map(a => a.id))
     } else {
       setSelectedAlquileres([])
     }
@@ -124,13 +193,6 @@ export default function AlquileresPage() {
     router.push(`/panel/ventas/editar/${cotizacionId}`)
   }
 
-  // Filtrar alquileres
-  const filteredAlquileres = alquileres.filter(alquiler =>
-    alquiler.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (alquiler.cliente && alquiler.cliente.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (alquiler.vendedor && alquiler.vendedor.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES')
   }
@@ -140,6 +202,35 @@ export default function AlquileresPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(price)
+  }
+
+  // Función para exportar a CSV
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      const response = await fetch('/api/alquileres/export')
+      
+      if (!response.ok) {
+        throw new Error('Error al exportar alquileres')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `alquileres_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast.success('Alquileres exportados correctamente')
+    } catch (error) {
+      console.error('Error exporting:', error)
+      toast.error('Error al exportar alquileres')
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -153,42 +244,80 @@ export default function AlquileresPage() {
 
         {/* Actions Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex flex-wrap gap-2 items-center">
-            {/* Buscador */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Buscar alquileres..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 w-64"
-              />
-            </div>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex flex-wrap gap-2 items-center flex-1">
+              {/* Buscador */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Buscar por cliente, vendedor, código o soporte..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 w-64"
+                />
+              </div>
 
-            <div className="flex-1" />
+              {/* Filtro por Vendedor */}
+              <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
+                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                  <SelectValue placeholder="Vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  {vendedoresUnicos.map((vendedor) => (
+                    <SelectItem key={vendedor} value={vendedor}>
+                      {vendedor}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Filtro por Estado */}
+              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                        {meta.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             
-            {/* Botones de acción */}
-            <Button
-              variant="outline"
-              size="sm"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Exportar
-            </Button>
-            
-            <Link href="/panel/ventas/nuevo">
-              <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Alquiler
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting || alquileres.length === 0}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {exporting ? 'Exportando...' : 'Exportar'}
               </Button>
-            </Link>
+              
+              <Link href="/panel/ventas/nuevo">
+                <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo Alquiler
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
         {/* Tabla de Alquileres */}
         <Card>
           <CardHeader>
-            <CardTitle>Alquileres ({filteredAlquileres.length})</CardTitle>
+            <CardTitle>Alquileres ({pagination.total})</CardTitle>
             <CardDescription>
               Lista de todos los alquileres de soportes
             </CardDescription>
@@ -215,81 +344,98 @@ export default function AlquileresPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3">
+                      <th className="text-center py-2 px-3">
                         <Checkbox
-                          checked={selectedAlquileres.length === filteredAlquileres.length && filteredAlquileres.length > 0}
+                          checked={selectedAlquileres.length === alquileres.length && alquileres.length > 0}
                           onCheckedChange={handleSelectAll}
                         />
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Código</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Inicio</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Fin</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Meses</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Cliente</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Vendedor</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Total</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Estado</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Acciones</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Código</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Inicio</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Fin</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Meses</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Soporte</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Cliente</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Vendedor</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Total</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Estado</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredAlquileres.length === 0 ? (
+                    {alquileres.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="text-center py-8 text-gray-500">
+                        <td colSpan={11} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron alquileres con ese criterio de búsqueda' : 'No hay alquileres disponibles'}
                         </td>
                       </tr>
                     ) : (
-                      filteredAlquileres.map((alquiler) => (
+                      alquileres.map((alquiler) => (
                         <tr key={alquiler.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-2 px-3">
+                          <td className="py-2 px-3 text-center">
                             <Checkbox
                               checked={selectedAlquileres.includes(alquiler.id)}
                               onCheckedChange={(checked) => handleSelectAlquiler(alquiler.id, checked as boolean)}
                             />
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
                             <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
                               {alquiler.codigo}
                             </span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1 text-sm">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-1 text-sm">
                               <Calendar className="w-3 h-3" />
                               {formatDate(alquiler.inicio)}
                             </div>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1 text-sm">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-1 text-sm">
                               <Calendar className="w-3 h-3" />
                               {formatDate(alquiler.fin)}
                             </div>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
                             <span className="text-sm">{alquiler.meses || '-'}</span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1 text-sm">
-                              <User className="w-3 h-3" />
-                              {alquiler.cliente || '-'}
-                            </div>
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            {alquiler.soporte_codigo ? (
+                              <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                                {alquiler.soporte_codigo}
+                              </span>
+                            ) : (
+                              <span className="text-sm">-</span>
+                            )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            {alquiler.cliente && alquiler.cliente.length > 25 ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger className="text-left">
+                                    <span className="text-sm">{alquiler.cliente.slice(0, 25) + '…'}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm">{alquiler.cliente}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <span className="text-sm">{alquiler.cliente || '-'}</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
                             <span className="text-sm">{alquiler.vendedor || '-'}</span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-3 h-3" />
-                              <span className="font-medium">Bs {alquiler.total ? formatPrice(alquiler.total) : '0.00'}</span>
-                            </div>
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <span className="font-medium text-green-600">
+                              {alquiler.total ? `${formatPrice(alquiler.total)} Bs` : '0.00 Bs'}
+                            </span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
                             <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${ESTADOS_ALQUILER[alquiler.estado]?.className || 'bg-gray-100 text-gray-800'}`}>
                               {ESTADOS_ALQUILER[alquiler.estado]?.label || alquiler.estado}
                             </span>
                           </td>
-                          <td className="py-2 px-3">
-                            <div className="flex gap-2">
+                          <td className="py-2 px-3 text-center">
+                            <div className="flex gap-2 justify-center">
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -306,6 +452,63 @@ export default function AlquileresPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Paginación */}
+            {pagination.totalPages > 1 && (
+              <div className="flex justify-center mt-8">
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handlePrevPage}
+                    disabled={!pagination.hasPrev || loading}
+                  >
+                    Anterior
+                  </Button>
+                  
+                  {/* Mostrar páginas */}
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        disabled={loading}
+                        className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleNextPage}
+                    disabled={!pagination.hasNext || loading}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+                
+                {/* Información de paginación */}
+                <div className="ml-4 text-sm text-gray-600">
+                  Mostrando {((currentPage - 1) * 50) + 1} - {Math.min(currentPage * 50, pagination.total)} de {pagination.total} items
+                </div>
               </div>
             )}
           </CardContent>

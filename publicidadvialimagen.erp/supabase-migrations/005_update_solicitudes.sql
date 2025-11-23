@@ -78,3 +78,5 @@ COMMENT ON COLUMN solicitudes.comentarios IS 'Comentarios adicionales de la soli
 
 
 
+
+

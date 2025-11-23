@@ -83,10 +83,14 @@ export default function NuevoSoportePage() {
   const widthM = Number(formData.widthM) || 0
   const heightM = Number(formData.heightM) || 0
 
-  const areaM2 = useMemo(() => +(Number(widthM) * Number(heightM)).toFixed(2), [widthM, heightM])
+  const areaM2 = useMemo(() => {
+    const calculated = Number(widthM) * Number(heightM)
+    return parseFloat(calculated.toFixed(2))
+  }, [widthM, heightM])
   
   useEffect(() => {
-    setFormData(prev => ({ ...prev, areaM2: areaM2.toString() }))
+    const formattedArea = areaM2.toFixed(2)
+    setFormData(prev => ({ ...prev, areaM2: formattedArea }))
   }, [areaM2])
 
   // Cargar productos para el sustrato y establecer el por defecto
@@ -600,7 +604,7 @@ export default function NuevoSoportePage() {
                   <Label htmlFor="areaM2">Área total (m²)</Label>
                   <Input
                     id="areaM2"
-                    value={formData.areaM2}
+                    value={formData.areaM2 ? parseFloat(formData.areaM2).toFixed(2) : ""}
                     readOnly
                     aria-readonly="true"
                     className="bg-gray-50"

@@ -58,3 +58,5 @@ USING (true);
 -- Si usas Service Role Key en el servidor, estas políticas no se aplican
 -- pero son útiles si en algún momento usas el anon key o necesitas acceso desde el cliente
 
+
+

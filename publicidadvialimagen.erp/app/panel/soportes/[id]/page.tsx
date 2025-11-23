@@ -181,7 +181,7 @@ export default function SoporteDetailPage() {
           status: data.status || "Disponible",
           widthM: data.widthM?.toString() || "",
           heightM: data.heightM?.toString() || "",
-          areaM2: data.areaM2?.toString() || "",
+          areaM2: data.areaM2 ? parseFloat(data.areaM2.toString()).toFixed(2) : "",
           iluminacion: data.iluminacion ?? null,
           owner: data.owner || "",
           imagen_principal: images[0] || data.imagen_principal || "",
@@ -218,11 +218,15 @@ export default function SoporteDetailPage() {
   const widthM = Number(formData.widthM) || 0
   const heightM = Number(formData.heightM) || 0
 
-  const areaM2 = useMemo(() => +(Number(widthM) * Number(heightM)).toFixed(2), [widthM, heightM])
+  const areaM2 = useMemo(() => {
+    const calculated = Number(widthM) * Number(heightM)
+    return parseFloat(calculated.toFixed(2))
+  }, [widthM, heightM])
   
   useEffect(() => {
     if (editing) {
-      setFormData(prev => ({ ...prev, areaM2: areaM2.toString() }))
+      const formattedArea = areaM2.toFixed(2)
+      setFormData(prev => ({ ...prev, areaM2: formattedArea }))
     }
   }, [areaM2, editing])
 
@@ -825,7 +829,7 @@ export default function SoporteDetailPage() {
                     <Label htmlFor="areaM2">Área total (m²)</Label>
                     <Input
                       id="areaM2"
-                      value={formData.areaM2}
+                      value={formData.areaM2 ? parseFloat(formData.areaM2).toFixed(2) : ""}
                       readOnly
                       aria-readonly="true"
                       className="bg-gray-50"

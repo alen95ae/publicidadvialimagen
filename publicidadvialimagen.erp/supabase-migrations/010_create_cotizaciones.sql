@@ -55,3 +55,5 @@ CREATE TRIGGER trigger_update_cotizacion_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_cotizacion_updated_at();
 
+
+

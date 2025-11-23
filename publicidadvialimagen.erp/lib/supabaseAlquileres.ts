@@ -75,6 +75,8 @@ export function recalcularEstadoAlquiler(alquiler: Alquiler): 'activo' | 'reserv
 export async function getAlquileres(options?: {
   estado?: string;
   cliente?: string;
+  vendedor?: string;
+  search?: string; // Búsqueda general en múltiples campos
   soporte_id?: string;
   fecha_inicio?: string;
   fecha_fin?: string;
@@ -99,14 +101,25 @@ export async function getAlquileres(options?: {
   if (options?.cliente) {
     query = query.ilike("cliente", `%${options.cliente}%`);
   }
+  if (options?.vendedor) {
+    query = query.ilike("vendedor", `%${options.vendedor}%`);
+  }
+  // Búsqueda general en múltiples campos
+  if (options?.search) {
+    query = query.or(`cliente.ilike.%${options.search}%,vendedor.ilike.%${options.search}%,codigo.ilike.%${options.search}%`);
+  }
   if (options?.soporte_id) {
     query = query.eq("soporte_id", options.soporte_id);
   }
-  if (options?.fecha_inicio) {
-    query = query.gte("inicio", options.fecha_inicio);
-  }
-  if (options?.fecha_fin) {
-    query = query.lte("fin", options.fecha_fin);
+  // Filtro de fechas: mostrar alquileres que se solapan con el rango
+  // Un alquiler se solapa si: inicio <= fecha_fin AND fin >= fecha_inicio
+  if (options?.fecha_inicio && options?.fecha_fin) {
+    // Mostrar alquileres que empiezan antes o en el fin del rango Y terminan después o en el inicio del rango
+    query = query.lte("inicio", options.fecha_fin).gte("fin", options.fecha_inicio);
+  } else if (options?.fecha_inicio) {
+    query = query.gte("fin", options.fecha_inicio);
+  } else if (options?.fecha_fin) {
+    query = query.lte("inicio", options.fecha_fin);
   }
 
   // Paginación
@@ -131,29 +144,114 @@ export async function getAlquileres(options?: {
     });
   }
 
-  // Recalcular estados de los alquileres
-  const alquileresConEstadoActualizado = await Promise.all(
-    (data || []).map(async (alquiler) => {
+  // Si hay búsqueda, también buscar por código de soporte
+  let soporteIdsParaBuscar: (string | number)[] = [];
+  if (options?.search) {
+    try {
+      // Buscar soportes que coincidan con el término de búsqueda
+      const { data: soportesBusqueda, error: errorBusqueda } = await supabase
+        .from("soportes")
+        .select("id")
+        .ilike("codigo", `%${options.search}%`);
+      
+      if (!errorBusqueda && soportesBusqueda) {
+        soporteIdsParaBuscar = soportesBusqueda.map((s: any) => s.id);
+      }
+    } catch (error) {
+      console.warn('⚠️ [getAlquileres] Error buscando soportes:', error);
+    }
+  }
+
+  // Obtener códigos, títulos y ciudades de soportes
+  const soporteIds = [...new Set([
+    ...(data || []).map((a: any) => a.soporte_id).filter(Boolean),
+    ...soporteIdsParaBuscar
+  ])];
+  const codigosSoportes: Record<string | number, string> = {};
+  const titulosSoportes: Record<string | number, string> = {};
+  const ciudadesSoportes: Record<string | number, string> = {};
+  
+  if (soporteIds.length > 0) {
+    try {
+      const { data: soportesData, error: soportesError } = await supabase
+        .from("soportes")
+        .select("id, codigo, titulo, ciudad")
+        .in("id", soporteIds);
+      
+      if (!soportesError && soportesData) {
+        soportesData.forEach((soporte: any) => {
+          codigosSoportes[soporte.id] = soporte.codigo;
+          titulosSoportes[soporte.id] = soporte.titulo || '';
+          ciudadesSoportes[soporte.id] = soporte.ciudad || '';
+        });
+      }
+    } catch (error) {
+      console.warn('⚠️ [getAlquileres] Error obteniendo códigos de soportes:', error);
+    }
+  }
+
+  // Si hay búsqueda y encontramos soportes, agregar esos alquileres a los resultados
+  let dataConSoportes = data || [];
+  if (options?.search && soporteIdsParaBuscar.length > 0) {
+    try {
+      const { data: alquileresPorSoporte, error: errorAlquileres } = await supabase
+        .from("alquileres")
+        .select("*")
+        .in("soporte_id", soporteIdsParaBuscar)
+        .order("fecha_creacion", { ascending: false });
+      
+      if (!errorAlquileres && alquileresPorSoporte) {
+        // Combinar resultados, evitando duplicados
+        const idsExistentes = new Set((data || []).map((a: any) => a.id));
+        const nuevosAlquileres = alquileresPorSoporte.filter((a: any) => !idsExistentes.has(a.id));
+        dataConSoportes = [...(data || []), ...nuevosAlquileres];
+      }
+    } catch (error) {
+      console.warn('⚠️ [getAlquileres] Error obteniendo alquileres por soporte:', error);
+    }
+  }
+
+  // Recalcular estados de los alquileres y mapear código y título del soporte
+  let alquileresConEstadoActualizado = await Promise.all(
+    dataConSoportes.map(async (alquiler: any) => {
       const estadoCalculado = recalcularEstadoAlquiler(alquiler as Alquiler);
+      
+      // Obtener código y título del soporte desde los mapas
+      const soporteCodigo = alquiler.soporte_id ? codigosSoportes[alquiler.soporte_id] || null : null;
+      const soporteTitulo = alquiler.soporte_id ? titulosSoportes[alquiler.soporte_id] || null : null;
+      const soporteCiudad = alquiler.soporte_id ? ciudadesSoportes[alquiler.soporte_id] || null : null;
       
       // Si el estado calculado es diferente al guardado, actualizarlo
       if (alquiler.estado !== estadoCalculado) {
         try {
           const actualizado = await updateAlquiler(alquiler.id, { estado: estadoCalculado });
-          return actualizado;
+          return { ...actualizado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
         } catch (error) {
           console.warn(`⚠️ [getAlquileres] Error actualizando estado para ${alquiler.id}:`, error);
-          return { ...alquiler, estado: estadoCalculado } as Alquiler;
+          return { ...alquiler, estado: estadoCalculado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
         }
       }
       
-      return { ...alquiler, estado: estadoCalculado } as Alquiler;
+      return { ...alquiler, estado: estadoCalculado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
     })
   );
 
+  // Aplicar paginación si es necesario (ya que agregamos alquileres por soporte)
+  let finalData = alquileresConEstadoActualizado;
+  if (options?.page && options?.limit && (options.search && soporteIdsParaBuscar.length > 0)) {
+    // Si agregamos resultados de búsqueda por soporte, necesitamos re-paginar
+    const page = options.page || 1;
+    const limit = options.limit || 50;
+    const from = (page - 1) * limit;
+    const to = from + limit;
+    finalData = alquileresConEstadoActualizado.slice(from, to);
+  }
+
   return {
-    data: alquileresConEstadoActualizado,
-    count: count || 0,
+    data: finalData,
+    count: options?.search && soporteIdsParaBuscar.length > 0 
+      ? alquileresConEstadoActualizado.length 
+      : (count || 0),
   };
 }
 

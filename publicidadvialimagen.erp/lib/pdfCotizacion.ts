@@ -143,7 +143,7 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
   pdf.setFontSize(14) // Más grande
   pdf.setFont('helvetica', 'bold')
-  pdf.text(`Cotización: ${datos.codigo}`, 15, yPosition)
+  pdf.text(datos.codigo, 15, yPosition)
   
   yPosition += 12
 
@@ -157,18 +157,20 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   pdf.setFontSize(10) // Más grande
   pdf.setFont('helvetica', 'normal')
   
-  // Todos los datos en la misma fila
+  // Fecha y Comercial en la primera línea (con más espacio entre ellos)
   let xPosition = 15
-  pdf.text(`Cliente: ${datos.clienteNombreCompleto || datos.cliente}`, xPosition, yPosition)
-  xPosition += 75
-  
-  // Fecha donde antes estaba Sucursal
   pdf.text(`Fecha: ${currentDate}`, xPosition, yPosition)
-  xPosition += 45
-
+  
   if (datos.vendedor) {
-    pdf.text(`Comercial: ${datos.vendedor}`, xPosition, yPosition)
+    const anchoFecha = pdf.getTextWidth(`Fecha: ${currentDate}`)
+    pdf.text(`Comercial: ${datos.vendedor}`, xPosition + anchoFecha + 15, yPosition)
   }
+  
+  yPosition += 6
+  
+  // Cliente debajo de fecha, a la izquierda
+  const textoCliente = `Cliente: ${datos.clienteNombreCompleto || datos.cliente}`
+  pdf.text(textoCliente, xPosition, yPosition)
   
   yPosition += 12
 
@@ -380,48 +382,51 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
 
   // Agregar footers con paginación a todas las páginas
   const totalPages = pdf.getNumberOfPages()
-  const footerY = 280
+  const pageHeight = 297 // Altura total de una página A4
+  const footerHeight = 12 // Similar a la altura de la fila de total
+  const footerY = pageHeight - footerHeight // Al final de la página, sin espacio blanco debajo
   
   for (let i = 1; i <= totalPages; i++) {
     pdf.setPage(i)
     
     // Fondo rojo del footer
     pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-    pdf.rect(0, footerY, 210, 17, 'F')
+    pdf.rect(0, footerY, 210, footerHeight, 'F')
     
     // Texto en blanco
     pdf.setTextColor(255, 255, 255)
     pdf.setFontSize(9)
     pdf.setFont('helvetica', 'normal')
     
-    // Distribuir el footer con separadores
+    // Distribuir el footer con separadores (ajustado para altura menor)
+    const footerTextY = footerY + (footerHeight / 2) + 2 // Centrado verticalmente
     // Izquierda: © 2025 Publicidad Vial Imagen
-    pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerY + 10)
+    pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerTextY)
     
     // Separador 1 (entre izquierda y centro)
-    pdf.text('|', 70, footerY + 10)
+    pdf.text('|', 70, footerTextY)
     
     // Centro (centrado en la página): publicidadvialimagen.com
-    pdf.text('publicidadvialimagen.com', 105, footerY + 10, { align: 'center' })
+    pdf.text('publicidadvialimagen.com', 105, footerTextY, { align: 'center' })
     
     // Separador 2 (entre centro y derecha)
-    pdf.text('|', 140, footerY + 10)
+    pdf.text('|', 140, footerTextY)
     
     // Derecha (antes de la paginación): email (si existe)
     if (datos.vendedorEmail) {
-      pdf.text(datos.vendedorEmail, 145, footerY + 10)
+      pdf.text(datos.vendedorEmail, 145, footerTextY)
     }
     
     // Separador 3 (entre email y paginación)
     if (datos.vendedorEmail) {
-      pdf.text('|', 190, footerY + 10)
+      pdf.text('|', 190, footerTextY)
     }
     
     // Extremo derecho: Paginación
-    pdf.text(`${i}/${totalPages}`, 205, footerY + 10, { align: 'right' })
+    pdf.text(`${i}/${totalPages}`, 205, footerTextY, { align: 'right' })
   }
 
-  const nombreArchivo = `cotizacion-${datos.codigo}-${new Date().toISOString().split('T')[0]}.pdf`
+  const nombreArchivo = `${datos.codigo}.pdf`
   pdf.save(nombreArchivo)
 }
 

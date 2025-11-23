@@ -122,6 +122,7 @@ export default function NuevaCotizacionPage() {
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
   const [cotizacionId, setCotizacionId] = useState<string>("")
+  const [codigoCotizacion, setCodigoCotizacion] = useState<string>("")
   const [estadoCotizacion, setEstadoCotizacion] = useState<"Pendiente" | "Aprobada" | "Rechazada" | "Vencida">("Pendiente")
   const [productosList, setProductosList] = useState<ItemLista[]>([
     {
@@ -967,6 +968,7 @@ export default function NuevaCotizacionPage() {
       // Guardar el ID de la cotización creada para poder actualizar el estado
       const cotizacionCreada = data.data.cotizacion
       setCotizacionId(cotizacionCreada.id)
+      setCodigoCotizacion(cotizacionCreada.codigo || "")
       setEstadoCotizacion('Pendiente')
 
       toast.success(`Cotización ${cotizacionCreada.codigo} guardada exitosamente`)
@@ -1198,6 +1200,11 @@ export default function NuevaCotizacionPage() {
 
   const descargarCotizacionPDF = async () => {
     try {
+      if (!cotizacionId) {
+        toast.error("Por favor guarda la cotización antes de descargarla")
+        return
+      }
+      
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
         return
@@ -1247,7 +1254,7 @@ export default function NuevaCotizacionPage() {
       console.log('📧 Email del comercial:', comercialSeleccionado?.email)
 
       await generarPDFCotizacion({
-        codigo: 'NUEVA',
+        codigo: codigoCotizacion || 'NUEVA',
         cliente: clienteSeleccionado?.displayName || '',
         clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
         sucursal: sucursal || '',
@@ -1482,7 +1489,12 @@ export default function NuevaCotizacionPage() {
               {/* Descargar OT */}
               <div className="space-y-2 w-48">
                 <Label>&nbsp;</Label>
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  disabled={!cotizacionId}
+                  title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
+                >
                   <Hammer className="w-4 h-4 mr-2" />
                   Descargar OT
                 </Button>
@@ -1494,6 +1506,8 @@ export default function NuevaCotizacionPage() {
                 <Button 
                   onClick={descargarCotizacionPDF}
                   className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
+                  disabled={!cotizacionId}
+                  title={!cotizacionId ? "Guarda la cotización antes de descargarla" : ""}
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Descargar Cotización

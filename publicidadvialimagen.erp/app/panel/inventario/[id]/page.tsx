@@ -705,9 +705,10 @@ export default function ProductoDetailPage() {
       }
       return sum
     }, 0)
-    setTotalCost(total)
+    const formattedTotal = parseFloat(total.toFixed(2))
+    setTotalCost(formattedTotal)
     // Sincronizar el valor editable cuando cambia el total calculado
-    setEditableCost(total.toFixed(2))
+    setEditableCost(formattedTotal.toFixed(2))
   }, [costRows])
 
   const fetchRecursos = async () => {
@@ -960,7 +961,7 @@ export default function ProductoDetailPage() {
   }
 
   const handleApplyCost = async () => {
-    const costValue = parseFloat(editableCost) || 0
+    const costValue = parseFloat(parseFloat(editableCost || "0").toFixed(2))
     if (costValue <= 0) {
       toast.error("El coste debe ser mayor a 0")
       return
@@ -1900,6 +1901,12 @@ export default function ProductoDetailPage() {
                       step="0.01"
                       value={editableCost}
                       onChange={(e) => setEditableCost(e.target.value)}
+                      onBlur={(e) => {
+                        const value = e.target.value
+                        if (value && !isNaN(parseFloat(value))) {
+                          setEditableCost(parseFloat(value).toFixed(2))
+                        }
+                      }}
                       className="w-24 h-9 text-sm font-semibold"
                       placeholder="0.00"
                     />

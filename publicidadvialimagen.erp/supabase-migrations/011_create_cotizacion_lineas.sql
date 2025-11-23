@@ -53,3 +53,5 @@ COMMENT ON COLUMN cotizacion_lineas.imagen IS 'URL de la imagen';
 COMMENT ON COLUMN cotizacion_lineas.variantes IS 'Variantes del producto en formato JSONB';
 COMMENT ON COLUMN cotizacion_lineas.subtotal_linea IS 'Subtotal de la línea';
 
+
+

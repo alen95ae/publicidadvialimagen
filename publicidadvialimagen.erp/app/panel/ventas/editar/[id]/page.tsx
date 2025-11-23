@@ -489,9 +489,16 @@ export default function EditarCotizacionPage() {
       // Cargar líneas desde JSON (ya vienen parseadas)
       if (lineas && lineas.length > 0) {
         const lineasConvertidas: ItemLista[] = lineas.map((linea: any, index: number) => {
-          // Compatibilidad: si viene del formato antiguo (tabla separada), convertir
-          if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
-            // Formato antiguo: tiene codigo_producto, nombre_producto, etc.
+          // DETECCIÓN MEJORADA: Si tiene campos de producto, es un PRODUCTO (incluso si tipo no está definido)
+          // Esto corrige el problema con cotizaciones importadas de Odoo que no tienen tipo definido
+          const tieneCamposProducto = (linea.nombre_producto || linea.codigo_producto) && 
+                                      (linea.cantidad > 0 || linea.ancho || linea.alto || 
+                                       (linea.subtotal_linea && linea.subtotal_linea > 0) || 
+                                       (linea.precio_unitario && linea.precio_unitario > 0))
+          
+          // Si tiene campos de producto, tratar como PRODUCTO (compatibilidad con Odoo y formato antiguo)
+          if (tieneCamposProducto || linea.tipo === 'Producto' || linea.tipo === 'producto') {
+            // Formato antiguo/importado: tiene codigo_producto, nombre_producto, etc.
             if (linea.codigo_producto || linea.nombre_producto) {
               // Parsear variantes si vienen como string
               let variantes = null
@@ -558,8 +565,39 @@ export default function EditarCotizacionPage() {
               tipo: 'nota' as const,
               texto: linea.texto || linea.descripcion || ''
             }
+          } else if (linea.tipo === 'Sección' || linea.tipo === 'Seccion' || linea.tipo === 'seccion') {
+            // Solo tratar como sección si explícitamente es tipo Sección
+            return {
+              id: linea.id || `${index + 1}`,
+              tipo: 'seccion' as const,
+              texto: linea.texto || linea.nombre_producto || ''
+            }
           } else {
-            // Sección
+            // Fallback: Si no se puede determinar, tratar como producto si tiene nombre_producto
+            // Esto asegura que las líneas importadas de Odoo se reconozcan como productos
+            if (linea.nombre_producto) {
+              return {
+                id: linea.id || `${index + 1}`,
+                tipo: 'producto' as const,
+                producto: linea.nombre_producto,
+                imagen: linea.imagen || undefined,
+                imagenOriginalUrl: linea.imagen || undefined,
+                descripcion: linea.descripcion || '',
+                cantidad: linea.cantidad || 1,
+                ancho: linea.ancho || 0,
+                alto: linea.alto || 0,
+                totalM2: linea.total_m2 || 0,
+                udm: linea.unidad_medida || 'm²',
+                precio: linea.precio_unitario || 0,
+                comision: linea.comision_porcentaje || linea.comision || 0,
+                conIVA: linea.con_iva !== undefined ? linea.con_iva : true,
+                conIT: linea.con_it !== undefined ? linea.con_it : true,
+                total: linea.subtotal_linea || 0,
+                esSoporte: linea.es_soporte || false,
+                dimensionesBloqueadas: linea.es_soporte || false
+              }
+            }
+            // Último recurso: sección
             return {
               id: linea.id || `${index + 1}`,
               tipo: 'seccion' as const,

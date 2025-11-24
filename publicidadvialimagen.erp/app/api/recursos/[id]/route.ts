@@ -41,11 +41,43 @@ export async function PUT(
       data: recursoActualizado
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error actualizando recurso:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Error al actualizar recurso'
+    
+    // Manejar errores de Supabase específicamente
+    let errorMessage = 'Error al actualizar recurso'
+    let errorDetails: any = {}
+    
+    if (error) {
+      // Error de Supabase tiene propiedades: code, message, details, hint
+      if (error.code) {
+        errorDetails.code = error.code
+        errorMessage = `Error de Supabase: ${error.message || error.code}`
+        
+        if (error.details) {
+          errorDetails.details = error.details
+          errorMessage += ` - ${error.details}`
+        }
+        
+        if (error.hint) {
+          errorDetails.hint = error.hint
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      } else if (typeof error === 'string') {
+        errorMessage = error
+      }
+    }
+    
+    console.error('   - Error completo:', JSON.stringify(errorDetails, null, 2))
+    
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { 
+        success: false, 
+        error: errorMessage,
+        details: errorDetails,
+        fullError: process.env.NODE_ENV === 'development' ? error : undefined
+      },
       { status: 500 }
     )
   }

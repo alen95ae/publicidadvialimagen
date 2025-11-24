@@ -42,6 +42,7 @@ interface ProductoItem {
   id: string
   tipo: 'producto'
   producto: string
+  producto_id?: string // ID del producto en la BD (para obtener precios por variante)
   imagen?: string // URL de la imagen (para mostrar preview o URL de Supabase)
   imagenFile?: File // Archivo temporal que se subirá al guardar
   imagenOriginalUrl?: string // URL original de Supabase (para saber cuál eliminar si se quita)
@@ -142,6 +143,27 @@ export default function EditarCotizacionPage() {
     // Si no hay variantes, retornar el precio base
     if (!variantes || Object.keys(variantes).length === 0) {
       return precioBase
+    }
+
+    // PRIMERO: Intentar obtener precio desde producto_variantes
+    if (item.producto_id || item.id) {
+      try {
+        const { obtenerPrecioVariante } = await import('@/lib/variantes/obtenerPrecioVariante')
+        const precioVariante = await obtenerPrecioVariante(
+          item.producto_id || item.id,
+          variantes,
+          precioBase
+        )
+        
+        // Si el precio variante es diferente al base, significa que se encontró una variante
+        if (precioVariante !== precioBase) {
+          return precioVariante
+        }
+        // Si es igual, continuar con el cálculo manual (puede que no exista la variante en BD)
+      } catch (error) {
+        console.warn('Error obteniendo precio variante, usando cálculo manual:', error)
+        // Continuar con cálculo manual
+      }
     }
 
     // Si no hay receta, retornar el precio base
@@ -867,6 +889,7 @@ export default function EditarCotizacionPage() {
         const productoActualizado: ProductoItem = {
           ...producto,
           producto: `${item.codigo} - ${item.nombre}`,
+          producto_id: item.id, // Guardar ID del producto para obtener precios por variante
           descripcion: descripcionFinal,
           precio: precioFinal,
           udm: esSoporte ? 'mes' : (item.unidad || 'm²'),
@@ -875,7 +898,8 @@ export default function EditarCotizacionPage() {
           ancho: ancho,
           alto: alto,
           totalM2: totalM2,
-          cantidad: cantidad
+          cantidad: cantidad,
+          variantes: Object.keys(variantes).length > 0 ? variantes : null
         }
         
         // Cargar imagen del soporte si está disponible

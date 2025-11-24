@@ -552,7 +552,7 @@ export default function AjustesInventarioPage() {
           }
         })
         
-        // Guardar en Airtable
+        // Guardar en Supabase
         const response = await fetch(`/api/recursos/${recursoId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -560,7 +560,45 @@ export default function AjustesInventarioPage() {
         })
         
         if (!response.ok) {
-          throw new Error(`Error actualizando recurso ${recursoId}`)
+          let errorData: any = {}
+          try {
+            const responseText = await response.text()
+            if (responseText) {
+              errorData = JSON.parse(responseText)
+            }
+          } catch (e) {
+            console.error('Error parseando respuesta de error:', e)
+          }
+          
+          // Construir mensaje de error detallado
+          let errorMessage = `Error actualizando recurso ${recursoId}`
+          
+          if (errorData.error) {
+            errorMessage = errorData.error
+          } else if (errorData.message) {
+            errorMessage = errorData.message
+          }
+          
+          // Si es un error de Supabase, mostrar detalles
+          if (errorData.details) {
+            if (errorData.details.code) {
+              errorMessage = `Error de Supabase (${errorData.details.code}): ${errorMessage}`
+              if (errorData.details.details) {
+                errorMessage += ` - ${errorData.details.details}`
+              }
+              if (errorData.details.hint) {
+                errorMessage += ` (${errorData.details.hint})`
+              }
+            }
+          }
+          
+          console.error(`❌ Error actualizando recurso ${recursoId}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            errorData: errorData
+          })
+          
+          throw new Error(errorMessage)
         }
       })
       

@@ -160,7 +160,7 @@ export default function CotizacionesPage() {
   // Cargar vendedores para el filtro
   const fetchVendedores = async () => {
     try {
-      const response = await fetch('/api/ajustes/usuarios?puesto=Comercial&pageSize=100')
+      const response = await fetch('/api/ajustes/usuarios?pageSize=100')
       const data = await response.json()
       setVendedores(data.users || [])
     } catch (error) {

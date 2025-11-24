@@ -4,48 +4,30 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Edit, Trash2, Shield, Lock, Eye } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface Permiso {
+  id: string;
+  modulo: string;
+  accion: string;
+}
 
 interface Role {
   id: string;
   nombre: string;
   descripcion: string;
-  permisos: Record<string, { view: boolean; edit: boolean; delete: boolean }>;
-  esPredefinido: boolean;
+  permisos: Record<string, Record<string, boolean>>; // { modulo: { accion: boolean } }
 }
-
-interface Module {
-  key: string;
-  name: string;
-  description: string;
-}
-
-const MODULES: Module[] = [
-  { key: "soportes", name: "Soportes", description: "Gestión de soportes publicitarios" },
-  { key: "contactos", name: "Contactos", description: "Base de datos de contactos" },
-  { key: "mensajes", name: "Mensajes", description: "Sistema de mensajería" },
-  { key: "inventario", name: "Inventario", description: "Control de inventario" },
-  { key: "calendario", name: "Calendario", description: "Planificación y eventos" },
-  { key: "produccion", name: "Producción", description: "Gestión de producción" },
-  { key: "ventas", name: "Ventas", description: "Gestión de ventas y CRM" },
-  { key: "contabilidad", name: "Contabilidad", description: "Gestión financiera" },
-  { key: "reservas", name: "Reservas", description: "Sistema de reservas" },
-  { key: "clientes", name: "Clientes", description: "Gestión de clientes" },
-  { key: "empleados", name: "Empleados", description: "Recursos humanos" },
-  { key: "diseno", name: "Diseño", description: "Herramientas de diseño" },
-  { key: "sitio", name: "Sitio Web", description: "Gestión del sitio web" },
-  { key: "ajustes", name: "Ajustes", description: "Configuración del sistema" },
-];
 
 export default function RolesSection() {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [permisos, setPermisos] = useState<Permiso[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -56,8 +38,10 @@ export default function RolesSection() {
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
-    permisos: {} as Record<string, { view: boolean; edit: boolean; delete: boolean }>,
   });
+
+  // Matriz de permisos: { modulo: { accion: boolean } }
+  const [permisoMatrix, setPermisoMatrix] = useState<Record<string, Record<string, boolean>>>({});
 
   useEffect(() => {
     loadRoles();
@@ -70,7 +54,18 @@ export default function RolesSection() {
       const data = await response.json();
       
       if (response.ok) {
-        setRoles(data.roles);
+        setRoles(data.roles || []);
+        setPermisos(data.permisos || []);
+        
+        // Inicializar matriz de permisos basada en los permisos disponibles
+        const initialMatrix: Record<string, Record<string, boolean>> = {};
+        (data.permisos || []).forEach((permiso: Permiso) => {
+          if (!initialMatrix[permiso.modulo]) {
+            initialMatrix[permiso.modulo] = {};
+          }
+          initialMatrix[permiso.modulo][permiso.accion] = false;
+        });
+        setPermisoMatrix(initialMatrix);
       } else {
         toast({
           title: "Error",
@@ -91,10 +86,31 @@ export default function RolesSection() {
 
   const handleCreateRole = async () => {
     try {
+      // Obtener lista de permiso_id seleccionados
+      const permisoIds: string[] = [];
+      Object.entries(permisoMatrix).forEach(([modulo, acciones]) => {
+        Object.entries(acciones).forEach(([accion, activo]) => {
+          if (activo) {
+            const permiso = permisos.find(p => p.modulo === modulo && p.accion === accion);
+            if (permiso) {
+              permisoIds.push(permiso.id);
+            }
+          }
+        });
+      });
+
+      const payload = {
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        permisos: permisoIds,
+      };
+      
+      console.log("📤 Enviando datos para crear rol:", payload);
+
       const response = await fetch("/api/ajustes/roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -105,7 +121,16 @@ export default function RolesSection() {
           description: "Rol creado correctamente",
         });
         setIsCreateDialogOpen(false);
-        setFormData({ nombre: "", descripcion: "", permisos: {} });
+        setFormData({ nombre: "", descripcion: "" });
+        // Resetear matriz de permisos
+        const initialMatrix: Record<string, Record<string, boolean>> = {};
+        permisos.forEach(permiso => {
+          if (!initialMatrix[permiso.modulo]) {
+            initialMatrix[permiso.modulo] = {};
+          }
+          initialMatrix[permiso.modulo][permiso.accion] = false;
+        });
+        setPermisoMatrix(initialMatrix);
         loadRoles();
       } else {
         toast({
@@ -127,13 +152,32 @@ export default function RolesSection() {
     if (!editingRole) return;
 
     try {
+      // Obtener lista de permiso_id seleccionados
+      const permisoIds: string[] = [];
+      Object.entries(permisoMatrix).forEach(([modulo, acciones]) => {
+        Object.entries(acciones).forEach(([accion, activo]) => {
+          if (activo) {
+            const permiso = permisos.find(p => p.modulo === modulo && p.accion === accion);
+            if (permiso) {
+              permisoIds.push(permiso.id);
+            }
+          }
+        });
+      });
+
+      const payload = {
+        id: editingRole.id,
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        permisos: permisoIds,
+      };
+      
+      console.log("📤 Enviando datos para editar rol:", payload);
+
       const response = await fetch("/api/ajustes/roles", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingRole.id,
-          ...formData,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -145,7 +189,7 @@ export default function RolesSection() {
         });
         setIsEditDialogOpen(false);
         setEditingRole(null);
-        setFormData({ nombre: "", descripcion: "", permisos: {} });
+        setFormData({ nombre: "", descripcion: "" });
         loadRoles();
       } else {
         toast({
@@ -198,62 +242,76 @@ export default function RolesSection() {
     setFormData({
       nombre: role.nombre,
       descripcion: role.descripcion,
-      permisos: { ...role.permisos },
     });
+    // Cargar permisos del rol en la matriz
+    setPermisoMatrix({ ...role.permisos });
     setIsEditDialogOpen(true);
   };
 
-  const handlePermissionChange = (moduleKey: string, permission: string, value: boolean) => {
-    setFormData(prev => ({
+  const handlePermissionChange = (modulo: string, accion: string, value: boolean) => {
+    setPermisoMatrix(prev => ({
       ...prev,
-      permisos: {
-        ...prev.permisos,
-        [moduleKey]: {
-          ...prev.permisos[moduleKey],
-          [permission]: value,
-        },
+      [modulo]: {
+        ...prev[modulo],
+        [accion]: value,
       },
     }));
   };
 
-  const initializePermissions = () => {
-    const initialPermissions: Record<string, { view: boolean; edit: boolean; delete: boolean }> = {};
-    MODULES.forEach(module => {
-      initialPermissions[module.key] = {
-        view: false,
-        edit: false,
-        delete: false,
-      };
-    });
-    return initialPermissions;
-  };
-
-  const getPermissionIcon = (permission: string) => {
-    switch (permission) {
-      case "view": return <Eye className="h-4 w-4" />;
-      case "edit": return <Edit className="h-4 w-4" />;
-      case "delete": return <Trash2 className="h-4 w-4" />;
+  const getPermissionIcon = (accion: string) => {
+    switch (accion) {
+      case "ver": return <Eye className="h-4 w-4" />;
+      case "editar": return <Edit className="h-4 w-4" />;
+      case "admin": return <Shield className="h-4 w-4" />;
+      case "eliminar": return <Trash2 className="h-4 w-4" />;
       default: return null;
     }
   };
 
-  const getPermissionLabel = (permission: string) => {
-    switch (permission) {
-      case "view": return "Ver";
-      case "edit": return "Editar";
-      case "delete": return "Eliminar";
-      default: return permission;
+  const getPermissionLabel = (accion: string) => {
+    switch (accion) {
+      case "ver": return "Ver";
+      case "editar": return "Editar";
+      case "admin": return "Admin";
+      case "eliminar": return "Eliminar";
+      default: return accion;
     }
   };
+
+  // Agrupar permisos por módulo
+  const permisosPorModulo = permisos.reduce((acc, permiso) => {
+    if (!acc[permiso.modulo]) {
+      acc[permiso.modulo] = [];
+    }
+    acc[permiso.modulo].push(permiso);
+    return acc;
+  }, {} as Record<string, Permiso[]>);
+
+  // Obtener módulos únicos ordenados
+  const modulos = Object.keys(permisosPorModulo).sort();
 
   return (
     <div className="space-y-6">
       {/* Botón crear rol */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Roles del Sistema ({roles.length})</h3>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (open) {
+            // Inicializar matriz de permisos cuando se abre el diálogo
+            const initialMatrix: Record<string, Record<string, boolean>> = {};
+            permisos.forEach(permiso => {
+              if (!initialMatrix[permiso.modulo]) {
+                initialMatrix[permiso.modulo] = {};
+              }
+              initialMatrix[permiso.modulo][permiso.accion] = false;
+            });
+            setPermisoMatrix(initialMatrix);
+            setFormData({ nombre: "", descripcion: "" });
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white">
               <Plus className="h-4 w-4 mr-2" />
               Crear Rol
             </Button>
@@ -290,31 +348,34 @@ export default function RolesSection() {
               <div>
                 <Label className="text-base font-semibold">Permisos por Módulo</Label>
                 <div className="mt-4 space-y-4">
-                  {MODULES.map((module) => (
-                    <Card key={module.key}>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm">{module.name}</CardTitle>
-                        <CardDescription className="text-xs">{module.description}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="grid grid-cols-3 gap-4">
-                          {["view", "edit", "delete"].map((permission) => (
-                            <div key={permission} className="flex items-center space-x-2">
-                              {getPermissionIcon(permission)}
-                              <Label htmlFor={`${module.key}-${permission}`} className="text-sm">
-                                {getPermissionLabel(permission)}
-                              </Label>
-                              <Switch
-                                id={`${module.key}-${permission}`}
-                                checked={formData.permisos[module.key]?.[permission as keyof typeof formData.permisos[typeof module.key]] || false}
-                                onCheckedChange={(checked) => handlePermissionChange(module.key, permission, checked)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {modulos.map((modulo) => {
+                    const permisosModulo = permisosPorModulo[modulo];
+                    return (
+                      <Card key={modulo}>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm capitalize">{modulo}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {permisosModulo.map((permiso) => (
+                              <div key={permiso.id} className="flex items-center space-x-2">
+                                {getPermissionIcon(permiso.accion)}
+                                <Label htmlFor={`create-${permiso.id}`} className="text-sm">
+                                  {getPermissionLabel(permiso.accion)}
+                                </Label>
+                                <Switch
+                                  id={`create-${permiso.id}`}
+                                  checked={permisoMatrix[modulo]?.[permiso.accion] || false}
+                                  onCheckedChange={(checked) => handlePermissionChange(modulo, permiso.accion, checked)}
+                                  className="data-[state=checked]:bg-red-600"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -322,7 +383,7 @@ export default function RolesSection() {
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleCreateRole}>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleCreateRole}>
                 Crear Rol
               </Button>
             </DialogFooter>
@@ -346,45 +407,35 @@ export default function RolesSection() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{role.nombre}</CardTitle>
-                  <div className="flex items-center space-x-2">
-                    {role.esPredefinido && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Shield className="h-3 w-3 mr-1" />
-                        Predefinido
-                      </Badge>
-                    )}
-                    <div className="flex items-center space-x-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(role)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      {!role.esPredefinido && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar rol?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Se eliminará permanentemente el rol {role.nombre}.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteRole(role.id)}>
-                                Eliminar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </div>
+                  <div className="flex items-center space-x-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(role)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar rol?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Se eliminará permanentemente el rol {role.nombre}.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteRole(role.id)}>
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
                 <CardDescription>{role.descripcion}</CardDescription>
@@ -393,23 +444,21 @@ export default function RolesSection() {
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-gray-700">Permisos:</div>
                   <div className="grid grid-cols-2 gap-2">
-                    {role.permisos && Object.entries(role.permisos).map(([moduleKey, permissions]) => {
-                      const module = MODULES.find(m => m.key === moduleKey);
-                      if (!module) return null;
+                    {Object.entries(role.permisos).map(([modulo, acciones]) => {
+                      const permisosActivos = Object.entries(acciones)
+                        .filter(([_, activo]) => activo)
+                        .map(([accion, _]) => getPermissionLabel(accion));
                       
-                      const hasAnyPermission = permissions && Object.values(permissions).some(Boolean);
-                      if (!hasAnyPermission) return null;
+                      if (permisosActivos.length === 0) return null;
 
                       return (
-                        <div key={moduleKey} className="text-xs">
-                          <div className="font-medium">{module.name}</div>
-                          <div className="flex space-x-1">
-                            {permissions && Object.entries(permissions).map(([perm, enabled]) => (
-                              enabled && (
-                                <Badge key={perm} variant="outline" className="text-xs">
-                                  {getPermissionLabel(perm)}
-                                </Badge>
-                              )
+                        <div key={modulo} className="text-xs">
+                          <div className="font-medium capitalize">{modulo}</div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {permisosActivos.map((accion) => (
+                              <Badge key={accion} variant="outline" className="text-xs">
+                                {accion}
+                              </Badge>
                             ))}
                           </div>
                         </div>
@@ -457,31 +506,34 @@ export default function RolesSection() {
             <div>
               <Label className="text-base font-semibold">Permisos por Módulo</Label>
               <div className="mt-4 space-y-4">
-                {MODULES.map((module) => (
-                  <Card key={module.key}>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm">{module.name}</CardTitle>
-                      <CardDescription className="text-xs">{module.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="grid grid-cols-3 gap-4">
-                        {["view", "edit", "delete"].map((permission) => (
-                          <div key={permission} className="flex items-center space-x-2">
-                            {getPermissionIcon(permission)}
-                            <Label htmlFor={`edit-${module.key}-${permission}`} className="text-sm">
-                              {getPermissionLabel(permission)}
-                            </Label>
-                            <Switch
-                              id={`edit-${module.key}-${permission}`}
-                              checked={formData.permisos[module.key]?.[permission as keyof typeof formData.permisos[typeof module.key]] || false}
-                              onCheckedChange={(checked) => handlePermissionChange(module.key, permission, checked)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {modulos.map((modulo) => {
+                  const permisosModulo = permisosPorModulo[modulo];
+                  return (
+                    <Card key={modulo}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm capitalize">{modulo}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {permisosModulo.map((permiso) => (
+                            <div key={permiso.id} className="flex items-center space-x-2">
+                              {getPermissionIcon(permiso.accion)}
+                              <Label htmlFor={`edit-${permiso.id}`} className="text-sm">
+                                {getPermissionLabel(permiso.accion)}
+                              </Label>
+                              <Switch
+                                id={`edit-${permiso.id}`}
+                                checked={permisoMatrix[modulo]?.[permiso.accion] || false}
+                                onCheckedChange={(checked) => handlePermissionChange(modulo, permiso.accion, checked)}
+                                className="data-[state=checked]:bg-red-600"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -489,7 +541,7 @@ export default function RolesSection() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleEditRole}>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleEditRole}>
               Guardar Cambios
             </Button>
           </DialogFooter>

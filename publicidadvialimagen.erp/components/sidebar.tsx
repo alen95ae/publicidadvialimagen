@@ -25,6 +25,7 @@ import {
   Home,
 } from "lucide-react"
 import PanelHeader from "@/components/panel-header"
+import { usePermisos } from "@/hooks/use-permisos"
 
 const modules = [
   { key: "panel", title: "Panel Principal", href: "/panel", icon: Home },
@@ -53,6 +54,7 @@ export default function Sidebar({ children }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const { permisos, puedeVer } = usePermisos()
 
   // Persistir el estado del sidebar en localStorage
   useEffect(() => {
@@ -162,10 +164,70 @@ export default function Sidebar({ children }: SidebarProps) {
           <ul className="space-y-2">
             {modules.map((module) => {
               const Icon = module.icon
+              
+              // Panel principal siempre visible
+              if (module.key === 'panel') {
+                const isActive = pathname === module.href
+                return (
+                  <li key={module.key}>
+                    <Link
+                      href={module.href}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group ${
+                        isActive
+                          ? 'bg-[#D54644] text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      } ${isCollapsed ? 'justify-center' : ''}`}
+                      title={isCollapsed ? module.title : undefined}
+                    >
+                      <Icon className={`w-6 h-6 flex-shrink-0 ${
+                        isActive ? 'text-white' : 'text-gray-600 group-hover:text-gray-900'
+                      }`} />
+                      {!isCollapsed && (
+                        <span className="text-sm font-medium truncate">
+                          {module.title}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                )
+              }
+              
+              // Ajustes solo para admin/desarrollador (ya verificado en middleware)
+              if (module.key === 'ajustes') {
+                const isActive = pathname.startsWith('/panel/ajustes')
+                return (
+                  <li key={module.key}>
+                    <Link
+                      href={module.href}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group ${
+                        isActive
+                          ? 'bg-[#D54644] text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      } ${isCollapsed ? 'justify-center' : ''}`}
+                      title={isCollapsed ? module.title : undefined}
+                    >
+                      <Icon className={`w-6 h-6 flex-shrink-0 ${
+                        isActive ? 'text-white' : 'text-gray-600 group-hover:text-gray-900'
+                      }`} />
+                      {!isCollapsed && (
+                        <span className="text-sm font-medium truncate">
+                          {module.title}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                )
+              }
+              
+              // Filtrar módulos sin permiso ver
+              if (!puedeVer(module.key)) {
+                return null
+              }
+              
               // Para el módulo inventario, también considerar activo cuando estamos en insumos
               const isActive = module.key === 'inventario' 
                 ? (pathname === module.href || pathname === '/panel/insumos')
-                : pathname === module.href
+                : pathname === module.href || pathname.startsWith(module.href + '/')
               
               // Manejar logout como botón especial
               if (module.isLogout) {

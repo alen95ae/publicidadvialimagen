@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server"
 import { getSoporteById, updateSoporte, deleteSoporte } from "@/lib/supabaseSoportes"
 import { buildSupabasePayload, rowToSupport } from "../helpers"
+import { requirePermiso } from "@/lib/permisos"
 
 export async function GET(_:Request,{ params }:{ params:Promise<{id:string}> }) {
   try{
+    // Verificar permiso de ver
+    const permisoCheck = await requirePermiso("soportes", "ver");
+    if (permisoCheck instanceof Response) {
+      return permisoCheck;
+    }
+
     const { id } = await params
     const record = await getSoporteById(id)
     
@@ -21,6 +28,12 @@ export async function GET(_:Request,{ params }:{ params:Promise<{id:string}> }) 
 
 export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }) {
   try{
+    // Verificar permiso de editar
+    const permisoCheck = await requirePermiso("soportes", "editar");
+    if (permisoCheck instanceof Response) {
+      return permisoCheck;
+    }
+
     const { id } = await params
     const body = await req.json()
     console.log('📝 PUT /api/soportes/[id] - ID recibido:', id, 'tipo:', typeof id)
@@ -157,6 +170,12 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
 
 export async function DELETE(_:Request,{ params }:{ params:Promise<{id:string}> }) {
   try{
+    // Verificar permiso de eliminar
+    const permisoCheck = await requirePermiso("soportes", "eliminar");
+    if (permisoCheck instanceof Response) {
+      return permisoCheck;
+    }
+
     const { id } = await params
     const existing = await getSoporteById(id)
     

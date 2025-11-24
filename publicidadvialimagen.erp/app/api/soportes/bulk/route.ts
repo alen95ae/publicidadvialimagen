@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSoportes, updateSoporte, deleteSoporte } from '@/lib/supabaseSoportes'
+import { requirePermiso } from '@/lib/permisos'
 
 interface BulkRequest {
   ids: string[]
@@ -15,7 +16,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sin IDs' }, { status: 400 })
     }
 
+    // Verificar permisos según la acción
     if (action === 'delete') {
+      const permisoCheck = await requirePermiso("soportes", "eliminar");
+      if (permisoCheck instanceof Response) {
+        return permisoCheck;
+      }
       let deletedCount = 0
       for (const id of ids) {
         try {
@@ -29,6 +35,11 @@ export async function POST(req: Request) {
     }
 
     if (action === 'update') {
+      const permisoCheck = await requirePermiso("soportes", "editar");
+      if (permisoCheck instanceof Response) {
+        return permisoCheck;
+      }
+
       if (data?.__codeSingle) {
         if (ids.length !== 1) {
           return NextResponse.json({ error: 'Código: seleccione solo 1 elemento' }, { status: 400 })

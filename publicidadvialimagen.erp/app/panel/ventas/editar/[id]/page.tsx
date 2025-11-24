@@ -1371,7 +1371,6 @@ export default function EditarCotizacionPage() {
                 nombre: currentUserData.user.nombre,
                 email: currentUserData.user.email,
                 rol: currentUserData.user.rol,
-                puesto: currentUserData.user.puesto
               }
               console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
             }

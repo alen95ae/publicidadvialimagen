@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { Permiso, PermisoEditar, PermisoEliminar } from "@/components/permiso"
 
 // Constantes para colores de estado (formato Airtable)
 const STATUS_META = {
@@ -927,12 +928,14 @@ export default function SoportesPage() {
                 </DialogContent>
               </Dialog>
               
-              <Link href="/panel/soportes/nuevo">
-                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nuevo Soporte
-                </Button>
-              </Link>
+              <PermisoEditar modulo="soportes">
+                <Link href="/panel/soportes/nuevo">
+                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nuevo Soporte
+                  </Button>
+                </Link>
+              </PermisoEditar>
             </div>
           </CardContent>
         </Card>
@@ -1027,14 +1030,16 @@ export default function SoportesPage() {
                   <div className="flex gap-2">
                     {Object.keys(editedSupports).length > 0 && (
                       <>
-                        <Button 
-                          size="sm" 
-                          onClick={handleSaveChanges}
-                          disabled={savingChanges}
-                          className="bg-red-600 hover:bg-red-700 text-white"
-                        >
-                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedSupports).length})`}
-                        </Button>
+                        <PermisoEditar modulo="soportes">
+                          <Button 
+                            size="sm" 
+                            onClick={handleSaveChanges}
+                            disabled={savingChanges}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedSupports).length})`}
+                          </Button>
+                        </PermisoEditar>
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -1045,14 +1050,16 @@ export default function SoportesPage() {
                       </>
                     )}
                     
-                    <Button 
-                      size="sm" 
-                      onClick={bulkDelete}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Eliminar
-                    </Button>
+                    <PermisoEliminar modulo="soportes">
+                      <Button 
+                        size="sm" 
+                        onClick={bulkDelete}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Eliminar
+                      </Button>
+                    </PermisoEliminar>
                   </div>
                 </div>
               </div>
@@ -1329,24 +1336,28 @@ export default function SoportesPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
-                            title="Editar soporte"
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(support.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Eliminar soporte"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <PermisoEditar modulo="soportes">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
+                              title="Editar soporte"
+                              className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </PermisoEditar>
+                          <PermisoEliminar modulo="soportes">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(support.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Eliminar soporte"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </PermisoEliminar>
                         </div>
                       </TableCell>
                     </TableRow>

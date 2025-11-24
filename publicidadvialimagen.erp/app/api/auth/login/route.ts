@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { findUserByEmail, signSession, updateUserLastAccess } from "@/lib/auth";
 import { createAuthCookie } from "@/lib/auth/cookies";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export async function POST(req: Request) {
   try {
@@ -37,9 +38,35 @@ export async function POST(req: Request) {
       // No fallar el login si falla la actualización del último acceso
     }
 
-    const token = await signSession({ id: user.id, email: user.fields.Email, role: user.fields.Rol, name: user.fields.Nombre });
+    // Obtener el nombre del rol desde la tabla roles usando rol_id
+    let roleName = user.fields.Rol || "invitado";
+    if (user.fields.RolId) {
+      try {
+        const supabase = getSupabaseServer();
+        const { data: roleData } = await supabase
+          .from('roles')
+          .select('nombre')
+          .eq('id', user.fields.RolId)
+          .single();
+        
+        if (roleData?.nombre) {
+          roleName = roleData.nombre;
+        }
+      } catch (error) {
+        console.error("Error obteniendo nombre del rol:", error);
+        // Usar el rol por defecto si falla
+      }
+    }
+
+    // El desarrollador siempre tiene acceso de admin
+    const isDeveloper = user.fields.Email?.toLowerCase() === "alen95ae@gmail.com";
+    if (isDeveloper) {
+      roleName = "admin";
+    }
+
+    const token = await signSession({ id: user.id, email: user.fields.Email, role: roleName, name: user.fields.Nombre });
     
-    const role = user.fields.Rol || "invitado";
+    const role = roleName;
     const redirect = (role === "usuario" || role === "admin") ? "/panel" : "/panel";
 
     // Duración de la cookie basada en "mantener sesión iniciada"

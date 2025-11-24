@@ -19,7 +19,10 @@ export async function GET(request: NextRequest) {
     }
     
     const session = await verifySession(token);
-    if (!session || session.role !== "admin") {
+    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
+    const isAdmin = session?.role === "admin";
+    
+    if (!session || (!isAdmin && !isDeveloper)) {
       return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
     }
 
@@ -58,7 +61,10 @@ export async function POST(request: NextRequest) {
     }
     
     const session = await verifySession(token);
-    if (!session || session.role !== "admin") {
+    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
+    const isAdmin = session?.role === "admin";
+    
+    if (!session || (!isAdmin && !isDeveloper)) {
       return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
     }
 
@@ -126,7 +132,10 @@ export async function PUT(request: NextRequest) {
     }
     
     const session = await verifySession(token);
-    if (!session || session.role !== "admin") {
+    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
+    const isAdmin = session?.role === "admin";
+    
+    if (!session || (!isAdmin && !isDeveloper)) {
       return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
     }
 

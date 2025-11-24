@@ -4,16 +4,15 @@ const supabase = getSupabaseServer()
 
 // Interfaz para el usuario en Supabase
 // NOTA: La tabla en Supabase tiene estos campos:
-// id, uuid, email, passwordhash, nombre, rol, activo, puesto, fecha_creacion, ultimo_acceso, created_at, updated_at
+// id, uuid, email, passwordhash, nombre, rol_id, activo, fecha_creacion, ultimo_acceso, created_at, updated_at
 export interface UsuarioSupabase {
   id: string
   uuid?: string
   email: string
   passwordhash?: string  // En Supabase se llama "passwordhash" (sin guión bajo)
   nombre?: string
-  rol: string
+  rol_id?: string
   activo: boolean
-  puesto?: string
   fecha_creacion?: string
   ultimo_acceso?: string
   created_at?: string
@@ -28,9 +27,9 @@ export interface Usuario {
     PasswordHash?: string
     Nombre?: string
     Rol?: string
+    RolId?: string
     Activo?: boolean
     UltimoAcceso?: string
-    Puesto?: string
   }
 }
 
@@ -45,10 +44,10 @@ function supabaseToUsuario(record: any): Usuario {
       Email: record.email,
       PasswordHash: record.passwordhash || record.password_hash || undefined,  // Soporta ambos nombres
       Nombre: record.nombre || '',
-      Rol: record.rol || 'invitado',
+      Rol: record.rol || 'invitado', // Mantener para compatibilidad, pero usar RolId
+      RolId: record.rol_id || undefined,
       Activo: record.activo ?? true,
       UltimoAcceso: record.ultimo_acceso || undefined,
-      Puesto: record.puesto || undefined,
     }
   }
 }
@@ -90,7 +89,7 @@ export async function createUserSupabase(
   email: string,
   passwordHash: string,
   nombre?: string,
-  rol: string = 'usuario'
+  rol_id?: string
 ): Promise<Usuario> {
   const now = new Date().toISOString()
   
@@ -100,11 +99,14 @@ export async function createUserSupabase(
     email: email.trim().toLowerCase(),
     passwordhash: passwordHash,  // Usar "passwordhash" (sin guión bajo)
     nombre: nombre || '',
-    rol: rol,
     activo: true,
     fecha_creacion: now,
     created_at: now,
     updated_at: now
+  }
+  
+  if (rol_id) {
+    userData.rol_id = rol_id;
   }
   
   const { data, error } = await supabase
@@ -153,9 +155,8 @@ export async function updateUserSupabase(
   userId: string,
   updates: {
     nombre?: string
-    rol?: string
+    rol_id?: string
     activo?: boolean
-    puesto?: string
     password_hash?: string
   }
 ): Promise<Usuario | null> {
@@ -164,9 +165,8 @@ export async function updateUserSupabase(
   }
 
   if (updates.nombre !== undefined) updateData.nombre = updates.nombre
-  if (updates.rol !== undefined) updateData.rol = updates.rol
+  if (updates.rol_id !== undefined) updateData.rol_id = updates.rol_id
   if (updates.activo !== undefined) updateData.activo = updates.activo
-  if (updates.puesto !== undefined) updateData.puesto = updates.puesto
   // En Supabase el campo se llama "passwordhash" (sin guión bajo)
   if (updates.password_hash !== undefined) updateData.passwordhash = updates.password_hash
 

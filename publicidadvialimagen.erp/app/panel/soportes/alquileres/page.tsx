@@ -130,7 +130,7 @@ export default function AlquileresPage() {
   // Cargar vendedores del sistema
   const fetchVendedoresSistema = async () => {
     try {
-      const response = await fetch('/api/ajustes/usuarios?puesto=Comercial&pageSize=100')
+      const response = await fetch('/api/ajustes/usuarios?pageSize=100')
       const data = await response.json()
       if (data.users) {
         const vendedoresSistema = data.users.map((u: any) => u.nombre).filter(Boolean) as string[]

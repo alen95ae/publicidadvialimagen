@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
         nombre: user.nombre || payload.name, // Mantener 'nombre' para compatibilidad con cotizaciones
         rol: user.rol || payload.role,
         role: user.rol || payload.role, // Agregar 'role' para compatibilidad con header
-        puesto: user.puesto
       }
     })
   } catch (error) {

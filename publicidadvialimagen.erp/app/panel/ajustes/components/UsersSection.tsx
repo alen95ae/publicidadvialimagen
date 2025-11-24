@@ -17,7 +17,7 @@ interface User {
   nombre: string;
   email: string;
   rol: string;
-  puesto?: string;
+  rol_id?: string;
   fechaCreacion: string;
   ultimoAcceso?: string;
 }
@@ -31,11 +31,9 @@ interface Role {
 export default function UsersSection() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [opcionesPuesto, setOpcionesPuesto] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
-  const [puestoFilter, setPuestoFilter] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -45,39 +43,13 @@ export default function UsersSection() {
   const [formData, setFormData] = useState({
     nombre: "",
     email: "",
-    rol: "",
-    puesto: "",
+    rol_id: "",
   });
 
   useEffect(() => {
     loadUsers();
     loadRoles();
   }, []);
-
-  // Opciones de puesto según Airtable
-  useEffect(() => {
-    // Valores exactos del campo Puesto en Airtable
-    const opcionesBase = [
-      "Comercial",
-      "Contabilidad",
-      "Administración",
-      "Producción",
-      "Operario",
-      "Diseño"
-    ];
-    
-    // También incluir valores existentes en usuarios por si hay alguno adicional
-    const puestosUnicos = new Set<string>(opcionesBase);
-    users.forEach(user => {
-      if (user.puesto && user.puesto.trim()) {
-        puestosUnicos.add(user.puesto.trim());
-      }
-    });
-    
-    // Mantener el orden de las opciones base y agregar las adicionales al final
-    const todasOpciones = [...opcionesBase, ...Array.from(puestosUnicos).filter(p => !opcionesBase.includes(p))];
-    setOpcionesPuesto(todasOpciones);
-  }, [users]);
 
   const loadUsers = async () => {
     try {
@@ -143,7 +115,7 @@ export default function UsersSection() {
           description: "Usuario creado correctamente",
         });
         setIsCreateDialogOpen(false);
-        setFormData({ nombre: "", email: "", rol: "", puesto: "" });
+        setFormData({ nombre: "", email: "", rol_id: "" });
         loadUsers();
       } else {
         toast({
@@ -184,7 +156,7 @@ export default function UsersSection() {
         });
         setIsEditDialogOpen(false);
         setEditingUser(null);
-        setFormData({ nombre: "", email: "", rol: "", puesto: "" });
+        setFormData({ nombre: "", email: "", rol_id: "" });
         loadUsers();
       } else {
         toast({
@@ -238,8 +210,7 @@ export default function UsersSection() {
     setFormData({
       nombre: user.nombre,
       email: user.email,
-      rol: user.rol,
-      puesto: user.puesto || "",
+      rol_id: user.rol_id || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -249,9 +220,8 @@ export default function UsersSection() {
       user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = !roleFilter || roleFilter === "all" || user.rol === roleFilter;
-    const matchesPuesto = !puestoFilter || puestoFilter === "all" || user.puesto === puestoFilter;
     
-    return matchesSearch && matchesRole && matchesPuesto;
+    return matchesSearch && matchesRole;
   });
 
   return (
@@ -269,19 +239,6 @@ export default function UsersSection() {
             />
           </div>
         </div>
-        <Select value={puestoFilter} onValueChange={setPuestoFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Filtrar por puesto" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los puestos</SelectItem>
-            {opcionesPuesto.map((puesto) => (
-              <SelectItem key={puesto} value={puesto}>
-                {puesto}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
           <SelectTrigger className="w-full sm:w-40">
             <SelectValue placeholder="Filtrar por rol" />
@@ -309,7 +266,6 @@ export default function UsersSection() {
             <TableRow>
               <TableHead className="text-center">Nombre</TableHead>
               <TableHead className="text-center">Email</TableHead>
-              <TableHead className="text-center">Puesto</TableHead>
               <TableHead className="text-center">Rol</TableHead>
               <TableHead className="text-center">Fecha de Creación</TableHead>
               <TableHead className="text-center">Último Acceso</TableHead>
@@ -319,13 +275,13 @@ export default function UsersSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   Cargando usuarios...
                 </TableCell>
               </TableRow>
             ) : filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                   No se encontraron usuarios
                 </TableCell>
               </TableRow>
@@ -334,7 +290,6 @@ export default function UsersSection() {
                 <TableRow key={user.id}>
                   <TableCell className="text-center font-medium">{user.nombre}</TableCell>
                   <TableCell className="text-center">{user.email}</TableCell>
-                  <TableCell className="text-center">{user.puesto || "-"}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary">{user.rol}</Badge>
                   </TableCell>
@@ -421,33 +376,14 @@ export default function UsersSection() {
             </div>
             <div>
               <Label htmlFor="edit-rol">Rol</Label>
-              <Select value={formData.rol} onValueChange={(value) => setFormData({ ...formData, rol: value })}>
+              <Select value={formData.rol_id} onValueChange={(value) => setFormData({ ...formData, rol_id: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar rol" />
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.nombre}>
+                    <SelectItem key={role.id} value={role.id}>
                       {role.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="edit-puesto">Puesto</Label>
-              <Select 
-                value={formData.puesto || "__sin_puesto__"} 
-                onValueChange={(value) => setFormData({ ...formData, puesto: value === "__sin_puesto__" ? "" : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar puesto" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__sin_puesto__">Sin puesto</SelectItem>
-                  {opcionesPuesto.map((puesto) => (
-                    <SelectItem key={puesto} value={puesto}>
-                      {puesto}
                     </SelectItem>
                   ))}
                 </SelectContent>

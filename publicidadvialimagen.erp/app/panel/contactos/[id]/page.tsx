@@ -83,7 +83,7 @@ export default function EditarContactoPage() {
 
   const fetchSalesOwners = async () => {
     try {
-      const response = await fetch("/api/ajustes/usuarios?puesto=Comercial&pageSize=100")
+      const response = await fetch("/api/ajustes/usuarios?pageSize=100")
       if (response.ok) {
         const data = await response.json()
         const users = data.users || []

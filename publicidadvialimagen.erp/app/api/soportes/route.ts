@@ -4,9 +4,16 @@ import { NextResponse } from "next/server"
 import { getSoportes, createSoporte } from "@/lib/supabaseSoportes"
 import { soporteToSupport, buildSupabasePayload } from "./helpers"
 import { uploadImage } from "@/lib/supabaseUpload"
+import { requirePermiso } from "@/lib/permisos"
 
 export async function GET(request: Request) {
   try {
+    // Verificar permiso de ver
+    const permisoCheck = await requirePermiso("soportes", "ver");
+    if (permisoCheck instanceof Response) {
+      return permisoCheck;
+    }
+
     const url = new URL(request.url)
     const searchParams = url.searchParams
     const query = searchParams.get('q') || ''
@@ -62,6 +69,12 @@ export async function GET(request: Request) {
 
 export async function POST(req: Request) {
   try {
+    // Verificar permiso de editar (crear requiere editar)
+    const permisoCheck = await requirePermiso("soportes", "editar");
+    if (permisoCheck instanceof Response) {
+      return permisoCheck;
+    }
+
     // Detectar si viene como FormData (con archivos) o JSON
     const contentType = req.headers.get("content-type") || ""
     let body: any = {}

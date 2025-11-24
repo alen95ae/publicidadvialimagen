@@ -527,7 +527,7 @@ export default function NuevaCotizacionPage() {
     const cargarComerciales = async () => {
       setCargandoComerciales(true)
       try {
-        const response = await fetch('/api/ajustes/usuarios?puesto=Comercial&pageSize=100')
+        const response = await fetch('/api/ajustes/usuarios?pageSize=100')
         const data = await response.json()
         setTodosLosComerciales(data.users || [])
       } catch (error) {
@@ -1240,7 +1240,6 @@ export default function NuevaCotizacionPage() {
                 nombre: currentUserData.user.nombre,
                 email: currentUserData.user.email,
                 rol: currentUserData.user.rol,
-                puesto: currentUserData.user.puesto
               }
               console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
             }

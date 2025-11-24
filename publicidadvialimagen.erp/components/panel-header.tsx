@@ -43,6 +43,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Planificación", href: "/panel/soportes/planificacion" },
       { label: "Costes", href: "/panel/soportes/costes" },
       { label: "Mantenimiento", href: "/panel/soportes/mantenimiento" },
+      { label: "Informes", href: "/panel/soportes/informes" },
     ],
   },
   ventas: {

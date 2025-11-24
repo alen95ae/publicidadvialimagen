@@ -314,6 +314,26 @@ export default function PlanificacionPage() {
     return matchesSearch
   })
 
+  // Función para filtrar alquileres según el agrupador
+  const filtrarAlquileresPorGrupo = (alquileres: SoportePlanificacion['alquileres'], grupoKey: string) => {
+    if (agrupador === "ninguno" || agrupador === "ciudad") {
+      return alquileres
+    }
+
+    return alquileres.filter(alq => {
+      switch (agrupador) {
+        case "vendedor":
+          return (alq.vendedor || "Sin vendedor") === grupoKey
+        case "cliente":
+          return (alq.cliente || "Sin cliente") === grupoKey
+        case "estado":
+          return (alq.estado || "Sin estado") === grupoKey
+        default:
+          return true
+      }
+    })
+  }
+
   // Función para agrupar soportes
   const agruparSoportes = (soportes: SoportePlanificacion[]) => {
     if (agrupador === "ninguno") {
@@ -323,35 +343,47 @@ export default function PlanificacionPage() {
     const gruposMap = new Map<string, SoportePlanificacion[]>()
     
     soportes.forEach(soporte => {
-      let grupoKey: string
+      // Obtener todos los valores únicos del campo de agrupación
+      const valoresUnicos = new Set<string>()
       
       switch (agrupador) {
         case "vendedor":
-          // Agrupar por el primer vendedor encontrado (no hacer combinaciones)
-          const primerVendedor = soporte.alquileres.find(a => a.vendedor)?.vendedor
-          grupoKey = primerVendedor || "Sin vendedor"
+          soporte.alquileres.forEach(a => {
+            valoresUnicos.add(a.vendedor || "Sin vendedor")
+          })
           break
         case "cliente":
-          // Agrupar por el primer cliente encontrado (no hacer combinaciones)
-          const primerCliente = soporte.alquileres.find(a => a.cliente)?.cliente
-          grupoKey = primerCliente || "Sin cliente"
+          soporte.alquileres.forEach(a => {
+            valoresUnicos.add(a.cliente || "Sin cliente")
+          })
           break
         case "estado":
-          // Agrupar por el primer estado encontrado (no hacer combinaciones)
-          const primerEstado = soporte.alquileres.find(a => a.estado)?.estado
-          grupoKey = primerEstado || "Sin estado"
+          soporte.alquileres.forEach(a => {
+            valoresUnicos.add(a.estado || "Sin estado")
+          })
           break
         case "ciudad":
-          grupoKey = soporte.ciudad || "Sin ciudad"
+          valoresUnicos.add(soporte.ciudad || "Sin ciudad")
           break
-        default:
-          grupoKey = "Otros"
       }
       
-      if (!gruposMap.has(grupoKey)) {
-        gruposMap.set(grupoKey, [])
-      }
-      gruposMap.get(grupoKey)!.push(soporte)
+      // Crear una copia del soporte para cada grupo al que pertenece
+      valoresUnicos.forEach(grupoKey => {
+        if (!gruposMap.has(grupoKey)) {
+          gruposMap.set(grupoKey, [])
+        }
+        
+        // Crear una copia del soporte con solo los alquileres que corresponden a este grupo
+        const soporteFiltrado: SoportePlanificacion = {
+          ...soporte,
+          alquileres: filtrarAlquileresPorGrupo(soporte.alquileres, grupoKey)
+        }
+        
+        // Solo agregar el soporte si tiene alquileres después del filtrado
+        if (soporteFiltrado.alquileres.length > 0) {
+          gruposMap.get(grupoKey)!.push(soporteFiltrado)
+        }
+      })
     })
     
     // Convertir a array y ordenar

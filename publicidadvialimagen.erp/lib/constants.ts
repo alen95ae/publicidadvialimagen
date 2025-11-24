@@ -14,6 +14,7 @@ export const UNIDADES_MEDIDA_AIRTABLE = [
 // Categorías válidas en Airtable para la tabla Recursos
 export const CATEGORIAS_RECURSOS_AIRTABLE = [
   "Insumos",
-  "Mano de Obra"
+  "Mano de Obra",
+  "Suministros"
 ] as const
 

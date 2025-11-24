@@ -16,7 +16,8 @@ import {
   XCircle,
   Copy,
   LayoutGrid,
-  List
+  List,
+  X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -206,6 +207,7 @@ export default function InventarioPage() {
     hasNext: false,
     hasPrev: false
   })
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
   
   // Estados para edición en línea
   const [editedItems, setEditedItems] = useState<Record<string, Partial<InventoryItem>>>({})
@@ -217,10 +219,58 @@ export default function InventarioPage() {
   // Estado para vista (lista o galería)
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
 
+  // 1) Cargar los filtros una sola vez al montar
+  useEffect(() => {
+    const saved = sessionStorage.getItem("inventario_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setSearchTerm(f.searchTerm ?? "")
+        setSelectedCategory(f.selectedCategory ?? "")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("inventario_filtros", JSON.stringify({
+      searchTerm,
+      selectedCategory
+    }))
+  }, [searchTerm, selectedCategory, filtersLoaded])
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'categoria') => {
+    switch (tipo) {
+      case 'busqueda':
+        setSearchTerm("")
+        break
+      case 'categoria':
+        setSelectedCategory("")
+        break
+    }
+  }
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setSearchTerm("")
+    setSelectedCategory("")
+    sessionStorage.removeItem('inventario_filtros')
+  }
+
   // Cargar datos de la API al inicializar
   useEffect(() => {
-    fetchItems()
-  }, [])
+    if (filtersLoaded) {
+      fetchItems()
+    }
+  }, [filtersLoaded])
 
   const fetchItems = async (page: number = currentPage) => {
     try {
@@ -255,9 +305,10 @@ export default function InventarioPage() {
 
   // Recargar datos cuando cambien los filtros
   useEffect(() => {
+    if (!filtersLoaded) return
     setCurrentPage(1)
     fetchItems(1)
-  }, [searchTerm, selectedCategory])
+  }, [searchTerm, selectedCategory, filtersLoaded])
   
   // Estados para acciones masivas
   const [showBulkActions, setShowBulkActions] = useState(false)
@@ -706,24 +757,27 @@ export default function InventarioPage() {
 
     try {
       const response = await fetch('/api/inventario/bulk', {
-        method: 'DELETE',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ids: selectedItems }),
+        body: JSON.stringify({ ids: selectedItems, action: 'delete' }),
       })
 
       if (response.ok) {
-        toast.success(`${selectedCount} items eliminados correctamente`)
+        const result = await response.json()
+        toast.success(result.message || `${selectedCount} items eliminados correctamente`)
         setSelected({})
         setShowBulkActions(false)
-        fetchItems()
+        await fetchItems()
       } else {
-        toast.error('Error al eliminar items')
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.error || errorData.message || 'Error al eliminar items'
+        toast.error(errorMessage)
       }
     } catch (error) {
       console.error('Error deleting items:', error)
-      toast.error('Error al eliminar items')
+      toast.error('Error de conexión al eliminar items')
     }
   }
 
@@ -793,6 +847,48 @@ export default function InventarioPage() {
               <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Etiquetas de filtros activos */}
+              {(searchTerm || selectedCategory) && (
+                <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
+                  {searchTerm && (
+                    <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Búsqueda:</span>
+                      <span className="text-gray-700">{searchTerm}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('busqueda')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {selectedCategory && (
+                    <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Categoría:</span>
+                      <span className="text-gray-700">{selectedCategory}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('categoria')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Botón para limpiar todos */}
+                  <button
+                    type="button"
+                    onClick={limpiarTodosFiltros}
+                    className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+                  >
+                    Limpiar todo
+                  </button>
+                </div>
+              )}
+              
               <div className="flex flex-col md:flex-row gap-4 mb-4">
                 <div className="flex-1 max-w-md">
                   <div className="relative">
@@ -807,7 +903,8 @@ export default function InventarioPage() {
                 </div>
                 <div className="flex gap-2 items-center">
                   <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value)}>
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[200px] [&>span]:text-black !pl-9 !pr-3 relative">
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                       <SelectValue placeholder="Filtrar por categoría" />
                     </SelectTrigger>
                     <SelectContent>
@@ -960,7 +1057,7 @@ export default function InventarioPage() {
                 {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en el inventario"}
               </div>
             ) : viewMode === "gallery" ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-3">
                 {filteredItems.map((item) => (
                   <Card 
                     key={item.id} 

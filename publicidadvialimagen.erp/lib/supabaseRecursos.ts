@@ -8,13 +8,14 @@ export interface RecursoSupabase {
   codigo: string
   nombre: string
   imagen_portada?: string
-  categoria: 'Insumos' | 'Mano de Obra'
+  categoria: 'Insumos' | 'Mano de Obra' | 'Suministros'
   responsable: string
   unidad_medida: string
   coste: number
   precio_venta?: number
   variantes?: any[]
   control_stock?: any
+  proveedores?: any[]
   fecha_creacion: string
   fecha_actualizacion: string
 }
@@ -110,6 +111,21 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     }
   }
   
+  // Parsear proveedores desde JSONB
+  let proveedores: any[] = []
+  if (record.proveedores) {
+    try {
+      if (typeof record.proveedores === 'string') {
+        proveedores = JSON.parse(record.proveedores)
+      } else {
+        proveedores = record.proveedores
+      }
+    } catch (e) {
+      console.error('Error parseando proveedores:', e)
+      proveedores = []
+    }
+  }
+  
   // Mapear imagen_principal de Supabase a imagen_portada para el frontend
   // El script de migración guardó las imágenes en imagen_principal
   const imagenPortada = record.imagen_principal || record.imagen_portada || undefined
@@ -126,6 +142,7 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     precio_venta: record.precio_venta ? Number(record.precio_venta) : undefined,
     variantes: variantes,
     control_stock: controlStock,
+    proveedores: proveedores,
     fecha_creacion: record.fecha_creacion || new Date().toISOString(),
     fecha_actualizacion: record.fecha_actualizacion || new Date().toISOString()
   }
@@ -150,7 +167,13 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
   
   if (recurso.categoria !== undefined && recurso.categoria !== null) {
     const cat = recurso.categoria || ''
-    fields.categoria = cat === 'Mano de Obra' ? 'Mano de Obra' : 'Insumos'
+    if (cat === 'Mano de Obra') {
+      fields.categoria = 'Mano de Obra'
+    } else if (cat === 'Suministros') {
+      fields.categoria = 'Suministros'
+    } else {
+      fields.categoria = 'Insumos'
+    }
   }
   
   if (recurso.responsable !== undefined && recurso.responsable !== null) {
@@ -199,10 +222,15 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
     }
   }
   
-  // Ignorar proveedores ya que no existe esa columna en la tabla recursos
-  // (solo se usa en productos)
-  if ((recurso as any).proveedores !== undefined) {
-    console.log('⚠️ Campo proveedores ignorado (no existe en tabla recursos)')
+  // Guardar proveedores como JSONB
+  if (recurso.proveedores !== undefined && recurso.proveedores !== null) {
+    try {
+      fields.proveedores = Array.isArray(recurso.proveedores) ? recurso.proveedores : []
+      console.log('📦 Proveedores guardados en Supabase:', fields.proveedores.length, 'proveedor(es)')
+    } catch (e) {
+      console.error('Error serializando proveedores:', e)
+      fields.proveedores = []
+    }
   }
   
   return fields

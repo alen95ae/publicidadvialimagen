@@ -6,7 +6,9 @@ import {
   Plus, 
   Search, 
   Edit, 
-  Trash2
+  Trash2,
+  MapPin,
+  X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -129,11 +131,60 @@ export default function AjustesInventarioPage() {
   const [savingChanges, setSavingChanges] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 100
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
+
+  // 1) Cargar los filtros una sola vez al montar
+  useEffect(() => {
+    const saved = sessionStorage.getItem("control_stock_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setSearchTerm(f.searchTerm ?? "")
+        setSelectedSucursal(f.selectedSucursal ?? "all")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("control_stock_filtros", JSON.stringify({
+      searchTerm,
+      selectedSucursal
+    }))
+  }, [searchTerm, selectedSucursal, filtersLoaded])
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'sucursal') => {
+    switch (tipo) {
+      case 'busqueda':
+        setSearchTerm("")
+        break
+      case 'sucursal':
+        setSelectedSucursal("all")
+        break
+    }
+  }
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setSearchTerm("")
+    setSelectedSucursal("all")
+    sessionStorage.removeItem('control_stock_filtros')
+  }
 
   // Cargar datos de recursos
   useEffect(() => {
-    fetchRecursos()
-  }, [])
+    if (filtersLoaded) {
+      fetchRecursos()
+    }
+  }, [filtersLoaded])
 
   const fetchRecursos = async () => {
     try {
@@ -325,8 +376,9 @@ export default function AjustesInventarioPage() {
 
   // Resetear a página 1 cuando cambian los filtros
   useEffect(() => {
+    if (!filtersLoaded) return
     setCurrentPage(1)
-  }, [searchTerm, selectedSucursal])
+  }, [searchTerm, selectedSucursal, filtersLoaded])
 
   // Funciones de paginación
   const handlePageChange = (page: number) => {
@@ -630,6 +682,48 @@ export default function AjustesInventarioPage() {
               <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Etiquetas de filtros activos */}
+              {(searchTerm || selectedSucursal !== "all") && (
+                <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
+                  {searchTerm && (
+                    <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Búsqueda:</span>
+                      <span className="text-gray-700">{searchTerm}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('busqueda')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {selectedSucursal !== "all" && (
+                    <div className="flex items-center gap-1 bg-purple-100 hover:bg-purple-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Sucursal:</span>
+                      <span className="text-gray-700">{selectedSucursal}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('sucursal')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Botón para limpiar todos */}
+                  <button
+                    type="button"
+                    onClick={limpiarTodosFiltros}
+                    className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+                  >
+                    Limpiar todo
+                  </button>
+                </div>
+              )}
+              
               <div className="flex flex-col md:flex-row gap-4 mb-4">
                 <div className="flex-1 max-w-md">
                   <div className="relative">
@@ -645,7 +739,8 @@ export default function AjustesInventarioPage() {
                 
                 <div className="flex gap-2 items-center">
                   <Select value={selectedSucursal} onValueChange={setSelectedSucursal}>
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[200px] [&>span]:text-black !pl-9 !pr-3 relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                       <SelectValue placeholder="Filtrar por sucursal" />
                     </SelectTrigger>
                     <SelectContent>

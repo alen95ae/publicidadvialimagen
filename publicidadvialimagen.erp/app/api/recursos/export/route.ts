@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || ''
     const categoria = searchParams.get('categoria') || ''
 
-    console.log('📤 Exportando recursos:', { query, categoria })
+    console.log('📤 Export recursos params:', { query, categoria })
 
     // Obtener todos los recursos de Supabase
     let recursos = await getAllRecursos()
@@ -25,55 +25,79 @@ export async function GET(request: NextRequest) {
       recursos = recursos.filter(recurso => recurso.categoria === categoria)
     }
 
-    // Crear CSV
-    // NOTA: Cantidad y Descripción NO se incluyen porque no existen en la tabla recursos de Supabase
+    // Función para escapar CSV correctamente
+    const escapeCSV = (value: string | number | boolean | null | undefined): string => {
+      if (value === null || value === undefined) return '""'
+      const str = String(value)
+      // Reemplazar comillas dobles por dos comillas dobles (estándar CSV)
+      const escaped = str.replace(/"/g, '""')
+      // Envolver en comillas para manejar comas, saltos de línea, etc.
+      return `"${escaped}"`
+    }
+
+    // Extraer cantidad del control_stock si existe
+    const getCantidad = (recurso: any): number => {
+      if (recurso.control_stock && typeof recurso.control_stock === 'object') {
+        // Intentar obtener cantidad del control_stock
+        if (recurso.control_stock.cantidad !== undefined) {
+          return Number(recurso.control_stock.cantidad) || 0
+        }
+        if (recurso.control_stock.stock !== undefined) {
+          return Number(recurso.control_stock.stock) || 0
+        }
+      }
+      return 0
+    }
+
+    // Crear CSV con todas las columnas de la lista de recursos
     const headers = [
-      'ID',
       'Código',
       'Nombre',
-      'Categoría',
       'Responsable',
-      'Unidad de Medida',
+      'Categoría',
+      'Unidad',
       'Coste',
-      'Precio Venta',
-      'Fecha Creación',
-      'Fecha Actualización'
+      'Stock'
     ]
 
     const csvRows = [headers.join(',')]
-    
+
     recursos.forEach(recurso => {
+      const cantidad = getCantidad(recurso)
+      
       const row = [
-        recurso.id,
-        `"${recurso.codigo}"`,
-        `"${recurso.nombre}"`,
-        `"${recurso.categoria}"`,
-        `"${recurso.responsable}"`,
-        `"${recurso.unidad_medida}"`,
-        recurso.coste,
-        recurso.precio_venta || 0,
-        `"${recurso.fecha_creacion}"`,
-        `"${recurso.fecha_actualizacion}"`
+        escapeCSV(recurso.codigo),
+        escapeCSV(recurso.nombre),
+        escapeCSV(recurso.responsable),
+        escapeCSV(recurso.categoria),
+        escapeCSV(recurso.unidad_medida),
+        recurso.coste.toFixed(2),
+        cantidad
       ]
       csvRows.push(row.join(','))
     })
 
-    const csvContent = csvRows.join('\n')
+    const csv = csvRows.join('\n')
+    // Agregar BOM (Byte Order Mark) para que Excel reconozca UTF-8 correctamente
+    // Esto es crucial para que las tildes y ñ se muestren correctamente
+    const csvWithBOM = '\uFEFF' + csv
 
-    console.log('📄 CSV generado con', recursos.length, 'recursos')
+    console.log('📊 CSV recursos generado:', { rows: recursos.length })
 
-    return new NextResponse(csvContent, {
+    const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+    
+    return new NextResponse(csvWithBOM, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="recursos_${new Date().toISOString().split('T')[0]}.csv"`
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="recursos_${fecha}.csv"`
       }
     })
 
   } catch (error) {
-    console.error('❌ Error exportando recursos:', error)
+    console.error('❌ Error en export recursos:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al exportar recursos' },
+      { success: false, error: 'Error al exportar datos' },
       { status: 500 }
     )
   }

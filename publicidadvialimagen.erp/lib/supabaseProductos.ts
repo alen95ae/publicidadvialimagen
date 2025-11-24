@@ -94,8 +94,20 @@ export function supabaseToProducto(record: any): ProductoSupabase {
     }
   }
   
-  // La columna proveedores no existe en Supabase
+  // Parsear proveedores desde JSONB
   let proveedores: any[] = []
+  if (record.proveedores) {
+    try {
+      if (typeof record.proveedores === 'string') {
+        proveedores = JSON.parse(record.proveedores)
+      } else {
+        proveedores = record.proveedores
+      }
+    } catch (e) {
+      console.error('Error parseando proveedores:', e)
+      proveedores = []
+    }
+  }
   
   let calculadoraDePrecios: any = null
   if (record.calculadora_precios) {
@@ -241,8 +253,15 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
     }
   }
   
-  // La columna proveedores no existe en Supabase
-  // No se guarda proveedores directamente
+  // Guardar proveedores como JSONB
+  if (producto.proveedores !== undefined && producto.proveedores !== null) {
+    try {
+      fields.proveedores = Array.isArray(producto.proveedores) ? producto.proveedores : []
+    } catch (e) {
+      console.error('Error serializando proveedores:', e)
+      fields.proveedores = []
+    }
+  }
   
   // Guardar calculadora de precios como JSONB
   if (producto.calculadora_de_precios !== undefined) {

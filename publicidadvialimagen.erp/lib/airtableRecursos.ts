@@ -8,7 +8,7 @@ export interface RecursoAirtable {
   nombre: string
   descripcion?: string
   imagen_portada?: string
-  categoria: 'Insumos' | 'Mano de Obra'
+  categoria: 'Insumos' | 'Mano de Obra' | 'Suministros'
   responsable: string
   unidad_medida: string
   cantidad: number
@@ -24,7 +24,7 @@ export interface RecursoAirtableFields {
   'Código': string
   'Nombre': string
   'Descripción'?: string
-  'Categoría': 'Insumos' | 'Mano de Obra'
+  'Categoría': 'Insumos' | 'Mano de Obra' | 'Suministros'
   'Responsable': string
   'Unidad de Medida': string
   'Stock': number
@@ -168,7 +168,13 @@ function recursoPartialToAirtable(recurso: Partial<RecursoAirtable>): Record<str
   if (recurso.categoria !== undefined && recurso.categoria !== null) {
     // Normalizar valores permitidos
     const cat = recurso.categoria || ''
-    fields['Categoría'] = cat === 'Mano de Obra' ? 'Mano de Obra' : 'Insumos'
+    if (cat === 'Mano de Obra') {
+      fields['Categoría'] = 'Mano de Obra'
+    } else if (cat === 'Suministros') {
+      fields['Categoría'] = 'Suministros'
+    } else {
+      fields['Categoría'] = 'Insumos'
+    }
   }
   
   if (recurso.responsable !== undefined && recurso.responsable !== null) {
@@ -296,7 +302,7 @@ export async function getAllRecursos() {
 // Generar datos de ejemplo para testing
 function generateSampleData() {
   const sampleData = []
-  const categorias = ['Insumos', 'Mano de Obra']
+  const categorias = ['Insumos', 'Mano de Obra', 'Suministros']
   const unidades = ['m2', 'kg', 'm', 'L', 'unidad', 'hora', 'km']
   const responsables = ['Ana Martínez', 'Carlos López', 'María García', 'Pedro Ruiz', 'Laura Sánchez', 'Juan Pérez', 'Elena Torres', 'Roberto Silva']
   
@@ -309,7 +315,7 @@ function generateSampleData() {
       codigo: `${prefijo}-${i.toString().padStart(3, '0')}`,
       nombre: `Recurso de Prueba ${i}`,
       descripcion: `Descripción del recurso ${i}`,
-      categoria: categoria as 'Insumos' | 'Mano de Obra',
+      categoria: categoria as 'Insumos' | 'Mano de Obra' | 'Suministros',
       responsable: responsables[i % responsables.length],
       unidad_medida: unidades[i % unidades.length],
       cantidad: Math.floor(Math.random() * 100) + 1,

@@ -15,7 +15,8 @@ import {
   Copy,
   X,
   LayoutGrid,
-  List
+  List,
+  Download
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,7 +72,8 @@ interface RecursoItem {
 // Categorías disponibles (solo las válidas en Airtable)
 const categorias = [
   "Insumos",
-  "Mano de Obra"
+  "Mano de Obra",
+  "Suministros"
 ]
 
 // Unidades de medida de Airtable
@@ -173,12 +175,60 @@ export default function RecursosPage() {
     hasNext: false,
     hasPrev: false
   })
-  
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
+
+  // 1) Cargar los filtros una sola vez al montar
+  useEffect(() => {
+    const saved = sessionStorage.getItem("recursos_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setSearchTerm(f.searchTerm ?? "")
+        setSelectedCategory(f.selectedCategory ?? "")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("recursos_filtros", JSON.stringify({
+      searchTerm,
+      selectedCategory
+    }))
+  }, [searchTerm, selectedCategory, filtersLoaded])
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'categoria') => {
+    switch (tipo) {
+      case 'busqueda':
+        setSearchTerm("")
+        break
+      case 'categoria':
+        setSelectedCategory("")
+        break
+    }
+  }
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setSearchTerm("")
+    setSelectedCategory("")
+    sessionStorage.removeItem('recursos_filtros')
+  }
 
   // Cargar datos de la API al inicializar
   useEffect(() => {
-    fetchItems()
-  }, [])
+    if (filtersLoaded) {
+      fetchItems()
+    }
+  }, [filtersLoaded])
 
   const fetchItems = async (page: number = currentPage) => {
     try {
@@ -214,9 +264,10 @@ export default function RecursosPage() {
 
   // Recargar datos cuando cambien los filtros
   useEffect(() => {
+    if (!filtersLoaded) return
     setCurrentPage(1)
     fetchItems(1)
-  }, [searchTerm, selectedCategory])
+  }, [searchTerm, selectedCategory, filtersLoaded])
   
   // Estados para edición masiva
   const [nombreDraft, setNombreDraft] = useState("")
@@ -392,6 +443,35 @@ export default function RecursosPage() {
     }
   }
 
+  // Función para exportar datos
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (searchTerm) params.set('q', searchTerm)
+      if (selectedCategory) params.set('categoria', selectedCategory)
+      
+      const response = await fetch(`/api/recursos/export?${params.toString()}`)
+      
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+        a.download = `recursos_${fecha}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success('Recursos exportados correctamente')
+      } else {
+        toast.error('Error al exportar los datos')
+      }
+    } catch (error) {
+      console.error('Error al exportar:', error)
+      toast.error('Error al exportar los datos')
+    }
+  }
 
   // Funciones de paginación
   const handlePageChange = (page: number) => {
@@ -617,6 +697,48 @@ export default function RecursosPage() {
               <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Etiquetas de filtros activos */}
+              {(searchTerm || selectedCategory) && (
+                <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
+                  {searchTerm && (
+                    <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Búsqueda:</span>
+                      <span className="text-gray-700">{searchTerm}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('busqueda')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {selectedCategory && (
+                    <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Categoría:</span>
+                      <span className="text-gray-700">{selectedCategory}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('categoria')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Botón para limpiar todos */}
+                  <button
+                    type="button"
+                    onClick={limpiarTodosFiltros}
+                    className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+                  >
+                    Limpiar todo
+                  </button>
+                </div>
+              )}
+              
               <div className="flex flex-col md:flex-row gap-4 mb-4">
                 <div className="flex-1 max-w-md">
                   <div className="relative">
@@ -631,7 +753,8 @@ export default function RecursosPage() {
                 </div>
                 <div className="flex gap-2 items-center">
                   <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value)}>
-                    <SelectTrigger className="w-[200px]">
+                    <SelectTrigger className="w-[200px] [&>span]:text-black !pl-9 !pr-3 relative">
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                       <SelectValue placeholder="Filtrar por categoría" />
                     </SelectTrigger>
                     <SelectContent>
@@ -647,6 +770,10 @@ export default function RecursosPage() {
                 
                 {/* Botones de acciones - completamente a la derecha */}
                 <div className="flex gap-2 items-center ml-auto">
+                  <Button variant="outline" size="sm" onClick={handleExport}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar
+                  </Button>
                   <Button 
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={handleNewRecurso}
@@ -782,7 +909,7 @@ export default function RecursosPage() {
                 {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en los recursos"}
               </div>
             ) : viewMode === "gallery" ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-3">
                 {filteredItems.map((item) => (
                   <Card 
                     key={item.id} 

@@ -22,6 +22,8 @@ import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, ImageIcon } fro
 import { toast } from "sonner"
 import SupportMap from "@/components/support-map"
 import dynamic from "next/dynamic";
+import { PermisoEditar, PermisoEliminar } from "@/components/permiso"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 const EditableLeafletMap = dynamic(() => import("@/components/maps/EditableLeafletMap"), { ssr: false });
 const GmapsLinkPaste = dynamic(() => import("@/components/maps/GmapsLinkPaste"), { ssr: false });
@@ -72,6 +74,7 @@ export default function SoporteDetailPage() {
   const searchParams = useSearchParams()
   const id = params.id as string
   const shouldEdit = searchParams.get('edit') === 'true'
+  const { tieneFuncionTecnica } = usePermisosContext()
   
   const [support, setSupport] = useState<Support | null>(null)
   const [loading, setLoading] = useState(true)
@@ -565,35 +568,39 @@ export default function SoporteDetailPage() {
           <div className="flex items-center gap-4">
             {!editing ? (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => setEditing(true)}
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Editar
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button className="bg-[#D54644] hover:bg-[#B03A38]">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Eliminar
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>¿Eliminar soporte?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Se eliminará permanentemente el soporte "{support.title}".
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                <PermisoEditar modulo="soportes">
+                  <Button
+                    variant="outline"
+                    onClick={() => setEditing(true)}
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Editar
+                  </Button>
+                </PermisoEditar>
+                <PermisoEliminar modulo="soportes">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button className="bg-[#D54644] hover:bg-[#B03A38]">
+                        <Trash2 className="w-4 h-4 mr-2" />
                         Eliminar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar soporte?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Se eliminará permanentemente el soporte "{support.title}".
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </PermisoEliminar>
               </>
             ) : (
               <>
@@ -696,20 +703,22 @@ export default function SoporteDetailPage() {
                   </Select>
                 </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="owner">Propietario</Label>
-                    <Input
-                      id="owner"
-                      value={formData.owner}
-                      onChange={(e) => handleChange("owner", e.target.value)}
-                      placeholder="Propietario del soporte"
-                    />
-                    {owner && (
-                      <div className={`mt-2 inline-flex rounded-md px-3 py-1 text-sm pointer-events-none select-none ${ownerClass}`}>
-                        {owner}
-                      </div>
-                    )}
-                  </div>
+                  {tieneFuncionTecnica("ver propietario soportes") && (
+                    <div className="space-y-2">
+                      <Label htmlFor="owner">Propietario</Label>
+                      <Input
+                        id="owner"
+                        value={formData.owner}
+                        onChange={(e) => handleChange("owner", e.target.value)}
+                        placeholder="Propietario del soporte"
+                      />
+                      {owner && (
+                        <div className={`mt-2 inline-flex rounded-md px-3 py-1 text-sm pointer-events-none select-none ${ownerClass}`}>
+                          {owner}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                 </>
               ) : (
@@ -732,7 +741,7 @@ export default function SoporteDetailPage() {
                     </span>
                   </div>
 
-                  {support.owner && (
+                  {support.owner && tieneFuncionTecnica("ver propietario soportes") && (
                     <div>
                       <Label className="text-sm font-medium text-gray-700">Propietario</Label>
                       <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${

@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 interface Cotizacion {
   id: string
@@ -49,6 +50,8 @@ interface Vendedor {
   id: string
   nombre: string
   email?: string
+  imagen_usuario?: any
+  vendedor?: boolean
 }
 
 // Constantes para colores de estado (similar a soportes)
@@ -90,6 +93,7 @@ const getEstadoIcon = (estado: string) => {
 }
 
 export default function CotizacionesPage() {
+  const { tieneFuncionTecnica, loading } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCotizaciones, setSelectedCotizaciones] = useState<string[]>([])
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
@@ -119,6 +123,18 @@ export default function CotizacionesPage() {
       .join("")
       .toUpperCase()
       .slice(0, 2)
+  }
+
+  // Función para obtener imagen del vendedor
+  const getVendedorImage = (vendedorNombre: string) => {
+    const vendedor = vendedores.find(v => v.nombre === vendedorNombre || v.id === vendedorNombre);
+    if (vendedor?.imagen_usuario) {
+      const imagenData = typeof vendedor.imagen_usuario === 'string' 
+        ? JSON.parse(vendedor.imagen_usuario) 
+        : vendedor.imagen_usuario;
+      return imagenData?.url || null;
+    }
+    return null;
   }
 
   // Función para eliminar cotización
@@ -160,9 +176,38 @@ export default function CotizacionesPage() {
   // Cargar vendedores para el filtro
   const fetchVendedores = async () => {
     try {
-      const response = await fetch('/api/ajustes/usuarios?pageSize=100')
+      // Obtener todos los usuarios
+      const response = await fetch('/api/ajustes/usuarios?pageSize=1000')
       const data = await response.json()
-      setVendedores(data.users || [])
+      const allUsers = data.users || []
+      
+      // Obtener todos los vendedores únicos de las cotizaciones
+      const cotizacionesResponse = await fetch('/api/cotizaciones?pageSize=10000')
+      const cotizacionesData = await cotizacionesResponse.json()
+      const vendedoresDeCotizaciones = new Set<string>()
+      
+      if (cotizacionesData.success && cotizacionesData.data) {
+        cotizacionesData.data.forEach((cot: Cotizacion) => {
+          if (cot.vendedor) {
+            vendedoresDeCotizaciones.add(cot.vendedor)
+          }
+        })
+      }
+      
+      // Filtrar usuarios que son vendedores (marcados como vendedor) o tienen cotizaciones
+      const vendedoresList = allUsers.filter((user: Vendedor) => {
+        // Si está marcado como vendedor
+        if (user.vendedor) return true
+        
+        // Si tiene al menos una cotización (por nombre o ID)
+        const tieneCotizacion = Array.from(vendedoresDeCotizaciones).some(vendedorNombre => {
+          return vendedorNombre === user.nombre || vendedorNombre === user.id
+        })
+        
+        return tieneCotizacion
+      })
+      
+      setVendedores(vendedoresList)
     } catch (error) {
       console.error('Error fetching vendedores:', error)
     }
@@ -467,15 +512,17 @@ export default function CotizacionesPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleExport}
-                  disabled={exporting || cotizaciones.length === 0}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  {exporting ? 'Exportando...' : 'Exportar'}
-                </Button>
+                {!loading && tieneFuncionTecnica("ver boton exportar") && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleExport}
+                    disabled={exporting || cotizaciones.length === 0}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {exporting ? 'Exportando...' : 'Exportar'}
+                  </Button>
+                )}
                 <Link href="/panel/ventas/nuevo">
                   <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
                     <Plus className="w-4 h-4 mr-2" />
@@ -606,7 +653,7 @@ export default function CotizacionesPage() {
                         <td className="py-3 px-4 align-middle">
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
-                              <AvatarImage src="" alt={cotizacion.vendedor} />
+                              <AvatarImage src={getVendedorImage(cotizacion.vendedor) || ""} alt={cotizacion.vendedor} />
                               <AvatarFallback className="bg-[#D54644] text-white text-[10px] font-medium">
                                 {getInitials(cotizacion.vendedor)}
                               </AvatarFallback>

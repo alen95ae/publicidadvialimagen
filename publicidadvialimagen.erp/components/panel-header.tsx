@@ -22,6 +22,7 @@ interface User {
   email: string
   name: string
   role: string
+  imagen_usuario?: any
 }
 
 interface NavItem {
@@ -185,6 +186,16 @@ export default function PanelHeader() {
 
   const getUserName = () => {
     return user?.name || user?.email || "Usuario"
+  }
+
+  const getUserImage = () => {
+    if (user?.imagen_usuario) {
+      const imagenData = typeof user.imagen_usuario === 'string' 
+        ? JSON.parse(user.imagen_usuario) 
+        : user.imagen_usuario;
+      return imagenData?.url || null;
+    }
+    return null;
   }
 
   const fetchNotifications = async () => {
@@ -446,7 +457,7 @@ export default function PanelHeader() {
                     onClick={(e) => e.preventDefault()}
                   >
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src="" alt={getUserName()} />
+                      <AvatarImage src={getUserImage() || ""} alt={getUserName()} />
                       <AvatarFallback className="bg-[#D54644] text-white text-sm font-medium">
                         {getInitials()}
                       </AvatarFallback>

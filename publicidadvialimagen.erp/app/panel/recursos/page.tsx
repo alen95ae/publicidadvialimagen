@@ -54,6 +54,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Tipo para los items de recursos
 interface RecursoItem {
@@ -160,6 +161,7 @@ function getStockBadge(cantidad: number) {
 
 
 export default function RecursosPage() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
@@ -770,10 +772,12 @@ export default function RecursosPage() {
                 
                 {/* Botones de acciones - completamente a la derecha */}
                 <div className="flex gap-2 items-center ml-auto">
-                  <Button variant="outline" size="sm" onClick={handleExport}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Exportar
-                  </Button>
+                  {tieneFuncionTecnica("ver boton exportar") && (
+                    <Button variant="outline" size="sm" onClick={handleExport}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Exportar
+                    </Button>
+                  )}
                   <Button 
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={handleNewRecurso}

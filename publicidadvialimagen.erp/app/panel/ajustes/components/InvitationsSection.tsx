@@ -8,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Copy, ExternalLink, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Copy, ExternalLink, Clock, CheckCircle, XCircle, Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Invitation {
@@ -36,6 +35,7 @@ export default function InvitationsSection() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const { toast } = useToast();
 
@@ -43,6 +43,12 @@ export default function InvitationsSection() {
   const [formData, setFormData] = useState({
     email: "",
     rol: "",
+    horasValidez: 72,
+  });
+
+  // Formulario para cambiar contraseña
+  const [changePasswordData, setChangePasswordData] = useState({
+    email: "",
     horasValidez: 72,
   });
 
@@ -160,6 +166,64 @@ export default function InvitationsSection() {
     }
   };
 
+  const handleChangePassword = async () => {
+    // Validación del formulario
+    if (!changePasswordData.email) {
+      toast({
+        title: "Error",
+        description: "El email es requerido",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!changePasswordData.horasValidez || changePasswordData.horasValidez <= 0) {
+      toast({
+        title: "Error",
+        description: "Las horas de validez deben ser mayor a 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/ajustes/invitaciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: changePasswordData.email,
+          horasValidez: changePasswordData.horasValidez,
+          cambioPassword: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: "Invitación para cambiar contraseña creada correctamente",
+        });
+        setIsChangePasswordDialogOpen(false);
+        setChangePasswordData({ email: "", horasValidez: 72 });
+        loadInvitations();
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al crear invitación",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al crear invitación",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCopyLink = async (link: string) => {
     try {
       await navigator.clipboard.writeText(link);
@@ -176,40 +240,6 @@ export default function InvitationsSection() {
     }
   };
 
-  const handleRevokeInvitation = async (invitationId: string) => {
-    try {
-      const response = await fetch("/api/ajustes/invitaciones", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: invitationId,
-          estado: "expirado",
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast({
-          title: "Éxito",
-          description: "Invitación revocada correctamente",
-        });
-        loadInvitations();
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Error al revocar invitación",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al revocar invitación",
-        variant: "destructive",
-      });
-    }
-  };
 
   const getRoleName = (roleId: string) => {
     const role = roles.find(r => r.id === roleId);
@@ -262,13 +292,66 @@ export default function InvitationsSection() {
       {/* Botón crear invitación */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Invitaciones ({filteredInvitations.length})</h3>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-red-600 hover:bg-red-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              Crear Invitación
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Dialog open={isChangePasswordDialogOpen} onOpenChange={setIsChangePasswordDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Key className="h-4 w-4 mr-2" />
+                Cambiar Contraseña
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Cambiar Contraseña</DialogTitle>
+                <DialogDescription>
+                  Genera un enlace para que un usuario existente pueda cambiar su contraseña
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="change-password-email">Email del Usuario</Label>
+                  <Input
+                    id="change-password-email"
+                    type="email"
+                    value={changePasswordData.email}
+                    onChange={(e) => setChangePasswordData({ ...changePasswordData, email: e.target.value })}
+                    placeholder="correo@ejemplo.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="change-password-horasValidez">Validez (horas)</Label>
+                  <Select value={changePasswordData.horasValidez.toString()} onValueChange={(value) => setChangePasswordData({ ...changePasswordData, horasValidez: parseInt(value) })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24 horas</SelectItem>
+                      <SelectItem value="48">48 horas</SelectItem>
+                      <SelectItem value="72">72 horas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsChangePasswordDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleChangePassword}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Crear Enlace
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-red-600 hover:bg-red-700 text-white">
+                <Plus className="h-4 w-4 mr-2" />
+                Crear Invitación
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Crear Nueva Invitación</DialogTitle>
@@ -329,6 +412,7 @@ export default function InvitationsSection() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Tabla de invitaciones */}
@@ -342,19 +426,18 @@ export default function InvitationsSection() {
               <TableHead>Fecha Creación</TableHead>
               <TableHead>Expira</TableHead>
               <TableHead>Enlace</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   Cargando invitaciones...
                 </TableCell>
               </TableRow>
             ) : filteredInvitations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                   No se encontraron invitaciones
                 </TableCell>
               </TableRow>
@@ -400,34 +483,6 @@ export default function InvitationsSection() {
                         <ExternalLink className="h-4 w-4" />
                       </Button>
                     </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {invitation.estado === "pendiente" && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="border-red-500 text-red-600 hover:bg-red-50 hover:border-red-600">
-                            Revocar
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Revocar invitación?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción marcará la invitación como expirada. El enlace ya no funcionará.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction 
-                              onClick={() => handleRevokeInvitation(invitation.id)}
-                              className="bg-red-600 hover:bg-red-700 text-white"
-                            >
-                              Revocar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
                   </TableCell>
                 </TableRow>
               ))

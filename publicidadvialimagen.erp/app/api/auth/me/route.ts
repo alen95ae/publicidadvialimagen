@@ -27,11 +27,14 @@ export async function GET(request: NextRequest) {
       success: true,
       user: {
         id: user.id,
+        sub: user.id,
         email: user.email || payload.email,
         name: user.nombre || payload.name, // Cambiado 'nombre' a 'name' para el header
         nombre: user.nombre || payload.name, // Mantener 'nombre' para compatibilidad con cotizaciones
         rol: user.rol || payload.role,
         role: user.rol || payload.role, // Agregar 'role' para compatibilidad con header
+        imagen_usuario: user.imagen_usuario || null,
+        vendedor: user.vendedor ?? false,
       }
     })
   } catch (error) {

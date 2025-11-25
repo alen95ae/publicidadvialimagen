@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Package, MessageSquare, Calendar, Handshake, Monitor, LineChart, Hammer, Wrench, Palette, Globe, Receipt, UserCog, Settings, Home, ShoppingCart, TrendingUp, Building2, BarChart3, ChevronRight } from "lucide-react";
+import { MessageSquare, Handshake, Monitor, ShoppingCart, ChevronRight, Package, Users, Receipt, Calendar } from "lucide-react";
 import Link from "next/link";
-import DashboardCharts from "@/components/dashboard-charts";
+import ERPModulesGrid from "@/components/erp-modules-grid";
 
 export default async function PanelPage() {
   const cookieStore = await cookies();
@@ -17,23 +17,6 @@ export default async function PanelPage() {
     redirect("/login");
   }
 
-  // Módulos para acciones rápidas
-  const quickActions = [
-    { name: "Mensajes", icon: MessageSquare, href: "/panel/mensajes" },
-    { name: "Calendario", icon: Calendar, href: "/panel/calendario" },
-    { name: "Contactos", icon: Users, href: "/panel/contactos" },
-    { name: "Ventas", icon: Handshake, href: "/panel/ventas/cotizaciones" },
-    { name: "Soportes", icon: Monitor, href: "/panel/soportes/gestion" },
-    { name: "Inventario", icon: Package, href: "/panel/inventario" },
-    { name: "Producción", icon: Hammer, href: "/panel/produccion" },
-    { name: "Mantenimiento", icon: Wrench, href: "/panel/mantenimiento" },
-    { name: "Contabilidad", icon: Receipt, href: "/panel/contabilidad" },
-    { name: "Métricas", icon: LineChart, href: "/panel/metricas" },
-    { name: "Sitio Web", icon: Globe, href: "/panel/sitio" },
-    { name: "Diseño", icon: Palette, href: "/panel/diseno" },
-    { name: "Empleados", icon: UserCog, href: "/panel/empleados" },
-    { name: "Ajustes", icon: Settings, href: "/panel/ajustes/usuarios" },
-  ];
 
   return (
       <div className="p-6 space-y-8">
@@ -195,30 +178,9 @@ export default async function PanelPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 md:grid-cols-7 xl:grid-cols-14 gap-4">
-              {quickActions.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <Link
-                    key={action.name}
-                    href={action.href}
-                    className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
-                  >
-                    <div className="w-12 h-12 rounded-lg bg-red-500 flex items-center justify-center text-white group-hover:bg-red-600 transition-colors">
-                      <Icon className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs text-center text-gray-700 font-medium">
-                      {action.name}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
+            <ERPModulesGrid />
           </CardContent>
         </Card>
-
-        {/* Gráficos y Métricas */}
-        <DashboardCharts />
       </div>
   );
 }

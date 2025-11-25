@@ -9,8 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Edit, Trash2, UserCheck, UserX, MoreHorizontal } from "lucide-react";
+import { Plus, Search, Edit, Trash2, UserCheck, UserX, MoreHorizontal, Upload, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 
 interface User {
   id: string;
@@ -20,6 +22,8 @@ interface User {
   rol_id?: string;
   fechaCreacion: string;
   ultimoAcceso?: string;
+  imagen_usuario?: any;
+  vendedor?: boolean;
 }
 
 interface Role {
@@ -44,7 +48,13 @@ export default function UsersSection() {
     nombre: "",
     email: "",
     rol_id: "",
+    vendedor: false,
   });
+
+  // Estados para imagen de perfil
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -115,7 +125,7 @@ export default function UsersSection() {
           description: "Usuario creado correctamente",
         });
         setIsCreateDialogOpen(false);
-        setFormData({ nombre: "", email: "", rol_id: "" });
+        setFormData({ nombre: "", email: "", rol_id: "", vendedor: false });
         loadUsers();
       } else {
         toast({
@@ -133,6 +143,78 @@ export default function UsersSection() {
     }
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "El archivo debe ser una imagen",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "La imagen no puede superar los 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadImage = async () => {
+    if (!imageFile || !editingUser) return;
+
+    try {
+      setUploadingImage(true);
+      const formData = new FormData();
+      formData.append('file', imageFile);
+
+      const response = await fetch(`/api/ajustes/usuarios/image?userId=${editingUser.id}`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({
+          title: "Éxito",
+          description: "Imagen de perfil actualizada correctamente",
+        });
+        setImageFile(null);
+        loadUsers();
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al subir imagen",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast({
+        title: "Error",
+        description: "Error al subir imagen",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleEditUser = async () => {
     if (!editingUser) return;
 
@@ -143,7 +225,10 @@ export default function UsersSection() {
         credentials: "include",
         body: JSON.stringify({
           id: editingUser.id,
-          ...formData,
+          nombre: formData.nombre,
+          email: formData.email,
+          rol_id: formData.rol_id,
+          vendedor: formData.vendedor,
         }),
       });
 
@@ -156,7 +241,9 @@ export default function UsersSection() {
         });
         setIsEditDialogOpen(false);
         setEditingUser(null);
-        setFormData({ nombre: "", email: "", rol_id: "" });
+        setFormData({ nombre: "", email: "", rol_id: "", vendedor: false });
+        setImagePreview(null);
+        setImageFile(null);
         loadUsers();
       } else {
         toast({
@@ -169,6 +256,38 @@ export default function UsersSection() {
       toast({
         title: "Error",
         description: "Error al actualizar usuario",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleVendedor = async (userId: string, currentValue: boolean) => {
+    try {
+      const response = await fetch("/api/ajustes/usuarios", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          id: userId,
+          vendedor: !currentValue,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        loadUsers();
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al actualizar vendedor",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar vendedor",
         variant: "destructive",
       });
     }
@@ -211,8 +330,45 @@ export default function UsersSection() {
       nombre: user.nombre,
       email: user.email,
       rol_id: user.rol_id || "",
+      vendedor: user.vendedor ?? false,
     });
+    
+    // Cargar imagen de perfil si existe
+    if (user.imagen_usuario) {
+      const imagenData = typeof user.imagen_usuario === 'string' 
+        ? JSON.parse(user.imagen_usuario) 
+        : user.imagen_usuario;
+      if (imagenData?.url) {
+        setImagePreview(imagenData.url);
+      } else {
+        setImagePreview(null);
+      }
+    } else {
+      setImagePreview(null);
+    }
+    
+    setImageFile(null);
     setIsEditDialogOpen(true);
+  };
+
+  const getInitials = (nombre: string) => {
+    if (!nombre) return "?";
+    return nombre
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getUserImage = (user: User) => {
+    if (user.imagen_usuario) {
+      const imagenData = typeof user.imagen_usuario === 'string' 
+        ? JSON.parse(user.imagen_usuario) 
+        : user.imagen_usuario;
+      return imagenData?.url || null;
+    }
+    return null;
   };
 
   const filteredUsers = users.filter(user => {
@@ -267,6 +423,7 @@ export default function UsersSection() {
               <TableHead className="text-center">Nombre</TableHead>
               <TableHead className="text-center">Email</TableHead>
               <TableHead className="text-center">Rol</TableHead>
+              <TableHead className="text-center">Vendedor</TableHead>
               <TableHead className="text-center">Fecha de Creación</TableHead>
               <TableHead className="text-center">Último Acceso</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
@@ -275,23 +432,44 @@ export default function UsersSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
+                <TableCell colSpan={7} className="text-center py-8">
                   Cargando usuarios...
                 </TableCell>
               </TableRow>
             ) : filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   No se encontraron usuarios
                 </TableCell>
               </TableRow>
             ) : (
-              filteredUsers.map((user) => (
+              filteredUsers.map((user) => {
+                const userImage = getUserImage(user);
+                return (
                 <TableRow key={user.id}>
-                  <TableCell className="text-center font-medium">{user.nombre}</TableCell>
+                  <TableCell className="text-left">
+                    <div className="flex items-center justify-start gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={userImage || ""} alt={user.nombre} />
+                        <AvatarFallback className="bg-[#D54644] text-white text-xs font-medium">
+                          {getInitials(user.nombre)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">{user.nombre}</span>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-center">{user.email}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary">{user.rol}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center">
+                      <Switch
+                        checked={user.vendedor ?? false}
+                        onCheckedChange={() => handleToggleVendedor(user.id, user.vendedor ?? false)}
+                        className="data-[state=checked]:bg-[#D54644] data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-[#B03A38] data-[state=unchecked]:hover:bg-gray-400 transition-colors"
+                      />
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     {new Date(user.fechaCreacion).toLocaleDateString()}
@@ -339,7 +517,8 @@ export default function UsersSection() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -355,6 +534,50 @@ export default function UsersSection() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Imagen de perfil */}
+            <div>
+              <Label>Imagen de Perfil</Label>
+              <div className="flex items-center gap-4 mt-2">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={imagePreview || ""} alt={formData.nombre || "Usuario"} />
+                  <AvatarFallback>{getInitials(formData.nombre || "")}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <label
+                    htmlFor="edit-image-upload"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md cursor-pointer transition-colors"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span className="text-sm">Cambiar imagen</span>
+                  </label>
+                  <input
+                    id="edit-image-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                  {imageFile && (
+                    <Button
+                      size="sm"
+                      onClick={handleUploadImage}
+                      disabled={uploadingImage}
+                      className="mt-2 bg-[#D54644] hover:bg-[#B03A38]"
+                    >
+                      {uploadingImage ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Subiendo...
+                        </>
+                      ) : (
+                        "Guardar imagen"
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div>
               <Label htmlFor="edit-nombre">Nombre</Label>
               <Input
@@ -388,6 +611,15 @@ export default function UsersSection() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="edit-vendedor">Vendedor</Label>
+              <Switch
+                id="edit-vendedor"
+                checked={formData.vendedor}
+                onCheckedChange={(checked) => setFormData({ ...formData, vendedor: checked })}
+                className="data-[state=checked]:bg-[#D54644] data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-[#B03A38] data-[state=unchecked]:hover:bg-gray-400 transition-colors"
+              />
             </div>
           </div>
           <DialogFooter>

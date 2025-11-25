@@ -19,12 +19,17 @@ interface PermisoProps {
  * </Permiso>
  */
 export function Permiso({ modulo, accion, children, fallback = null }: PermisoProps) {
-  const { tienePermiso, loading } = usePermisosContext();
+  const { tienePermiso, loading, permisos } = usePermisosContext();
 
   // Esperar a que los permisos se carguen antes de verificar
   // Esto evita el renderizado escalonado de botones
   if (loading) {
     return null;
+  }
+
+  // Si no hay permisos cargados, no mostrar nada (más seguro)
+  if (!permisos || Object.keys(permisos).length === 0) {
+    return <>{fallback}</>;
   }
 
   // Si tiene admin, tiene todos los permisos

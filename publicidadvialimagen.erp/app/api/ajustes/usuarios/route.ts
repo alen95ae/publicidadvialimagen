@@ -100,6 +100,8 @@ export async function GET(request: NextRequest) {
         fechaCreacion: record.fecha_creacion || record.created_at,
         ultimoAcceso: record.ultimo_acceso || null,
         activo: record.activo ?? true,
+        imagen_usuario: record.imagen_usuario || null,
+        vendedor: record.vendedor ?? false,
       };
     });
 
@@ -178,7 +180,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { id, nombre, email, rol_id, activo, password } = body;
+    const { id, nombre, email, rol_id, activo, password, imagen_usuario, vendedor } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID de usuario requerido" }, { status: 400 });
@@ -190,6 +192,8 @@ export async function PUT(request: NextRequest) {
       rol_id?: string;
       activo?: boolean;
       password_hash?: string;
+      imagen_usuario?: any;
+      vendedor?: boolean;
     } = {};
 
     if (nombre !== undefined) updateData.nombre = nombre;
@@ -199,6 +203,8 @@ export async function PUT(request: NextRequest) {
     if (password) {
       updateData.password_hash = await bcrypt.hash(password, 10);
     }
+    if (imagen_usuario !== undefined) updateData.imagen_usuario = imagen_usuario;
+    if (vendedor !== undefined) updateData.vendedor = vendedor;
 
     const updatedUser = await updateUserSupabase(id, updateData);
     if (!updatedUser) {

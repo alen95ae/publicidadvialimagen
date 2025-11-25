@@ -56,7 +56,7 @@ interface Support {
 }
 
 export default function SoportesPage() {
-  const { tieneFuncionTecnica, puedeEditar } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEditar, loading: permisosLoading } = usePermisosContext()
   const [supports, setSupports] = useState<Support[]>([])
   const [allSupports, setAllSupports] = useState<Support[]>([]) // Para almacenar todos los soportes cuando hay ordenamiento
   const [loading, setLoading] = useState(true)
@@ -682,7 +682,7 @@ export default function SoportesPage() {
         'Precio por m²',
         'Coste de producción',
         'Estado',
-        ...(tieneFuncionTecnica("ver propietario soportes") ? ['Propietario'] : []),
+        ...(!permisosLoading && tieneFuncionTecnica("ver propietario soportes") ? ['Propietario'] : []),
         'Empresa'
       ]
       
@@ -699,7 +699,7 @@ export default function SoportesPage() {
         s.pricePerM2 || '',
         s.productionCost || '',
         s.status || '',
-        ...(tieneFuncionTecnica("ver propietario soportes") ? [s.owner || ''] : []),
+        ...(!permisosLoading && tieneFuncionTecnica("ver propietario soportes") ? [s.owner || ''] : []),
         s.company?.name || ''
       ])
       
@@ -895,7 +895,7 @@ export default function SoportesPage() {
               <div className="flex-1" />
               
               {/* Botones de acción */}
-              {tieneFuncionTecnica("ver boton exportar") && (
+              {!permisosLoading && tieneFuncionTecnica("ver boton exportar") && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1172,7 +1172,6 @@ export default function SoportesPage() {
                 <Table>
                 <TableHeader>
                   <TableRow>
-                    {puedeEditar("soportes") && (
                     <TableHead className="w-10">
                       <Checkbox
                         checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
@@ -1180,7 +1179,6 @@ export default function SoportesPage() {
                         aria-label="Seleccionar todo"
                       />
                     </TableHead>
-                    )}
                     <TableHead>
                       <div className="flex items-center gap-2">
                         <span>Código</span>
@@ -1220,7 +1218,6 @@ export default function SoportesPage() {
                 <TableBody>
                   {supportsArray.map((support) => (
                     <TableRow key={support.id}>
-                      {puedeEditar("soportes") && (
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[support.id]}
@@ -1230,7 +1227,6 @@ export default function SoportesPage() {
                           aria-label={`Seleccionar ${support.code}`}
                         />
                       </TableCell>
-                      )}
                       <TableCell className="whitespace-nowrap">
                         {selected[support.id] && puedeEditar("soportes") ? (
                           <Input

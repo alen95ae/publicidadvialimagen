@@ -284,7 +284,6 @@ export default function Sidebar({ children }: SidebarProps) {
                 </button>
               </li>
             )}
-            })}
           </ul>
         </nav>
       </div>

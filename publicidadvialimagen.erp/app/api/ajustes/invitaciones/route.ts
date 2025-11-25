@@ -8,6 +8,7 @@ import {
   createInvitacion,
   updateInvitacion
 } from "@/lib/supabaseInvitaciones";
+import { findUserByEmailSupabase } from "@/lib/supabaseUsers";
 
 // GET - Obtener invitaciones
 export async function GET(request: NextRequest) {
@@ -68,40 +69,99 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
     }
 
-    const { email, rol, horasValidez } = await request.json();
+    const { email, rol, horasValidez, cambioPassword } = await request.json();
 
-    if (!email || !rol || !horasValidez) {
-      return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
-    }
+    // Validaciones según el tipo de invitación
+    if (cambioPassword) {
+      // Para cambio de contraseña, solo necesitamos email y horasValidez
+      if (!email || !horasValidez) {
+        return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
+      }
 
-    // Verificar si ya existe una invitación pendiente para este email
-    const existingInvitation = await findInvitacionPendienteByEmail(email);
-    
-    if (existingInvitation) {
-      return NextResponse.json({ error: "Ya existe una invitación pendiente para este email" }, { status: 400 });
-    }
+      // Verificar que el usuario existe
+      const existingUser = await findUserByEmailSupabase(email);
+      if (!existingUser) {
+        return NextResponse.json({ error: "No se encontró un usuario con ese email" }, { status: 404 });
+      }
 
-    // Generar token único para la invitación
-    const invitationToken = randomBytes(32).toString('hex');
-    
-    // Calcular fechas
-    const fechaCreacion = new Date().toISOString();
-    const fechaExpiracion = new Date(Date.now() + horasValidez * 60 * 60 * 1000).toISOString();
-    
-    // Generar enlace de invitación
-    // Usar la función helper que maneja correctamente localhost vs producción
-    const baseUrl = getBaseUrl().replace(/\/$/, ''); // Remover barra final si existe
-    const enlace = `${baseUrl}/register?token=${invitationToken}&email=${encodeURIComponent(email)}`;
+      // Usar el rol_id del usuario existente (necesario para crear la invitación)
+      const userRolId = existingUser.fields.RolId || existingUser.fields.Rol || "usuario";
+      
+      // Verificar si ya existe una invitación pendiente para este email
+      const existingInvitation = await findInvitacionPendienteByEmail(email);
+      
+      if (existingInvitation) {
+        return NextResponse.json({ error: "Ya existe una invitación pendiente para este email" }, { status: 400 });
+      }
 
-    // Crear invitación en Supabase
-    const newInvitation = await createInvitacion(
-      email,
-      rol,
-      invitationToken,
-      fechaCreacion,
-      fechaExpiracion,
-      enlace
-    );
+      // Generar token único para la invitación
+      const invitationToken = randomBytes(32).toString('hex');
+      
+      // Calcular fechas
+      const fechaCreacion = new Date().toISOString();
+      const fechaExpiracion = new Date(Date.now() + horasValidez * 60 * 60 * 1000).toISOString();
+      
+      // Generar enlace para cambio de contraseña
+      const baseUrl = getBaseUrl().replace(/\/$/, '');
+      const enlace = `${baseUrl}/reset-password?token=${invitationToken}&email=${encodeURIComponent(email)}`;
+
+      // Crear invitación en Supabase
+      const newInvitation = await createInvitacion(
+        email,
+        userRolId,
+        invitationToken,
+        fechaCreacion,
+        fechaExpiracion,
+        enlace
+      );
+
+      return NextResponse.json({ 
+        message: "Invitación para cambiar contraseña creada correctamente",
+        invitation: {
+          id: newInvitation.id,
+          email: newInvitation.email,
+          rol: newInvitation.rol,
+          token: newInvitation.token,
+          estado: newInvitation.estado,
+          fechaCreacion: newInvitation.fechaCreacion,
+          fechaExpiracion: newInvitation.fechaExpiracion,
+          enlace: newInvitation.enlace
+        }
+      });
+    } else {
+      // Para invitación normal, necesitamos email, rol y horasValidez
+      if (!email || !rol || !horasValidez) {
+        return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
+      }
+
+      // Verificar si ya existe una invitación pendiente para este email
+      const existingInvitation = await findInvitacionPendienteByEmail(email);
+      
+      if (existingInvitation) {
+        return NextResponse.json({ error: "Ya existe una invitación pendiente para este email" }, { status: 400 });
+      }
+
+      // Generar token único para la invitación
+      const invitationToken = randomBytes(32).toString('hex');
+      
+      // Calcular fechas
+      const fechaCreacion = new Date().toISOString();
+      const fechaExpiracion = new Date(Date.now() + horasValidez * 60 * 60 * 1000).toISOString();
+      
+      // Generar enlace de invitación
+      // Usar la función helper que maneja correctamente localhost vs producción
+      const baseUrl = getBaseUrl().replace(/\/$/, ''); // Remover barra final si existe
+      const enlace = `${baseUrl}/register?token=${invitationToken}&email=${encodeURIComponent(email)}`;
+
+      // Crear invitación en Supabase
+      const newInvitation = await createInvitacion(
+        email,
+        rol,
+        invitationToken,
+        fechaCreacion,
+        fechaExpiracion,
+        enlace
+      );
 
     return NextResponse.json({ 
       message: "Invitación creada correctamente",

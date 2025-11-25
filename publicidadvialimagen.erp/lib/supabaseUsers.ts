@@ -155,9 +155,12 @@ export async function updateUserSupabase(
   userId: string,
   updates: {
     nombre?: string
+    email?: string
     rol_id?: string
     activo?: boolean
     password_hash?: string
+    imagen_usuario?: any
+    vendedor?: boolean
   }
 ): Promise<Usuario | null> {
   const updateData: any = {
@@ -165,10 +168,13 @@ export async function updateUserSupabase(
   }
 
   if (updates.nombre !== undefined) updateData.nombre = updates.nombre
+  if (updates.email !== undefined) updateData.email = updates.email.trim().toLowerCase()
   if (updates.rol_id !== undefined) updateData.rol_id = updates.rol_id
   if (updates.activo !== undefined) updateData.activo = updates.activo
   // En Supabase el campo se llama "passwordhash" (sin guión bajo)
   if (updates.password_hash !== undefined) updateData.passwordhash = updates.password_hash
+  if (updates.imagen_usuario !== undefined) updateData.imagen_usuario = updates.imagen_usuario
+  if (updates.vendedor !== undefined) updateData.vendedor = updates.vendedor
 
   const { data, error } = await supabase
     .from('usuarios')
@@ -184,13 +190,21 @@ export async function updateUserSupabase(
 
   if (!data) return null
 
-  return supabaseToUsuario(data as UsuarioSupabase)
+  const usuario = supabaseToUsuario(data as UsuarioSupabase)
+  return {
+    ...usuario,
+    imagen_usuario: data.imagen_usuario || null,
+    vendedor: data.vendedor ?? false,
+    email: data.email,
+    nombre: data.nombre,
+    rol: data.rol || 'invitado',
+  }
 }
 
 /**
- * Obtener usuario por ID
+ * Obtener usuario por ID (con todos los campos incluyendo imagen_usuario y vendedor)
  */
-export async function getUserByIdSupabase(userId: string): Promise<Usuario | null> {
+export async function getUserByIdSupabase(userId: string): Promise<any | null> {
   const { data, error } = await supabase
     .from('usuarios')
     .select('*')
@@ -207,7 +221,15 @@ export async function getUserByIdSupabase(userId: string): Promise<Usuario | nul
 
   if (!data) return null
 
-  return supabaseToUsuario(data as UsuarioSupabase)
+  const usuario = supabaseToUsuario(data as UsuarioSupabase)
+  return {
+    ...usuario,
+    imagen_usuario: data.imagen_usuario || null,
+    vendedor: data.vendedor ?? false,
+    email: data.email,
+    nombre: data.nombre,
+    rol: data.rol || 'invitado',
+  }
 }
 
 /**

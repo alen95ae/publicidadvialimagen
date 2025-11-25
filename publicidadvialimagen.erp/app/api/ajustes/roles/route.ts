@@ -73,11 +73,22 @@ export async function GET(request: NextRequest) {
       // Construir estructura: { modulo: { accion: true/false } }
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
       
+      // Separar permisos técnicos
+      const permisosTecnicos: Array<{ id: string; accion: string; asignado: boolean }> = [];
+      
       (permisosData || []).forEach(permiso => {
-        if (!permisosMatrix[permiso.modulo]) {
-          permisosMatrix[permiso.modulo] = {};
+        if (permiso.modulo === 'tecnico') {
+          permisosTecnicos.push({
+            id: permiso.id,
+            accion: permiso.accion,
+            asignado: permisoIds.includes(permiso.id),
+          });
+        } else {
+          if (!permisosMatrix[permiso.modulo]) {
+            permisosMatrix[permiso.modulo] = {};
+          }
+          permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
         }
-        permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
       });
 
       return {
@@ -85,6 +96,7 @@ export async function GET(request: NextRequest) {
         nombre: role.nombre,
         descripcion: role.descripcion || "",
         permisos: permisosMatrix,
+        permisosTecnicos: permisosTecnicos,
       };
     });
 
@@ -107,9 +119,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { nombre, descripcion, permisos } = body; // permisos es un array de permiso_id
+    const { nombre, descripcion, permisos, permisosTecnicos } = body; // permisos es un array de permiso_id, permisosTecnicos también
 
-    console.log("📝 POST /api/ajustes/roles - Datos recibidos:", { nombre, descripcion, permisos });
+    console.log("📝 POST /api/ajustes/roles - Datos recibidos:", { nombre, descripcion, permisos, permisosTecnicos });
 
     if (!nombre || !descripcion) {
       return NextResponse.json({ error: "Nombre y descripción son obligatorios" }, { status: 400 });
@@ -130,8 +142,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Insertar permisos si se proporcionaron
-    if (permisos && Array.isArray(permisos) && permisos.length > 0) {
-      const rolPermisosToInsert = permisos.map((permisoId: string) => ({
+    const todosLosPermisos = [
+      ...(permisos && Array.isArray(permisos) ? permisos : []),
+      ...(permisosTecnicos && Array.isArray(permisosTecnicos) ? permisosTecnicos : []),
+    ];
+
+    if (todosLosPermisos.length > 0) {
+      const rolPermisosToInsert = todosLosPermisos.map((permisoId: string) => ({
         rol_id: roleData.id,
         permiso_id: permisoId,
       }));
@@ -193,9 +210,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, nombre, descripcion, permisos } = body; // permisos es un array de permiso_id
+    const { id, nombre, descripcion, permisos, permisosTecnicos: permisosTecnicosIds } = body; // permisos es un array de permiso_id, permisosTecnicos también
 
-    console.log("📝 PUT /api/ajustes/roles - Datos recibidos:", { id, nombre, descripcion, permisos });
+    console.log("📝 PUT /api/ajustes/roles - Datos recibidos:", { id, nombre, descripcion, permisos, permisosTecnicos: permisosTecnicosIds });
 
     if (!id || !nombre || !descripcion) {
       return NextResponse.json({ error: "ID, nombre y descripción son obligatorios" }, { status: 400 });
@@ -227,9 +244,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: `Error al eliminar permisos previos: ${deleteError.message}` }, { status: 500 });
     }
 
-    // 3. Insertar nuevos permisos si se proporcionaron
-    if (permisos && Array.isArray(permisos) && permisos.length > 0) {
-      const rolPermisosToInsert = permisos.map((permisoId: string) => ({
+    // 3. Insertar nuevos permisos (módulos + técnicos) si se proporcionaron
+    const todosLosPermisos = [
+      ...(permisos && Array.isArray(permisos) ? permisos : []),
+      ...(permisosTecnicosIds && Array.isArray(permisosTecnicosIds) ? permisosTecnicosIds : []),
+    ];
+
+    if (todosLosPermisos.length > 0) {
+      const rolPermisosToInsert = todosLosPermisos.map((permisoId: string) => ({
         rol_id: id,
         permiso_id: permisoId,
       }));
@@ -258,12 +280,21 @@ export async function PUT(request: NextRequest) {
 
     const permisoIds = (rolPermisosData || []).map(rp => rp.permiso_id);
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
+    const permisosTecnicos: Array<{ id: string; accion: string; asignado: boolean }> = [];
     
     (permisosData || []).forEach(permiso => {
-      if (!permisosMatrix[permiso.modulo]) {
-        permisosMatrix[permiso.modulo] = {};
+      if (permiso.modulo === 'tecnico') {
+        permisosTecnicos.push({
+          id: permiso.id,
+          accion: permiso.accion,
+          asignado: permisoIds.includes(permiso.id),
+        });
+      } else {
+        if (!permisosMatrix[permiso.modulo]) {
+          permisosMatrix[permiso.modulo] = {};
+        }
+        permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
       }
-      permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
     });
 
     console.log("✅ Rol actualizado correctamente");
@@ -274,6 +305,7 @@ export async function PUT(request: NextRequest) {
         nombre: roleData.nombre,
         descripcion: roleData.descripcion,
         permisos: permisosMatrix,
+        permisosTecnicos: permisosTecnicos,
       }
     });
   } catch (error) {

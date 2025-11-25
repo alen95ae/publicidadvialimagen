@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { User, Bell, Mail, FileText } from "lucide-react"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -136,6 +137,7 @@ interface Notification {
 export default function PanelHeader() {
   const router = useRouter()
   const pathname = usePathname()
+  const { tieneFuncionTecnica } = usePermisosContext()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -308,19 +310,33 @@ export default function PanelHeader() {
               </div>
               {moduleConfig.navItems.length > 0 && (
                 <div className="flex items-center gap-6 ml-4 overflow-x-auto">
-                  {moduleConfig.navItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`text-sm font-medium whitespace-nowrap transition-colors ${
-                        isActive(item.href)
-                          ? "text-[#D54644] hover:text-[#D54644]/80"
-                          : "text-gray-600 hover:text-[#D54644]"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
+                  {moduleConfig.navItems
+                    .filter((item) => {
+                      // Filtrar según permisos técnicos
+                      if (item.href === "/panel/soportes/informes" && !tieneFuncionTecnica("ver informes soportes")) {
+                        return false;
+                      }
+                      if (item.href === "/panel/soportes/mantenimiento" && !tieneFuncionTecnica("ver mantenimiento soportes")) {
+                        return false;
+                      }
+                      if (item.href === "/panel/soportes/costes" && !tieneFuncionTecnica("ver costes soportes")) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`text-sm font-medium whitespace-nowrap transition-colors ${
+                          isActive(item.href)
+                            ? "text-[#D54644] hover:text-[#D54644]/80"
+                            : "text-gray-600 hover:text-[#D54644]"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
                 </div>
               )}
             </>

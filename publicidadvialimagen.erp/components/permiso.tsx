@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { usePermisos } from "@/hooks/use-permisos";
+import { usePermisosContext } from "@/hooks/permisos-provider";
 
 interface PermisoProps {
   modulo: string;
@@ -19,7 +19,13 @@ interface PermisoProps {
  * </Permiso>
  */
 export function Permiso({ modulo, accion, children, fallback = null }: PermisoProps) {
-  const { tienePermiso } = usePermisos();
+  const { tienePermiso, loading } = usePermisosContext();
+
+  // Esperar a que los permisos se carguen antes de verificar
+  // Esto evita el renderizado escalonado de botones
+  if (loading) {
+    return null;
+  }
 
   // Si tiene admin, tiene todos los permisos
   if (tienePermiso(modulo, "admin")) {

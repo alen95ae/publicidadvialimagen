@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { Permiso, PermisoEditar, PermisoEliminar } from "@/components/permiso"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Constantes para colores de estado (formato Airtable)
 const STATUS_META = {
@@ -55,6 +56,7 @@ interface Support {
 }
 
 export default function SoportesPage() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const [supports, setSupports] = useState<Support[]>([])
   const [allSupports, setAllSupports] = useState<Support[]>([]) // Para almacenar todos los soportes cuando hay ordenamiento
   const [loading, setLoading] = useState(true)
@@ -680,7 +682,7 @@ export default function SoportesPage() {
         'Precio por m²',
         'Coste de producción',
         'Estado',
-        'Propietario',
+        ...(tieneFuncionTecnica("ver propietario soportes") ? ['Propietario'] : []),
         'Empresa'
       ]
       
@@ -697,7 +699,7 @@ export default function SoportesPage() {
         s.pricePerM2 || '',
         s.productionCost || '',
         s.status || '',
-        s.owner || '',
+        ...(tieneFuncionTecnica("ver propietario soportes") ? [s.owner || ''] : []),
         s.company?.name || ''
       ])
       
@@ -893,22 +895,25 @@ export default function SoportesPage() {
               <div className="flex-1" />
               
               {/* Botones de acción */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCsvExport}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exportar CSV
-              </Button>
+              {tieneFuncionTecnica("ver boton exportar") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCsvExport}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              )}
               
-              <Dialog open={openImport} onOpenChange={setOpenImport}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar
-                  </Button>
-                </DialogTrigger>
+              {tieneFuncionTecnica("ver boton importar") && (
+                <Dialog open={openImport} onOpenChange={setOpenImport}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Importar
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Importar soportes (CSV)</DialogTitle>
@@ -927,6 +932,7 @@ export default function SoportesPage() {
                   {importLoading && <p>Importando...</p>}
                 </DialogContent>
               </Dialog>
+              )}
               
               <PermisoEditar modulo="soportes">
                 <Link href="/panel/soportes/nuevo">

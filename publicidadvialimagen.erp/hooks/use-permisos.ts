@@ -74,6 +74,11 @@ export function usePermisos() {
     return tienePermiso(modulo, "admin");
   };
 
+  // Helper para verificar funciones técnicas
+  const tieneFuncionTecnica = (accion: string): boolean => {
+    return tienePermiso("tecnico", accion);
+  };
+
   return {
     permisos,
     loading,
@@ -83,6 +88,7 @@ export function usePermisos() {
     puedeEditar,
     puedeEliminar,
     esAdmin,
+    tieneFuncionTecnica,
     refresh: loadPermisos,
   };
 }

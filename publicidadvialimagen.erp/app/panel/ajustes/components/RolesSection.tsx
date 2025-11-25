@@ -42,6 +42,9 @@ export default function RolesSection() {
 
   // Matriz de permisos: { modulo: { accion: boolean } }
   const [permisoMatrix, setPermisoMatrix] = useState<Record<string, Record<string, boolean>>>({});
+  
+  // Estado para permisos técnicos: { id: string, accion: string, asignado: boolean }
+  const [permisosTecnicos, setPermisosTecnicos] = useState<Array<{ id: string; accion: string; asignado: boolean }>>([]);
 
   useEffect(() => {
     loadRoles();
@@ -57,15 +60,26 @@ export default function RolesSection() {
         setRoles(data.roles || []);
         setPermisos(data.permisos || []);
         
-        // Inicializar matriz de permisos basada en los permisos disponibles
+        // Inicializar matriz de permisos basada en los permisos disponibles (excluyendo técnicos)
         const initialMatrix: Record<string, Record<string, boolean>> = {};
+        const permisosTecnicosInicial: Array<{ id: string; accion: string; asignado: boolean }> = [];
+        
         (data.permisos || []).forEach((permiso: Permiso) => {
-          if (!initialMatrix[permiso.modulo]) {
-            initialMatrix[permiso.modulo] = {};
+          if (permiso.modulo === 'tecnico') {
+            permisosTecnicosInicial.push({
+              id: permiso.id,
+              accion: permiso.accion,
+              asignado: false,
+            });
+          } else {
+            if (!initialMatrix[permiso.modulo]) {
+              initialMatrix[permiso.modulo] = {};
+            }
+            initialMatrix[permiso.modulo][permiso.accion] = false;
           }
-          initialMatrix[permiso.modulo][permiso.accion] = false;
         });
         setPermisoMatrix(initialMatrix);
+        setPermisosTecnicos(permisosTecnicosInicial);
       } else {
         toast({
           title: "Error",
@@ -86,7 +100,7 @@ export default function RolesSection() {
 
   const handleCreateRole = async () => {
     try {
-      // Obtener lista de permiso_id seleccionados
+      // Obtener lista de permiso_id seleccionados (módulos normales)
       const permisoIds: string[] = [];
       Object.entries(permisoMatrix).forEach(([modulo, acciones]) => {
         Object.entries(acciones).forEach(([accion, activo]) => {
@@ -99,10 +113,16 @@ export default function RolesSection() {
         });
       });
 
+      // Obtener IDs de permisos técnicos seleccionados
+      const permisosTecnicosIds = permisosTecnicos
+        .filter(pt => pt.asignado)
+        .map(pt => pt.id);
+
       const payload = {
         nombre: formData.nombre,
         descripcion: formData.descripcion,
         permisos: permisoIds,
+        permisosTecnicos: permisosTecnicosIds,
       };
       
       console.log("📤 Enviando datos para crear rol:", payload);
@@ -124,13 +144,23 @@ export default function RolesSection() {
         setFormData({ nombre: "", descripcion: "" });
         // Resetear matriz de permisos
         const initialMatrix: Record<string, Record<string, boolean>> = {};
+        const permisosTecnicosReset: Array<{ id: string; accion: string; asignado: boolean }> = [];
         permisos.forEach(permiso => {
-          if (!initialMatrix[permiso.modulo]) {
-            initialMatrix[permiso.modulo] = {};
+          if (permiso.modulo === 'tecnico') {
+            permisosTecnicosReset.push({
+              id: permiso.id,
+              accion: permiso.accion,
+              asignado: false,
+            });
+          } else {
+            if (!initialMatrix[permiso.modulo]) {
+              initialMatrix[permiso.modulo] = {};
+            }
+            initialMatrix[permiso.modulo][permiso.accion] = false;
           }
-          initialMatrix[permiso.modulo][permiso.accion] = false;
         });
         setPermisoMatrix(initialMatrix);
+        setPermisosTecnicos(permisosTecnicosReset);
         loadRoles();
       } else {
         toast({
@@ -152,7 +182,7 @@ export default function RolesSection() {
     if (!editingRole) return;
 
     try {
-      // Obtener lista de permiso_id seleccionados
+      // Obtener lista de permiso_id seleccionados (módulos normales)
       const permisoIds: string[] = [];
       Object.entries(permisoMatrix).forEach(([modulo, acciones]) => {
         Object.entries(acciones).forEach(([accion, activo]) => {
@@ -165,11 +195,17 @@ export default function RolesSection() {
         });
       });
 
+      // Obtener IDs de permisos técnicos seleccionados
+      const permisosTecnicosIds = permisosTecnicos
+        .filter(pt => pt.asignado)
+        .map(pt => pt.id);
+
       const payload = {
         id: editingRole.id,
         nombre: formData.nombre,
         descripcion: formData.descripcion,
         permisos: permisoIds,
+        permisosTecnicos: permisosTecnicosIds,
       };
       
       console.log("📤 Enviando datos para editar rol:", payload);
@@ -245,6 +281,21 @@ export default function RolesSection() {
     });
     // Cargar permisos del rol en la matriz
     setPermisoMatrix({ ...role.permisos });
+    // Cargar permisos técnicos del rol
+    if ((role as any).permisosTecnicos) {
+      setPermisosTecnicos((role as any).permisosTecnicos);
+    } else {
+      // Si no vienen permisos técnicos, inicializar desde permisos disponibles
+      const permisosTecnicosInicial: Array<{ id: string; accion: string; asignado: boolean }> = [];
+      permisos.filter(p => p.modulo === 'tecnico').forEach(permiso => {
+        permisosTecnicosInicial.push({
+          id: permiso.id,
+          accion: permiso.accion,
+          asignado: false,
+        });
+      });
+      setPermisosTecnicos(permisosTecnicosInicial);
+    }
     setIsEditDialogOpen(true);
   };
 
@@ -278,17 +329,26 @@ export default function RolesSection() {
     }
   };
 
-  // Agrupar permisos por módulo
-  const permisosPorModulo = permisos.reduce((acc, permiso) => {
-    if (!acc[permiso.modulo]) {
-      acc[permiso.modulo] = [];
-    }
-    acc[permiso.modulo].push(permiso);
-    return acc;
-  }, {} as Record<string, Permiso[]>);
+  // Agrupar permisos por módulo (excluyendo técnicos)
+  const permisosPorModulo = permisos
+    .filter(p => p.modulo !== 'tecnico')
+    .reduce((acc, permiso) => {
+      if (!acc[permiso.modulo]) {
+        acc[permiso.modulo] = [];
+      }
+      acc[permiso.modulo].push(permiso);
+      return acc;
+    }, {} as Record<string, Permiso[]>);
 
   // Obtener módulos únicos ordenados
   const modulos = Object.keys(permisosPorModulo).sort();
+
+  // Función para cambiar estado de permiso técnico
+  const handlePermisoTecnicoChange = (id: string, checked: boolean) => {
+    setPermisosTecnicos(prev => 
+      prev.map(pt => pt.id === id ? { ...pt, asignado: checked } : pt)
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -300,13 +360,23 @@ export default function RolesSection() {
           if (open) {
             // Inicializar matriz de permisos cuando se abre el diálogo
             const initialMatrix: Record<string, Record<string, boolean>> = {};
+            const permisosTecnicosInicial: Array<{ id: string; accion: string; asignado: boolean }> = [];
             permisos.forEach(permiso => {
-              if (!initialMatrix[permiso.modulo]) {
-                initialMatrix[permiso.modulo] = {};
+              if (permiso.modulo === 'tecnico') {
+                permisosTecnicosInicial.push({
+                  id: permiso.id,
+                  accion: permiso.accion,
+                  asignado: false,
+                });
+              } else {
+                if (!initialMatrix[permiso.modulo]) {
+                  initialMatrix[permiso.modulo] = {};
+                }
+                initialMatrix[permiso.modulo][permiso.accion] = false;
               }
-              initialMatrix[permiso.modulo][permiso.accion] = false;
             });
             setPermisoMatrix(initialMatrix);
+            setPermisosTecnicos(permisosTecnicosInicial);
             setFormData({ nombre: "", descripcion: "" });
           }
         }}>
@@ -376,6 +446,32 @@ export default function RolesSection() {
                       </Card>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Sección Funciones Técnicas */}
+              <div>
+                <Label className="text-base font-semibold">Funciones Técnicas</Label>
+                <div className="mt-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="space-y-3">
+                        {permisosTecnicos.map((permisoTecnico) => (
+                          <div key={permisoTecnico.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                            <Label htmlFor={`create-tecnico-${permisoTecnico.id}`} className="text-sm font-normal cursor-pointer">
+                              {permisoTecnico.accion}
+                            </Label>
+                            <Switch
+                              id={`create-tecnico-${permisoTecnico.id}`}
+                              checked={permisoTecnico.asignado}
+                              onCheckedChange={(checked) => handlePermisoTecnicoChange(permisoTecnico.id, checked)}
+                              className="data-[state=checked]:bg-red-600"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </div>
@@ -534,6 +630,32 @@ export default function RolesSection() {
                     </Card>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Sección Funciones Técnicas */}
+            <div>
+              <Label className="text-base font-semibold">Funciones Técnicas</Label>
+              <div className="mt-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      {permisosTecnicos.map((permisoTecnico) => (
+                        <div key={permisoTecnico.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                          <Label htmlFor={`tecnico-${permisoTecnico.id}`} className="text-sm font-normal cursor-pointer">
+                            {permisoTecnico.accion}
+                          </Label>
+                          <Switch
+                            id={`tecnico-${permisoTecnico.id}`}
+                            checked={permisoTecnico.asignado}
+                            onCheckedChange={(checked) => handlePermisoTecnicoChange(permisoTecnico.id, checked)}
+                            className="data-[state=checked]:bg-red-600"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>

@@ -25,7 +25,7 @@ import {
   Home,
 } from "lucide-react"
 import PanelHeader from "@/components/panel-header"
-import { usePermisos } from "@/hooks/use-permisos"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 const modules = [
   { key: "panel", title: "Panel Principal", href: "/panel", icon: Home },
@@ -54,7 +54,7 @@ export default function Sidebar({ children }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { permisos, puedeVer } = usePermisos()
+  const { permisos, puedeVer, puedeEditar, esAdmin, loading } = usePermisosContext()
 
   // Persistir el estado del sidebar en localStorage
   useEffect(() => {
@@ -192,8 +192,18 @@ export default function Sidebar({ children }: SidebarProps) {
                 )
               }
               
-              // Ajustes solo para admin/desarrollador (ya verificado en middleware)
+              // Esperar a que los permisos se carguen antes de filtrar módulos
+              // Esto evita el renderizado escalonado
+              if (loading) {
+                return null
+              }
+              
+              // Ajustes: solo mostrar si tiene permiso ver, editar o admin
               if (module.key === 'ajustes') {
+                const tieneAcceso = puedeVer(module.key) || puedeEditar(module.key) || esAdmin(module.key)
+                if (!tieneAcceso) {
+                  return null
+                }
                 const isActive = pathname.startsWith('/panel/ajustes')
                 return (
                   <li key={module.key}>
@@ -229,30 +239,6 @@ export default function Sidebar({ children }: SidebarProps) {
                 ? (pathname === module.href || pathname === '/panel/insumos')
                 : pathname === module.href || pathname.startsWith(module.href + '/')
               
-              // Manejar logout como botón especial
-              if (module.isLogout) {
-                return (
-                  <li key={module.key}>
-                    <button
-                      onClick={handleLogout}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group w-full text-left ${
-                        'text-gray-700 hover:bg-red-50 hover:text-red-600'
-                      } ${isCollapsed ? 'justify-center' : ''}`}
-                      title={isCollapsed ? module.title : undefined}
-                    >
-                      <Icon className={`w-6 h-6 flex-shrink-0 ${
-                        'text-gray-600 group-hover:text-red-600'
-                      }`} />
-                      {!isCollapsed && (
-                        <span className="text-sm font-medium truncate">
-                          {module.title}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                )
-              }
-              
               return (
                 <li key={module.key}>
                   <Link
@@ -275,6 +261,29 @@ export default function Sidebar({ children }: SidebarProps) {
                   </Link>
                 </li>
               )
+            })}
+            
+            {/* Botón de salir al final, en rojo */}
+            {modules.find(m => m.isLogout) && (
+              <li>
+                <button
+                  onClick={handleLogout}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors group w-full text-left ${
+                    'text-red-600 hover:bg-red-50 hover:text-red-700'
+                  } ${isCollapsed ? 'justify-center' : ''}`}
+                  title={isCollapsed ? 'Salir' : undefined}
+                >
+                  <Power className={`w-6 h-6 flex-shrink-0 ${
+                    'text-red-600 group-hover:text-red-700'
+                  }`} />
+                  {!isCollapsed && (
+                    <span className="text-sm font-medium truncate">
+                      Salir
+                    </span>
+                  )}
+                </button>
+              </li>
+            )}
             })}
           </ul>
         </nav>

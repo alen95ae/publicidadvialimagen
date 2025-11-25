@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { usePermisos } from "@/hooks/use-permisos";
+import { usePermisosContext } from "@/hooks/permisos-provider";
 
 interface ProtectRouteProps {
   modulo: string;
@@ -22,7 +22,7 @@ interface ProtectRouteProps {
  */
 export function ProtectRoute({ modulo, accion = "ver", children, redirectTo = "/panel/no-autorizado" }: ProtectRouteProps) {
   const router = useRouter();
-  const { permisos, loading, puedeVer, puedeEditar, puedeEliminar, esAdmin } = usePermisos();
+  const { permisos, loading, puedeVer, puedeEditar, puedeEliminar, esAdmin } = usePermisosContext();
 
   useEffect(() => {
     if (loading) return;

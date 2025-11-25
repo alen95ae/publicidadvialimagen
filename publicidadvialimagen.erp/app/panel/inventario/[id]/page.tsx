@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ArrowLeft, Save, Trash2, Edit, Image as ImageIcon, Calculator, DollarSign, Plus, X, Palette, RotateCcw, Eye } from "lucide-react"
+import { ArrowLeft, Save, Trash2, Edit, Image as ImageIcon, Calculator, DollarSign, Plus, X, Palette, RotateCcw, Eye, Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useProductoVariantes } from "@/hooks/useProductoVariantes"
@@ -99,6 +99,11 @@ export default function ProductoDetailPage() {
   const [showCostDropdown, setShowCostDropdown] = useState<number | null>(null)
   const [totalCost, setTotalCost] = useState(0)
   const [editableCost, setEditableCost] = useState<string>("")
+  const [isApplyingCost, setIsApplyingCost] = useState(false)
+  const [costApplied, setCostApplied] = useState(false)
+  const hasManualCostRef = useRef(false)
+  const savedCostRef = useRef<number | null>(null)
+  const lastCalculatedCostRef = useRef(0)
   
   // Estados para calculadora de precios
   const [priceRowIdCounter, setPriceRowIdCounter] = useState(5)
@@ -110,6 +115,12 @@ export default function ProductoDetailPage() {
   ])
   const [totalPrice, setTotalPrice] = useState(0)
   const [editablePrice, setEditablePrice] = useState<string>("")
+  const isPriceManuallyEditedRef = useRef(false)
+  const hasManualPriceRef = useRef(false)
+  const savedPriceRef = useRef<number | null>(null)
+  const lastCalculatedPriceRef = useRef(0)
+  const [isApplyingPrice, setIsApplyingPrice] = useState(false)
+  const [priceApplied, setPriceApplied] = useState(false)
   const [utilidadReal, setUtilidadReal] = useState<number>(0)
   const [objetivoUtilidadReal, setObjetivoUtilidadReal] = useState<string>("")
   
@@ -142,6 +153,9 @@ export default function ProductoDetailPage() {
   ])
   const [priceRowIdCounterVariante, setPriceRowIdCounterVariante] = useState(5)
   const [editablePriceVariante, setEditablePriceVariante] = useState<string>("")
+  const isPriceManuallyEditedVarianteRef = useRef(false)
+  const [isApplyingPriceVariante, setIsApplyingPriceVariante] = useState(false)
+  const [priceAppliedVariante, setPriceAppliedVariante] = useState(false)
   const [utilidadRealVariante, setUtilidadRealVariante] = useState<number>(0)
   const [objetivoUtilidadRealVariante, setObjetivoUtilidadRealVariante] = useState<string>("")
   
@@ -283,6 +297,7 @@ export default function ProductoDetailPage() {
             if (calcData.totalPrice !== undefined) {
               setTotalPrice(calcData.totalPrice)
               setEditablePrice(calcData.totalPrice.toFixed(2))
+              isPriceManuallyEditedRef.current = false // Resetear cuando se carga desde guardado
             }
             if (calcData.utilidadReal !== undefined) {
               setUtilidadReal(calcData.utilidadReal)
@@ -497,6 +512,7 @@ export default function ProductoDetailPage() {
   // Funciones para calculadora de precios por variante
   const openCalculadoraVariante = (variante: any) => {
     setVarianteCalculadora(variante)
+    isPriceManuallyEditedVarianteRef.current = false // Resetear cuando se abre la calculadora
     
     // Inicializar calculadora con coste de la variante
     const costeVariante = getCosteFinal(variante)
@@ -635,7 +651,17 @@ export default function ProductoDetailPage() {
   useEffect(() => {
     if (calculadoraVarianteOpen) {
       const total = priceRowsVariante.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
-      setEditablePriceVariante(total.toFixed(2))
+      
+      // Solo actualizar editablePriceVariante si el usuario NO lo está editando manualmente
+      if (!isPriceManuallyEditedVarianteRef.current) {
+        setEditablePriceVariante(total.toFixed(2))
+      } else {
+        // Si está en modo manual, verificar si el valor escrito coincide con el calculado
+        const userValue = parseFloat(editablePriceVariante) || 0
+        if (Math.abs(userValue - total) < 0.01) {
+          isPriceManuallyEditedVarianteRef.current = false
+        }
+      }
       
       const coste = parseNum(priceRowsVariante.find(r => r.campo === "Coste")?.valor ?? 0)
       const utilidadPorcentaje = parseNum(priceRowsVariante.find(r => r.campo === "Utilidad (U)")?.porcentaje ?? 0) / 100
@@ -866,23 +892,29 @@ export default function ProductoDetailPage() {
   }
 
   const handleApplyPriceVariante = async () => {
-    if (!varianteCalculadora) {
-      toast.error("No hay variante seleccionada")
-      return
-    }
+    setIsApplyingPriceVariante(true)
+    setPriceAppliedVariante(false)
     
-    if (!id || id === 'nuevo' || id === 'new') {
-      toast.error("El producto debe estar guardado primero")
-      return
-    }
-    
-    const priceValue = parseFloat(editablePriceVariante) || 0
-    if (priceValue <= 0) {
-      toast.error("El precio debe ser mayor a 0")
-      return
-    }
-
     try {
+      if (!varianteCalculadora) {
+        toast.error("No hay variante seleccionada")
+        setIsApplyingPriceVariante(false)
+        return
+      }
+      
+      if (!id || id === 'nuevo' || id === 'new') {
+        toast.error("El producto debe estar guardado primero")
+        setIsApplyingPriceVariante(false)
+        return
+      }
+      
+      const priceValue = parseFloat(editablePriceVariante) || 0
+      if (priceValue <= 0) {
+        toast.error("El precio debe ser mayor a 0")
+        setIsApplyingPriceVariante(false)
+        return
+      }
+
       // Preparar calculadora de precios para guardar
       const calculadoraDePrecios = {
         priceRows: priceRowsVariante,
@@ -909,21 +941,33 @@ export default function ProductoDetailPage() {
         })
       })
 
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        const errorMessage = result.error || result.message || 'Error al guardar la calculadora de precios'
+        throw new Error(errorMessage)
+      }
+
       const result = await response.json()
       console.log('📥 Respuesta de la API:', result)
 
-      if (response.ok && result.success) {
+      if (result.success) {
+        // Resetear flag de edición manual
+        isPriceManuallyEditedVarianteRef.current = false
+        setPriceAppliedVariante(true)
         toast.success(`Calculadora de precios guardada: Bs ${priceValue.toFixed(2)}`)
         await getVariantes()
-        setCalculadoraVarianteOpen(false)
+        
+        // Resetear animación después de 1.8 segundos
+        setTimeout(() => setPriceAppliedVariante(false), 1800)
       } else {
         const errorMessage = result.error || result.message || 'Error al guardar la calculadora de precios'
-        console.error('❌ Error en respuesta:', errorMessage, result)
-        toast.error(errorMessage)
+        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error('❌ Error guardando calculadora de precios:', error)
-      toast.error(`Error de conexión: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+      toast.error(error instanceof Error ? error.message : 'Error de conexión')
+    } finally {
+      setIsApplyingPriceVariante(false)
     }
   }
 
@@ -1454,7 +1498,40 @@ export default function ProductoDetailPage() {
   useEffect(() => {
     const total = priceRows.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
     setTotalPrice(total)
-    // NO sincronizar editablePrice aquí - dejar que el usuario escriba libremente
+    
+    // Si hay un precio guardado manualmente, verificar si la calculadora cambió significativamente
+    if (hasManualPriceRef.current && savedPriceRef.current !== null) {
+      // Solo verificar cambio si el último valor calculado no es 0 (ya se inicializó)
+      if (lastCalculatedPriceRef.current > 0) {
+        const difference = Math.abs(total - lastCalculatedPriceRef.current)
+        // Si la calculadora cambió significativamente (> 0.01), resetear el flag de guardado manual
+        if (difference > 0.01) {
+          hasManualPriceRef.current = false
+          savedPriceRef.current = null
+          // Actualizar el campo con el nuevo total calculado
+          if (!isPriceManuallyEditedRef.current) {
+            setEditablePrice(total.toFixed(2))
+          }
+        }
+      }
+      // Si lastCalculatedPriceRef.current es 0, es la primera carga, mantener el valor guardado
+    } else {
+      // No hay precio guardado manualmente, actualizar normalmente
+      if (!isPriceManuallyEditedRef.current) {
+        setEditablePrice(total.toFixed(2))
+      } else {
+        // Si está en modo manual, verificar si el valor escrito coincide con el calculado
+        const userValue = parseFloat(editablePrice) || 0
+        if (Math.abs(userValue - total) < 0.01) {
+          isPriceManuallyEditedRef.current = false
+        }
+      }
+    }
+    
+    // Actualizar el último valor calculado solo si no es la primera vez (ya hay un valor previo)
+    if (lastCalculatedPriceRef.current > 0 || !hasManualPriceRef.current) {
+      lastCalculatedPriceRef.current = total
+    }
     
     // Calcular utilidad real
     const coste = parseNum(priceRows.find(r => r.campo === "Coste")?.valor ?? 0)
@@ -1482,8 +1559,30 @@ export default function ProductoDetailPage() {
     }, 0)
     const formattedTotal = parseFloat(total.toFixed(2))
     setTotalCost(formattedTotal)
-    // Sincronizar el valor editable cuando cambia el total calculado
-    setEditableCost(formattedTotal.toFixed(2))
+    
+    // Si hay un coste guardado manualmente, verificar si la calculadora cambió significativamente
+    if (hasManualCostRef.current && savedCostRef.current !== null) {
+      // Solo verificar cambio si el último valor calculado no es 0 (ya se inicializó)
+      if (lastCalculatedCostRef.current > 0) {
+        const difference = Math.abs(formattedTotal - lastCalculatedCostRef.current)
+        // Si la calculadora cambió significativamente (> 0.01), resetear el flag de guardado manual
+        if (difference > 0.01) {
+          hasManualCostRef.current = false
+          savedCostRef.current = null
+          // Actualizar el campo con el nuevo total calculado
+          setEditableCost(formattedTotal.toFixed(2))
+        }
+      }
+      // Si lastCalculatedCostRef.current es 0, es la primera carga, mantener el valor guardado
+    } else {
+      // No hay coste guardado manualmente, actualizar normalmente
+      setEditableCost(formattedTotal.toFixed(2))
+    }
+    
+    // Actualizar el último valor calculado solo si no es la primera vez (ya hay un valor previo)
+    if (lastCalculatedCostRef.current > 0 || !hasManualCostRef.current) {
+      lastCalculatedCostRef.current = formattedTotal
+    }
   }, [costRows])
 
   const fetchRecursos = async () => {
@@ -1842,13 +1941,17 @@ export default function ProductoDetailPage() {
   }
 
   const handleApplyCost = async () => {
-    const costValue = parseFloat(parseFloat(editableCost || "0").toFixed(2))
-    if (costValue <= 0) {
-      toast.error("El coste debe ser mayor a 0")
-      return
-    }
-
+    setIsApplyingCost(true)
+    setCostApplied(false)
+    
     try {
+      const costValue = parseFloat(parseFloat(editableCost || "0").toFixed(2))
+      if (costValue <= 0) {
+        toast.error("El coste debe ser mayor a 0")
+        setIsApplyingCost(false)
+        return
+      }
+
       // Actualizar el formData local
       handleChange("coste", costValue.toString())
       
@@ -1873,19 +1976,32 @@ export default function ProductoDetailPage() {
         body: JSON.stringify(dataToSend)
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        const updated = result.data || result
-        setProducto(updated)
-        toast.success(`Coste aplicado y guardado: Bs ${costValue.toFixed(2)}`)
-      } else {
+      if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         const errorMessage = errorData.error || errorData.message || "Error al guardar el coste"
-        toast.error(errorMessage)
+        throw new Error(errorMessage)
       }
+
+      const result = await response.json()
+      const updated = result.data || result
+      setProducto(updated)
+      
+      // Marcar que hay un coste guardado manualmente
+      hasManualCostRef.current = true
+      savedCostRef.current = costValue
+      lastCalculatedCostRef.current = totalCost
+      
+      setCostApplied(true)
+      toast.success(`Coste aplicado y guardado: Bs ${costValue.toFixed(2)}`)
+      
+      // Resetear animación después de 1.8 segundos
+      setTimeout(() => setCostApplied(false), 1800)
+      
     } catch (error) {
       console.error("Error saving cost:", error)
-      toast.error("Error de conexión al guardar el coste")
+      toast.error(error instanceof Error ? error.message : "Error de conexión al guardar el coste")
+    } finally {
+      setIsApplyingCost(false)
     }
   }
 
@@ -2112,13 +2228,17 @@ export default function ProductoDetailPage() {
   }
 
   const handleApplyPrice = async () => {
-    const priceValue = parseFloat(editablePrice) || 0
-    if (priceValue <= 0) {
-      toast.error("El precio debe ser mayor a 0")
-      return
-    }
-
+    setIsApplyingPrice(true)
+    setPriceApplied(false)
+    
     try {
+      const priceValue = parseFloat(editablePrice) || 0
+      if (priceValue <= 0) {
+        toast.error("El precio debe ser mayor a 0")
+        setIsApplyingPrice(false)
+        return
+      }
+
       // Actualizar el formData local
       handleChange("precio_venta", priceValue.toString())
       
@@ -2143,19 +2263,34 @@ export default function ProductoDetailPage() {
         body: JSON.stringify(dataToSend)
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        const updated = result.data || result
-        setProducto(updated)
-        toast.success(`Precio aplicado y guardado: Bs ${priceValue.toFixed(2)}`)
-      } else {
+      if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         const errorMessage = errorData.error || errorData.message || "Error al guardar el precio"
-        toast.error(errorMessage)
+        throw new Error(errorMessage)
       }
+
+      const result = await response.json()
+      const updated = result.data || result
+      setProducto(updated)
+      
+      // Marcar que hay un precio guardado manualmente
+      hasManualPriceRef.current = true
+      savedPriceRef.current = priceValue
+      lastCalculatedPriceRef.current = totalPrice
+      
+      // Resetear flag de edición manual
+      isPriceManuallyEditedRef.current = false
+      setPriceApplied(true)
+      toast.success(`Precio aplicado y guardado: Bs ${priceValue.toFixed(2)}`)
+      
+      // Resetear animación después de 1.8 segundos
+      setTimeout(() => setPriceApplied(false), 1800)
+      
     } catch (error) {
       console.error("Error saving price:", error)
-      toast.error("Error de conexión al guardar el precio")
+      toast.error(error instanceof Error ? error.message : "Error de conexión al guardar el precio")
+    } finally {
+      setIsApplyingPrice(false)
     }
   }
 
@@ -2174,13 +2309,40 @@ export default function ProductoDetailPage() {
         }
         return prev
       })
-      // Inicializar el campo editable con el coste actual si no hay costRows o si está vacío
-      if (costRows.length === 1 && !costRows[0].selectedRecurso) {
-        setEditableCost(coste.toFixed(2))
-      }
-      // Inicializar el campo editable de precio con el precio actual
+      // Inicializar campos editables con los valores guardados en la base de datos
+      // Estos valores tienen prioridad sobre los calculados
       const precio = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
+      
+      // Calcular los totales actuales de la calculadora para comparar después
+      const totalCalculadoCoste = costRows.reduce((sum, row) => {
+        if (row.selectedRecurso && row.cantidad > 0) {
+          return sum + (row.selectedRecurso.coste * row.cantidad)
+        }
+        return sum
+      }, 0)
+      
+      const totalCalculadoPrecio = priceRows.reduce((sum, row) => 
+        sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0
+      )
+      
+      // Siempre inicializar con los valores de la base de datos
+      setEditableCost(coste.toFixed(2))
       setEditablePrice(precio.toFixed(2))
+      
+      // Marcar que estos valores vienen de la base de datos (guardados manualmente)
+      // Esto previene que se sobrescriban cuando se recalcula la calculadora
+      hasManualCostRef.current = true
+      savedCostRef.current = coste
+      // Inicializar con el total calculado actual para que la primera comparación sea correcta
+      lastCalculatedCostRef.current = totalCalculadoCoste
+      
+      hasManualPriceRef.current = true
+      savedPriceRef.current = precio
+      // Inicializar con el total calculado actual para que la primera comparación sea correcta
+      lastCalculatedPriceRef.current = totalCalculadoPrecio
+      
+      // Resetear flag de edición manual (no está siendo editado ahora)
+      isPriceManuallyEditedRef.current = false
     }
   }, [editing, producto?.id, isNewProduct])
 
@@ -2846,7 +3008,12 @@ export default function ProductoDetailPage() {
                       min="0"
                       step="0.01"
                       value={editableCost}
-                      onChange={(e) => setEditableCost(e.target.value)}
+                      onChange={(e) => {
+                        // Si el usuario escribe manualmente, resetear el flag de guardado manual
+                        hasManualCostRef.current = false
+                        savedCostRef.current = null
+                        setEditableCost(e.target.value)
+                      }}
                       onBlur={(e) => {
                         const value = e.target.value
                         if (value && !isNaN(parseFloat(value))) {
@@ -2858,11 +3025,27 @@ export default function ProductoDetailPage() {
                     />
                     <Button
                       onClick={handleApplyCost}
-                      disabled={!editableCost || parseFloat(editableCost) <= 0}
-                      className="bg-red-600 hover:bg-red-700 text-white ml-auto"
+                      disabled={isApplyingCost || !editableCost || parseFloat(editableCost) <= 0}
+                      className={`ml-auto transition-all duration-300 transform ${
+                        costApplied
+                          ? 'bg-red-500 hover:bg-red-600 scale-105 shadow-lg'
+                          : 'bg-red-600 hover:bg-red-700'
+                      } ${isApplyingCost ? 'opacity-75 cursor-wait' : ''} text-white`}
                       size="sm"
                     >
-                      Aplicar Coste
+                      {isApplyingCost ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : costApplied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2 animate-pulse" />
+                          ¡Aplicado!
+                        </>
+                      ) : (
+                        'Aplicar Coste'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -2882,18 +3065,45 @@ export default function ProductoDetailPage() {
                       min="0"
                       step="0.01"
                       value={editablePrice}
-                      onChange={(e) => setEditablePrice(e.target.value)}
-                      onBlur={(e) => handlePriceTotalChange(e.target.value)}
+                      onChange={(e) => {
+                        // Si el usuario escribe manualmente, resetear el flag de guardado manual
+                        hasManualPriceRef.current = false
+                        savedPriceRef.current = null
+                        isPriceManuallyEditedRef.current = true
+                        setEditablePrice(e.target.value)
+                      }}
+                      onBlur={(e) => {
+                        handlePriceTotalChange(e.target.value)
+                      }}
+                      onFocus={() => {
+                        isPriceManuallyEditedRef.current = true
+                      }}
                       className="w-24 h-9 text-sm font-semibold"
                       placeholder="0.00"
                     />
                     <Button
                       onClick={handleApplyPrice}
-                      disabled={!editablePrice || parseFloat(editablePrice) <= 0}
-                      className="bg-green-600 hover:bg-green-700 text-white ml-auto"
+                      disabled={isApplyingPrice || !editablePrice || parseFloat(editablePrice) <= 0}
+                      className={`ml-auto transition-all duration-300 transform ${
+                        priceApplied
+                          ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
+                          : 'bg-green-600 hover:bg-green-700'
+                      } ${isApplyingPrice ? 'opacity-75 cursor-wait' : ''} text-white`}
                       size="sm"
                     >
-                      Aplicar Precio
+                      {isApplyingPrice ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : priceApplied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2 animate-pulse" />
+                          ¡Aplicado!
+                        </>
+                      ) : (
+                        'Aplicar Precio'
+                      )}
                     </Button>
                   </div>
                   
@@ -2975,24 +3185,22 @@ export default function ProductoDetailPage() {
                             const costeFinal = getCosteFinal(variante)
                             const precioFinal = getPrecioFinal(variante)
                             
-                            // Calcular diferencia con el item anterior (no con el base)
+                            // Calcular diferencia con respecto a la cifra base (primera variante)
                             const variantesVisibles = variantesProducto.filter(v => v && v.id)
                             let difCoste = 0
                             let difPrecio = 0
                             
                             if (index === 0) {
-                              // Primera variante: comparar con el producto base
-                              const costeBase = parseFloat(formData.coste) || 0
-                              const precioBase = parseFloat(formData.precio_venta) || 0
+                              // Primera variante: siempre muestra 0.00 (es la base)
+                              difCoste = 0
+                              difPrecio = 0
+                            } else {
+                              // Resto de variantes: comparar con la primera variante (la base)
+                              const varianteBase = variantesVisibles[0]
+                              const costeBase = getCosteFinal(varianteBase)
+                              const precioBase = getPrecioFinal(varianteBase)
                               difCoste = calcularDiferenciaCoste(costeFinal, costeBase)
                               difPrecio = calcularDiferenciaPrecio(precioFinal, precioBase)
-                            } else {
-                              // Resto de variantes: comparar con la variante anterior
-                              const varianteAnterior = variantesVisibles[index - 1]
-                              const costeAnterior = getCosteFinal(varianteAnterior)
-                              const precioAnterior = getPrecioFinal(varianteAnterior)
-                              difCoste = calcularDiferenciaCoste(costeFinal, costeAnterior)
-                              difPrecio = calcularDiferenciaPrecio(precioFinal, precioAnterior)
                             }
                             
                             const isEditing = editingVariante[variante.id] !== undefined
@@ -3278,18 +3486,42 @@ export default function ProductoDetailPage() {
                   min="0"
                   step="0.01"
                   value={editablePriceVariante}
-                  onChange={(e) => setEditablePriceVariante(e.target.value)}
-                  onBlur={(e) => handlePriceTotalChangeVariante(e.target.value)}
+                  onChange={(e) => {
+                    isPriceManuallyEditedVarianteRef.current = true
+                    setEditablePriceVariante(e.target.value)
+                  }}
+                  onBlur={(e) => {
+                    handlePriceTotalChangeVariante(e.target.value)
+                  }}
+                  onFocus={() => {
+                    isPriceManuallyEditedVarianteRef.current = true
+                  }}
                   className="w-24 h-9 text-sm font-semibold"
                   placeholder="0.00"
                 />
                 <Button
                   onClick={handleApplyPriceVariante}
-                  disabled={!editablePriceVariante || parseFloat(editablePriceVariante) <= 0}
-                  className="bg-green-600 hover:bg-green-700 text-white ml-auto"
+                  disabled={isApplyingPriceVariante || !editablePriceVariante || parseFloat(editablePriceVariante) <= 0}
+                  className={`ml-auto transition-all duration-300 transform ${
+                    priceAppliedVariante
+                      ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
+                      : 'bg-green-600 hover:bg-green-700'
+                  } ${isApplyingPriceVariante ? 'opacity-75 cursor-wait' : ''} text-white`}
                   size="sm"
                 >
-                  Aplicar Precio
+                  {isApplyingPriceVariante ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : priceAppliedVariante ? (
+                    <>
+                      <Check className="w-4 h-4 mr-2 animate-pulse" />
+                      ¡Aplicado!
+                    </>
+                  ) : (
+                    'Aplicar Precio'
+                  )}
                 </Button>
               </div>
               

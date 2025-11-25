@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import Sidebar from "@/components/sidebar";
+import { PermisosProvider } from "@/hooks/permisos-provider";
 
 export default async function PanelLayout({
   children,
@@ -22,8 +23,10 @@ export default async function PanelLayout({
   }
 
   return (
-    <Sidebar>
-      {children}
-    </Sidebar>
+    <PermisosProvider>
+      <Sidebar>
+        {children}
+      </Sidebar>
+    </PermisosProvider>
   );
 }

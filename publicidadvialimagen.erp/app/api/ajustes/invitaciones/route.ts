@@ -163,19 +163,20 @@ export async function POST(request: NextRequest) {
         enlace
       );
 
-    return NextResponse.json({ 
-      message: "Invitación creada correctamente",
-      invitation: {
-        id: newInvitation.id,
-        email: newInvitation.email,
-        rol: newInvitation.rol,
-        token: newInvitation.token,
-        estado: newInvitation.estado,
-        fechaCreacion: newInvitation.fechaCreacion,
-        fechaExpiracion: newInvitation.fechaExpiracion,
-        enlace: newInvitation.enlace
-      }
-    });
+      return NextResponse.json({ 
+        message: "Invitación creada correctamente",
+        invitation: {
+          id: newInvitation.id,
+          email: newInvitation.email,
+          rol: newInvitation.rol,
+          token: newInvitation.token,
+          estado: newInvitation.estado,
+          fechaCreacion: newInvitation.fechaCreacion,
+          fechaExpiracion: newInvitation.fechaExpiracion,
+          enlace: newInvitation.enlace
+        }
+      });
+    }
   } catch (error) {
     console.error("Error al crear invitación:", error);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });

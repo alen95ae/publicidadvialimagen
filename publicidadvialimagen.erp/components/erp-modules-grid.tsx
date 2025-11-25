@@ -33,6 +33,11 @@ export default function ERPModulesGrid() {
       return puedeVer(module.key) || puedeEditar(module.key) || esAdmin(module.key);
     }
     
+    // Para módulo sitio, verificar también con "web" como fallback
+    if (module.key === 'sitio') {
+      return puedeVer(module.key) || puedeVer('web');
+    }
+    
     // Filtrar módulos sin permiso ver
     return puedeVer(module.key);
   });

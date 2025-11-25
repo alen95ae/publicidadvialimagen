@@ -62,6 +62,7 @@ export default function ContactosPage() {
   const [selectedPrimary, setSelectedPrimary] = useState<Record<number, string>>({})
   const [currentPage, setCurrentPage] = useState(1)
   const [salesOwners, setSalesOwners] = useState<Record<string, string>>({})
+  const [salesOwnersData, setSalesOwnersData] = useState<Record<string, any>>({})
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 100,
@@ -88,14 +89,28 @@ export default function ContactosPage() {
         const data = await response.json()
         const users = data.users || []
         const ownersMap: Record<string, string> = {}
+        const ownersDataMap: Record<string, any> = {}
         users.forEach((user: any) => {
           ownersMap[user.id] = user.nombre || user.name || ""
+          ownersDataMap[user.id] = user
         })
         setSalesOwners(ownersMap)
+        setSalesOwnersData(ownersDataMap)
       }
     } catch (error) {
       console.error("Error fetching sales owners:", error)
     }
+  }
+
+  const getSalesOwnerImage = (ownerId: string) => {
+    const owner = salesOwnersData[ownerId];
+    if (owner?.imagen_usuario) {
+      const imagenData = typeof owner.imagen_usuario === 'string' 
+        ? JSON.parse(owner.imagen_usuario) 
+        : owner.imagen_usuario;
+      return imagenData?.url || null;
+    }
+    return null;
   }
 
   const fetchContacts = async (page: number = currentPage) => {
@@ -884,7 +899,7 @@ export default function ContactosPage() {
                             contact.salesOwnerId && salesOwners[contact.salesOwnerId] ? (
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-6 w-6">
-                                  <AvatarImage src="" alt={salesOwners[contact.salesOwnerId]} />
+                                  <AvatarImage src={getSalesOwnerImage(contact.salesOwnerId) || ""} alt={salesOwners[contact.salesOwnerId]} />
                                   <AvatarFallback className="bg-[#D54644] text-white text-[10px] font-medium">
                                     {salesOwners[contact.salesOwnerId]
                                       .split(" ")

@@ -980,7 +980,28 @@ export default function SoportesPage() {
           </CardHeader>
           <CardContent>
 
-            {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
+            {/* Catálogo PDF - Siempre visible cuando hay soportes seleccionados (para todos los usuarios) */}
+            {viewMode === "list" && Object.keys(selected).filter(id => selected[id]).length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-blue-800">
+                      {Object.keys(selected).filter(id => selected[id]).length} seleccionados
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportPDF}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Catálogo PDF
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Barra azul unificada de acciones masivas - Solo en modo lista y para usuarios con editar */}
             {viewMode === "list" && puedeEditar("soportes") && ((someSelected || allSelected) || Object.keys(editedSupports).length > 0) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
@@ -1018,18 +1039,6 @@ export default function SoportesPage() {
                        </SelectContent>
                      </Select>
                    </>
-                 )}
-
-                 {/* Catálogo PDF - Siempre visible cuando hay soportes seleccionados */}
-                 {Object.keys(selected).filter(id => selected[id]).length > 0 && (
-                   <Button
-                     variant="outline"
-                     size="sm"
-                     onClick={exportPDF}
-                   >
-                     <Download className="w-4 h-4 mr-2" />
-                     Catálogo PDF
-                   </Button>
                  )}
                   </div>
                   

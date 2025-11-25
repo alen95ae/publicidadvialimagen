@@ -229,9 +229,16 @@ export default function Sidebar({ children }: SidebarProps) {
                 )
               }
               
-              // Filtrar módulos sin permiso ver
-              if (!puedeVer(module.key)) {
-                return null
+              // Para módulo sitio, verificar también con "web" como fallback
+              if (module.key === 'sitio') {
+                if (!puedeVer(module.key) && !puedeVer('web')) {
+                  return null
+                }
+              } else {
+                // Filtrar módulos sin permiso ver
+                if (!puedeVer(module.key)) {
+                  return null
+                }
               }
               
               // Para el módulo inventario, también considerar activo cuando estamos en insumos

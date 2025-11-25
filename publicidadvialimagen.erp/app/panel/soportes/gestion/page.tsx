@@ -566,7 +566,8 @@ export default function SoportesPage() {
       }
       
       if (soporteTitulo) {
-        params.append('soporte', soporteTitulo)
+        // Codificar el título del soporte para evitar problemas con caracteres especiales
+        params.append('soporte', encodeURIComponent(soporteTitulo))
       }
       
       const url = `/api/soportes/export/pdf?${params.toString()}`

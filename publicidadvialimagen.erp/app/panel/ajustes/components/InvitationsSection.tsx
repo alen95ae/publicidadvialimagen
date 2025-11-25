@@ -345,13 +345,13 @@ export default function InvitationsSection() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-red-600 hover:bg-red-700 text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                Crear Invitación
-              </Button>
-            </DialogTrigger>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-red-600 hover:bg-red-700 text-white">
+              <Plus className="h-4 w-4 mr-2" />
+              Crear Invitación
+            </Button>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Crear Nueva Invitación</DialogTitle>

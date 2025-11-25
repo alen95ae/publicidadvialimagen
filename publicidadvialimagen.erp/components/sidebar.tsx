@@ -242,9 +242,9 @@ export default function Sidebar({ children }: SidebarProps) {
                 }
                 console.log('✅ Módulo sitio con acceso')
               } else {
-                // Filtrar módulos sin permiso ver
-                if (!puedeVer(module.key)) {
-                  return null
+              // Filtrar módulos sin permiso ver
+              if (!puedeVer(module.key)) {
+                return null
                 }
               }
               

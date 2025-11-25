@@ -152,10 +152,20 @@ export default function NuevaCotizacionPage() {
     return ancho * alto
   }
 
-  const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, conIVA: boolean, conIT: boolean, esSoporte: boolean = false) => {
+  const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, conIVA: boolean, conIT: boolean, esSoporte: boolean = false, udm?: string) => {
     // Para soportes: cantidad × precio (sin totalM2)
-    // Para productos: cantidad × totalM2 × precio
-    let subtotal = esSoporte ? (cantidad * precio) : (cantidad * totalM2 * precio)
+    // Para productos con unidad m²: cantidad × totalM2 × precio
+    // Para productos con unidad "unidad" o "unidades": cantidad × precio (sin totalM2)
+    let subtotal: number
+    if (esSoporte) {
+      subtotal = cantidad * precio
+    } else if (udm === 'unidad' || udm === 'unidades') {
+      subtotal = cantidad * precio
+    } else {
+      // Para m²: cantidad × totalM2 × precio
+      subtotal = cantidad * totalM2 * precio
+    }
+    
     const comisionTotal = subtotal * (comision / 100)
     
     // Si no tiene IVA, descontar 13%
@@ -431,37 +441,24 @@ export default function NuevaCotizacionPage() {
             productoActualizado.comision === '' ? 0 : productoActualizado.comision,
             productoActualizado.conIVA,
             productoActualizado.conIT,
-            productoActualizado.esSoporte || false
+            productoActualizado.esSoporte || false,
+            productoActualizado.udm
           )
-          productoActualizado.total = totalCalculado
-          // Si el total manual es menor al nuevo calculado, resetearlo
-          if (productoActualizado.totalManual !== null && productoActualizado.totalManual !== undefined) {
-            if (productoActualizado.totalManual < totalCalculado) {
-              productoActualizado.totalManual = null
-            }
-          }
-        }
-        
-        // Si se está editando el campo 'total', validar que sea mayor o igual al calculado
-        if (campo === 'total') {
-          const totalCalculado = calcularTotal(
-            productoActualizado.cantidad === '' ? 0 : productoActualizado.cantidad,
-            productoActualizado.totalM2,
-            productoActualizado.precio === '' ? 0 : productoActualizado.precio,
-            productoActualizado.comision === '' ? 0 : productoActualizado.comision,
-            productoActualizado.conIVA,
-            productoActualizado.conIT,
-            productoActualizado.esSoporte || false
-          )
-          const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
-          if (valorNum >= totalCalculado) {
-            productoActualizado.totalManual = valorNum
-            productoActualizado.total = valorNum
+          // Si hay un total manual válido (mayor o igual), mantenerlo
+          // Si no hay total manual o es menor al calculado, usar el calculado
+          if (productoActualizado.totalManual !== null && productoActualizado.totalManual !== undefined && productoActualizado.totalManual >= totalCalculado) {
+            productoActualizado.total = productoActualizado.totalManual
           } else {
             productoActualizado.total = totalCalculado
             productoActualizado.totalManual = null
-            toast.warning("El total no puede ser menor al precio calculado.")
           }
+        }
+        
+        // Si se está editando el campo 'total', permitir cualquier valor (validación en onBlur)
+        if (campo === 'total') {
+          const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
+          productoActualizado.totalManual = valorNum
+          productoActualizado.total = valorNum
         }
         
         return productoActualizado
@@ -528,7 +525,7 @@ export default function NuevaCotizacionPage() {
           nombre: p.nombre,
           descripcion: p.descripcion || '',
           precio: p.precio_venta || 0,
-          unidad: p.unidad_medida || 'm²',
+          unidad: p.unidad_medida === 'm2' ? 'm²' : (p.unidad_medida || 'm²'),
           variantes: p.variantes || [],
           receta: p.receta || [],
           tipo: 'producto'
@@ -786,7 +783,7 @@ export default function NuevaCotizacionPage() {
           producto_id: item.id, // Guardar ID del producto para obtener precios por variante
           descripcion: descripcionFinal,
           precio: precioFinal,
-          udm: esSoporte ? 'mes' : (item.unidad || 'm²'),
+          udm: esSoporte ? 'mes' : (item.unidad === 'm2' ? 'm²' : (item.unidad || 'm²')),
           esSoporte: esSoporte,
           dimensionesBloqueadas: esSoporte,
           ancho: ancho,
@@ -801,16 +798,19 @@ export default function NuevaCotizacionPage() {
           productoActualizado.imagen = imagenUrl
         }
         
-        // Recalcular total
-        productoActualizado.total = calcularTotal(
+        // Recalcular total automáticamente al seleccionar producto
+        const totalCalculado = calcularTotal(
           productoActualizado.cantidad,
           productoActualizado.totalM2,
           productoActualizado.precio,
           productoActualizado.comision,
           productoActualizado.conIVA,
           productoActualizado.conIT,
-          esSoporte
+          esSoporte,
+          productoActualizado.udm
         )
+        productoActualizado.total = totalCalculado
+        productoActualizado.totalManual = null // Resetear total manual al seleccionar nuevo producto
         
         return productoActualizado
       }
@@ -876,7 +876,8 @@ export default function NuevaCotizacionPage() {
         producto.comision,
         producto.conIVA,
         producto.conIT,
-        producto.esSoporte || false
+        producto.esSoporte || false,
+        producto.udm
       )
       return {
         ...producto,
@@ -891,16 +892,19 @@ export default function NuevaCotizacionPage() {
   // Total general: usar manual si es mayor al calculado, sino usar calculado
   const totalGeneral = totalManual !== null && totalManual >= totalCalculado ? totalManual : totalCalculado
   
-  // Handler para cambio del total manual
+  // Handler para cambio del total manual (permite cualquier valor, validación en onBlur)
   const handleTotalChange = (valor: string) => {
     const valorNum = parseFloat(valor) || 0
-    if (valorNum >= totalCalculado) {
-      setTotalManual(valorNum)
-    } else {
-      setTotalManual(null)
-      // Mostrar toast de advertencia
-      toast.warning("El total no puede ser menor al precio calculado.")
+    setTotalManual(valorNum)
+  }
+  
+  // Handler para onBlur del total general
+  const handleTotalBlur = (valor: string) => {
+    const valorNum = parseFloat(valor) || totalCalculado
+    if (valorNum < totalCalculado) {
+      toast.warning("El total ingresado es menor al precio calculado. Se mantendrá el valor ingresado.")
     }
+    setTotalManual(valorNum)
   }
 
   const handleGuardar = async (redirigir: boolean = true) => {
@@ -2031,9 +2035,9 @@ export default function NuevaCotizacionPage() {
                           {producto.udm === "m²" ? (
                             <>
                               <span className="font-medium text-xs">{Number(producto.totalM2 || 0).toFixed(2)} m<sup>2</sup></span>
-                              <div className="flex items-center justify-center h-6 w-6">
-                                <Calculator className="w-3 h-3 text-red-500" />
-                              </div>
+                          <div className="flex items-center justify-center h-6 w-6">
+                            <Calculator className="w-3 h-3 text-red-500" />
+                          </div>
                             </>
                           ) : (
                             <span className="font-medium text-xs text-gray-400">-</span>
@@ -2137,34 +2141,39 @@ export default function NuevaCotizacionPage() {
                               producto.comision,
                               producto.conIVA,
                               producto.conIT,
-                              producto.esSoporte || false
+                              producto.esSoporte || false,
+                              producto.udm
                             )
                             const totalFinal = producto.totalManual !== null && producto.totalManual !== undefined && producto.totalManual >= totalCalculado 
+                              ? producto.totalManual 
+                              : totalCalculado
+                            
+                            // Usar el valor manual si existe, sino el calculado
+                            const valorActual = producto.totalManual !== null && producto.totalManual !== undefined 
                               ? producto.totalManual 
                               : totalCalculado
                             
                             return (
                               <Input
                                 type="number"
-                                value={totalFinal}
+                                value={valorActual}
                                 onChange={(e) => {
                                   const valor = parseFloat(e.target.value) || 0
-                                  if (valor >= totalCalculado) {
-                                    actualizarProducto(producto.id, 'total', valor)
-                                  } else {
-                                    actualizarProducto(producto.id, 'total', totalCalculado)
-                                    toast.warning("El total no puede ser menor al precio calculado.")
-                                  }
+                                  // Permitir editar cualquier valor (validación en onBlur)
+                                  actualizarProducto(producto.id, 'total', valor)
                                 }}
                                 onBlur={(e) => {
                                   const valor = parseFloat(e.target.value) || totalCalculado
                                   if (valor < totalCalculado) {
-                                    actualizarProducto(producto.id, 'total', totalCalculado)
+                                    // Avisar pero permitir el valor menor
+                                    toast.warning("El total ingresado es menor al precio calculado. Se mantendrá el valor ingresado.")
+                                    actualizarProducto(producto.id, 'total', valor)
+                                  } else {
+                                    actualizarProducto(producto.id, 'total', valor)
                                   }
                                 }}
                                 className="w-24 h-8 text-xs font-medium text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 step="0.01"
-                                min={totalCalculado}
                               />
                             )
                           })()}
@@ -2211,22 +2220,16 @@ export default function NuevaCotizacionPage() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    value={totalManual !== null && totalManual >= totalCalculado ? totalManual : totalCalculado}
+                    value={totalManual !== null && totalManual !== undefined ? totalManual : totalCalculado}
                     onChange={(e) => handleTotalChange(e.target.value)}
-                    onBlur={(e) => {
-                      const valor = parseFloat(e.target.value) || totalCalculado
-                      if (valor < totalCalculado) {
-                        setTotalManual(null)
-                      }
-                    }}
+                    onBlur={(e) => handleTotalBlur(e.target.value)}
                     className="w-32 h-10 text-lg font-bold text-[#D54644] text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     step="0.01"
-                    min={totalCalculado}
                   />
                   <span className="text-lg font-bold text-[#D54644]">Bs</span>
-                </div>
               </div>
-              {totalManual !== null && totalManual >= totalCalculado && (
+              </div>
+              {totalManual !== null && totalManual !== undefined && totalManual !== totalCalculado && (
                 <p className="text-xs text-gray-500 mt-1 text-right">
                   Total calculado: Bs {Number(totalCalculado).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                 </p>

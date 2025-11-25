@@ -66,7 +66,9 @@ export async function GET(request: NextRequest) {
     // Obtener parámetros para el nombre del archivo
     const disponibilidad = url.searchParams.get('disponibilidad') || undefined
     const ciudad = url.searchParams.get('ciudad') || undefined
-    const soporteTitulo = url.searchParams.get('soporte') || undefined
+    const soporteTituloEncoded = url.searchParams.get('soporte') || undefined
+    // Decodificar el título del soporte si viene codificado
+    const soporteTitulo = soporteTituloEncoded ? decodeURIComponent(soporteTituloEncoded) : undefined
     
     if (!ids) {
       return NextResponse.json({ error: "IDs de soportes requeridos" }, { status: 400 })

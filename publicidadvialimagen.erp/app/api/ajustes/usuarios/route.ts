@@ -98,6 +98,8 @@ export async function GET(request: NextRequest) {
         rol: roleData?.nombre || "Sin rol",
         rol_id: record.rol_id || null,
         fechaCreacion: record.fecha_creacion || record.created_at,
+        imagen_usuario: record.imagen_usuario || null,
+        vendedor: record.vendedor ?? false,
         ultimoAcceso: record.ultimo_acceso || null,
         activo: record.activo ?? true,
         imagen_usuario: record.imagen_usuario || null,

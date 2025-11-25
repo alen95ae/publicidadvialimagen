@@ -110,7 +110,7 @@ export default function ProfilePage() {
         setImageFile(null)
       } else {
         toast.error(data.error || "Error al subir imagen")
-      }
+  }
     } catch (error) {
       console.error("Error uploading image:", error)
       toast.error("Error al subir imagen")
@@ -196,12 +196,12 @@ export default function ProfilePage() {
         <p className="text-gray-600 mt-2">Información de tu cuenta</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Información Personal</CardTitle>
-          <CardDescription>Tus datos de usuario</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Información Personal</CardTitle>
+            <CardDescription>Tus datos de usuario</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
           {/* Avatar e imagen de perfil */}
           <div className="flex items-center gap-6">
             <div className="relative">
@@ -249,7 +249,7 @@ export default function ProfilePage() {
 
           {/* Formulario de edición */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+              <div>
               <Label htmlFor="nombre">Nombre</Label>
               <Input
                 id="nombre"
@@ -257,7 +257,7 @@ export default function ProfilePage() {
                 onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                 placeholder="Tu nombre completo"
               />
-            </div>
+              </div>
 
             <div>
               <Label htmlFor="email">Email</Label>
@@ -283,7 +283,7 @@ export default function ProfilePage() {
                     onChange={(e) => setFormData({ ...formData, passwordActual: e.target.value })}
                     placeholder="Ingresa tu contraseña actual"
                   />
-                </div>
+              </div>
 
                 <div>
                   <Label htmlFor="passwordNueva">Nueva Contraseña</Label>
@@ -294,7 +294,7 @@ export default function ProfilePage() {
                     onChange={(e) => setFormData({ ...formData, passwordNueva: e.target.value })}
                     placeholder="Ingresa tu nueva contraseña"
                   />
-                </div>
+              </div>
 
                 <div>
                   <Label htmlFor="passwordNuevaConfirmar">Confirmar Nueva Contraseña</Label>
@@ -329,9 +329,9 @@ export default function ProfilePage() {
                 variant="outline"
                 onClick={() => router.push("/api/auth/logout")}
               >
-                Cerrar Sesión
-              </Button>
-            </div>
+            Cerrar Sesión
+          </Button>
+      </div>
           </form>
         </CardContent>
       </Card>

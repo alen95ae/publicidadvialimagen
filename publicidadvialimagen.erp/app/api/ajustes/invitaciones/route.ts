@@ -130,52 +130,52 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Para invitación normal, necesitamos email, rol y horasValidez
-      if (!email || !rol || !horasValidez) {
-        return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
+    if (!email || !rol || !horasValidez) {
+      return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
+    }
+
+    // Verificar si ya existe una invitación pendiente para este email
+    const existingInvitation = await findInvitacionPendienteByEmail(email);
+    
+    if (existingInvitation) {
+      return NextResponse.json({ error: "Ya existe una invitación pendiente para este email" }, { status: 400 });
+    }
+
+    // Generar token único para la invitación
+    const invitationToken = randomBytes(32).toString('hex');
+    
+    // Calcular fechas
+    const fechaCreacion = new Date().toISOString();
+    const fechaExpiracion = new Date(Date.now() + horasValidez * 60 * 60 * 1000).toISOString();
+    
+    // Generar enlace de invitación
+    // Usar la función helper que maneja correctamente localhost vs producción
+    const baseUrl = getBaseUrl().replace(/\/$/, ''); // Remover barra final si existe
+    const enlace = `${baseUrl}/register?token=${invitationToken}&email=${encodeURIComponent(email)}`;
+
+    // Crear invitación en Supabase
+    const newInvitation = await createInvitacion(
+      email,
+      rol,
+      invitationToken,
+      fechaCreacion,
+      fechaExpiracion,
+      enlace
+    );
+
+    return NextResponse.json({ 
+      message: "Invitación creada correctamente",
+      invitation: {
+        id: newInvitation.id,
+        email: newInvitation.email,
+        rol: newInvitation.rol,
+        token: newInvitation.token,
+        estado: newInvitation.estado,
+        fechaCreacion: newInvitation.fechaCreacion,
+        fechaExpiracion: newInvitation.fechaExpiracion,
+        enlace: newInvitation.enlace
       }
-
-      // Verificar si ya existe una invitación pendiente para este email
-      const existingInvitation = await findInvitacionPendienteByEmail(email);
-      
-      if (existingInvitation) {
-        return NextResponse.json({ error: "Ya existe una invitación pendiente para este email" }, { status: 400 });
-      }
-
-      // Generar token único para la invitación
-      const invitationToken = randomBytes(32).toString('hex');
-      
-      // Calcular fechas
-      const fechaCreacion = new Date().toISOString();
-      const fechaExpiracion = new Date(Date.now() + horasValidez * 60 * 60 * 1000).toISOString();
-      
-      // Generar enlace de invitación
-      // Usar la función helper que maneja correctamente localhost vs producción
-      const baseUrl = getBaseUrl().replace(/\/$/, ''); // Remover barra final si existe
-      const enlace = `${baseUrl}/register?token=${invitationToken}&email=${encodeURIComponent(email)}`;
-
-      // Crear invitación en Supabase
-      const newInvitation = await createInvitacion(
-        email,
-        rol,
-        invitationToken,
-        fechaCreacion,
-        fechaExpiracion,
-        enlace
-      );
-
-      return NextResponse.json({ 
-        message: "Invitación creada correctamente",
-        invitation: {
-          id: newInvitation.id,
-          email: newInvitation.email,
-          rol: newInvitation.rol,
-          token: newInvitation.token,
-          estado: newInvitation.estado,
-          fechaCreacion: newInvitation.fechaCreacion,
-          fechaExpiracion: newInvitation.fechaExpiracion,
-          enlace: newInvitation.enlace
-        }
-      });
+    });
     }
   } catch (error) {
     console.error("Error al crear invitación:", error);

@@ -137,7 +137,7 @@ interface Notification {
 export default function PanelHeader() {
   const router = useRouter()
   const pathname = usePathname()
-  const { tieneFuncionTecnica } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeVer } = usePermisosContext()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -200,7 +200,22 @@ export default function PanelHeader() {
         // Filtrar las notificaciones ya leídas usando el estado actual
         setReadNotifications((currentRead) => {
           const unreadNotifications = allNotifications.filter(
-            (n: Notification) => !currentRead.has(n.id)
+            (n: Notification) => {
+              // Filtrar notificaciones ya leídas
+              if (currentRead.has(n.id)) return false
+              
+              // Filtrar notificaciones de mensajes si no tiene permiso ver mensajes
+              if (n.type === "mensaje" && !puedeVer("mensajes")) {
+                return false
+              }
+              
+              // Filtrar notificaciones de solicitudes si no tiene función técnica ver solicitudes cotizacion
+              if (n.type === "solicitud" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                return false
+              }
+              
+              return true
+            }
           )
           setNotifications(unreadNotifications)
           setNotificationCount(unreadNotifications.length)
@@ -322,6 +337,9 @@ export default function PanelHeader() {
                       if (item.href === "/panel/soportes/costes" && !tieneFuncionTecnica("ver costes soportes")) {
                         return false;
                       }
+                      if (item.href === "/panel/ventas/solicitudes" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                        return false;
+                      }
                       return true;
                     })
                     .map((item) => (
@@ -348,7 +366,12 @@ export default function PanelHeader() {
           {/* Notificaciones */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative"
+                onClick={(e) => e.preventDefault()}
+              >
                 <Bell className="h-5 w-5" />
                 {notificationCount > 0 && (
                   <Badge
@@ -359,7 +382,7 @@ export default function PanelHeader() {
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
               <DropdownMenuLabel className="flex items-center justify-between">
                 <span>Notificaciones</span>
                 {notificationCount > 0 && (
@@ -417,7 +440,11 @@ export default function PanelHeader() {
             ) : user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2 h-auto p-2 hover:bg-gray-100">
+                  <Button 
+                    variant="ghost" 
+                    className="flex items-center gap-2 h-auto p-2 hover:bg-gray-100"
+                    onClick={(e) => e.preventDefault()}
+                  >
                     <Avatar className="h-8 w-8">
                       <AvatarImage src="" alt={getUserName()} />
                       <AvatarFallback className="bg-[#D54644] text-white text-sm font-medium">
@@ -429,7 +456,7 @@ export default function PanelHeader() {
                     </span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={(e) => e.preventDefault()}>
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium">{getUserName()}</p>

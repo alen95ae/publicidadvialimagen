@@ -17,6 +17,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
+import { usePermisosContext } from "@/hooks/permisos-provider"
+import { PermisoEliminar } from "@/components/permiso"
 
 interface Contact {
   id: string
@@ -45,6 +47,7 @@ interface ContactFilters {
 }
 
 export default function ContactosPage() {
+  const { tieneFuncionTecnica, puedeEliminar, puedeEditar } = usePermisosContext()
   const router = useRouter()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
@@ -540,14 +543,18 @@ export default function ContactosPage() {
 
             {/* Botones - Derecha */}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={detectDuplicates} disabled={duplicatesLoading}>
-                <Users className="w-4 h-4 mr-2" />
-                {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
-              </Button>
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
+              {tieneFuncionTecnica("detectar duplicados contactos") && (
+                <Button variant="outline" onClick={detectDuplicates} disabled={duplicatesLoading}>
+                  <Users className="w-4 h-4 mr-2" />
+                  {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
+                </Button>
+              )}
+              {tieneFuncionTecnica("ver boton exportar") && (
+                <Button variant="outline" onClick={handleExport}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar
+                </Button>
+              )}
               <Link href="/panel/contactos/nuevo">
                 <Button className="bg-[#D54644] hover:bg-[#B03A38]">
                   <Plus className="w-4 h-4 mr-2" />
@@ -558,7 +565,7 @@ export default function ContactosPage() {
           </div>
 
           {/* Acciones masivas */}
-          {selectedContacts.size > 0 && (
+          {selectedContacts.size > 0 && puedeEditar("contactos") && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -610,20 +617,24 @@ export default function ContactosPage() {
                       </Button>
                     </>
                   )}
-                  <Button 
-                    variant="outline" 
-                    onClick={handleExportSelected}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Exportar selección
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="sm" className="bg-[#D54644] hover:bg-[#B73E3A] text-white">
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        Eliminar
-                      </Button>
-                    </AlertDialogTrigger>
+                  {tieneFuncionTecnica("ver boton exportar") && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleExportSelected}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Exportar selección
+                    </Button>
+                  )}
+                  <PermisoEliminar modulo="contactos">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" className="bg-[#D54644] hover:bg-[#B73E3A] text-white">
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Eliminar
+                        </Button>
+                      </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar contactos?</AlertDialogTitle>
@@ -640,6 +651,7 @@ export default function ContactosPage() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  </PermisoEliminar>
                 </div>
               </div>
             </div>
@@ -721,6 +733,7 @@ export default function ContactosPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {puedeEditar("contactos") ? (
                     <TableHead className="w-12">
                       <Checkbox
                         checked={
@@ -740,6 +753,7 @@ export default function ContactosPage() {
                         }}
                       />
                     </TableHead>
+                    ) : null}
                     <TableHead>Nombre</TableHead>
                     <TableHead>NIT</TableHead>
                     <TableHead>Teléfono</TableHead>
@@ -752,6 +766,7 @@ export default function ContactosPage() {
                 <TableBody>
                   {filteredContacts.map((contact) => (
                       <TableRow key={contact.id} className="hover:bg-gray-50">
+                        {puedeEditar("contactos") ? (
                         <TableCell>
                           <Checkbox
                             checked={selectedContacts.has(contact.id)}
@@ -770,8 +785,9 @@ export default function ContactosPage() {
                             }}
                           />
                         </TableCell>
+                        ) : null}
                         <TableCell>
-                          {selectedContacts.has(contact.id) ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Input
                               value={editedContacts[contact.id]?.displayName ?? contact.displayName}
                               onChange={(e) => handleFieldChange(contact.id, 'displayName', e.target.value)}
@@ -816,7 +832,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {selectedContacts.has(contact.id) ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Input
                               value={editedContacts[contact.id]?.taxId ?? contact.taxId ?? ''}
                               onChange={(e) => handleFieldChange(contact.id, 'taxId', e.target.value)}
@@ -827,7 +843,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {selectedContacts.has(contact.id) ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Input
                               value={editedContacts[contact.id]?.phone ?? contact.phone ?? ''}
                               onChange={(e) => handleFieldChange(contact.id, 'phone', e.target.value)}
@@ -838,7 +854,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {selectedContacts.has(contact.id) ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Input
                               value={editedContacts[contact.id]?.email ?? contact.email ?? ''}
                               onChange={(e) => handleFieldChange(contact.id, 'email', e.target.value)}
@@ -849,7 +865,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {selectedContacts.has(contact.id) ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Select 
                               value={editedContacts[contact.id]?.salesOwnerId ?? contact.salesOwnerId ?? 'none'}
                               onValueChange={(value) => handleFieldChange(contact.id, 'salesOwnerId', value === 'none' ? null : value)}
@@ -886,7 +902,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {selectedContacts.has(contact.id) ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Select 
                               value={editedContacts[contact.id]?.relation ?? contact.relation}
                               onValueChange={(value) => handleFieldChange(contact.id, 'relation', value)}
@@ -908,6 +924,7 @@ export default function ContactosPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
+                            {puedeEditar("contactos") && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -916,15 +933,18 @@ export default function ContactosPage() {
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDelete(contact.id)}
-                              title="Eliminar contacto"
-                              className="text-red-600 hover:text-red-700 hover:border-red-600"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            )}
+                            <PermisoEliminar modulo="contactos">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(contact.id)}
+                                title="Eliminar contacto"
+                                className="text-red-600 hover:text-red-700 hover:border-red-600"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </PermisoEliminar>
                           </div>
                         </TableCell>
                       </TableRow>

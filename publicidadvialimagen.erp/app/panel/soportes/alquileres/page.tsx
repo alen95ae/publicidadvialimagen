@@ -24,6 +24,7 @@ import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Interface para los datos de alquileres
 interface Alquiler {
@@ -49,6 +50,7 @@ const ESTADOS_ALQUILER = {
 } as const
 
 export default function AlquileresPage() {
+  const { tieneFuncionTecnica, puedeEditar } = usePermisosContext()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAlquileres, setSelectedAlquileres] = useState<string[]>([])
@@ -294,15 +296,17 @@ export default function AlquileresPage() {
             </div>
             
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExport}
-                disabled={exporting || alquileres.length === 0}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {exporting ? 'Exportando...' : 'Exportar'}
-              </Button>
+              {tieneFuncionTecnica("ver boton exportar") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={exporting || alquileres.length === 0}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting ? 'Exportando...' : 'Exportar'}
+                </Button>
+              )}
               
               <Link href="/panel/ventas/nuevo">
                 <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
@@ -344,12 +348,14 @@ export default function AlquileresPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
+                      {puedeEditar("soportes") && (
                       <th className="text-center py-2 px-3">
                         <Checkbox
                           checked={selectedAlquileres.length === alquileres.length && alquileres.length > 0}
                           onCheckedChange={handleSelectAll}
                         />
                       </th>
+                      )}
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Código</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Inicio</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Fin</th>
@@ -365,19 +371,21 @@ export default function AlquileresPage() {
                   <tbody>
                     {alquileres.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="text-center py-8 text-gray-500">
+                        <td colSpan={puedeEditar("soportes") ? 11 : 10} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron alquileres con ese criterio de búsqueda' : 'No hay alquileres disponibles'}
                         </td>
                       </tr>
                     ) : (
                       alquileres.map((alquiler) => (
                         <tr key={alquiler.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          {puedeEditar("soportes") && (
                           <td className="py-2 px-3 text-center">
                             <Checkbox
                               checked={selectedAlquileres.includes(alquiler.id)}
                               onCheckedChange={(checked) => handleSelectAlquiler(alquiler.id, checked as boolean)}
                             />
                           </td>
+                          )}
                           <td className="py-2 px-3 whitespace-nowrap text-center">
                             <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
                               {alquiler.codigo}

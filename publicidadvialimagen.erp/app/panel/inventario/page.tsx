@@ -56,6 +56,7 @@ import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { includesIgnoreAccents } from "@/lib/utils"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Tipo para los items del inventario
 interface InventoryItem {
@@ -192,6 +193,7 @@ function getStockBadge(cantidad: number) {
 
 
 export default function InventarioPage() {
+  const { tieneFuncionTecnica, puedeEditar } = usePermisosContext()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
@@ -920,10 +922,12 @@ export default function InventarioPage() {
                 
                 {/* Botones de acciones - completamente a la derecha */}
                 <div className="flex gap-2 items-center ml-auto">
-                  <Button variant="outline" size="sm" onClick={handleExport}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Exportar
-                  </Button>
+                  {tieneFuncionTecnica("ver boton exportar") && (
+                    <Button variant="outline" size="sm" onClick={handleExport}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Exportar
+                    </Button>
+                  )}
                   <Button 
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={handleNewProduct}
@@ -966,7 +970,7 @@ export default function InventarioPage() {
           </CardHeader>
           <CardContent>
             {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
-            {viewMode === "list" && someSelected && (
+            {viewMode === "list" && puedeEditar("inventario") && someSelected && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -1133,6 +1137,7 @@ export default function InventarioPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {puedeEditar("inventario") && (
                     <TableHead className="w-10">
                       <Checkbox
                         checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
@@ -1140,6 +1145,7 @@ export default function InventarioPage() {
                         aria-label="Seleccionar todo"
                       />
                     </TableHead>
+                    )}
                     <TableHead>Código</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Categoría</TableHead>
@@ -1155,6 +1161,7 @@ export default function InventarioPage() {
                 <TableBody>
                   {filteredItems.map((item) => (
                     <TableRow key={item.id}>
+                      {puedeEditar("inventario") && (
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[item.id]}
@@ -1164,8 +1171,9 @@ export default function InventarioPage() {
                           aria-label={`Seleccionar ${item.codigo}`}
                         />
                       </TableCell>
+                      )}
                       <TableCell className="whitespace-nowrap">
-                        {selected[item.id] ? (
+                        {selected[item.id] && puedeEditar("inventario") ? (
                           <Input
                             value={editedItems[item.id]?.codigo ?? item.codigo}
                             onChange={(e) => handleFieldChange(item.id, 'codigo', e.target.value)}
@@ -1185,7 +1193,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[42ch]">
-                        {selected[item.id] ? (
+                        {selected[item.id] && puedeEditar("inventario") ? (
                           <Input
                             value={editedItems[item.id]?.nombre ?? item.nombre}
                             onChange={(e) => handleFieldChange(item.id, 'nombre', e.target.value)}
@@ -1217,7 +1225,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {selected[item.id] ? (
+                        {selected[item.id] && puedeEditar("inventario") ? (
                           <Select 
                             value={(editedItems[item.id]?.categoria ?? item.categoria) || undefined}
                             onValueChange={(value) => {
@@ -1244,7 +1252,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {selected[item.id] ? (
+                        {selected[item.id] && puedeEditar("inventario") ? (
                           <Select 
                             value={(editedItems[item.id]?.unidad_medida ?? item.unidad_medida) || undefined}
                             onValueChange={(value) => {

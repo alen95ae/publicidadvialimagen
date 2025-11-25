@@ -56,7 +56,7 @@ interface Support {
 }
 
 export default function SoportesPage() {
-  const { tieneFuncionTecnica } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEditar } = usePermisosContext()
   const [supports, setSupports] = useState<Support[]>([])
   const [allSupports, setAllSupports] = useState<Support[]>([]) // Para almacenar todos los soportes cuando hay ordenamiento
   const [loading, setLoading] = useState(true)
@@ -981,7 +981,7 @@ export default function SoportesPage() {
           <CardContent>
 
             {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
-            {viewMode === "list" && ((someSelected || allSelected) || Object.keys(editedSupports).length > 0) && (
+            {viewMode === "list" && puedeEditar("soportes") && ((someSelected || allSelected) || Object.keys(editedSupports).length > 0) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -1172,6 +1172,7 @@ export default function SoportesPage() {
                 <Table>
                 <TableHeader>
                   <TableRow>
+                    {puedeEditar("soportes") && (
                     <TableHead className="w-10">
                       <Checkbox
                         checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
@@ -1179,6 +1180,7 @@ export default function SoportesPage() {
                         aria-label="Seleccionar todo"
                       />
                     </TableHead>
+                    )}
                     <TableHead>
                       <div className="flex items-center gap-2">
                         <span>Código</span>
@@ -1218,6 +1220,7 @@ export default function SoportesPage() {
                 <TableBody>
                   {supportsArray.map((support) => (
                     <TableRow key={support.id}>
+                      {puedeEditar("soportes") && (
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[support.id]}
@@ -1227,8 +1230,9 @@ export default function SoportesPage() {
                           aria-label={`Seleccionar ${support.code}`}
                         />
                       </TableCell>
+                      )}
                       <TableCell className="whitespace-nowrap">
-                        {selected[support.id] ? (
+                        {selected[support.id] && puedeEditar("soportes") ? (
                           <Input
                             value={editedSupports[support.id]?.code ?? support.code}
                             onChange={(e) => handleFieldChange(support.id, 'code', e.target.value)}
@@ -1241,7 +1245,7 @@ export default function SoportesPage() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[42ch]">
-                        {selected[support.id] ? (
+                        {selected[support.id] && puedeEditar("soportes") ? (
                           <Input
                             value={editedSupports[support.id]?.title ?? support.title ?? ''}
                             onChange={(e) => handleFieldChange(support.id, 'title', e.target.value)}
@@ -1262,7 +1266,7 @@ export default function SoportesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {selected[support.id] ? (
+                        {selected[support.id] && puedeEditar("soportes") ? (
                           <Select 
                             value={editedSupports[support.id]?.type ?? support.type}
                             onValueChange={(value) => handleFieldChange(support.id, 'type', value)}
@@ -1296,7 +1300,7 @@ export default function SoportesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {selected[support.id] ? (
+                        {selected[support.id] && puedeEditar("soportes") ? (
                           <Input
                             type="number"
                             value={editedSupports[support.id]?.priceMonth ?? support.priceMonth ?? ''}
@@ -1311,7 +1315,7 @@ export default function SoportesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {selected[support.id] ? (
+                        {selected[support.id] && puedeEditar("soportes") ? (
                           <Select 
                             value={editedSupports[support.id]?.status ?? support.status}
                             onValueChange={(value) => handleFieldChange(support.id, 'status', value)}

@@ -33,9 +33,17 @@ export default function ERPModulesGrid() {
       return puedeVer(module.key) || puedeEditar(module.key) || esAdmin(module.key);
     }
     
-    // Para módulo sitio, verificar también con "web" como fallback
+    // Para módulo sitio, verificar con "sitio", "sitio_web" y "web" como fallback
     if (module.key === 'sitio') {
-      return puedeVer(module.key) || puedeVer('web');
+      const tieneAcceso = puedeVer('sitio') || puedeVer('sitio_web') || puedeVer('web')
+      if (!tieneAcceso) {
+        console.log('🔍 Módulo sitio sin acceso en grid:', { 
+          sitio: puedeVer('sitio'), 
+          sitio_web: puedeVer('sitio_web'), 
+          web: puedeVer('web') 
+        })
+      }
+      return tieneAcceso
     }
     
     // Filtrar módulos sin permiso ver

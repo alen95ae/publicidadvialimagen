@@ -9,6 +9,51 @@ import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
 
+/**
+ * Construye el nombre del archivo PDF según los filtros y selección
+ */
+function buildPDFFileName({
+  disponibilidad,
+  ciudad,
+  soporte,
+}: {
+  disponibilidad?: string; // "disponibles" | "ocupados"
+  ciudad?: string;
+  soporte?: string;
+}): string {
+  const hoy = new Date();
+  const fecha = `${String(hoy.getDate()).padStart(2, "0")}-${String(
+    hoy.getMonth() + 1
+  ).padStart(2, "0")}-${hoy.getFullYear()}`;
+
+  // Opción 4: Un solo soporte seleccionado
+  if (soporte) {
+    return `${soporte} - ${fecha}.pdf`;
+  }
+
+  // Opción 1: disponibilidad + ciudad
+  if (disponibilidad && ciudad) {
+    const dispUpper =
+      disponibilidad === "disponibles" ? "Disponibles" : "Ocupados";
+    return `${dispUpper} - ${ciudad} - ${fecha}.pdf`;
+  }
+
+  // Opción 2: solo disponibilidad
+  if (disponibilidad) {
+    const dispUpper =
+      disponibilidad === "disponibles" ? "Disponibles" : "Ocupados";
+    return `${dispUpper} - ${fecha}.pdf`;
+  }
+
+  // Opción 3: solo ciudad
+  if (ciudad) {
+    return `${ciudad} - ${fecha}.pdf`;
+  }
+
+  // Opción 5: nada seleccionado
+  return `Catalogo Vallas Publicitarias - ${fecha}.pdf`;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
@@ -17,6 +62,11 @@ export async function GET(request: NextRequest) {
     // Obtener el email del parámetro de URL (igual que en cotizaciones)
     const userEmail = url.searchParams.get('email') || undefined
     console.log('📧 Email recibido como parámetro:', userEmail)
+    
+    // Obtener parámetros para el nombre del archivo
+    const disponibilidad = url.searchParams.get('disponibilidad') || undefined
+    const ciudad = url.searchParams.get('ciudad') || undefined
+    const soporteTitulo = url.searchParams.get('soporte') || undefined
     
     if (!ids) {
       return NextResponse.json({ error: "IDs de soportes requeridos" }, { status: 400 })
@@ -73,10 +123,17 @@ export async function GET(request: NextRequest) {
     // Generar PDF
     const pdf = await generatePDF(supports, userEmail)
     
-    // Configurar headers para descarga
+    // Construir nombre del archivo dinámico
+    const fileName = buildPDFFileName({
+      disponibilidad,
+      ciudad,
+      soporte: soporteTitulo,
+    })
+    
+    // Configurar headers para descarga (sin acentos para evitar problemas)
     const headers = new Headers()
     headers.set('Content-Type', 'application/pdf')
-    headers.set('Content-Disposition', `attachment; filename="catalogo-soportes-${new Date().toISOString().split('T')[0]}.pdf"`)
+    headers.set('Content-Disposition', `attachment; filename="${fileName}"`)
     
     return new NextResponse(pdf, { headers })
   } catch (error) {

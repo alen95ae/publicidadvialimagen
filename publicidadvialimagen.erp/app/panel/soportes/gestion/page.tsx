@@ -519,13 +519,54 @@ export default function SoportesPage() {
         console.error('Error obteniendo email del usuario:', error)
       }
       
-      // Construir URL con IDs y email
+      // Determinar disponibilidad según statusFilter
+      let disponibilidad: string | undefined = undefined
+      if (statusFilter.length === 1) {
+        if (statusFilter[0] === 'Disponible') {
+          disponibilidad = 'disponibles'
+        } else if (statusFilter[0] === 'Ocupado') {
+          disponibilidad = 'ocupados'
+        }
+      }
+      
+      // Determinar si es un solo soporte y obtener su título
+      let soporteTitulo: string | undefined = undefined
+      if (ids.length === 1) {
+        const selectedId = ids[0]
+        // Buscar en todos los soportes disponibles
+        // Primero intentar en allSupports (si hay ordenamiento), luego en supports
+        const allSupportsToSearch = (sortColumn && allSupports.length > 0) ? allSupports : supports
+        const selectedSupport = allSupportsToSearch.find(s => s.id === selectedId)
+        if (selectedSupport?.title) {
+          soporteTitulo = selectedSupport.title
+        } else {
+          // Si no se encuentra, intentar buscar en la página actual
+          const currentPageSupport = supports.find(s => s.id === selectedId)
+          if (currentPageSupport?.title) {
+            soporteTitulo = currentPageSupport.title
+          }
+        }
+      }
+      
+      // Construir URL con IDs, email y filtros
       const params = new URLSearchParams({
         ids: ids.join(',')
       })
       
       if (userEmail) {
         params.append('email', userEmail)
+      }
+      
+      if (disponibilidad) {
+        params.append('disponibilidad', disponibilidad)
+      }
+      
+      if (cityFilter) {
+        params.append('ciudad', cityFilter)
+      }
+      
+      if (soporteTitulo) {
+        params.append('soporte', soporteTitulo)
       }
       
       const url = `/api/soportes/export/pdf?${params.toString()}`
@@ -539,12 +580,23 @@ export default function SoportesPage() {
         throw new Error('Error al generar el PDF')
       }
       
+      // Obtener el nombre del archivo del header Content-Disposition
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let fileName = `catalogo-soportes-${new Date().toISOString().split('T')[0]}.pdf`
+      
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/i)
+        if (fileNameMatch && fileNameMatch[1]) {
+          fileName = fileNameMatch[1]
+        }
+      }
+      
       // Convertir a blob y descargar
       const blob = await response.blob()
       const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = `catalogo-soportes-${new Date().toISOString().split('T')[0]}.pdf`
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

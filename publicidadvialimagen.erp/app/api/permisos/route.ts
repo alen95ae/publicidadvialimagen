@@ -29,6 +29,13 @@ export async function GET(request: NextRequest) {
         .order('modulo', { ascending: true })
         .order('accion', { ascending: true });
 
+      console.log('🔍 [Permisos API] Desarrollador - Permisos encontrados:', permisosData?.length || 0);
+      console.log('🔍 [Permisos API] Módulos únicos:', [...new Set(permisosData?.map(p => p.modulo) || [])]);
+      
+      // Verificar si existe sitio_web
+      const sitioWebPermisos = permisosData?.filter(p => p.modulo === 'sitio_web' || p.modulo === 'sitio' || p.modulo === 'web') || [];
+      console.log('🔍 [Permisos API] Permisos sitio/sitio_web/web:', sitioWebPermisos);
+
       // Construir matriz con todos los permisos en true
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
       (permisosData || []).forEach(permiso => {
@@ -37,6 +44,17 @@ export async function GET(request: NextRequest) {
         }
         permisosMatrix[permiso.modulo][permiso.accion] = true;
       });
+
+      // Asegurar que sitio_web tenga todos los permisos si no existe
+      if (!permisosMatrix['sitio_web'] && !permisosMatrix['sitio'] && !permisosMatrix['web']) {
+        console.log('⚠️ [Permisos API] No se encontraron permisos para sitio/sitio_web/web, creando permisos por defecto');
+        permisosMatrix['sitio_web'] = {
+          ver: true,
+          editar: true,
+          eliminar: true,
+          admin: true
+        };
+      }
 
       return NextResponse.json({ permisos: permisosMatrix });
     }
@@ -84,6 +102,16 @@ export async function GET(request: NextRequest) {
         permisosMatrix[modulo].editar = true;
         permisosMatrix[modulo].eliminar = true;
       }
+    });
+
+    // Log para depuración del módulo sitio
+    const sitioPermisos = permisosMatrix['sitio'] || permisosMatrix['sitio_web'] || permisosMatrix['web'] || {};
+    console.log('🔍 [Permisos API] Permisos sitio para usuario:', { 
+      userId, 
+      sitio: permisosMatrix['sitio'], 
+      sitio_web: permisosMatrix['sitio_web'], 
+      web: permisosMatrix['web'],
+      sitioPermisos 
     });
 
     return NextResponse.json({ permisos: permisosMatrix });

@@ -578,14 +578,34 @@ export default function NuevaCotizacionPage() {
     cargarClientes()
   }, [])
 
-  // Cargar todos los comerciales al inicio
+  // Cargar todos los comerciales al inicio y predefinir el usuario actual
   useEffect(() => {
     const cargarComerciales = async () => {
       setCargandoComerciales(true)
       try {
         const response = await fetch('/api/ajustes/usuarios?pageSize=100')
         const data = await response.json()
-        setTodosLosComerciales(data.users || [])
+        // Filtrar solo usuarios con vendedor=true
+        const vendedores = (data.users || []).filter((user: any) => user.vendedor === true)
+        setTodosLosComerciales(vendedores)
+        
+        // Predefinir el usuario actual si es vendedor
+        if (!vendedor) {
+          try {
+            const userRes = await fetch('/api/auth/me')
+            if (userRes.ok) {
+              const userData = await userRes.json()
+              if (userData.success && userData.user) {
+                const currentUser = vendedores.find((v: any) => v.id === userData.user.id)
+                if (currentUser) {
+                  setVendedor(currentUser.id)
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error obteniendo usuario actual:', error)
+          }
+        }
       } catch (error) {
         console.error('Error cargando comerciales:', error)
       } finally {
@@ -942,39 +962,67 @@ export default function NuevaCotizacionPage() {
         return
       }
 
-      setGuardando(true)
-
-      // Primero subir todas las imágenes nuevas
+      // Validar que ningún producto tenga un total menor al calculado
       for (const producto of productos) {
-        if (producto.imagenFile) {
-          try {
-            const formData = new FormData()
-            formData.append('file', producto.imagenFile)
-            
-            const response = await fetch('/api/cotizaciones/image', {
-              method: 'POST',
-              body: formData
-            })
-            
-            const data = await response.json()
-            
-            if (data.success && data.data.publicUrl) {
-              // Actualizar el producto con la URL de Supabase
-              actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
-              actualizarProducto(producto.id, 'imagenFile', undefined)
-            } else {
-              throw new Error(data.error || 'Error al subir la imagen')
-            }
-          } catch (error) {
-            console.error('Error subiendo imagen:', error)
-            toast.error(`Error al subir imagen del producto ${producto.producto}`)
-            setGuardando(false)
-            return
-          }
+        const esUnidades = producto.udm?.toLowerCase().trim() === 'unidad' || producto.udm?.toLowerCase().trim() === 'unidades' || producto.udm?.toLowerCase().trim() === 'unidade'
+        const totalCalculado = calcularTotal(
+          producto.cantidad,
+          producto.totalM2,
+          producto.precio,
+          producto.comision,
+          producto.conIVA,
+          producto.conIT,
+          producto.esSoporte || esUnidades,
+          producto.udm
+        )
+        
+        if (producto.total < totalCalculado) {
+          toast.error(`El producto "${producto.producto}" tiene un total (${producto.total}) menor al precio calculado (${totalCalculado.toFixed(2)}). Por favor corrige el precio antes de guardar.`)
+          setGuardando(false)
+          return
         }
       }
 
-      // Preparar las líneas de cotización
+      setGuardando(true)
+
+      // Primero subir todas las imágenes nuevas y actualizar el estado
+      const productosConImagenes = await Promise.all(
+        productos.map(async (producto) => {
+          if (producto.imagenFile) {
+            try {
+              const formData = new FormData()
+              formData.append('file', producto.imagenFile)
+              
+              const response = await fetch('/api/cotizaciones/image', {
+                method: 'POST',
+                body: formData
+              })
+              
+              const data = await response.json()
+              
+              if (data.success && data.data.publicUrl) {
+                // Actualizar el producto con la URL de Supabase
+                actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
+                actualizarProducto(producto.id, 'imagenFile', undefined)
+                return { ...producto, imagen: data.data.publicUrl, imagenFile: undefined }
+              } else {
+                throw new Error(data.error || 'Error al subir la imagen')
+              }
+            } catch (error) {
+              console.error('Error subiendo imagen:', error)
+              toast.error(`Error al subir imagen del producto ${producto.producto}`)
+              setGuardando(false)
+              throw error
+            }
+          }
+          return producto
+        })
+      )
+
+      // Esperar un momento para que el estado se actualice
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Preparar las líneas de cotización usando el estado actualizado
       const lineas = productosList.map((item, index) => {
         if (item.tipo === 'producto') {
           const producto = item as ProductoItem
@@ -994,6 +1042,7 @@ export default function NuevaCotizacionPage() {
             con_it: producto.conIT,
             es_soporte: producto.esSoporte || false,
             orden: index + 1,
+            imagen_url: producto.imagen || null,
             imagen: producto.imagen || null,
             variantes: producto.variantes || null,
             subtotal_linea: producto.total
@@ -1548,7 +1597,6 @@ export default function NuevaCotizacionPage() {
                               <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
                               <div className="flex flex-col">
                                 <span className="font-medium">{c.nombre}</span>
-                                {c.email && <span className="text-xs text-gray-500">{c.email}</span>}
                               </div>
                             </CommandItem>
                           ))}

@@ -1,7 +1,7 @@
 // Constantes compartidas para el proyecto
 
-// Unidades de medida válidas en Airtable para la tabla Recursos
-export const UNIDADES_MEDIDA_AIRTABLE = [
+// Unidades de medida válidas para la tabla Recursos
+export const UNIDADES_MEDIDA = [
   "m2",
   "kg",
   "m",
@@ -11,10 +11,14 @@ export const UNIDADES_MEDIDA_AIRTABLE = [
   "km"
 ] as const
 
-// Categorías válidas en Airtable para la tabla Recursos
-export const CATEGORIAS_RECURSOS_AIRTABLE = [
+// Categorías válidas para la tabla Recursos
+export const CATEGORIAS_RECURSOS = [
   "Insumos",
   "Mano de Obra",
   "Suministros"
 ] as const
+
+// Mantener compatibilidad con código existente
+export const UNIDADES_MEDIDA_AIRTABLE = UNIDADES_MEDIDA
+export const CATEGORIAS_RECURSOS_AIRTABLE = CATEGORIAS_RECURSOS
 

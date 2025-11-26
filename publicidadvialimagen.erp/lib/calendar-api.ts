@@ -1,4 +1,4 @@
-import { airtable } from "./airtable"
+// Calendar API - Migrado a Supabase (pendiente de implementación)
 
 export interface CalendarEvent {
   id: string
@@ -25,81 +25,18 @@ export interface EventFormData {
  * Obtiene todos los eventos del calendario desde Airtable
  */
 export async function getEvents(): Promise<CalendarEvent[]> {
-  try {
-    // Verificar que las variables de entorno estén configuradas
-    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
-      console.warn("Airtable credentials not configured, returning empty events")
-      return []
-    }
-
-    const records = await airtable("Eventos")
-      .select({
-        view: "Grid view",
-      })
-      .all()
-
-    return records.map((record) => ({
-      id: record.id,
-      title: record.get("Titulo") as string || "Sin título",
-      description: record.get("Descripcion") as string,
-      start: new Date(record.get("FechaInicio") as string),
-      end: new Date(record.get("FechaFin") as string),
-      assignedTo: record.get("AsignadoA") as string,
-      assignedToName: record.get("NombreAsignado") as string,
-      status: (record.get("Estado") as string || "pendiente") as CalendarEvent["status"],
-      userId: record.get("UserId") as string,
-    }))
-  } catch (error: any) {
-    // Manejar específicamente el caso donde la tabla no existe o no tenemos permisos
-    if (error.message?.includes("not authorized") || error.message?.includes("not found")) {
-      console.warn("Calendar table 'Eventos' not available or not authorized, returning empty events")
-      return []
-    }
-    console.error("Error fetching events:", error)
-    // Retornar array vacío en lugar de lanzar error
-    return []
-  }
+  // TODO: Implementar con Supabase cuando se migre la tabla de eventos
+  console.warn("Calendar events not yet migrated to Supabase, returning empty events")
+  return []
 }
 
 /**
  * Obtiene eventos filtrados por usuario
  */
 export async function getEventsByUser(userId: string): Promise<CalendarEvent[]> {
-  try {
-    // Verificar que las variables de entorno estén configuradas
-    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
-      console.warn("Airtable credentials not configured, returning empty events")
-      return []
-    }
-
-    const records = await airtable("Eventos")
-      .select({
-        view: "Grid view",
-        filterByFormula: `{UserId} = '${userId}'`,
-      })
-      .all()
-
-    return records.map((record) => ({
-      id: record.id,
-      title: record.get("Titulo") as string || "Sin título",
-      description: record.get("Descripcion") as string,
-      start: new Date(record.get("FechaInicio") as string),
-      end: new Date(record.get("FechaFin") as string),
-      assignedTo: record.get("AsignadoA") as string,
-      assignedToName: record.get("NombreAsignado") as string,
-      status: (record.get("Estado") as string || "pendiente") as CalendarEvent["status"],
-      userId: record.get("UserId") as string,
-    }))
-  } catch (error: any) {
-    // Manejar específicamente el caso donde la tabla no existe o no tenemos permisos
-    if (error.message?.includes("not authorized") || error.message?.includes("not found")) {
-      console.warn("Calendar table 'Eventos' not available or not authorized, returning empty events")
-      return []
-    }
-    console.error("Error fetching user events:", error)
-    // Retornar array vacío en lugar de lanzar error
-    return []
-  }
+  // TODO: Implementar con Supabase cuando se migre la tabla de eventos
+  console.warn("Calendar events not yet migrated to Supabase, returning empty events")
+  return []
 }
 
 /**
@@ -130,37 +67,9 @@ export async function getEventsByDate(date: Date, userId?: string): Promise<Cale
  * Crea un nuevo evento en Airtable
  */
 export async function addEvent(eventData: EventFormData & { userId?: string }): Promise<CalendarEvent | null> {
-  try {
-    const records = await airtable("Eventos").create([
-      {
-        fields: {
-          Titulo: eventData.title,
-          Descripcion: eventData.description || "",
-          FechaInicio: eventData.start.toISOString(),
-          FechaFin: eventData.end.toISOString(),
-          AsignadoA: eventData.assignedTo,
-          Estado: eventData.status,
-          UserId: eventData.userId || "",
-        },
-      },
-    ])
-
-    const record = records[0]
-    return {
-      id: record.id,
-      title: record.get("Titulo") as string,
-      description: record.get("Descripcion") as string,
-      start: new Date(record.get("FechaInicio") as string),
-      end: new Date(record.get("FechaFin") as string),
-      assignedTo: record.get("AsignadoA") as string,
-      assignedToName: record.get("NombreAsignado") as string,
-      status: record.get("Estado") as CalendarEvent["status"],
-      userId: record.get("UserId") as string,
-    }
-  } catch (error) {
-    console.error("Error creating event:", error)
-    return null
-  }
+  // TODO: Implementar con Supabase cuando se migre la tabla de eventos
+  console.warn("Calendar events not yet migrated to Supabase, cannot create event")
+  return null
 }
 
 /**
@@ -170,84 +79,46 @@ export async function updateEvent(
   eventId: string,
   eventData: Partial<EventFormData>
 ): Promise<CalendarEvent | null> {
-  try {
-    const fields: any = {}
-    
-    if (eventData.title) fields.Titulo = eventData.title
-    if (eventData.description !== undefined) fields.Descripcion = eventData.description
-    if (eventData.start) fields.FechaInicio = eventData.start.toISOString()
-    if (eventData.end) fields.FechaFin = eventData.end.toISOString()
-    if (eventData.assignedTo) fields.AsignadoA = eventData.assignedTo
-    if (eventData.status) fields.Estado = eventData.status
-
-    const records = await airtable("Eventos").update([
-      {
-        id: eventId,
-        fields,
-      },
-    ])
-
-    const record = records[0]
-    return {
-      id: record.id,
-      title: record.get("Titulo") as string,
-      description: record.get("Descripcion") as string,
-      start: new Date(record.get("FechaInicio") as string),
-      end: new Date(record.get("FechaFin") as string),
-      assignedTo: record.get("AsignadoA") as string,
-      assignedToName: record.get("NombreAsignado") as string,
-      status: record.get("Estado") as CalendarEvent["status"],
-      userId: record.get("UserId") as string,
-    }
-  } catch (error) {
-    console.error("Error updating event:", error)
-    return null
-  }
+  // TODO: Implementar con Supabase cuando se migre la tabla de eventos
+  console.warn("Calendar events not yet migrated to Supabase, cannot update event")
+  return null
 }
 
 /**
  * Elimina un evento
  */
 export async function deleteEvent(eventId: string): Promise<boolean> {
-  try {
-    await airtable("Eventos").destroy([eventId])
-    return true
-  } catch (error) {
-    console.error("Error deleting event:", error)
-    return false
-  }
+  // TODO: Implementar con Supabase cuando se migre la tabla de eventos
+  console.warn("Calendar events not yet migrated to Supabase, cannot delete event")
+  return false
 }
 
 /**
  * Obtiene la lista de empleados para asignar eventos
  */
 export async function getEmployees(): Promise<Array<{ id: string; name: string; email?: string }>> {
+  // TODO: Implementar con Supabase cuando se migre la tabla de empleados
+  // Por ahora, obtener empleados desde la tabla de usuarios
   try {
-    // Verificar que las variables de entorno estén configuradas
-    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
-      console.warn("Airtable credentials not configured, returning empty employees")
+    const { getSupabaseServer } = await import('./supabaseServer')
+    const supabase = getSupabaseServer()
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id, nombre, email')
+      .eq('activo', true)
+    
+    if (error) {
+      console.error("Error fetching employees:", error)
       return []
     }
-
-    const records = await airtable("Empleados")
-      .select({
-        view: "Grid view",
-      })
-      .all()
-
-    return records.map((record) => ({
-      id: record.id,
-      name: record.get("Nombre") as string || "Sin nombre",
-      email: record.get("Email") as string,
+    
+    return (data || []).map((user: any) => ({
+      id: user.id,
+      name: user.nombre || "Sin nombre",
+      email: user.email || undefined,
     }))
-  } catch (error: any) {
-    // Manejar específicamente el caso donde la tabla no existe o no tenemos permisos
-    if (error.message?.includes("not authorized") || error.message?.includes("not found")) {
-      console.warn("Employees table 'Empleados' not available or not authorized, returning empty employees")
-      return []
-    }
+  } catch (error) {
     console.error("Error fetching employees:", error)
-    // Retornar lista vacía si falla o si la tabla no existe
     return []
   }
 }

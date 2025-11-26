@@ -24,7 +24,14 @@ export default async function PanelPage() {
       <div className="p-6 space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Panel Principal</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-gray-900">Panel Principal</h1>
+            {user.role && (
+              <span className="px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-full">
+                {user.role === 'vendedor' ? 'Vendedor' : user.role === 'admin' ? 'Administrador' : 'Ventas'}
+              </span>
+            )}
+          </div>
           <p className="text-gray-600 mt-2">
             Bienvenido al panel de control de PublicidadVialImagen
           </p>

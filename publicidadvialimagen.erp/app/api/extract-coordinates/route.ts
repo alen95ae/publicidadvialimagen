@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from 'next/server'
-import { airtable } from '@/lib/airtable'
 
 /** Extraer coordenadas de un enlace de Google Maps */
 function extractCoordinatesFromUrl(url: string): { latitude: number | null, longitude: number | null } {

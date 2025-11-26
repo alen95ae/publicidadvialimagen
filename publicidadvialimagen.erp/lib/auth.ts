@@ -8,9 +8,6 @@ import {
   updateLastAccessSupabase,
   type Usuario 
 } from "./supabaseUsers";
-import { airtableList } from "./airtable-rest";
-
-const USERS = process.env.AIRTABLE_TABLE_USERS || "Users";
 
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "7d";
 
@@ -52,21 +49,7 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
       return usuarioToUserRecord(usuario);
     }
     
-    // Si no se encuentra en Supabase, intentar en Airtable (fallback temporal)
-    console.log('⚠️ [Auth ERP] Usuario no encontrado en Supabase, buscando en Airtable...');
-    const lower = email.trim().toLowerCase().replace(/'/g, "\\'");
-    const data = await airtableList(USERS, {
-      filterByFormula: `LOWER({Email})='${lower}'`,
-      maxRecords: "1",
-      pageSize: "1",
-    });
-    const rec = data?.records?.[0];
-    if (rec) {
-      console.log('✅ [Auth ERP] Usuario encontrado en Airtable (fallback):', rec.id);
-      return { id: rec.id, fields: rec.fields };
-    }
-    
-    console.log('❌ [Auth ERP] Usuario no encontrado ni en Supabase ni en Airtable');
+    console.log('❌ [Auth ERP] Usuario no encontrado en Supabase');
     return null;
   } catch (error) {
     console.error("❌ [Auth ERP] Error finding user by email:", error);

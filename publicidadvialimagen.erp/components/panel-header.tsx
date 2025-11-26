@@ -471,6 +471,11 @@ export default function PanelHeader() {
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium">{getUserName()}</p>
                       <p className="text-xs text-gray-500">{user.email}</p>
+                      {user.role && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {user.role === 'vendedor' ? 'Vendedor' : user.role === 'admin' ? 'Administrador' : 'Ventas'}
+                        </p>
+                      )}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />

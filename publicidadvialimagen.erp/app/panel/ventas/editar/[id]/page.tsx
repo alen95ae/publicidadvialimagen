@@ -756,9 +756,10 @@ export default function EditarCotizacionPage() {
     
     setCargandoComerciales(true)
     try {
-      const response = await fetch('/api/ajustes/usuarios')
+      const response = await fetch('/api/ajustes/usuarios?pageSize=100')
       const data = await response.json()
-      const vendedores = data.users || data.data || []
+      // Filtrar solo usuarios con vendedor=true
+      const vendedores = (data.users || []).filter((user: any) => user.vendedor === true)
       setTodosLosComerciales(vendedores)
       setFilteredComerciales(vendedores.slice(0, 20))
     } catch (error) {
@@ -1077,65 +1078,91 @@ export default function EditarCotizacionPage() {
         return
       }
 
-      setGuardando(true)
-
-      // Primero subir todas las imágenes nuevas
+      // Validar que ningún producto tenga un total menor al calculado
       for (const producto of productos) {
-        if (producto.imagenFile) {
-          try {
-            const formData = new FormData()
-            formData.append('file', producto.imagenFile)
-            
-            const response = await fetch('/api/cotizaciones/image', {
-              method: 'POST',
-              body: formData
-            })
-            
-            const data = await response.json()
-            
-            if (data.success && data.data.publicUrl) {
-              // Si había una imagen original, eliminarla
-              if (producto.imagenOriginalUrl && producto.imagenOriginalUrl.startsWith('http')) {
-                try {
-                  await fetch('/api/cotizaciones/image/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: producto.imagenOriginalUrl })
-                  })
-                } catch (deleteError) {
-                  console.warn('Error eliminando imagen anterior:', deleteError)
-                  // No fallar si no se puede eliminar la imagen anterior
-                }
-              }
-              
-              // Actualizar el producto con la URL de Supabase
-              actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
-              actualizarProducto(producto.id, 'imagenOriginalUrl', data.data.publicUrl)
-              actualizarProducto(producto.id, 'imagenFile', undefined)
-            } else {
-              throw new Error(data.error || 'Error al subir la imagen')
-            }
-          } catch (error) {
-            console.error('Error subiendo imagen:', error)
-            toast.error(`Error al subir imagen del producto ${producto.producto}`)
-            setGuardando(false)
-            return
-          }
-        } else if (!producto.imagen && producto.imagenOriginalUrl) {
-          // Si se eliminó la imagen, eliminar también de Supabase
-          try {
-            await fetch('/api/cotizaciones/image/delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: producto.imagenOriginalUrl })
-            })
-            actualizarProducto(producto.id, 'imagenOriginalUrl', undefined)
-          } catch (deleteError) {
-            console.warn('Error eliminando imagen:', deleteError)
-            // No fallar si no se puede eliminar
-          }
+        const esUnidades = producto.udm?.toLowerCase().trim() === 'unidad' || producto.udm?.toLowerCase().trim() === 'unidades' || producto.udm?.toLowerCase().trim() === 'unidade'
+        const totalCalculado = calcularTotal(
+          producto.cantidad,
+          producto.totalM2,
+          producto.precio,
+          producto.comision,
+          producto.conIVA,
+          producto.conIT,
+          producto.esSoporte || esUnidades,
+          producto.udm
+        )
+        
+        if (producto.total < totalCalculado) {
+          toast.error(`El producto "${producto.producto}" tiene un total (${producto.total}) menor al precio calculado (${totalCalculado.toFixed(2)}). Por favor corrige el precio antes de guardar.`)
+          setGuardando(false)
+          return
         }
       }
+
+      setGuardando(true)
+
+      // Primero subir todas las imágenes nuevas y actualizar el estado
+      await Promise.all(
+        productos.map(async (producto) => {
+          if (producto.imagenFile) {
+            try {
+              const formData = new FormData()
+              formData.append('file', producto.imagenFile)
+              
+              const response = await fetch('/api/cotizaciones/image', {
+                method: 'POST',
+                body: formData
+              })
+              
+              const data = await response.json()
+              
+              if (data.success && data.data.publicUrl) {
+                // Si había una imagen original, eliminarla
+                if (producto.imagenOriginalUrl && producto.imagenOriginalUrl.startsWith('http')) {
+                  try {
+                    await fetch('/api/cotizaciones/image/delete', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url: producto.imagenOriginalUrl })
+                    })
+                  } catch (deleteError) {
+                    console.warn('Error eliminando imagen anterior:', deleteError)
+                    // No fallar si no se puede eliminar la imagen anterior
+                  }
+                }
+                
+                // Actualizar el producto con la URL de Supabase
+                actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
+                actualizarProducto(producto.id, 'imagenOriginalUrl', data.data.publicUrl)
+                actualizarProducto(producto.id, 'imagenFile', undefined)
+              } else {
+                throw new Error(data.error || 'Error al subir la imagen')
+              }
+            } catch (error) {
+              console.error('Error subiendo imagen:', error)
+              toast.error(`Error al subir imagen del producto ${producto.producto}`)
+              setGuardando(false)
+              throw error
+            }
+          } else if (!producto.imagen && producto.imagenOriginalUrl) {
+            // Si se eliminó la imagen, eliminar también de Supabase
+            try {
+              await fetch('/api/cotizaciones/image/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: producto.imagenOriginalUrl })
+              })
+              actualizarProducto(producto.id, 'imagenOriginalUrl', undefined)
+            } catch (deleteError) {
+              console.warn('Error eliminando imagen:', deleteError)
+              // No fallar si no se puede eliminar
+            }
+          }
+        })
+      )
+
+      // Esperar un momento para que el estado se actualice
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       const lineas = productosList.map((item, index) => {
         if (item.tipo === 'producto') {
@@ -1156,6 +1183,7 @@ export default function EditarCotizacionPage() {
             con_it: producto.conIT,
             es_soporte: producto.esSoporte || false,
             orden: index + 1,
+            imagen_url: producto.imagen || null,
             imagen: producto.imagen || null,
             variantes: producto.variantes || null,
             subtotal_linea: producto.total
@@ -1643,6 +1671,81 @@ export default function EditarCotizacionPage() {
                 </Popover>
               </div>
               
+              {/* Comercial */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="vendedor">Comercial</Label>
+                <Popover open={openComercialCombobox} onOpenChange={(open) => {
+                  setOpenComercialCombobox(open)
+                  if (open) {
+                    cargarComercialesLazy()
+                    if (todosLosComerciales.length > 0) {
+                      setFilteredComerciales(todosLosComerciales.slice(0, 20))
+                    }
+                  }
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className={cn(
+                        "w-full justify-between",
+                        !vendedor && "text-muted-foreground"
+                      )}
+                    >
+                      <span className="truncate">
+                        {vendedor 
+                          ? todosLosComerciales.find(c => c.id === vendedor)?.nombre || vendedor
+                          : "Seleccionar comercial"}
+                      </span>
+                      <Check className={cn("ml-2 h-4 w-4 shrink-0", vendedor ? "opacity-100" : "opacity-0")} />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command shouldFilter={false} className="overflow-visible">
+                      <CommandInput 
+                        placeholder="Buscar comercial..."
+                        className="h-9 border-0 focus:ring-0"
+                        onValueChange={(value) => {
+                          if (!value || value.trim() === '') {
+                            setFilteredComerciales(todosLosComerciales.slice(0, 20))
+                            return
+                          }
+                          const search = value.toLowerCase().trim()
+                          const filtered = todosLosComerciales.filter((c: any) => {
+                            const nombre = (c.nombre || '').toLowerCase()
+                            const email = (c.email || '').toLowerCase()
+                            return nombre.includes(search) || email.includes(search)
+                          }).slice(0, 20)
+                          setFilteredComerciales(filtered)
+                        }}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {cargandoComerciales ? "Cargando..." : "No se encontraron comerciales."}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {filteredComerciales.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.nombre}
+                              onSelect={() => {
+                                setVendedor(c.id)
+                                setOpenComercialCombobox(false)
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col">
+                                <span className="font-medium">{c.nombre}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               
               {/* Sucursal */}
               <div className="flex-1 space-y-2">

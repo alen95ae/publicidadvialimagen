@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { requireRole } from "@/lib/server-auth";
-import { airtableCreate } from "@/lib/airtable-rest";
-
-const TABLE = process.env.AIRTABLE_TABLE_INVITACIONES || "Invitaciones";
-const SITE = process.env.PUBLIC_SITE_URL || "http://localhost:3000";
+import { createInvitacion } from "@/lib/supabaseInvitaciones";
+import { getBaseUrl } from "@/lib/url";
 
 function nowPlusDays(days: number) {
   const d = new Date();
@@ -24,31 +22,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Rol no válido" }, { status: 400 });
     }
 
-    const records = emails.map((raw: string) => {
+    const baseUrl = getBaseUrl().replace(/\/$/, '');
+    const links = [];
+
+    for (const raw of emails) {
       const email = (raw || "").trim().toLowerCase();
       const token = crypto.randomBytes(24).toString("hex");
-      const link = `${SITE}/register?invite=${token}&email=${encodeURIComponent(email)}`;
-      return {
-        fields: {
-          Email: email,
-          Role: role,
-          Token: token,
-          ExpiresAt: nowPlusDays(expiresDays),
-          Accepted: false,
-          Revoked: false,
-          CreatedBy: user.email || "",
-        },
-      };
-    });
+      const fechaCreacion = new Date().toISOString();
+      const fechaExpiracion = nowPlusDays(expiresDays);
+      const link = `${baseUrl}/register?invite=${token}&email=${encodeURIComponent(email)}`;
 
-    const res = await airtableCreate(TABLE, records);
-    // Devolver los links generados
-    const links = res.records.map((r: any, i: number) => ({
-      id: r.id,
-      email: records[i].fields.Email,
-      role,
-      link: `${SITE}/register?invite=${records[i].fields.Token}&email=${encodeURIComponent(records[i].fields.Email)}`
-    }));
+      try {
+        const invitacion = await createInvitacion(
+          email,
+          role,
+          token,
+          fechaCreacion,
+          fechaExpiracion,
+          link
+        );
+
+        links.push({
+          id: invitacion.id,
+          email: invitacion.email,
+          role,
+          link: invitacion.enlace
+        });
+      } catch (error) {
+        console.error(`Error creando invitación para ${email}:`, error);
+        // Continuar con los demás emails
+      }
+    }
 
     return NextResponse.json({ success: true, links });
   } catch (e: any) {

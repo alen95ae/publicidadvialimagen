@@ -1,4 +1,3 @@
-import { airtable } from '@/lib/airtable'
 import { getAllProductos } from '@/lib/supabaseProductos'
 
 export const TIPOS_OFICIALES = [
@@ -430,29 +429,9 @@ export function buildPayload(data:any, existing?:any){
 
 /** Si no hay propietario, asegura uno por defecto y devuelve su id */
 export async function ensureDefaultOwnerId(): Promise<string> {
-  try {
-    // Try to get existing default owner from Airtable
-    const response = await airtable('Dueños de Casa').select({
-      filterByFormula: `{Nombre} = 'Propietario por Defecto'`,
-      maxRecords: 1
-    }).all()
-    
-    if (response && response.length > 0) {
-      return response[0].id
-    }
-    
-    // Create default owner if not exists
-    const createResponse = await airtable('Dueños de Casa').create({
-      'Nombre': 'Propietario por Defecto',
-      'Tipo Propietario': 'empresa',
-      'Estado': 'activo'
-    })
-    
-    return createResponse.id
-  } catch (error) {
-    console.error('Error ensuring default owner:', error)
-    return 'default-owner-id'
-  }
+  // Esta función ya no es necesaria con Supabase
+  // Si se necesita un propietario por defecto, debe crearse en Supabase
+  return 'default-owner-id'
 }
 
 /** Procesa datos de CSV para importación */

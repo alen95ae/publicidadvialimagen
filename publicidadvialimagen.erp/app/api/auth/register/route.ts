@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { createUser, createUserWithRole, findUserByEmail, signSession, setSessionCookie } from "@/lib/auth";
-import { airtableList, airtableUpdate } from "@/lib/airtable-rest";
 import { verify } from "@/lib/auth/jwt";
 import { getBaseUrl } from "@/lib/url";
-
-const TABLE_INV = process.env.AIRTABLE_TABLE_INVITATIONS || "Invitaciones";
 
 function nowISO() { return new Date().toISOString(); }
 

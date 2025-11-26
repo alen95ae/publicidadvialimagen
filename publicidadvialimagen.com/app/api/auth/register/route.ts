@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { createUser, findUserByEmail, signSession, setSessionCookie } from "@/lib/auth";
 import { updateUserSupabase } from "@/lib/supabaseUsers";
-import { airtableList, airtableUpdate } from "@/lib/airtable-rest";
-
-const TABLE_INV = process.env.AIRTABLE_TABLE_INVITACIONES || "Invitaciones";
 
 function nowISO() { return new Date().toISOString(); }
 
@@ -20,44 +17,12 @@ export async function POST(req: Request) {
     }
 
     let assignedRole = "invitado";
-    let invRecordId: string | null = null;
 
-    if (inviteToken) {
-      const lower = email.trim().toLowerCase().replace(/'/g, "\\'");
-      const token = inviteToken.replace(/'/g, "\\'");
-      const data = await airtableList(TABLE_INV, {
-        filterByFormula: `AND(
-          LOWER({Email})='${lower}',
-          {Token}='${token}',
-          NOT({Revoked}),
-          NOT({Accepted})
-        )`,
-        maxRecords: "1",
-        pageSize: "1",
-      });
-      const rec = data?.records?.[0];
-      if (rec) {
-        const expires = rec.fields?.["ExpiresAt"] as string | undefined;
-        const role = rec.fields?.["Role"] as string | undefined;
-        if (role && (!expires || new Date(expires) > new Date())) {
-          assignedRole = role; // "usuario" o "admin"
-          invRecordId = rec.id;
-        }
-      }
-    }
+    // TODO: Verificar invitación en Supabase si se implementa
+    // Por ahora, todos los usuarios se crean como "invitado"
 
     // Crear usuario (por defecto con rol "invitado")
     const user = await createUser(email, password, name);
-    
-    // Si hay invitación válida, actualizar el rol en Supabase
-    if (assignedRole !== "invitado") {
-      await updateUserSupabase(user.id, { rol: assignedRole });
-      user.fields.Rol = assignedRole;
-    }
-
-    if (invRecordId) {
-      await airtableUpdate(TABLE_INV, invRecordId, { Accepted: true, UsedAt: nowISO() });
-    }
 
     const token = signSession({ id: user.id, email: user.fields.Email, role: assignedRole, name: user.fields.Nombre });
     await setSessionCookie(token);

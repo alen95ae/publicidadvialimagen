@@ -39,6 +39,7 @@ export interface CotizacionInput {
 export async function getCotizaciones(options?: {
   estado?: string;
   cliente?: string;
+  vendedor?: string;
   page?: number;
   limit?: number;
 }) {
@@ -65,6 +66,12 @@ export async function getCotizaciones(options?: {
     query = query.ilike("cliente", `%${options.cliente}%`);
     if (process.env.NODE_ENV === 'development') {
       console.log('🔍 [getCotizaciones] Filtro cliente aplicado:', options.cliente)
+    }
+  }
+  if (options?.vendedor) {
+    query = query.ilike("vendedor", `%${options.vendedor}%`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [getCotizaciones] Filtro vendedor aplicado:', options.vendedor)
     }
   }
 

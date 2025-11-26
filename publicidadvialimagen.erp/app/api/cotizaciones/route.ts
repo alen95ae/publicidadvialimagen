@@ -14,13 +14,15 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const estado = searchParams.get('estado') || ''
     const cliente = searchParams.get('cliente') || ''
+    const vendedor = searchParams.get('vendedor') || ''
 
-    console.log('🔍 Cotizaciones search params:', { pageSize, page, estado, cliente })
+    console.log('🔍 Cotizaciones search params:', { pageSize, page, estado, cliente, vendedor })
 
     // Obtener datos de Supabase
     const result = await getCotizaciones({ 
       estado: estado || undefined,
       cliente: cliente || undefined,
+      vendedor: vendedor || undefined,
       page,
       limit: pageSize
     })

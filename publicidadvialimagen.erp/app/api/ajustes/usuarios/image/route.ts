@@ -1,33 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/auth";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { updateUserSupabase } from "@/lib/supabaseUsers";
+import { requirePermiso } from "@/lib/permisos";
 
 export const runtime = 'nodejs'
 
-// Middleware para verificar que el usuario es administrador
-async function requireAdmin(request: NextRequest) {
-  const token = request.cookies.get("session")?.value;
-  if (!token) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  try {
-    const payload = await verifySession(token);
-    const isDeveloper = payload?.email?.toLowerCase() === "alen95ae@gmail.com";
-    const isAdmin = payload?.role === "admin";
-    
-    if (!payload || (!isAdmin && !isDeveloper)) {
-      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
-    }
-    return payload;
-  } catch (error) {
-    return NextResponse.json({ error: "Token inválido" }, { status: 401 });
-  }
-}
-
 export async function POST(request: NextRequest) {
-  const authResult = await requireAdmin(request);
+  const authResult = await requirePermiso("ajustes", "admin");
   if (authResult instanceof NextResponse) return authResult;
 
   try {

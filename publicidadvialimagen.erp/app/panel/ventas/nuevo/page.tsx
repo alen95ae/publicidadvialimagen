@@ -159,11 +159,14 @@ export default function NuevaCotizacionPage() {
     let subtotal: number
     if (esSoporte) {
       subtotal = cantidad * precio
-    } else if (udm === 'unidad' || udm === 'unidades') {
-      subtotal = cantidad * precio
     } else {
-      // Para m²: cantidad × totalM2 × precio
-      subtotal = cantidad * totalM2 * precio
+      const udmLower = (udm || '').toLowerCase().trim()
+      if (udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade') {
+        subtotal = cantidad * precio
+      } else {
+        // Para m²: cantidad × totalM2 × precio
+        subtotal = cantidad * totalM2 * precio
+      }
     }
     
     const comisionTotal = subtotal * (comision / 100)
@@ -433,7 +436,10 @@ export default function NuevaCotizacionPage() {
         
         // Recalcular total si cambian los valores relevantes (convertir strings vacíos a 0)
         // Solo recalcular si no es el campo 'total' (para permitir edición manual)
-        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT'].includes(campo)) {
+        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm'].includes(campo)) {
+          // Detectar unidades (case-insensitive y considerar singular/plural)
+          const udmLower = productoActualizado.udm?.toLowerCase().trim() || ''
+          const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
           const totalCalculado = calcularTotal(
             productoActualizado.cantidad === '' ? 0 : productoActualizado.cantidad,
             productoActualizado.totalM2,
@@ -441,16 +447,15 @@ export default function NuevaCotizacionPage() {
             productoActualizado.comision === '' ? 0 : productoActualizado.comision,
             productoActualizado.conIVA,
             productoActualizado.conIT,
-            productoActualizado.esSoporte || false,
+            productoActualizado.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
             productoActualizado.udm
           )
-          // Si hay un total manual válido (mayor o igual), mantenerlo
-          // Si no hay total manual o es menor al calculado, usar el calculado
-          if (productoActualizado.totalManual !== null && productoActualizado.totalManual !== undefined && productoActualizado.totalManual >= totalCalculado) {
+          // Si hay un total manual establecido, mantenerlo (permitir edición libre)
+          // Solo recalcular automáticamente si no hay totalManual
+          if (productoActualizado.totalManual !== null && productoActualizado.totalManual !== undefined) {
             productoActualizado.total = productoActualizado.totalManual
           } else {
             productoActualizado.total = totalCalculado
-            productoActualizado.totalManual = null
           }
         }
         
@@ -777,13 +782,18 @@ export default function NuevaCotizacionPage() {
         // Para soportes, la cantidad es el número de meses
         const cantidad = esSoporte && mesesAlquiler ? mesesAlquiler : (producto.cantidad || 1)
         
+        const udmFinal = esSoporte ? 'mes' : (item.unidad === 'm2' ? 'm²' : (item.unidad || 'm²'))
+        // Detectar unidades (case-insensitive y considerar singular/plural)
+        const udmLower = udmFinal.toLowerCase().trim()
+        const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+        
         const productoActualizado: ProductoItem = {
           ...producto,
           producto: `${item.codigo} - ${item.nombre}`,  // Guardar en formato "CODIGO - NOMBRE"
           producto_id: item.id, // Guardar ID del producto para obtener precios por variante
           descripcion: descripcionFinal,
           precio: precioFinal,
-          udm: esSoporte ? 'mes' : (item.unidad === 'm2' ? 'm²' : (item.unidad || 'm²')),
+          udm: udmFinal,
           esSoporte: esSoporte,
           dimensionesBloqueadas: esSoporte,
           ancho: ancho,
@@ -799,6 +809,7 @@ export default function NuevaCotizacionPage() {
         }
         
         // Recalcular total automáticamente al seleccionar producto
+        // Para unidades: total = cantidad × precio (como en soportes)
         const totalCalculado = calcularTotal(
           productoActualizado.cantidad,
           productoActualizado.totalM2,
@@ -806,7 +817,7 @@ export default function NuevaCotizacionPage() {
           productoActualizado.comision,
           productoActualizado.conIVA,
           productoActualizado.conIT,
-          esSoporte,
+          esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo (cantidad × precio)
           productoActualizado.udm
         )
         productoActualizado.total = totalCalculado
@@ -869,6 +880,7 @@ export default function NuevaCotizacionPage() {
   const productosConTotal = productosList
     .filter((item): item is ProductoItem => item.tipo === 'producto')
     .map(producto => {
+      const esUnidades = producto.udm === 'unidad' || producto.udm === 'unidades'
       const totalCalculado = calcularTotal(
         producto.cantidad,
         producto.totalM2,
@@ -876,7 +888,7 @@ export default function NuevaCotizacionPage() {
         producto.comision,
         producto.conIVA,
         producto.conIT,
-        producto.esSoporte || false,
+        producto.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
         producto.udm
       )
       return {
@@ -2134,6 +2146,9 @@ export default function NuevaCotizacionPage() {
                       <td className="py-2 px-2">
                         <div className="flex items-center gap-1 h-8">
                           {(() => {
+                            // Detectar unidades (case-insensitive y considerar singular/plural)
+                            const udmLower = producto.udm?.toLowerCase().trim() || ''
+                            const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
                             const totalCalculado = calcularTotal(
                               producto.cantidad,
                               producto.totalM2,
@@ -2141,36 +2156,38 @@ export default function NuevaCotizacionPage() {
                               producto.comision,
                               producto.conIVA,
                               producto.conIT,
-                              producto.esSoporte || false,
+                              producto.esSoporte || esUnidades, // Tratar unidades como soportes
                               producto.udm
                             )
-                            const totalFinal = producto.totalManual !== null && producto.totalManual !== undefined && producto.totalManual >= totalCalculado 
-                              ? producto.totalManual 
-                              : totalCalculado
-                            
-                            // Usar el valor manual si existe, sino el calculado
-                            const valorActual = producto.totalManual !== null && producto.totalManual !== undefined 
-                              ? producto.totalManual 
-                              : totalCalculado
+                            // Mostrar siempre el valor que el usuario está editando (total o totalManual)
+                            // Permitir edición libre, solo avisar en onBlur si es menor
+                            const valorActual = producto.total !== undefined && producto.total !== null 
+                              ? producto.total 
+                              : (producto.totalManual !== null && producto.totalManual !== undefined 
+                                  ? producto.totalManual 
+                                  : totalCalculado)
                             
                             return (
                               <Input
                                 type="number"
                                 value={valorActual}
                                 onChange={(e) => {
-                                  const valor = parseFloat(e.target.value) || 0
-                                  // Permitir editar cualquier valor (validación en onBlur)
-                                  actualizarProducto(producto.id, 'total', valor)
-                                }}
-                                onBlur={(e) => {
-                                  const valor = parseFloat(e.target.value) || totalCalculado
-                                  if (valor < totalCalculado) {
-                                    // Avisar pero permitir el valor menor
-                                    toast.warning("El total ingresado es menor al precio calculado. Se mantendrá el valor ingresado.")
-                                    actualizarProducto(producto.id, 'total', valor)
+                                  const valor = e.target.value === '' ? '' : parseFloat(e.target.value)
+                                  // Permitir editar cualquier valor libremente (validación solo en onBlur)
+                                  if (valor === '') {
+                                    actualizarProducto(producto.id, 'total', 0)
                                   } else {
                                     actualizarProducto(producto.id, 'total', valor)
                                   }
+                                }}
+                                onBlur={(e) => {
+                                  const valor = parseFloat(e.target.value) || 0
+                                  // Solo avisar si es menor al calculado, pero permitir el valor
+                                  if (valor < totalCalculado) {
+                                    toast.warning("El total ingresado es menor al precio calculado.")
+                                  }
+                                  // Guardar el valor (ya se guardó en onChange, pero asegurarnos)
+                                  actualizarProducto(producto.id, 'total', valor)
                                 }}
                                 className="w-24 h-8 text-xs font-medium text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 step="0.01"

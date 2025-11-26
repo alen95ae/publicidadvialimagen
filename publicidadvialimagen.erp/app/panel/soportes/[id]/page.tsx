@@ -85,6 +85,11 @@ export default function SoporteDetailPage() {
     secundaria1: false,
     secundaria2: false
   })
+  const [imageErrors, setImageErrors] = useState({
+    principal: "",
+    secundaria1: "",
+    secundaria2: ""
+  })
   const [formData, setFormData] = useState({
     code: "",
     title: "",
@@ -332,14 +337,19 @@ export default function SoporteDetailPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Limpiar error anterior
+    setImageErrors(prev => ({ ...prev, [imageType]: "" }))
+
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("La imagen no puede superar los 5MB")
+      const errorMsg = "La imagen no puede superar los 5MB"
+      setImageErrors(prev => ({ ...prev, [imageType]: errorMsg }))
       e.target.value = ''
       return
     }
 
     if (!file.type.startsWith('image/')) {
-      toast.error("El archivo debe ser una imagen (JPG, PNG, GIF)")
+      const errorMsg = "El archivo debe ser una imagen (JPG, PNG, GIF)"
+      setImageErrors(prev => ({ ...prev, [imageType]: errorMsg }))
       e.target.value = ''
       return
     }
@@ -380,9 +390,13 @@ export default function SoporteDetailPage() {
       }))
 
       toast.success("Imagen subida correctamente", { id: `upload-${imageType}` })
+      // Limpiar error al subir correctamente
+      setImageErrors(prev => ({ ...prev, [imageType]: "" }))
     } catch (error) {
       console.error(`Error subiendo imagen ${imageType}:`, error)
-      toast.error(error instanceof Error ? error.message : "Error subiendo la imagen", { id: `upload-${imageType}` })
+      const errorMsg = error instanceof Error ? error.message : "Error subiendo la imagen"
+      setImageErrors(prev => ({ ...prev, [imageType]: errorMsg }))
+      toast.error(errorMsg, { id: `upload-${imageType}` })
       URL.revokeObjectURL(previewUrl)
     } finally {
       setUploadingImages(prev => ({ ...prev, [imageType === 'principal' ? 'principal' : imageType === 'secundaria1' ? 'secundaria1' : 'secundaria2']: false }))
@@ -1211,6 +1225,9 @@ export default function SoporteDetailPage() {
                           </Button>
                         </div>
                       </div>
+                      {imageErrors.principal && (
+                        <p className="text-sm text-red-600 mt-1">{imageErrors.principal}</p>
+                      )}
                     </div>
 
                     {/* Imagen Secundaria 1 */}
@@ -1271,6 +1288,9 @@ export default function SoporteDetailPage() {
                           </Button>
                         </div>
                       </div>
+                      {imageErrors.secundaria1 && (
+                        <p className="text-sm text-red-600 mt-1">{imageErrors.secundaria1}</p>
+                      )}
                     </div>
 
                     {/* Imagen Secundaria 2 */}
@@ -1331,6 +1351,9 @@ export default function SoporteDetailPage() {
                           </Button>
                         </div>
                       </div>
+                      {imageErrors.secundaria2 && (
+                        <p className="text-sm text-red-600 mt-1">{imageErrors.secundaria2}</p>
+                      )}
                     </div>
                     
                     <p className="text-xs text-gray-500">Máximo 5MB. Formatos: JPG, PNG, GIF</p>

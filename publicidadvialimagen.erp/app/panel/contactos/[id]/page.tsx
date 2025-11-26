@@ -87,7 +87,9 @@ export default function EditarContactoPage() {
       if (response.ok) {
         const data = await response.json()
         const users = data.users || []
-        setSalesOwners(users.map((user: any) => ({
+        // Filtrar solo usuarios que tienen marcada la opción vendedor
+        const vendedores = users.filter((user: any) => user.vendedor)
+        setSalesOwners(vendedores.map((user: any) => ({
           id: user.id,
           name: user.nombre || user.name || "",
           email: user.email || ""

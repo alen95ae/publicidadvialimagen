@@ -88,9 +88,11 @@ export default function ContactosPage() {
       if (response.ok) {
         const data = await response.json()
         const users = data.users || []
+        // Filtrar solo usuarios que tienen marcada la opción vendedor
+        const vendedores = users.filter((user: any) => user.vendedor)
         const ownersMap: Record<string, string> = {}
         const ownersDataMap: Record<string, any> = {}
-        users.forEach((user: any) => {
+        vendedores.forEach((user: any) => {
           ownersMap[user.id] = user.nombre || user.name || ""
           ownersDataMap[user.id] = user
         })
@@ -880,7 +882,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
+                          {puedeEditar("contactos") ? (
                             <Select 
                               value={editedContacts[contact.id]?.salesOwnerId ?? contact.salesOwnerId ?? 'none'}
                               onValueChange={(value) => handleFieldChange(contact.id, 'salesOwnerId', value === 'none' ? null : value)}

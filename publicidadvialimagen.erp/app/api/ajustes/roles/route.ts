@@ -1,32 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/auth";
 import { getSupabaseServer } from "@/lib/supabaseServer";
-
-// Función auxiliar para verificar autenticación y permisos de administrador
-async function requireAdmin(request: NextRequest) {
-  const token = request.cookies.get("session")?.value;
-  if (!token) {
-    return { error: "Token de sesión no encontrado", status: 401 };
-  }
-  
-  const session = await verifySession(token);
-  const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
-  const isAdmin = session?.role === "admin";
-  
-  if (!session || (!isAdmin && !isDeveloper)) {
-    return { error: "Acceso denegado. Se requiere rol de administrador", status: 403 };
-  }
-  
-  return { session };
-}
+import { requirePermiso } from "@/lib/permisos";
 
 // GET - Obtener roles disponibles con sus permisos
 export async function GET(request: NextRequest) {
   try {
-    const authCheck = await requireAdmin(request);
-    if (authCheck.error) {
-      return NextResponse.json({ error: authCheck.error }, { status: authCheck.status });
-    }
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof NextResponse) return authResult;
 
     const supabase = getSupabaseServer();
     
@@ -113,10 +93,8 @@ export async function GET(request: NextRequest) {
 // POST - Crear nuevo rol
 export async function POST(request: NextRequest) {
   try {
-    const authCheck = await requireAdmin(request);
-    if (authCheck.error) {
-      return NextResponse.json({ error: authCheck.error }, { status: authCheck.status });
-    }
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof NextResponse) return authResult;
 
     const body = await request.json();
     const { nombre, descripcion, permisos, permisosTecnicos } = body; // permisos es un array de permiso_id, permisosTecnicos también
@@ -204,10 +182,8 @@ export async function POST(request: NextRequest) {
 // PUT - Actualizar rol y sus permisos
 export async function PUT(request: NextRequest) {
   try {
-    const authCheck = await requireAdmin(request);
-    if (authCheck.error) {
-      return NextResponse.json({ error: authCheck.error }, { status: authCheck.status });
-    }
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof NextResponse) return authResult;
 
     const body = await request.json();
     const { id, nombre, descripcion, permisos, permisosTecnicos: permisosTecnicosIds } = body; // permisos es un array de permiso_id, permisosTecnicos también
@@ -317,10 +293,8 @@ export async function PUT(request: NextRequest) {
 // DELETE - Eliminar rol
 export async function DELETE(request: NextRequest) {
   try {
-    const authCheck = await requireAdmin(request);
-    if (authCheck.error) {
-      return NextResponse.json({ error: authCheck.error }, { status: authCheck.status });
-    }
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof NextResponse) return authResult;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

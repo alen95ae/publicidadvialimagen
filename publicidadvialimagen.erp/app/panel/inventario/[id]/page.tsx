@@ -80,6 +80,7 @@ export default function ProductoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [imageError, setImageError] = useState("")
   const [editing, setEditing] = useState(false)
   
   // Detectar si es un nuevo producto
@@ -445,14 +446,19 @@ export default function ProductoDetailPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Limpiar error anterior
+    setImageError("")
+
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("La imagen no puede superar los 5MB")
+      const errorMsg = "La imagen no puede superar los 5MB"
+      setImageError(errorMsg)
       e.target.value = ''
       return
     }
 
     if (!file.type.startsWith('image/')) {
-      toast.error("El archivo debe ser una imagen (JPG, PNG, GIF)")
+      const errorMsg = "El archivo debe ser una imagen (JPG, PNG, GIF)"
+      setImageError(errorMsg)
       e.target.value = ''
       return
     }
@@ -1200,9 +1206,13 @@ export default function ProductoDetailPage() {
           } else {
             toast.success("Imagen subida correctamente", { id: 'upload-image' })
           }
+          // Limpiar error al subir correctamente
+          setImageError("")
         } catch (error) {
           console.error("❌ [FRONTEND] Error subiendo Imagen Principal:", error)
-          toast.error(error instanceof Error ? error.message : "Error subiendo la imagen", { id: 'upload-image' })
+          const errorMsg = error instanceof Error ? error.message : "Error subiendo la imagen"
+          setImageError(errorMsg)
+          toast.error(errorMsg, { id: 'upload-image' })
           setSaving(false)
           return
         } finally {
@@ -2713,6 +2723,9 @@ export default function ProductoDetailPage() {
                             : 'Seleccionar imagen'
                         }
                       </Button>
+                      {imageError && (
+                        <p className="text-sm text-red-600 mt-1">{imageError}</p>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500 text-center">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
                   </div>

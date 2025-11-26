@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { verify } from "./lib/auth/jwt";
+import { getPermisos, tienePermiso } from "./lib/permisos";
 
 const PROTECTED_PREFIX = "/panel";
 
@@ -96,29 +97,40 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(loginUrl);
       }
       
-      // 🔒 Verificación especial para módulo de ajustes - solo administradores y desarrollador
-      if (pathname.startsWith("/panel/ajustes") || pathname.startsWith("/api/ajustes")) {
+      // 🔒 Verificación especial para módulo de ajustes - verificar permiso admin en ajustes
+      // NOTA: ajustes-inventario NO es parte de ajustes, es parte de inventario
+      if ((pathname.startsWith("/panel/ajustes") && !pathname.startsWith("/panel/ajustes-inventario")) || pathname.startsWith("/api/ajustes")) {
         const isDeveloper = payload.email?.toLowerCase() === "alen95ae@gmail.com";
-        const isAdmin = payload.role === "admin";
         
-        if (!isAdmin && !isDeveloper) {
-          console.log("🔒 Access denied to ajustes - user role:", payload.role);
-          console.log("🔒 Available roles for ajustes: admin, desarrollador");
-          console.log("🔒 Current user role:", payload.role);
-          console.log("🔒 Current user email:", payload.email);
-          
-          // Si está intentando acceder a la página principal de ajustes, redirigir a access-denied
-          if (pathname === "/panel/ajustes") {
-            const deniedUrl = req.nextUrl.clone();
-            deniedUrl.pathname = "/panel/ajustes/access-denied";
-            deniedUrl.search = "";
-            return NextResponse.redirect(deniedUrl);
+        // Si no es desarrollador, verificar permisos
+        if (!isDeveloper && payload.sub) {
+          try {
+            const permisos = await getPermisos(payload.sub, payload.email);
+            const tieneAdminAjustes = tienePermiso(permisos, "ajustes", "admin");
+            
+            if (!tieneAdminAjustes) {
+              console.log("🔒 Access denied to ajustes - no admin permission");
+              console.log("🔒 Current user email:", payload.email);
+              
+              // Si está intentando acceder a la página principal de ajustes, redirigir a access-denied
+              if (pathname === "/panel/ajustes" || pathname.startsWith("/panel/ajustes/")) {
+                const deniedUrl = req.nextUrl.clone();
+                deniedUrl.pathname = "/panel/ajustes/access-denied";
+                deniedUrl.search = "";
+                return NextResponse.redirect(deniedUrl);
+              }
+              
+              // Para APIs, devolver error 403
+              return NextResponse.json({ error: "Acceso denegado. Se requiere permiso de administrador en ajustes" }, { status: 403 });
+            }
+            console.log("✅ Admin permission granted to ajustes for user:", payload.email);
+          } catch (error) {
+            console.error("Error checking ajustes permissions:", error);
+            return NextResponse.json({ error: "Error al verificar permisos" }, { status: 500 });
           }
-          
-          // Para APIs, devolver error 403
-          return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+        } else if (isDeveloper) {
+          console.log("✅ Developer access granted to ajustes for user:", payload.email);
         }
-        console.log("✅ Admin/Developer access granted to ajustes for user:", payload.email);
       }
       
       console.log("✅ Token valid for user:", payload.email);

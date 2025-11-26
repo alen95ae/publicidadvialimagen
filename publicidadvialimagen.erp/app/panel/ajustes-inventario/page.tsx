@@ -33,6 +33,8 @@ import {
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { usePermisosContext } from "@/hooks/permisos-provider"
+import { ProtectRoute } from "@/components/protect-route"
 
 // Tipo para los items de ajustes de inventario
 interface AjusteInventarioItem {
@@ -119,8 +121,9 @@ function generateVarianteKey(combinacion: any): string {
   return parts.join("|")
 }
 
-export default function AjustesInventarioPage() {
+function AjustesInventarioPageContent() {
   const router = useRouter()
+  const { puedeEditar } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSucursal, setSelectedSucursal] = useState<string>("all")
   const [items, setItems] = useState<any[]>([])
@@ -800,7 +803,7 @@ export default function AjustesInventarioPage() {
           </CardHeader>
           <CardContent>
             {/* Barra azul unificada de acciones masivas */}
-            {someSelected && (
+            {someSelected && puedeEditar("inventario") && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -893,13 +896,15 @@ export default function AjustesInventarioPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-10">
-                        <Checkbox
-                          checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
-                          onCheckedChange={(v) => toggleAll(Boolean(v))}
-                          aria-label="Seleccionar todo"
-                        />
-                      </TableHead>
+                      {puedeEditar("inventario") && (
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
+                            onCheckedChange={(v) => toggleAll(Boolean(v))}
+                            aria-label="Seleccionar todo"
+                          />
+                        </TableHead>
+                      )}
                       <TableHead>Nombre</TableHead>
                       <TableHead className="w-24">Sucursal</TableHead>
                       <TableHead className="min-w-[200px]">Variantes</TableHead>
@@ -913,13 +918,15 @@ export default function AjustesInventarioPage() {
                     {paginatedItems.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="w-10">
-                          <Checkbox
-                            checked={!!selected[item.id]}
-                            onCheckedChange={(v) =>
-                              setSelected(prev => ({ ...prev, [item.id]: Boolean(v) }))
-                            }
-                            aria-label={`Seleccionar ${item.nombre}`}
-                          />
+                          {puedeEditar("inventario") && (
+                            <Checkbox
+                              checked={!!selected[item.id]}
+                              onCheckedChange={(v) =>
+                                setSelected(prev => ({ ...prev, [item.id]: Boolean(v) }))
+                              }
+                              aria-label={`Seleccionar ${item.nombre}`}
+                            />
+                          )}
                         </TableCell>
                         <TableCell className="max-w-[42ch]">
                           <div className="truncate">{item.nombre}</div>
@@ -941,7 +948,7 @@ export default function AjustesInventarioPage() {
                         </TableCell>
                         <TableCell className="text-center w-32">
                           <div className="flex justify-center">
-                            {selected[item.id] ? (
+                            {selected[item.id] && puedeEditar("inventario") ? (
                               <Input
                                 type="number"
                                 step="0.01"
@@ -972,7 +979,7 @@ export default function AjustesInventarioPage() {
                         </TableCell>
                         <TableCell className="text-right w-28">
                           <div className="flex justify-end">
-                            {selected[item.id] ? (
+                            {selected[item.id] && puedeEditar("inventario") ? (
                               <Input
                                 type="number"
                                 step="0.01"
@@ -1007,7 +1014,7 @@ export default function AjustesInventarioPage() {
                         </TableCell>
                         <TableCell className="text-right w-20">
                           <div className="flex justify-end">
-                            {selected[item.id] ? (
+                            {selected[item.id] && puedeEditar("inventario") ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -1102,6 +1109,14 @@ export default function AjustesInventarioPage() {
         </Card>
       </main>
     </div>
+  )
+}
+
+export default function AjustesInventarioPage() {
+  return (
+    <ProtectRoute modulo="inventario" accion="ver">
+      <AjustesInventarioPageContent />
+    </ProtectRoute>
   )
 }
 

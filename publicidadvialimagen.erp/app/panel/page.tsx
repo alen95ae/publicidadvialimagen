@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquare, Handshake, Monitor, ShoppingCart, ChevronRight, Package, Users, Receipt, Calendar } from "lucide-react";
+import { Handshake, ChevronRight, Monitor, Users } from "lucide-react";
 import Link from "next/link";
 import ERPModulesGrid from "@/components/erp-modules-grid";
+import PanelMetrics from "@/components/panel-metrics";
+import PanelNotifications from "@/components/panel-notifications";
 
 export default async function PanelPage() {
   const cookieStore = await cookies();
@@ -22,94 +24,19 @@ export default async function PanelPage() {
       <div className="p-6 space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Panel Principal</h1>
           <p className="text-gray-600 mt-2">
             Bienvenido al panel de control de PublicidadVialImagen
           </p>
         </div>
 
         {/* Métricas principales */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Mensajes</CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">12</div>
-              <p className="text-xs text-muted-foreground">+2 nuevos hoy</p>
-            </CardContent>
-          </Card>
+        <PanelMetrics userName={user.name || user.email || ""} />
 
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Soportes Activos</CardTitle>
-              <Monitor className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">45</div>
-              <p className="text-xs text-muted-foreground">+3 esta semana</p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas</CardTitle>
-              <Handshake className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">$45,231</div>
-              <p className="text-xs text-muted-foreground">+20.1% este mes</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sección de Próximas Actividades y Acciones Rápidas */}
+        {/* Sección de Notificaciones y Acciones Rápidas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Próximas Actividades */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <Calendar className="mr-2 h-5 w-5" />
-                Próximas Actividades
-              </CardTitle>
-              <CardDescription>
-                Eventos y tareas programadas
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start justify-between pb-3 border-b">
-                  <div>
-                    <p className="text-sm font-medium">Reunión con cliente ABC</p>
-                    <p className="text-xs text-gray-500 mt-1">Presentación de propuesta comercial</p>
-                  </div>
-                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">Hoy 14:00</span>
-                </div>
-                <div className="flex items-start justify-between pb-3 border-b">
-                  <div>
-                    <p className="text-sm font-medium">Entrega de soporte #123</p>
-                    <p className="text-xs text-gray-500 mt-1">Instalación en Av. Cristo Redentor</p>
-                  </div>
-                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">Mañana 10:00</span>
-                </div>
-                <div className="flex items-start justify-between pb-3 border-b">
-                  <div>
-                    <p className="text-sm font-medium">Revisión de inventario</p>
-                    <p className="text-xs text-gray-500 mt-1">Control mensual de stock</p>
-                  </div>
-                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">Viernes 16:00</span>
-                </div>
-                <Link 
-                  href="/panel/calendario"
-                  className="flex items-center justify-center text-sm text-red-600 hover:text-red-700 font-medium pt-2"
-                >
-                  Ver todas las actividades
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Notificaciones */}
+          <PanelNotifications />
 
           {/* Acciones Rápidas */}
           <Card>
@@ -122,23 +49,23 @@ export default async function PanelPage() {
             <CardContent>
               <div className="space-y-3">
                 <Link
-                  href="/panel/ventas/cotizaciones"
+                  href="/panel/ventas/nuevo"
                   className="flex items-center justify-between p-4 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors group"
                 >
                   <div className="flex items-center gap-3">
-                    <ShoppingCart className="w-5 h-5" />
+                    <Handshake className="w-5 h-5" />
                     <span className="font-medium">Nueva Venta</span>
                   </div>
                   <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
 
                 <Link
-                  href="/panel/inventario"
+                  href="/panel/soportes/gestion"
                   className="flex items-center justify-between p-4 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition-colors group"
                 >
                   <div className="flex items-center gap-3">
-                    <Package className="w-5 h-5 text-gray-700" />
-                    <span className="font-medium text-gray-700">Registrar Compra</span>
+                    <Monitor className="w-5 h-5 text-gray-700" />
+                    <span className="font-medium text-gray-700">Descargar Catálogo</span>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
                 </Link>
@@ -150,17 +77,6 @@ export default async function PanelPage() {
                   <div className="flex items-center gap-3">
                     <Users className="w-5 h-5 text-gray-700" />
                     <span className="font-medium text-gray-700">Agregar Cliente</span>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                </Link>
-
-                <Link
-                  href="/panel/contabilidad"
-                  className="flex items-center justify-between p-4 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <Receipt className="w-5 h-5 text-gray-700" />
-                    <span className="font-medium text-gray-700">Emitir Factura</span>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
                 </Link>

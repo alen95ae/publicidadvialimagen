@@ -2,34 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
 import { getAllUsersSupabase, createUserSupabase, updateUserSupabase, getUserByIdSupabase, findUserByEmailSupabase } from "@/lib/supabaseUsers";
 import { getSupabaseServer } from "@/lib/supabaseServer";
+import { requirePermiso } from "@/lib/permisos";
 import bcrypt from "bcryptjs";
 
 const supabase = getSupabaseServer();
 
-// Middleware para verificar que el usuario es administrador
-async function requireAdmin(request: NextRequest) {
-  const token = request.cookies.get("session")?.value;
-  if (!token) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  try {
-    const payload = await verifySession(token);
-    const isDeveloper = payload?.email?.toLowerCase() === "alen95ae@gmail.com";
-    const isAdmin = payload?.role === "admin";
-    
-    if (!payload || (!isAdmin && !isDeveloper)) {
-      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
-    }
-    return payload;
-  } catch (error) {
-    return NextResponse.json({ error: "Token inválido" }, { status: 401 });
-  }
-}
-
 // GET /api/ajustes/usuarios - Listar usuarios
 export async function GET(request: NextRequest) {
-  const authResult = await requireAdmin(request);
+  const authResult = await requirePermiso("ajustes", "admin");
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -102,8 +82,6 @@ export async function GET(request: NextRequest) {
         vendedor: record.vendedor ?? false,
         ultimoAcceso: record.ultimo_acceso || null,
         activo: record.activo ?? true,
-        imagen_usuario: record.imagen_usuario || null,
-        vendedor: record.vendedor ?? false,
       };
     });
 
@@ -121,7 +99,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/ajustes/usuarios - Crear usuario
 export async function POST(request: NextRequest) {
-  const authResult = await requireAdmin(request);
+  const authResult = await requirePermiso("ajustes", "admin");
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -177,7 +155,7 @@ export async function POST(request: NextRequest) {
 
 // PUT /api/ajustes/usuarios - Actualizar usuario
 export async function PUT(request: NextRequest) {
-  const authResult = await requireAdmin(request);
+  const authResult = await requirePermiso("ajustes", "admin");
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -222,7 +200,7 @@ export async function PUT(request: NextRequest) {
 
 // DELETE /api/ajustes/usuarios - Eliminar usuario
 export async function DELETE(request: NextRequest) {
-  const authResult = await requireAdmin(request);
+  const authResult = await requirePermiso("ajustes", "admin");
   if (authResult instanceof NextResponse) return authResult;
 
   try {

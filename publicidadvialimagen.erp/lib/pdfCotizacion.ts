@@ -570,9 +570,9 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
   pdf.setLineWidth(0.2)
   
   const tableX = 15 // Menos margen
-  const tableWidth = 180 // Tabla más ancha
   // Descripción, Ancho, Alto, Cant (SIN P.Unit y P.Total)
-  const colWidths = [100, 20, 20, 20] // Sin columnas de precio
+  const colWidths = [120, 25, 25, 20] // Columnas más anchas, especialmente descripción
+  const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) // Ancho total = suma de columnas
   
   pdf.setFontSize(9) // Más grande
   pdf.setFont('helvetica', 'bold')
@@ -750,33 +750,6 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
       pdf.setFontSize(9) // Volver al tamaño normal
     }
   }
-
-  // Total como una fila más de la tabla
-  const totalRowHeight = 12
-  
-  // Verificar si hay espacio suficiente
-  if (yPosition + totalRowHeight > 270) {
-    pdf.addPage()
-    yPosition = 20
-  }
-  
-  // Fondo blanco para toda la fila
-  pdf.setFillColor(255, 255, 255)
-  pdf.rect(tableX, yPosition, tableWidth, totalRowHeight, 'F')
-  
-  // Borde de la fila del total
-  pdf.setDrawColor(180, 180, 180)
-  pdf.rect(tableX, yPosition, tableWidth, totalRowHeight)
-  
-  // Texto en rojo
-  pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  pdf.setFontSize(12)
-  pdf.setFont('helvetica', 'bold')
-  pdf.text('TOTAL:', tableX + 3, yPosition + 8)
-  pdf.text(formatearNumero(datos.totalGeneral), tableX + tableWidth - 3, yPosition + 8, { align: 'right' })
-  
-  // Resetear color de texto
-  pdf.setTextColor(0, 0, 0)
 
   // Agregar footers con paginación a todas las páginas
   const totalPages = pdf.getNumberOfPages()

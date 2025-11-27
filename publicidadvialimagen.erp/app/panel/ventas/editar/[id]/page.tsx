@@ -1597,28 +1597,6 @@ export default function EditarCotizacionPage() {
           c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
         )
       }
-      
-      // Si aún no se encuentra, obtener el usuario actual de la sesión
-      if (!comercialSeleccionado) {
-        console.log('🔍 Obteniendo usuario actual de la sesión')
-        try {
-          const currentUserRes = await fetch('/api/auth/me')
-          if (currentUserRes.ok) {
-            const currentUserData = await currentUserRes.json()
-            if (currentUserData.success && currentUserData.user) {
-              comercialSeleccionado = {
-                id: currentUserData.user.id,
-                nombre: currentUserData.user.nombre,
-                email: currentUserData.user.email,
-                rol: currentUserData.user.rol,
-              }
-              console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
-            }
-          }
-        } catch (error) {
-          console.error('Error obteniendo usuario actual:', error)
-        }
-      }
 
       console.log('📧 Comercial final seleccionado:', comercialSeleccionado)
       console.log('📧 Email del comercial:', comercialSeleccionado?.email)
@@ -1628,7 +1606,7 @@ export default function EditarCotizacionPage() {
         cliente: clienteSeleccionado?.displayName || cliente,
         clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
         sucursal: sucursal || '',
-        vendedor: comercialSeleccionado?.nombre || vendedor,
+        vendedor: comercialSeleccionado?.nombre || vendedor || '',
         vendedorEmail: comercialSeleccionado?.email || undefined,
         productos: productosList,
         totalGeneral: totalGeneral

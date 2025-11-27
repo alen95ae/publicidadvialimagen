@@ -881,7 +881,7 @@ export default function ContactosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {puedeEditar("contactos") ? (
+                          {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
                             <Select 
                               value={editedContacts[contact.id]?.salesOwnerId ?? contact.salesOwnerId ?? 'none'}
                               onValueChange={(value) => handleFieldChange(contact.id, 'salesOwnerId', value === 'none' ? null : value)}
@@ -897,24 +897,35 @@ export default function ContactosPage() {
                               </SelectContent>
                             </Select>
                           ) : (
-                            contact.salesOwnerId && salesOwners[contact.salesOwnerId] ? (
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-6 w-6">
-                                  <AvatarImage src={getSalesOwnerImage(contact.salesOwnerId) || ""} alt={salesOwners[contact.salesOwnerId]} />
-                                  <AvatarFallback className="bg-[#D54644] text-white text-[10px] font-medium">
-                                    {salesOwners[contact.salesOwnerId]
-                                      .split(" ")
-                                      .map(n => n[0])
-                                      .join("")
-                                      .toUpperCase()
-                                      .slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm text-gray-900">{salesOwners[contact.salesOwnerId]}</span>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">-</span>
-                            )
+                            <div 
+                              onClick={() => {
+                                if (puedeEditar("contactos") && !selectedContacts.has(contact.id)) {
+                                  const newSelected = new Set(selectedContacts)
+                                  newSelected.add(contact.id)
+                                  setSelectedContacts(newSelected)
+                                }
+                              }}
+                              className={puedeEditar("contactos") ? "cursor-pointer" : ""}
+                            >
+                              {contact.salesOwnerId && salesOwners[contact.salesOwnerId] ? (
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarImage src={getSalesOwnerImage(contact.salesOwnerId) || ""} alt={salesOwners[contact.salesOwnerId]} />
+                                    <AvatarFallback className="bg-[#D54644] text-white text-[10px] font-medium">
+                                      {salesOwners[contact.salesOwnerId]
+                                        .split(" ")
+                                        .map(n => n[0])
+                                        .join("")
+                                        .toUpperCase()
+                                        .slice(0, 2)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="text-sm text-gray-900">{salesOwners[contact.salesOwnerId]}</span>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-400">-</span>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>

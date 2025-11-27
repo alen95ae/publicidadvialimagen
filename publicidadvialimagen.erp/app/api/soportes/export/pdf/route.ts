@@ -126,11 +126,14 @@ export async function GET(request: NextRequest) {
     const pdf = await generatePDF(supports, userEmail)
     
     // Construir nombre del archivo dinámico
-    const fileName = buildPDFFileName({
+    let fileName = buildPDFFileName({
       disponibilidad,
       ciudad,
       soporte: soporteTitulo,
     })
+    
+    // Limpiar el nombre del archivo: eliminar espacios y caracteres extra al final
+    fileName = fileName.trim().replace(/[_\s]+$/, '').replace(/\s+/g, ' ')
     
     // Configurar headers para descarga (sin acentos para evitar problemas)
     const headers = new Headers()
@@ -353,6 +356,35 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                 // Aumentar tamaño de 120x80 a 130x90, más a la izquierda
                 pdf.addImage(imageBase64, imageFormat, 15, yPosition, 130, 90)
                 console.log(`✅ Imagen agregada al PDF (formato: ${imageFormat})`)
+                
+                // Agregar marca de agua sobre la imagen (más grande y que salga de la imagen)
+                if (logoBase64Watermark) {
+                  pdf.saveGraphicsState()
+                  pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
+                  
+                  const aspectRatio = 24 / 5.5
+                  const watermarkWidth = 120 // El triple de grande (40 * 3)
+                  const watermarkHeight = watermarkWidth / aspectRatio
+                  
+                  // Centrar sobre la imagen pero que salga un poco
+                  const imageCenterX = 15 + 130 / 2
+                  const imageCenterY = yPosition + 90 / 2
+                  
+                  // Rotar 45 grados
+                  pdf.addImage(
+                    logoBase64Watermark,
+                    'JPEG',
+                    imageCenterX - watermarkWidth / 2,
+                    imageCenterY - watermarkHeight / 2,
+                    watermarkWidth,
+                    watermarkHeight,
+                    undefined,
+                    'NONE',
+                    45
+                  )
+                  
+                  pdf.restoreGraphicsState()
+                }
               } catch (pdfError) {
                 console.error('❌ Error agregando imagen al PDF:', pdfError)
               }
@@ -510,6 +542,35 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
           if (mapBase64) {
             try {
               pdf.addImage(mapBase64, 'PNG', mapX, mapY, mapWidth, mapHeight)
+              
+              // Agregar marca de agua sobre el mapa (más grande y que salga del mapa)
+              if (logoBase64Watermark) {
+                pdf.saveGraphicsState()
+                pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
+                
+                const aspectRatio = 24 / 5.5
+                const watermarkWidth = 120 // El triple de grande (40 * 3)
+                const watermarkHeight = watermarkWidth / aspectRatio
+                
+                // Centrar sobre el mapa pero que salga un poco
+                const mapCenterX = mapX + mapWidth / 2
+                const mapCenterY = mapY + mapHeight / 2
+                
+                // Rotar 45 grados
+                pdf.addImage(
+                  logoBase64Watermark,
+                  'JPEG',
+                  mapCenterX - watermarkWidth / 2,
+                  mapCenterY - watermarkHeight / 2,
+                  watermarkWidth,
+                  watermarkHeight,
+                  undefined,
+                  'NONE',
+                  45
+                )
+                
+                pdf.restoreGraphicsState()
+              }
               
               // Agregar enlace clickeable al mapa para Google Maps
               const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`
@@ -695,49 +756,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
     
     for (let i = 1; i <= totalPages; i++) {
       pdf.setPage(i)
-      
-      // Agregar marca de agua diagonal con el logo ANTES del footer (por encima de todo)
-      if (logoBase64Watermark) {
-        // Guardar el estado actual
-        pdf.saveGraphicsState()
-        
-        // Establecer opacidad al 25% (más transparente)
-        pdf.setGState(new pdf.GState({ opacity: 0.25 }))
-        
-        // Calcular dimensiones para la marca de agua
-        const pageHeight = 210 // A4 landscape alto
-        const aspectRatio = 24 / 5.5
-        
-        // Hacer el logo MUCHO más grande (aproximadamente 260mm de ancho)
-        const watermarkWidth = 260
-        const watermarkHeight = watermarkWidth / aspectRatio
-        
-        // Centrar exactamente en la diagonal (esquina inferior izquierda a superior derecha)
-        // El centro de la página es el punto medio de la diagonal
-        const centerX = pageWidth / 2 + 30  // Más a la derecha (148.5 + 30 = 178.5mm)
-        const centerY = pageHeight / 2 // 105mm - centro exacto de la diagonal
-        
-        // Calcular el ángulo exacto de la diagonal de la página
-        // Para ir de esquina inferior izquierda (0, 210) a superior derecha (297, 0)
-        const angle = Math.atan(pageHeight / pageWidth) * (180 / Math.PI) // ≈ 35.32 grados
-        
-        // Marca de agua (posicionada más abajo y ajustada)
-        const centerY2 = centerY + 50 // 50mm más abajo (un poco más arriba que antes)
-        pdf.addImage(
-          logoBase64Watermark, 
-          'JPEG', 
-          centerX - watermarkWidth / 2, 
-          centerY2 - watermarkHeight / 2, 
-          watermarkWidth, 
-          watermarkHeight,
-          undefined,
-          'NONE',
-          angle // Ángulo de rotación diagonal
-        )
-        
-        // Restaurar el estado gráfico
-        pdf.restoreGraphicsState()
-      }
       
       // Fondo rojo del footer
       pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])

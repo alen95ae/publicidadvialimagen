@@ -586,9 +586,17 @@ export default function SoportesPage() {
       let fileName = `catalogo-soportes-${new Date().toISOString().split('T')[0]}.pdf`
       
       if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/i)
+        // Mejorar el regex para capturar correctamente el nombre del archivo
+        // Puede venir como filename="nombre.pdf" o filename*=UTF-8''nombre.pdf
+        const fileNameMatch = contentDisposition.match(/filename\*?=['"]?([^'";]+)['"]?/i)
         if (fileNameMatch && fileNameMatch[1]) {
           fileName = fileNameMatch[1]
+          // Decodificar si viene codificado (UTF-8'')
+          if (fileName.includes("UTF-8''")) {
+            fileName = decodeURIComponent(fileName.split("UTF-8''")[1])
+          }
+          // Eliminar cualquier carácter extra al final (como _)
+          fileName = fileName.trim().replace(/[_\s]+$/, '')
         }
       }
       

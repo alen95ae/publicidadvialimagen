@@ -24,9 +24,6 @@ export async function POST(request: NextRequest) {
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
     const dataRows = lines.slice(1)
 
-    console.log('📊 Headers:', headers)
-    console.log('📊 Data rows:', dataRows.length)
-
     let created = 0
     let updated = 0
     let skipped = 0

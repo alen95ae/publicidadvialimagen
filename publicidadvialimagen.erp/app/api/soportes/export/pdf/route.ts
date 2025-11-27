@@ -61,7 +61,6 @@ export async function GET(request: NextRequest) {
     
     // Obtener el email del parámetro de URL (igual que en cotizaciones)
     const userEmail = url.searchParams.get('email') || undefined
-    console.log('📧 Email recibido como parámetro:', userEmail)
     
     // Obtener parámetros para el nombre del archivo
     const disponibilidad = url.searchParams.get('disponibilidad') || undefined
@@ -75,7 +74,6 @@ export async function GET(request: NextRequest) {
     }
 
     const supportIds = ids.split(',')
-    console.log('🔍 Exporting PDF for supports:', supportIds)
 
     // Obtener los soportes específicos
     const supports = []
@@ -184,7 +182,7 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
       const logoBuffer = fs.readFileSync(logoPath)
       logoBase64Watermark = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
     } catch (error) {
-      console.log('Error cargando logo para marca de agua:', error)
+      // Logo no disponible, continuar sin marca de agua
     }
 
     // Agregar cada soporte (una página por soporte)
@@ -216,11 +214,8 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
           const logoY = yPosition - 1
           
           pdf.addImage(logoBase64, 'JPEG', logoX, logoY, logoWidth, logoHeight)
-          console.log('Logo JPG cargado exitosamente con proporciones 24x5.5')
           return true
         } catch (error) {
-          console.log('Error cargando logo JPG, intentando fallbacks:', error)
-          
           try {
             // Fallback 1: Captura de pantalla
             const logoPath = path.join(process.cwd(), 'public', 'Captura de pantalla 2025-10-27 a la(s) 7.12.41 p.m..png')
@@ -233,11 +228,8 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
             const logoY = yPosition - 1
             
             pdf.addImage(logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight)
-            console.log('Logo PNG fallback cargado exitosamente')
             return true
           } catch (pngError) {
-            console.log('Error cargando logo PNG, intentando SVG:', pngError)
-            
             try {
               // Fallback 2: Logo SVG del ERP
               const logoPath = path.join(process.cwd(), 'public', 'logo-publicidad-vial-imagen.svg')
@@ -250,10 +242,8 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
               const logoY = yPosition - 1
               
               pdf.addImage(logoBase64, 'SVG', logoX, logoY, logoWidth, logoHeight)
-              console.log('Logo SVG cargado exitosamente')
               return true
             } catch (finalError) {
-              console.log('Error cargando todos los logos:', finalError)
               return false
             }
           }
@@ -284,8 +274,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
             if (!imageUrl.startsWith('data:')) {
               // Si es una URL externa, intentar cargarla
               try {
-                console.log(`📥 Descargando imagen del soporte: ${imageUrl.substring(0, 100)}...`)
-                
                 // Asegurar que la URL sea válida
                 if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
                   throw new Error(`URL inválida: ${imageUrl}`)
@@ -334,7 +322,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                 
                 const base64 = Buffer.from(imageBuffer).toString('base64')
                 imageBase64 = `data:image/${imageFormat.toLowerCase()};base64,${base64}`
-                console.log(`✅ Imagen cargada exitosamente (formato: ${imageFormat}, tamaño: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB)`)
               } catch (error) {
                 console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
                 console.error('   URL:', imageUrl.substring(0, 150))
@@ -355,7 +342,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
               try {
                 // Aumentar tamaño de 120x80 a 130x90, más a la izquierda
                 pdf.addImage(imageBase64, imageFormat, 15, yPosition, 130, 90)
-                console.log(`✅ Imagen agregada al PDF (formato: ${imageFormat})`)
                 
                 // Agregar marca de agua sobre la imagen (más grande y que salga de la imagen)
                 if (logoBase64Watermark) {
@@ -417,7 +403,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
           
           // Generar mapa con OpenStreetMap - Grid de 3x3 tiles con marcador exacto
           try {
-            console.log(`🗺️ Generando mapa OSM para ${lat}, ${lng}`)
             const zoom = 17
             const tileSize = 256
             
@@ -432,9 +417,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
             // Calcular la posición del marcador dentro del grid completo (3x3 tiles)
             const pixelX = (centerX - tileX) * tileSize + tileSize
             const pixelY = (centerY - tileY) * tileSize + tileSize
-            
-            console.log(`📍 Tile central: ${tileX}, ${tileY}`)
-            console.log(`📍 Posición del marcador en el grid: ${pixelX.toFixed(2)}, ${pixelY.toFixed(2)}`)
             
             // Descargar grid de 3x3 tiles y crear composites
             const composites: any[] = []
@@ -460,7 +442,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                       left: col * tileSize,
                       top: row * tileSize
                     })
-                    console.log(`✅ Tile ${tx},${ty} descargado`)
                   } else {
                     console.warn(`⚠️ Tile ${tx},${ty} falló: ${tileResponse.status}`)
                   }
@@ -472,8 +453,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                 await new Promise(resolve => setTimeout(resolve, 100))
               }
             }
-            
-            console.log(`📊 Total de tiles descargados: ${composites.length}/9`)
             
             if (composites.length === 0) {
               throw new Error('No se pudo descargar ningún tile')
@@ -511,8 +490,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                 }])
                 .png()
                 .toBuffer()
-              
-              console.log(`✅ Icono agregado`)
             }
             
             // Recortar al tamaño deseado (centrado en el marcador)
@@ -532,7 +509,6 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
             
             mapBase64 = `data:image/png;base64,${finalBuffer.toString('base64')}`
             mapSource = 'osm'
-            console.log(`✅ Mapa OSM generado (${(finalBuffer.length / 1024).toFixed(2)} KB)`)
           } catch (osmError) {
             console.error('❌ Error generando mapa OSM:', osmError)
           }
@@ -617,14 +593,11 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
               pdf.setFontSize(6)
               pdf.setFont('helvetica', 'normal')
               pdf.text('Clic para abrir en Google Maps', mapX + mapWidth/2, mapY + mapHeight + 3, { align: 'center' })
-              
-              console.log('✅ Mapa agregado al PDF exitosamente')
             } catch (pdfError) {
               console.error('❌ Error agregando mapa al PDF:', pdfError)
             }
           } else {
             // Fallback: mostrar coordenadas sin mapa
-            console.warn('⚠️ No se pudo generar el mapa, mostrando solo coordenadas')
             pdf.setTextColor(0, 0, 0)
             pdf.setFontSize(8)
             pdf.setFont('helvetica', 'bold')

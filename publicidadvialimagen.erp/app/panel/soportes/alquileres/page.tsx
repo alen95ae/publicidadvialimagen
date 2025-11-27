@@ -50,7 +50,7 @@ const ESTADOS_ALQUILER = {
 } as const
 
 export default function AlquileresPage() {
-  const { tieneFuncionTecnica, puedeEditar } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEditar, puedeEliminar } = usePermisosContext()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAlquileres, setSelectedAlquileres] = useState<string[]>([])
@@ -193,6 +193,29 @@ export default function AlquileresPage() {
 
   const handleEdit = (cotizacionId: string) => {
     router.push(`/panel/ventas/editar/${cotizacionId}`)
+  }
+
+  const handleDelete = async (alquilerId: string, codigo: string) => {
+    if (!confirm(`¿Estás seguro de eliminar el alquiler ${codigo}? Esta acción no se puede deshacer.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/alquileres/${alquilerId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        toast.success('Alquiler eliminado correctamente')
+        loadAlquileres(currentPage)
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error al eliminar el alquiler')
+      }
+    } catch (error) {
+      console.error('Error eliminando alquiler:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar el alquiler')
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -453,6 +476,17 @@ export default function AlquileresPage() {
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
+                              {puedeEliminar("soportes") && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  title="Eliminar alquiler"
+                                  onClick={() => handleDelete(alquiler.id, alquiler.codigo)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -45,7 +45,6 @@ export async function GET(
       )
     }
 
-    console.log('✅ Solicitud encontrada:', solicitud.codigo)
     return NextResponse.json(solicitud)
 
   } catch (error) {

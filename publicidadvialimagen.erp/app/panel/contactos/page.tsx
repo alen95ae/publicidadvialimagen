@@ -124,15 +124,12 @@ export default function ContactosPage() {
       params.set('page', page.toString())
       params.set('limit', '100')
 
-      console.log('🔍 Fetching contacts with params:', params.toString())
       const response = await fetch(`/api/contactos?${params}`, {
         credentials: 'include'
       })
       
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Contacts loaded:', data.data?.length || 0, 'contacts')
-        console.log('📊 Sample contact:', data.data?.[0])
         setContacts(data.data || [])
         if (data.pagination) {
           setPagination(data.pagination)

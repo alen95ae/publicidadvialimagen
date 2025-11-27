@@ -22,8 +22,6 @@ export async function GET(
       )
     }
 
-    console.log('✅ Alquiler encontrado:', alquiler.codigo)
-
     return NextResponse.json({
       success: true,
       data: alquiler
@@ -51,8 +49,6 @@ export async function PATCH(
 
     const alquilerActualizado = await updateAlquiler(id, body)
 
-    console.log('✅ Alquiler actualizado:', alquilerActualizado.codigo)
-
     return NextResponse.json({
       success: true,
       data: alquilerActualizado
@@ -78,8 +74,6 @@ export async function DELETE(
     console.log('🗑️ Eliminando alquiler:', id)
 
     await deleteAlquiler(id)
-
-    console.log('✅ Alquiler eliminado correctamente')
 
     return NextResponse.json({
       success: true,

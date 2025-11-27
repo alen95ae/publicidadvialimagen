@@ -82,7 +82,6 @@ export async function GET(request: Request) {
     // BOM UTF-8 para Excel y otros programas
     const csvWithBOM = '\uFEFF' + csv
 
-    console.log(`✅ Exportados ${allAlquileres.length} alquileres a CSV`)
 
     // Convertir a Buffer con encoding UTF-8 explícito
     const csvBuffer = Buffer.from(csvWithBOM, 'utf-8')

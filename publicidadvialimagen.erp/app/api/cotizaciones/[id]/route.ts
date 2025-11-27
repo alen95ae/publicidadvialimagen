@@ -103,10 +103,8 @@ export async function PATCH(
     
     // Si se está rechazando una cotización aprobada, cancelar alquileres
     if (seEstaCambiandoARechazada) {
-      console.log(`⚠️ Rechazando cotización aprobada ${id}, cancelando alquileres...`)
       try {
         await cancelarAlquileresCotizacion(id)
-        console.log(`✅ Alquileres cancelados para cotización ${id}`)
       } catch (errorAlquileres) {
         console.error(`❌ Error cancelando alquileres:`, errorAlquileres)
         // No fallar la actualización si falla la cancelación de alquileres

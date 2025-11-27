@@ -1383,16 +1383,12 @@ export default function NuevaCotizacionPage() {
 
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
       
-      console.log('🔍 Buscando vendedor:', vendedor)
-      console.log('🔍 Total comerciales:', todosLosComerciales.length)
-      
       // Buscar comercial por ID (UUID) o por nombre
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
       
       // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
       if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
-        console.log('🔍 Buscando por nombre:', vendedor)
         comercialSeleccionado = todosLosComerciales.find(c => 
           c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
         )
@@ -1400,7 +1396,6 @@ export default function NuevaCotizacionPage() {
       
       // Si aún no se encuentra, obtener el usuario actual de la sesión
       if (!comercialSeleccionado) {
-        console.log('🔍 Obteniendo usuario actual de la sesión')
         try {
           const currentUserRes = await fetch('/api/auth/me')
           if (currentUserRes.ok) {
@@ -1412,16 +1407,12 @@ export default function NuevaCotizacionPage() {
                 email: currentUserData.user.email,
                 rol: currentUserData.user.rol,
               }
-              console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
             }
           }
         } catch (error) {
           console.error('Error obteniendo usuario actual:', error)
         }
       }
-
-      console.log('📧 Comercial final seleccionado:', comercialSeleccionado)
-      console.log('📧 Email del comercial:', comercialSeleccionado?.email)
 
       await generarPDFCotizacion({
         codigo: codigoCotizacion || 'NUEVA',

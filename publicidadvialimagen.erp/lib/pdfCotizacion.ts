@@ -271,7 +271,6 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
               reader.readAsDataURL(imgBlob)
             })
             imgType = imgBlob.type.includes('png') ? 'PNG' : 'JPEG'
-            console.log('✅ Imagen cargada correctamente para PDF:', producto.imagen.substring(0, 50))
           } catch (error) {
             console.error('❌ Error cargando imagen del producto para PDF:', error)
             console.error('   URL:', producto.imagen?.substring(0, 100))
@@ -654,7 +653,6 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
               reader.readAsDataURL(imgBlob)
             })
             imgType = imgBlob.type.includes('png') ? 'PNG' : 'JPEG'
-            console.log('✅ Imagen cargada correctamente para PDF:', producto.imagen.substring(0, 50))
           } catch (error) {
             console.error('❌ Error cargando imagen del producto para PDF:', error)
             console.error('   URL:', producto.imagen?.substring(0, 100))

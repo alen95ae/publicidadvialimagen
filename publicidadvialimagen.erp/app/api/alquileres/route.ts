@@ -67,8 +67,6 @@ export async function POST(request: NextRequest) {
 
     const alquiler = await createAlquiler(body)
 
-    console.log('✅ Alquiler creado exitosamente:', alquiler.codigo)
-
     return NextResponse.json({
       success: true,
       data: alquiler

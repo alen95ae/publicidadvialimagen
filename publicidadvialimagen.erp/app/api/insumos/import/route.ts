@@ -4,15 +4,11 @@ import { parse } from 'csv-parse/sync'
 
 export async function POST(req: Request) {
   try {
-    console.log('=== INICIO IMPORTACIÓN INSUMOS ===')
     const form = await req.formData()
     const file = form.get('file') as File | null
     if (!file) {
-      console.log('Error: No se recibió archivo')
       return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 })
     }
-    
-    console.log(`Archivo recibido: ${file.name}, tamaño: ${file.size} bytes`)
 
     const buf = Buffer.from(await file.arrayBuffer())
     // Decodificación robusta: intentar UTF-8 y, si hay caracteres de reemplazo, probar latin1
@@ -25,8 +21,6 @@ export async function POST(req: Request) {
       }
     }
     const rows = parse(csvText, { columns: true, skip_empty_lines: true })
-    console.log(`CSV parseado: ${rows.length} filas encontradas`)
-    console.log('Primera fila:', rows[0])
 
     let created = 0, updated = 0, errors = 0
     const errorMessages: string[] = []

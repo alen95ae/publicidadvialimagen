@@ -8,8 +8,7 @@
     "lint": "next lint",
     "start": "next start",
     "verify": "node verify-deployment-ready.js",
-    "preinstall": "echo '📦 Instalando dependencias del ERP...'",
-    "migrate:airtable-images": "ts-node scripts/migrate-airtable-images.ts"
+    "preinstall": "echo '📦 Instalando dependencias del ERP...'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

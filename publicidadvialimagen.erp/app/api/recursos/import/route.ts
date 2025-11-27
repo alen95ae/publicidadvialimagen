@@ -4,25 +4,18 @@ import { createRecurso } from '@/lib/supabaseRecursos'
 
 export async function POST(req: Request) {
   try {
-    console.log('=== INICIO IMPORTACIÓN RECURSOS ===')
     const form = await req.formData()
     const file = form.get('file') as File | null
     if (!file) {
-      console.log('Error: No se recibió archivo')
       return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 })
     }
-    
-    console.log(`Archivo recibido: ${file.name}, tamaño: ${file.size} bytes`)
 
     const buf = Buffer.from(await file.arrayBuffer())
     // Decodificación robusta: intentar UTF-8 y, si hay caracteres de reemplazo, probar latin1
     let csvText = buf.toString('utf8')
     if (csvText.includes('\uFFFD')) {
-      console.log('Detectados caracteres de reemplazo, probando latin1...')
       csvText = buf.toString('latin1')
     }
-
-    console.log(`CSV decodificado, longitud: ${csvText.length} caracteres`)
 
     // Parsear CSV
     const records = parse(csvText, {
@@ -30,8 +23,6 @@ export async function POST(req: Request) {
       skip_empty_lines: true,
       trim: true
     })
-
-    console.log(`CSV parseado: ${records.length} registros encontrados`)
 
     if (records.length === 0) {
       return NextResponse.json({ error: 'El archivo CSV está vacío' }, { status: 400 })

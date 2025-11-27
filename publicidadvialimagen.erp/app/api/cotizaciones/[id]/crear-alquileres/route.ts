@@ -56,15 +56,11 @@ export async function POST(
     const alquileresExistentes = await getAlquileresPorCotizacion(cotizacionId)
     
     if (alquileresExistentes.length > 0) {
-      console.log(`⚠️ Ya existen ${alquileresExistentes.length} alquiler(es) para esta cotización, cancelando...`)
       await cancelarAlquileresCotizacion(cotizacionId)
-      console.log(`✅ Alquileres antiguos cancelados`)
     }
 
     // Crear nuevos alquileres
     const result = await crearAlquileresDesdeCotizacion(cotizacionId)
-
-    console.log('✅ Alquileres creados exitosamente:', result.alquileresCreados.length)
 
     return NextResponse.json({
       success: true,

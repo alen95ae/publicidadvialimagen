@@ -176,10 +176,10 @@ export default function CotizacionesPage() {
   // Cargar vendedores para el filtro
   const fetchVendedores = async () => {
     try {
-      // Obtener todos los usuarios
-      const response = await fetch('/api/ajustes/usuarios?pageSize=1000')
+      // Obtener comerciales desde el endpoint público
+      const response = await fetch('/api/public/comerciales')
       const data = await response.json()
-      const allUsers = data.users || []
+      const comerciales = data.users || []
       
       // Obtener todos los vendedores únicos de las cotizaciones
       const cotizacionesResponse = await fetch('/api/cotizaciones?pageSize=10000')
@@ -194,18 +194,27 @@ export default function CotizacionesPage() {
         })
       }
       
-      // Filtrar usuarios que son vendedores (marcados como vendedor) o tienen cotizaciones
-      const vendedoresList = allUsers.filter((user: Vendedor) => {
-        // Si está marcado como vendedor
-        if (user.vendedor) return true
+      // Combinar comerciales con vendedores que tienen cotizaciones pero no están marcados como vendedor
+      // El endpoint ya filtra por vendedor=true, pero incluimos también los que tienen cotizaciones
+      const vendedoresList = [...comerciales]
+      
+      // Agregar vendedores que tienen cotizaciones pero no están en la lista de comerciales
+      if (cotizacionesData.success && cotizacionesData.data) {
+        const comercialesIds = new Set(comerciales.map((c: Vendedor) => c.id))
+        const comercialesNombres = new Set(comerciales.map((c: Vendedor) => c.nombre))
         
-        // Si tiene al menos una cotización (por nombre o ID)
-        const tieneCotizacion = Array.from(vendedoresDeCotizaciones).some(vendedorNombre => {
-          return vendedorNombre === user.nombre || vendedorNombre === user.id
+        Array.from(vendedoresDeCotizaciones).forEach(vendedorNombre => {
+          // Si no está en la lista de comerciales, agregarlo como vendedor temporal
+          if (!comercialesIds.has(vendedorNombre) && !comercialesNombres.has(vendedorNombre)) {
+            vendedoresList.push({
+              id: vendedorNombre,
+              nombre: vendedorNombre,
+              email: '',
+              imagen_usuario: null
+            } as Vendedor)
+          }
         })
-        
-        return tieneCotizacion
-      })
+      }
       
       setVendedores(vendedoresList)
     } catch (error) {
@@ -356,17 +365,18 @@ export default function CotizacionesPage() {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       
       try {
-        const userResponse = await fetch(`/api/ajustes/usuarios?pageSize=1000`)
-        if (userResponse.ok) {
-          const userData = await userResponse.json()
+        // Primero intentar con el endpoint de comerciales (accesible para todos)
+        const comercialesResponse = await fetch(`/api/public/comerciales`)
+        if (comercialesResponse.ok) {
+          const comercialesData = await comercialesResponse.json()
           let vendedor
           
           // Buscar por ID (UUID) o por nombre
           if (cotizacion.vendedor && uuidRegex.test(cotizacion.vendedor)) {
-            vendedor = userData.users?.find((u: any) => u.id === cotizacion.vendedor)
+            vendedor = comercialesData.users?.find((u: any) => u.id === cotizacion.vendedor)
           } else if (cotizacion.vendedor) {
             // Buscar por nombre
-            vendedor = userData.users?.find((u: any) => 
+            vendedor = comercialesData.users?.find((u: any) => 
               u.nombre?.toLowerCase().includes(cotizacion.vendedor.toLowerCase())
             )
           }
@@ -375,7 +385,7 @@ export default function CotizacionesPage() {
             vendedorEmail = vendedor.email
             console.log('✅ Email del vendedor encontrado:', vendedorEmail)
           } else {
-            console.log('⚠️ No se encontró vendedor, obteniendo usuario actual')
+            console.log('⚠️ No se encontró vendedor en comerciales, obteniendo usuario actual')
             // Si no se encuentra, usar el usuario actual
             const currentUserRes = await fetch('/api/auth/me')
             if (currentUserRes.ok) {

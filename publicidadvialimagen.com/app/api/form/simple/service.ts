@@ -1,8 +1,5 @@
 // app/api/form/simple/service.ts
-import { airtableCreate, airtableUpsertByEmail } from "@/lib/airtable-rest"
-
-const CONTACTOS = process.env.AIRTABLE_TABLE_CONTACTOS!
-const MENSAJES = process.env.AIRTABLE_TABLE_MENSAJES!
+import { createMensajeSupabase } from "@/lib/supabaseMensajes"
 
 type Payload = {
   nombre?: string
@@ -12,39 +9,26 @@ type Payload = {
 }
 
 export async function saveToAirtableSimple(p: Payload) {
-  const fields = {
-    Nombre: p.nombre || "",
-    Email: p.email,
-    ["Teléfono"]: p.telefono || "",
-    Empresa: p.empresa || "",
-    Origen: ["FORMULARIO"] // Asignar 'FORMULARIO' para contactos creados desde formularios web (array para selección múltiple)
-  }
-
-  // 1) UPSERT en Contactos (merge por Email)
-  let contactoId: string | null = null
+  // Crear mensaje en Supabase
+  // Nota: El nombre de la función se mantiene por compatibilidad, pero ahora usa Supabase
   try {
-    const upsertRes = await airtableUpsertByEmail(CONTACTOS, fields)
-    contactoId = upsertRes?.records?.[0]?.id ?? null
+    const mensaje = await createMensajeSupabase({
+      nombre: p.nombre || '',
+      email: p.email,
+      telefono: p.telefono || undefined,
+      empresa: p.empresa || undefined,
+      mensaje: `Formulario simple: ${p.empresa ? `Empresa: ${p.empresa}. ` : ''}${p.telefono ? `Tel: ${p.telefono}` : ''}`.trim() || 'Sin mensaje',
+      estado: 'NUEVO'
+    })
+
+    const mensajeId = mensaje.id || null
+    // contactoId se mantiene como null ya que no hay tabla de contactos en Supabase
+    // (los datos del contacto están en el mensaje)
+    return { contactoId: null, mensajeId }
   } catch (e: any) {
-    console.error("[Contactos Upsert] Error:", e?.message || e)
+    console.error("[Supabase] Error guardando mensaje:", e?.message || e)
+    throw e
   }
-
-  // Fallback: si no hubo id (por cualquier motivo), intentar CREATE explícito
-  if (!contactoId) {
-    try {
-      const createContacto = await airtableCreate(CONTACTOS, [{ fields }])
-      contactoId = createContacto?.records?.[0]?.id ?? null
-    } catch (e: any) {
-      console.error("[Contactos Create Fallback] Error:", e?.message || e)
-    }
-  }
-
-  // 2) CREATE en Mensajes (siempre)
-  const createRes = await airtableCreate(MENSAJES, [{ fields }])
-
-  const mensajeId = createRes?.records?.[0]?.id ?? null
-
-  return { contactoId, mensajeId }
 }
 
 

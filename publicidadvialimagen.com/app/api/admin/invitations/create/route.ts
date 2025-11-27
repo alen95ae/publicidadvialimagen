@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { requireRole } from "@/lib/server-auth";
-import { airtableCreate } from "@/lib/airtable-rest";
+import { createInvitacion } from "@/lib/supabaseInvitaciones";
 
-const TABLE = process.env.AIRTABLE_TABLE_INVITACIONES || "Invitaciones";
 const SITE = process.env.PUBLIC_SITE_URL || "http://localhost:3001";
 
 function nowPlusDays(days: number) {
@@ -24,31 +23,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Rol no válido" }, { status: 400 });
     }
 
-    const records = emails.map((raw: string) => {
-      const email = (raw || "").trim().toLowerCase();
-      const token = crypto.randomBytes(24).toString("hex");
-      const link = `${SITE}/register?invite=${token}&email=${encodeURIComponent(email)}`;
-      return {
-        fields: {
-          Email: email,
-          Role: role,
-          Token: token,
-          ExpiresAt: nowPlusDays(expiresDays),
-          Accepted: false,
-          Revoked: false,
-          CreatedBy: user.email || "",
-        },
-      };
-    });
-
-    const res = await airtableCreate(TABLE, records);
-    // Devolver los links generados
-    const links = res.records.map((r: any, i: number) => ({
-      id: r.id,
-      email: records[i].fields.Email,
-      role,
-      link: `${SITE}/register?invite=${records[i].fields.Token}&email=${encodeURIComponent(records[i].fields.Email)}`
-    }));
+    const now = new Date().toISOString();
+    const expiresAt = nowPlusDays(expiresDays);
+    
+    // Crear invitaciones en Supabase
+    const links = await Promise.all(
+      emails.map(async (raw: string) => {
+        const email = (raw || "").trim().toLowerCase();
+        const token = crypto.randomBytes(24).toString("hex");
+        const link = `${SITE}/register?invite=${token}&email=${encodeURIComponent(email)}`;
+        
+        try {
+          const invitacion = await createInvitacion(
+            email,
+            role,
+            token,
+            now,
+            expiresAt,
+            link
+          );
+          
+          return {
+            id: invitacion.id,
+            email: invitacion.email,
+            role,
+            link
+          };
+        } catch (error: any) {
+          console.error(`Error creando invitación para ${email}:`, error);
+          throw error;
+        }
+      })
+    );
 
     return NextResponse.json({ success: true, links });
   } catch (e: any) {

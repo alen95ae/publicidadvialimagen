@@ -112,6 +112,10 @@ export async function createLinea(linea: CotizacionLineaInput) {
     throw new Error(`Cotización con ID ${linea.cotizacion_id} no existe`);
   }
 
+  // Validar que no se guarden URLs blob
+  // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+  const imagenValida = linea.imagen && !linea.imagen.startsWith('blob:') ? linea.imagen : null
+
   const insertData = {
     cotizacion_id: linea.cotizacion_id,
     tipo: linea.tipo || "Producto",
@@ -129,7 +133,7 @@ export async function createLinea(linea: CotizacionLineaInput) {
     con_it: linea.con_it !== undefined ? linea.con_it : true,
     es_soporte: linea.es_soporte || false,
     orden: linea.orden || 0,
-    imagen: linea.imagen || null,
+    imagen: imagenValida,
     variantes: linea.variantes || null,
     subtotal_linea: linea.subtotal_linea || 0,
   }
@@ -179,28 +183,33 @@ export async function createMultipleLineas(lineas: CotizacionLineaInput[]) {
     throw new Error(`Cotización con ID ${cotizacionId} no existe`);
   }
 
-  // Preparar datos para insertar
-  const insertData = lineas.map((linea) => ({
-    cotizacion_id: linea.cotizacion_id,
-    tipo: linea.tipo || "Producto",
-    codigo_producto: linea.codigo_producto || null,
-    nombre_producto: linea.nombre_producto || null,
-    descripcion: linea.descripcion || null,
-    cantidad: linea.cantidad || 0,
-    ancho: linea.ancho || null,
-    alto: linea.alto || null,
-    total_m2: linea.total_m2 || null,
-    unidad_medida: linea.unidad_medida || "m²",
-    precio_unitario: linea.precio_unitario || 0,
-    comision: linea.comision || 0,
-    con_iva: linea.con_iva !== undefined ? linea.con_iva : true,
-    con_it: linea.con_it !== undefined ? linea.con_it : true,
-    es_soporte: linea.es_soporte || false,
-    orden: linea.orden || 0,
-    imagen: linea.imagen || null,
-    variantes: linea.variantes || null,
-    subtotal_linea: linea.subtotal_linea || 0,
-  }));
+  // Preparar datos para insertar - validar que no se guarden URLs blob
+  // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+  const insertData = lineas.map((linea) => {
+    const imagenValida = linea.imagen && !linea.imagen.startsWith('blob:') ? linea.imagen : null
+    
+    return {
+      cotizacion_id: linea.cotizacion_id,
+      tipo: linea.tipo || "Producto",
+      codigo_producto: linea.codigo_producto || null,
+      nombre_producto: linea.nombre_producto || null,
+      descripcion: linea.descripcion || null,
+      cantidad: linea.cantidad || 0,
+      ancho: linea.ancho || null,
+      alto: linea.alto || null,
+      total_m2: linea.total_m2 || null,
+      unidad_medida: linea.unidad_medida || "m²",
+      precio_unitario: linea.precio_unitario || 0,
+      comision: linea.comision || 0,
+      con_iva: linea.con_iva !== undefined ? linea.con_iva : true,
+      con_it: linea.con_it !== undefined ? linea.con_it : true,
+      es_soporte: linea.es_soporte || false,
+      orden: linea.orden || 0,
+      imagen: imagenValida,
+      variantes: linea.variantes || null,
+      subtotal_linea: linea.subtotal_linea || 0,
+    }
+  });
 
   if (process.env.NODE_ENV === 'development') {
     console.log('📝 [createMultipleLineas] Insertando líneas:', insertData.length, 'líneas')
@@ -250,7 +259,11 @@ export async function updateLinea(id: string, linea: Partial<CotizacionLineaInpu
   if (linea.con_it !== undefined) updateData.con_it = linea.con_it;
   if (linea.es_soporte !== undefined) updateData.es_soporte = linea.es_soporte;
   if (linea.orden !== undefined) updateData.orden = linea.orden;
-  if (linea.imagen !== undefined) updateData.imagen = linea.imagen;
+  // Validar que no se guarden URLs blob
+  // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+  if (linea.imagen !== undefined) {
+    updateData.imagen = linea.imagen && !linea.imagen.startsWith('blob:') ? linea.imagen : null;
+  }
   if (linea.variantes !== undefined) updateData.variantes = linea.variantes;
   if (linea.subtotal_linea !== undefined) updateData.subtotal_linea = linea.subtotal_linea;
 

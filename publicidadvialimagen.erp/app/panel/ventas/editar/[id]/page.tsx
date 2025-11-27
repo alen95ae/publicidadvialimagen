@@ -31,7 +31,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
-import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
+import { generarPDFCotizacion, generarPDFOT } from "@/lib/pdfCotizacion"
 
 const sucursales = [
   { id: "1", nombre: "La Paz" },
@@ -577,8 +577,17 @@ export default function EditarCotizacionPage() {
                 producto: linea.codigo_producto && linea.nombre_producto 
                   ? `${linea.codigo_producto} - ${linea.nombre_producto}`
                   : linea.producto || linea.nombre_producto || '',
-                imagen: linea.imagen || undefined,
-                imagenOriginalUrl: linea.imagen || undefined, // Guardar URL original para poder eliminarla después
+                // Asegurar que solo se use URL pública, nunca blob
+                imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+                  ? linea.imagen 
+                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+                    ? linea.imagen_url 
+                    : undefined,
+                imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+                  ? linea.imagen 
+                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+                    ? linea.imagen_url 
+                    : undefined,
                 descripcion: linea.descripcion || '',
                 cantidad: linea.cantidad || 1,
                 ancho: linea.ancho || 0,
@@ -600,7 +609,17 @@ export default function EditarCotizacionPage() {
               id: linea.id || `${index + 1}`,
               tipo: 'producto' as const,
               producto: linea.producto || '',
-              imagen: linea.imagen_url || linea.imagen,
+              // Asegurar que solo se use URL pública, nunca blob
+              imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+                ? linea.imagen 
+                : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+                  ? linea.imagen_url 
+                  : undefined,
+              imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+                ? linea.imagen 
+                : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+                  ? linea.imagen_url 
+                  : undefined,
               descripcion: linea.descripcion || '',
               cantidad: linea.cantidad || 1,
               ancho: linea.ancho || 0,
@@ -636,8 +655,17 @@ export default function EditarCotizacionPage() {
                 id: linea.id || `${index + 1}`,
                 tipo: 'producto' as const,
                 producto: linea.nombre_producto,
-                imagen: linea.imagen || undefined,
-                imagenOriginalUrl: linea.imagen || undefined,
+                // Asegurar que solo se use URL pública, nunca blob
+                imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+                  ? linea.imagen 
+                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+                    ? linea.imagen_url 
+                    : undefined,
+                imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+                  ? linea.imagen 
+                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+                    ? linea.imagen_url 
+                    : undefined,
                 descripcion: linea.descripcion || '',
                 cantidad: linea.cantidad || 1,
                 ancho: linea.ancho || 0,
@@ -756,14 +784,24 @@ export default function EditarCotizacionPage() {
     
     setCargandoComerciales(true)
     try {
-      const response = await fetch('/api/ajustes/usuarios?pageSize=100')
+      const response = await fetch('/api/public/comerciales')
+      
+      if (!response.ok) {
+        console.error('❌ Error en respuesta de comerciales:', response.status, response.statusText)
+        setTodosLosComerciales([])
+        return
+      }
+      
       const data = await response.json()
-      // Filtrar solo usuarios con vendedor=true
-      const vendedores = (data.users || []).filter((user: any) => user.vendedor === true)
+      console.log('✅ Comerciales recibidos (editar):', data.users?.length || 0)
+      
+      // El endpoint ya filtra solo usuarios con vendedor=true
+      const vendedores = data.users || []
       setTodosLosComerciales(vendedores)
       setFilteredComerciales(vendedores.slice(0, 20))
     } catch (error) {
-      console.error('Error cargando comerciales:', error)
+      console.error('❌ Error cargando comerciales:', error)
+      setTodosLosComerciales([])
     } finally {
       setCargandoComerciales(false)
     }
@@ -1183,8 +1221,9 @@ export default function EditarCotizacionPage() {
             con_it: producto.conIT,
             es_soporte: producto.esSoporte || false,
             orden: index + 1,
-            imagen_url: producto.imagen || null,
-            imagen: producto.imagen || null,
+            // Asegurar que solo se guarde URL de Supabase, no URLs blob
+            // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+            imagen: producto.imagen && !producto.imagen.startsWith('blob:') ? producto.imagen : null,
             variantes: producto.variantes || null,
             subtotal_linea: producto.total
           }
@@ -1535,6 +1574,73 @@ export default function EditarCotizacionPage() {
     }
   }
 
+  const descargarOTPDF = async () => {
+    try {
+      if (!cliente) {
+        toast.error("Por favor selecciona un cliente")
+        return
+      }
+
+      const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
+      
+      console.log('🔍 Buscando vendedor:', vendedor)
+      console.log('🔍 Total comerciales:', todosLosComerciales.length)
+      
+      // Buscar comercial por ID (UUID) o por nombre
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
+      
+      // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
+      if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
+        console.log('🔍 Buscando por nombre:', vendedor)
+        comercialSeleccionado = todosLosComerciales.find(c => 
+          c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+        )
+      }
+      
+      // Si aún no se encuentra, obtener el usuario actual de la sesión
+      if (!comercialSeleccionado) {
+        console.log('🔍 Obteniendo usuario actual de la sesión')
+        try {
+          const currentUserRes = await fetch('/api/auth/me')
+          if (currentUserRes.ok) {
+            const currentUserData = await currentUserRes.json()
+            if (currentUserData.success && currentUserData.user) {
+              comercialSeleccionado = {
+                id: currentUserData.user.id,
+                nombre: currentUserData.user.nombre,
+                email: currentUserData.user.email,
+                rol: currentUserData.user.rol,
+              }
+              console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
+            }
+          }
+        } catch (error) {
+          console.error('Error obteniendo usuario actual:', error)
+        }
+      }
+
+      console.log('📧 Comercial final seleccionado:', comercialSeleccionado)
+      console.log('📧 Email del comercial:', comercialSeleccionado?.email)
+
+      await generarPDFOT({
+        codigo: codigoCotizacion || 'SIN-CODIGO',
+        cliente: clienteSeleccionado?.displayName || cliente,
+        clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
+        sucursal: sucursal || '',
+        vendedor: comercialSeleccionado?.nombre || vendedor,
+        vendedorEmail: comercialSeleccionado?.email || undefined,
+        productos: productosList,
+        totalGeneral: totalGeneral
+      })
+      
+      toast.success("OT descargada exitosamente")
+    } catch (error) {
+      console.error("Error generando PDF OT:", error)
+      toast.error("Error al generar el PDF OT")
+    }
+  }
+
   // Mostrar loading mientras carga la cotización (ESPECÍFICO DE EDITAR)
   if (cargandoCotizacion) {
     return (
@@ -1782,7 +1888,11 @@ export default function EditarCotizacionPage() {
               {/* Descargar OT */}
               <div className="space-y-2 w-48">
                 <Label>&nbsp;</Label>
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={descargarOTPDF}
+                >
                   <Hammer className="w-4 h-4 mr-2" />
                   Descargar OT
                 </Button>
@@ -2100,20 +2210,91 @@ export default function EditarCotizacionPage() {
                                 src={producto.imagen} 
                                 alt="Producto" 
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  // Si la imagen blob falla, intentar recrear la URL si tenemos el File
-                                  const productoConFile = productosList.find(
-                                    (item): item is ProductoItem => 
-                                      item.id === producto.id && 
-                                      item.tipo === 'producto' &&
-                                      !!(item as ProductoItem).imagenFile
-                                  ) as ProductoItem | undefined
+                                onError={async (e) => {
+                                  console.error('❌ Error cargando imagen:', producto.imagen)
                                   
-                                  if (productoConFile?.imagenFile) {
-                                    const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
-                                    actualizarProducto(producto.id, 'imagen', newBlobUrl)
+                                  // Si la imagen es blob, intentar subirla automáticamente
+                                  if (producto.imagen?.startsWith('blob:')) {
+                                    console.log('🔄 Detectada URL blob, intentando subir imagen...')
+                                    try {
+                                      // Obtener el blob desde la URL
+                                      const blobResponse = await fetch(producto.imagen)
+                                      const blob = await blobResponse.blob()
+                                      
+                                      // Crear un File desde el blob
+                                      const file = new File([blob], 'imagen.jpg', { type: blob.type })
+                                      
+                                      // Subir a Supabase
+                                      const formData = new FormData()
+                                      formData.append('file', file)
+                                      if (producto.id) {
+                                        formData.append('lineaId', producto.id)
+                                      }
+                                      
+                                      const uploadResponse = await fetch('/api/cotizaciones/image', {
+                                        method: 'POST',
+                                        body: formData
+                                      })
+                                      
+                                      const uploadData = await uploadResponse.json()
+                                      
+                                      if (uploadData.success && uploadData.data.publicUrl) {
+                                        console.log('✅ Imagen blob subida correctamente:', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
+                                        // Revocar la URL blob
+                                        URL.revokeObjectURL(producto.imagen)
+                                      } else {
+                                        throw new Error(uploadData.error || 'Error al subir imagen')
+                                      }
+                                    } catch (uploadError) {
+                                      console.error('❌ Error subiendo imagen blob:', uploadError)
+                                      // Si falla, intentar con File si existe
+                                      const productoConFile = productosList.find(
+                                        (item): item is ProductoItem => 
+                                          item.id === producto.id && 
+                                          item.tipo === 'producto' &&
+                                          !!(item as ProductoItem).imagenFile
+                                      ) as ProductoItem | undefined
+                                      
+                                      if (productoConFile?.imagenFile) {
+                                        const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
+                                        actualizarProducto(producto.id, 'imagen', newBlobUrl)
+                                      } else {
+                                        e.currentTarget.style.display = 'none'
+                                      }
+                                    }
+                                  } else if (producto.imagenFile) {
+                                    // Si hay un File pero no se ha subido, subirlo
+                                    try {
+                                      const formData = new FormData()
+                                      formData.append('file', producto.imagenFile)
+                                      if (producto.id) {
+                                        formData.append('lineaId', producto.id)
+                                      }
+                                      
+                                      const uploadResponse = await fetch('/api/cotizaciones/image', {
+                                        method: 'POST',
+                                        body: formData
+                                      })
+                                      
+                                      const uploadData = await uploadResponse.json()
+                                      
+                                      if (uploadData.success && uploadData.data.publicUrl) {
+                                        actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagenFile', undefined)
+                                      }
+                                    } catch (uploadError) {
+                                      console.error('❌ Error subiendo imagenFile:', uploadError)
+                                    }
+                                  } else if (producto.imagenOriginalUrl && producto.imagenOriginalUrl !== producto.imagen && !producto.imagenOriginalUrl.startsWith('blob:')) {
+                                    // Si hay una URL original diferente y válida, intentar usarla
+                                    console.log('🔄 Intentando cargar URL original:', producto.imagenOriginalUrl)
+                                    actualizarProducto(producto.id, 'imagen', producto.imagenOriginalUrl)
                                   } else {
-                                    // Si no hay File, ocultar la imagen
+                                    // Si no hay File ni URL original válida, ocultar
+                                    console.warn('⚠️ No se pudo cargar la imagen, ocultando')
                                     e.currentTarget.style.display = 'none'
                                   }
                                 }}

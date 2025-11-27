@@ -159,7 +159,8 @@ export async function PATCH(
           con_it: linea.con_it !== undefined ? linea.con_it : true,
           es_soporte: linea.es_soporte || false,
           orden: linea.orden || index + 1,
-          imagen: linea.imagen || null,
+          // Validar que no se guarden URLs blob
+          imagen: linea.imagen && !linea.imagen.startsWith('blob:') ? linea.imagen : null,
           variantes: variantesParsed, // JSONB en Supabase
           subtotal_linea: linea.subtotal_linea || 0
         }

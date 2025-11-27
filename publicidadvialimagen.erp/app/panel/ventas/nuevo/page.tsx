@@ -31,7 +31,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
-import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
+import { generarPDFCotizacion, generarPDFOT } from "@/lib/pdfCotizacion"
 
 // Datos de ejemplo para los desplegables
 const clientes = [
@@ -583,11 +583,21 @@ export default function NuevaCotizacionPage() {
     const cargarComerciales = async () => {
       setCargandoComerciales(true)
       try {
-        const response = await fetch('/api/ajustes/usuarios?pageSize=100')
+        const response = await fetch('/api/public/comerciales')
+        
+        if (!response.ok) {
+          console.error('❌ Error en respuesta de comerciales:', response.status, response.statusText)
+          setTodosLosComerciales([])
+          return
+        }
+        
         const data = await response.json()
-        // Filtrar solo usuarios con vendedor=true
-        const vendedores = (data.users || []).filter((user: any) => user.vendedor === true)
+        console.log('✅ Comerciales recibidos:', data.users?.length || 0)
+        
+        // El endpoint ya filtra solo usuarios con vendedor=true
+        const vendedores = data.users || []
         setTodosLosComerciales(vendedores)
+        setFilteredComerciales(vendedores.slice(0, 20))
         
         // Predefinir el usuario actual si es vendedor
         if (!vendedor) {
@@ -598,7 +608,10 @@ export default function NuevaCotizacionPage() {
               if (userData.success && userData.user) {
                 const currentUser = vendedores.find((v: any) => v.id === userData.user.id)
                 if (currentUser) {
+                  console.log('✅ Usuario actual encontrado en comerciales, estableciendo como vendedor:', currentUser.nombre)
                   setVendedor(currentUser.id)
+                } else {
+                  console.log('⚠️ Usuario actual no está en la lista de comerciales')
                 }
               }
             }
@@ -607,7 +620,8 @@ export default function NuevaCotizacionPage() {
           }
         }
       } catch (error) {
-        console.error('Error cargando comerciales:', error)
+        console.error('❌ Error cargando comerciales:', error)
+        setTodosLosComerciales([])
       } finally {
         setCargandoComerciales(false)
       }
@@ -992,6 +1006,7 @@ export default function NuevaCotizacionPage() {
             try {
               const formData = new FormData()
               formData.append('file', producto.imagenFile)
+              // Nota: En nueva cotización, el lineaId no existe aún, se actualizará al guardar
               
               const response = await fetch('/api/cotizaciones/image', {
                 method: 'POST',
@@ -1042,8 +1057,9 @@ export default function NuevaCotizacionPage() {
             con_it: producto.conIT,
             es_soporte: producto.esSoporte || false,
             orden: index + 1,
-            imagen_url: producto.imagen || null,
-            imagen: producto.imagen || null,
+            // Asegurar que solo se guarde URL de Supabase, no URLs blob
+            // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+            imagen: producto.imagen && !producto.imagen.startsWith('blob:') ? producto.imagen : null,
             variantes: producto.variantes || null,
             subtotal_linea: producto.total
           }
@@ -1425,6 +1441,78 @@ export default function NuevaCotizacionPage() {
     }
   }
 
+  const descargarOTPDF = async () => {
+    try {
+      if (!cotizacionId) {
+        toast.error("Por favor guarda la cotización antes de descargar la OT")
+        return
+      }
+      
+      if (!cliente) {
+        toast.error("Por favor selecciona un cliente")
+        return
+      }
+
+      const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
+      
+      console.log('🔍 Buscando vendedor:', vendedor)
+      console.log('🔍 Total comerciales:', todosLosComerciales.length)
+      
+      // Buscar comercial por ID (UUID) o por nombre
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
+      
+      // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
+      if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
+        console.log('🔍 Buscando por nombre:', vendedor)
+        comercialSeleccionado = todosLosComerciales.find(c => 
+          c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+        )
+      }
+      
+      // Si aún no se encuentra, obtener el usuario actual de la sesión
+      if (!comercialSeleccionado) {
+        console.log('🔍 Obteniendo usuario actual de la sesión')
+        try {
+          const currentUserRes = await fetch('/api/auth/me')
+          if (currentUserRes.ok) {
+            const currentUserData = await currentUserRes.json()
+            if (currentUserData.success && currentUserData.user) {
+              comercialSeleccionado = {
+                id: currentUserData.user.id,
+                nombre: currentUserData.user.nombre,
+                email: currentUserData.user.email,
+                rol: currentUserData.user.rol,
+              }
+              console.log('✅ Usuario actual obtenido:', comercialSeleccionado)
+            }
+          }
+        } catch (error) {
+          console.error('Error obteniendo usuario actual:', error)
+        }
+      }
+
+      console.log('📧 Comercial final seleccionado:', comercialSeleccionado)
+      console.log('📧 Email del comercial:', comercialSeleccionado?.email)
+
+      await generarPDFOT({
+        codigo: codigoCotizacion || 'NUEVA',
+        cliente: clienteSeleccionado?.displayName || '',
+        clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
+        sucursal: sucursal || '',
+        vendedor: comercialSeleccionado?.nombre || '',
+        vendedorEmail: comercialSeleccionado?.email || undefined,
+        productos: productosList,
+        totalGeneral: totalGeneral
+      })
+      
+      toast.success("OT descargada exitosamente")
+    } catch (error) {
+      console.error("Error generando PDF OT:", error)
+      toast.error("Error al generar el PDF OT")
+    }
+  }
+
   return (
     <>
       <Toaster position="top-right" />
@@ -1646,6 +1734,7 @@ export default function NuevaCotizacionPage() {
                   variant="outline" 
                   className="w-full"
                   disabled={!cotizacionId}
+                  onClick={descargarOTPDF}
                   title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
                 >
                   <Hammer className="w-4 h-4 mr-2" />
@@ -1968,20 +2057,85 @@ export default function NuevaCotizacionPage() {
                                 src={producto.imagen} 
                                 alt="Producto" 
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  // Si la imagen blob falla, intentar recrear la URL si tenemos el File
-                                  const productoConFile = productosList.find(
-                                    (item): item is ProductoItem => 
-                                      item.id === producto.id && 
-                                      item.tipo === 'producto' &&
-                                      !!(item as ProductoItem).imagenFile
-                                  ) as ProductoItem | undefined
+                                onError={async (e) => {
+                                  console.error('❌ Error cargando imagen:', producto.imagen)
                                   
-                                  if (productoConFile?.imagenFile) {
-                                    const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
-                                    actualizarProducto(producto.id, 'imagen', newBlobUrl)
+                                  // Si la imagen es blob, intentar subirla automáticamente
+                                  if (producto.imagen?.startsWith('blob:')) {
+                                    console.log('🔄 Detectada URL blob, intentando subir imagen...')
+                                    try {
+                                      // Obtener el blob desde la URL
+                                      const blobResponse = await fetch(producto.imagen)
+                                      const blob = await blobResponse.blob()
+                                      
+                                      // Crear un File desde el blob
+                                      const file = new File([blob], 'imagen.jpg', { type: blob.type })
+                                      
+                                      // Subir a Supabase
+                                      const formData = new FormData()
+                                      formData.append('file', file)
+                                      
+                                      const uploadResponse = await fetch('/api/cotizaciones/image', {
+                                        method: 'POST',
+                                        body: formData
+                                      })
+                                      
+                                      const uploadData = await uploadResponse.json()
+                                      
+                                      if (uploadData.success && uploadData.data.publicUrl) {
+                                        console.log('✅ Imagen blob subida correctamente:', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
+                                        // Revocar la URL blob
+                                        URL.revokeObjectURL(producto.imagen)
+                                      } else {
+                                        throw new Error(uploadData.error || 'Error al subir imagen')
+                                      }
+                                    } catch (uploadError) {
+                                      console.error('❌ Error subiendo imagen blob:', uploadError)
+                                      // Si falla, intentar con File si existe
+                                      const productoConFile = productosList.find(
+                                        (item): item is ProductoItem => 
+                                          item.id === producto.id && 
+                                          item.tipo === 'producto' &&
+                                          !!(item as ProductoItem).imagenFile
+                                      ) as ProductoItem | undefined
+                                      
+                                      if (productoConFile?.imagenFile) {
+                                        const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
+                                        actualizarProducto(producto.id, 'imagen', newBlobUrl)
+                                      } else {
+                                        e.currentTarget.style.display = 'none'
+                                      }
+                                    }
+                                  } else if (producto.imagenFile) {
+                                    // Si hay un File pero no se ha subido, subirlo
+                                    try {
+                                      const formData = new FormData()
+                                      formData.append('file', producto.imagenFile)
+                                      
+                                      const uploadResponse = await fetch('/api/cotizaciones/image', {
+                                        method: 'POST',
+                                        body: formData
+                                      })
+                                      
+                                      const uploadData = await uploadResponse.json()
+                                      
+                                      if (uploadData.success && uploadData.data.publicUrl) {
+                                        actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
+                                        actualizarProducto(producto.id, 'imagenFile', undefined)
+                                      }
+                                    } catch (uploadError) {
+                                      console.error('❌ Error subiendo imagenFile:', uploadError)
+                                    }
+                                  } else if (producto.imagenOriginalUrl && producto.imagenOriginalUrl !== producto.imagen && !producto.imagenOriginalUrl.startsWith('blob:')) {
+                                    // Si hay una URL original diferente y válida, intentar usarla
+                                    console.log('🔄 Intentando cargar URL original:', producto.imagenOriginalUrl)
+                                    actualizarProducto(producto.id, 'imagen', producto.imagenOriginalUrl)
                                   } else {
-                                    // Si no hay File, ocultar la imagen
+                                    // Si no hay File ni URL original válida, ocultar
+                                    console.warn('⚠️ No se pudo cargar la imagen, ocultando')
                                     e.currentTarget.style.display = 'none'
                                   }
                                 }}

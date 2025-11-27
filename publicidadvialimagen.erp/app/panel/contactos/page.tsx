@@ -84,15 +84,14 @@ export default function ContactosPage() {
 
   const fetchSalesOwners = async () => {
     try {
-      const response = await fetch("/api/ajustes/usuarios?pageSize=100")
+      const response = await fetch("/api/public/comerciales")
       if (response.ok) {
         const data = await response.json()
         const users = data.users || []
-        // Filtrar solo usuarios que tienen marcada la opción vendedor
-        const vendedores = users.filter((user: any) => user.vendedor)
+        // El endpoint ya filtra solo vendedores, no necesitamos filtrar de nuevo
         const ownersMap: Record<string, string> = {}
         const ownersDataMap: Record<string, any> = {}
-        vendedores.forEach((user: any) => {
+        users.forEach((user: any) => {
           ownersMap[user.id] = user.nombre || user.name || ""
           ownersDataMap[user.id] = user
         })

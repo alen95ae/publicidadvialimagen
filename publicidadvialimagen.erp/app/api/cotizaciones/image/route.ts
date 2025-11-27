@@ -7,6 +7,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
+    const lineaId = formData.get('lineaId') as string | null
 
     if (!file) {
       console.error('❌ [UPLOAD COTIZACION] No se recibió archivo')
@@ -95,10 +96,32 @@ export async function POST(request: NextRequest) {
         
         console.log('✅ [UPLOAD COTIZACION] Imagen subida correctamente (retry):', publicUrlData.publicUrl)
         
+        // Si se proporcionó un lineaId, actualizar la línea en la BD
+        // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+        if (lineaId) {
+          try {
+            const { error: updateError } = await supabase
+              .from('cotizacion_lineas')
+              .update({
+                imagen: publicUrlData.publicUrl
+              })
+              .eq('id', lineaId)
+
+            if (updateError) {
+              console.warn('⚠️ [UPLOAD COTIZACION] Error actualizando línea en BD (retry):', updateError)
+            } else {
+              console.log('✅ [UPLOAD COTIZACION] Línea actualizada en BD (retry):', lineaId)
+            }
+          } catch (updateError) {
+            console.warn('⚠️ [UPLOAD COTIZACION] Error actualizando línea (retry):', updateError)
+          }
+        }
+        
         return NextResponse.json({
           success: true,
           data: {
-            publicUrl: publicUrlData.publicUrl
+            publicUrl: publicUrlData.publicUrl,
+            lineaId: lineaId || null
           }
         })
       }
@@ -115,13 +138,38 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ [UPLOAD COTIZACION] Imagen subida correctamente:', {
       path: path,
-      publicUrl: publicUrl
+      publicUrl: publicUrl,
+      lineaId: lineaId || 'no proporcionado'
     })
+
+    // Si se proporcionó un lineaId, actualizar la línea en la BD
+    // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
+    if (lineaId) {
+      try {
+        const { error: updateError } = await supabase
+          .from('cotizacion_lineas')
+          .update({
+            imagen: publicUrl
+          })
+          .eq('id', lineaId)
+
+        if (updateError) {
+          console.warn('⚠️ [UPLOAD COTIZACION] Error actualizando línea en BD:', updateError)
+          // No fallar, solo advertir - la URL se retornará al frontend
+        } else {
+          console.log('✅ [UPLOAD COTIZACION] Línea actualizada en BD:', lineaId)
+        }
+      } catch (updateError) {
+        console.warn('⚠️ [UPLOAD COTIZACION] Error actualizando línea:', updateError)
+        // Continuar sin fallar
+      }
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        publicUrl: publicUrl
+        publicUrl: publicUrl,
+        lineaId: lineaId || null
       }
     })
 

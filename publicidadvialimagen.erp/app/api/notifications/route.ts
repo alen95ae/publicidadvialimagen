@@ -34,8 +34,21 @@ export async function GET() {
     let solicitudes: any[] = [];
     try {
       const allSolicitudes = await getAllSolicitudes();
-      solicitudes = allSolicitudes
-        .filter((s) => s.estado === "Nueva")
+      console.log(`📊 [NOTIFICACIONES] Solicitudes obtenidas de BD: ${allSolicitudes.length}`);
+      
+      // Filtrar solo las que tienen estado EXACTAMENTE "Nueva"
+      const solicitudesNuevas = allSolicitudes.filter((s) => {
+        const estado = s.estado?.trim();
+        const esNueva = estado === "Nueva";
+        if (!esNueva && estado) {
+          console.log(`⚠️ [NOTIFICACIONES] Solicitud ${s.codigo} tiene estado "${estado}" (no es "Nueva")`);
+        }
+        return esNueva;
+      });
+      
+      console.log(`📊 [NOTIFICACIONES] Solicitudes con estado "Nueva": ${solicitudesNuevas.length}`);
+      
+      solicitudes = solicitudesNuevas
         .slice(0, 10)
         .map((s) => ({
           id: s.id || s.codigo,
@@ -46,9 +59,9 @@ export async function GET() {
           fecha: s.fechaCreacion || new Date().toISOString(),
           link: `/panel/ventas/solicitudes/${s.codigo}`,
         }));
-      console.log(`✅ Notificaciones: ${solicitudes.length} solicitudes nuevas desde Supabase`);
+      console.log(`✅ [NOTIFICACIONES] Solicitudes nuevas procesadas: ${solicitudes.length}`);
     } catch (error) {
-      console.error("Error fetching solicitudes from Supabase:", error);
+      console.error("❌ [NOTIFICACIONES] Error fetching solicitudes from Supabase:", error);
     }
 
     // Combinar y ordenar por fecha

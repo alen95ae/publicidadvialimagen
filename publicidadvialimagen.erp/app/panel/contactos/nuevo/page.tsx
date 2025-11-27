@@ -45,13 +45,12 @@ export default function NuevoContactoPage() {
 
   const fetchSalesOwners = async () => {
     try {
-      const response = await fetch("/api/ajustes/usuarios?pageSize=100")
+      const response = await fetch("/api/public/comerciales")
       if (response.ok) {
         const data = await response.json()
         const users = data.users || []
-        // Filtrar solo usuarios que tienen marcada la opción vendedor
-        const vendedores = users.filter((user: any) => user.vendedor)
-        setSalesOwners(vendedores.map((user: any) => ({
+        // El endpoint ya filtra solo vendedores, no necesitamos filtrar de nuevo
+        setSalesOwners(users.map((user: any) => ({
           id: user.id,
           name: user.nombre || user.name || "",
           email: user.email || ""

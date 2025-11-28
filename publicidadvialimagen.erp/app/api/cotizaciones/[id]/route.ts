@@ -60,26 +60,42 @@ export async function PATCH(
     const lineas = body.lineas
     delete body.lineas
 
-    // Limpiar campos que no existen en Supabase
-    const { vigencia_dias, notas_generales, terminos_condiciones, ...camposLimpios } = body
+    // REGLA 10: Si viene total_final del frontend (usuario editó manualmente el Total General),
+    // ese valor ya incluye IVA/IT y debe usarse DIRECTAMENTE sin recalcular
+    const totalFinalManual = body.total_final
 
-    // Calcular totales si vienen líneas
+    // Limpiar campos que no existen en Supabase
+    const { vigencia_dias, notas_generales, terminos_condiciones, total_final, ...camposLimpios } = body
+
+    // ============================================================================
+    // NUEVA LÓGICA: subtotal_linea YA es el total final (incluye impuestos si están activos)
+    // El backend NO suma impuestos adicionales
+    // ============================================================================
     if (lineas && Array.isArray(lineas)) {
       let subtotal = 0
       let totalIVA = 0
       let totalIT = 0
+      let totalFinal = 0
 
       lineas.forEach((linea: any) => {
-        // Solo productos tienen subtotal
+        // Solo productos tienen subtotal_linea (que YA es el total final)
         if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
-          const lineaSubtotal = linea.subtotal_linea || 0
-          subtotal += lineaSubtotal
-
-          if (linea.con_iva) {
-            totalIVA += lineaSubtotal * 0.13
-          }
-          if (linea.con_it) {
-            totalIT += lineaSubtotal * 0.03
+          const lineaTotal = linea.subtotal_linea || 0
+          subtotal += lineaTotal
+          
+          // Calcular IVA e IT para el desglose (solo informativo)
+          // Si con_iva y con_it están activos, el subtotal_linea ya los incluye
+          // Calculamos la base sin impuestos para el desglose
+          if (linea.con_iva && linea.con_it) {
+            const base = lineaTotal / 1.16
+            totalIVA += base * 0.13
+            totalIT += base * 0.03
+          } else if (linea.con_iva) {
+            const base = lineaTotal / 1.13
+            totalIVA += base * 0.13
+          } else if (linea.con_it) {
+            const base = lineaTotal / 1.03
+            totalIT += base * 0.03
           }
         }
       })
@@ -87,7 +103,17 @@ export async function PATCH(
       camposLimpios.subtotal = subtotal
       camposLimpios.total_iva = totalIVA
       camposLimpios.total_it = totalIT
-      camposLimpios.total_final = subtotal + totalIVA + totalIT
+      
+      // REGLA 10: Si hay total_final manual, usarlo DIRECTAMENTE
+      // Si no, usar la suma de subtotal_linea (que ya son totales finales)
+      if (totalFinalManual !== undefined && totalFinalManual !== null) {
+        camposLimpios.total_final = totalFinalManual
+        console.log('💰 Backend PATCH: Usando total_final manual (NO recalcula):', totalFinalManual)
+      } else {
+        camposLimpios.total_final = subtotal // subtotal_linea ya incluye impuestos si están activos
+        console.log('💰 Backend PATCH: Usando suma de subtotal_linea (ya son totales finales):', camposLimpios.total_final)
+      }
+      
       camposLimpios.cantidad_items = lineas.length
       camposLimpios.lineas_cotizacion = lineas.length
     }

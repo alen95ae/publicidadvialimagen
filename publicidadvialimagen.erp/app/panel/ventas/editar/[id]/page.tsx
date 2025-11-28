@@ -121,6 +121,8 @@ export default function EditarCotizacionPage() {
     return ancho * alto
   }
 
+  // Calcular total: el valor YA incluye impuestos si conIVA/conIT están activos
+  // Solo se RESTAN impuestos cuando se desmarcan los toggles
   const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, conIVA: boolean, conIT: boolean, esSoporte: boolean = false, udm?: string) => {
     // Para soportes: cantidad × precio (sin totalM2)
     // Para productos con unidad m²: cantidad × totalM2 × precio
@@ -140,18 +142,165 @@ export default function EditarCotizacionPage() {
     
     const comisionTotal = subtotal * (comision / 100)
     
-    // Si no tiene IVA, descontar 13%
+    // Si no tiene IVA, descontar 13% (el total YA incluye IVA si está activo)
     if (!conIVA) {
       subtotal = subtotal * (1 - 0.13)
     }
     
-    // Si no tiene IT, descontar 3%
+    // Si no tiene IT, descontar 3% (el total YA incluye IT si está activo)
     if (!conIT) {
       subtotal = subtotal * (1 - 0.03)
     }
     
     return subtotal + comisionTotal
   }
+
+  // ============================================================================
+  // FUNCIÓN UNIFICADA: Normalizar línea importada (Odoo, CSV, etc.)
+  // ============================================================================
+  const normalizarLineaImportada = (linea: any, index: number): ProductoItem | null => {
+    // REGLA 1: Detectar si es línea de producto
+    const esProducto = linea.tipo === 'Producto' || 
+                       linea.tipo === 'producto' || 
+                       !!(linea.nombre_producto || linea.codigo_producto)
+    
+    if (!esProducto) {
+      return null // No es una línea de producto
+    }
+    
+    // REGLA 3: Detectar si es línea importada desde Odoo
+    // - viene de Supabase (siempre es true cuando se carga desde /api/cotizaciones/[id])
+    // - tiene total > 0
+    // - tiene nombre_producto o codigo_producto
+    const totalLinea = linea.total || 0
+    const esImportada = totalLinea > 0 && !!(linea.nombre_producto || linea.codigo_producto)
+    
+    // Parsear variantes si vienen como string
+    let variantes = null
+    if (linea.variantes) {
+      if (typeof linea.variantes === 'string') {
+        try {
+          variantes = JSON.parse(linea.variantes)
+        } catch (e) {
+          variantes = null
+        }
+      } else {
+        variantes = linea.variantes
+      }
+    }
+    
+    // REGLA PRINCIPAL: subtotal_linea YA es el total final (incluye impuestos si están activos)
+    let totalFinal: number
+    
+    if (esImportada) {
+      // REGLA PRINCIPAL: Si es importada, subtotal_linea YA es el total final
+      // NO dividir por 1.16, usar directamente el valor que viene
+      if (linea.subtotal_linea !== undefined && linea.subtotal_linea !== null && linea.subtotal_linea > 0) {
+        // Ya tiene subtotal_linea, usarlo directamente (ya es el total final)
+        totalFinal = linea.subtotal_linea
+      } else {
+        // Si no tiene subtotal_linea, usar total (que ya incluye impuestos)
+        totalFinal = totalLinea
+      }
+      
+      // REGLA 5: IVA e IT siempre TRUE en importados
+      const conIVA = true
+      const conIT = true
+      
+      // REGLA PRINCIPAL: producto.total es el valor FINAL (ya incluye impuestos)
+      return {
+        id: linea.id || `imported-${index + 1}`,
+        tipo: 'producto' as const,
+        producto: linea.codigo_producto && linea.nombre_producto 
+          ? `${linea.codigo_producto} - ${linea.nombre_producto}`
+          : linea.producto || linea.nombre_producto || '',
+        imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+          ? linea.imagen 
+          : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+            ? linea.imagen_url 
+            : undefined,
+        imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+          ? linea.imagen 
+          : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+            ? linea.imagen_url 
+            : undefined,
+        descripcion: linea.descripcion || '',
+        cantidad: linea.cantidad || 1,
+        ancho: linea.ancho || 0,
+        alto: linea.alto || 0,
+        totalM2: linea.total_m2 || linea.totalM2 || 0,
+        udm: (linea.unidad_medida === 'm2' ? 'm²' : (linea.unidad_medida || linea.udm || 'm²')),
+        precio: linea.precio_unitario || linea.precio || 0,
+        comision: linea.comision_porcentaje || linea.comision || 0,
+        conIVA: conIVA,
+        conIT: conIT,
+        // REGLA PRINCIPAL: producto.total es el valor FINAL (ya incluye impuestos)
+        total: totalFinal,
+        totalManual: null, // Se establecerá desde total_final de BD
+        esSoporte: linea.es_soporte || linea.esSoporte || false,
+        dimensionesBloqueadas: linea.es_soporte || linea.esSoporte || false,
+        variantes: variantes
+      }
+    } else {
+      // Línea NO importada (cotización creada en el ERP)
+      // Usar valores normales
+      let conIVAValue = linea.con_iva
+      if (conIVAValue === "0" || conIVAValue === 0 || conIVAValue === "false" || conIVAValue === false) {
+        conIVAValue = false
+      } else {
+        conIVAValue = true
+      }
+      
+      let conITValue = linea.con_it
+      if (conITValue === "0" || conITValue === 0 || conITValue === "false" || conITValue === false) {
+        conITValue = false
+      } else {
+        conITValue = true
+      }
+      
+      const conIVA = conIVAValue === false ? false : true
+      const conIT = conITValue === false ? false : true
+      
+      // Usar subtotal_linea si existe, sino usar total, sino 0
+      const subtotalLinea = linea.subtotal_linea !== undefined && linea.subtotal_linea !== null 
+        ? linea.subtotal_linea 
+        : (linea.total !== undefined && linea.total !== null ? linea.total : 0)
+      
+      return {
+        id: linea.id || `${index + 1}`,
+        tipo: 'producto' as const,
+        producto: linea.codigo_producto && linea.nombre_producto 
+          ? `${linea.codigo_producto} - ${linea.nombre_producto}`
+          : linea.producto || linea.nombre_producto || '',
+        imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+          ? linea.imagen 
+          : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+            ? linea.imagen_url 
+            : undefined,
+        imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
+          ? linea.imagen 
+          : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
+            ? linea.imagen_url 
+            : undefined,
+        descripcion: linea.descripcion || '',
+        cantidad: linea.cantidad || 1,
+        ancho: linea.ancho || 0,
+        alto: linea.alto || 0,
+        totalM2: linea.total_m2 || linea.totalM2 || 0,
+        udm: (linea.unidad_medida === 'm2' ? 'm²' : (linea.unidad_medida || linea.udm || 'm²')),
+        precio: linea.precio_unitario || linea.precio || 0,
+        comision: linea.comision_porcentaje || linea.comision || 0,
+        conIVA: conIVA,
+        conIT: conIT,
+        total: subtotalLinea,
+        totalManual: subtotalLinea,
+        esSoporte: linea.es_soporte || linea.esSoporte || false,
+        dimensionesBloqueadas: linea.es_soporte || linea.esSoporte || false,
+        variantes: variantes
+      }
+    }
+  }
+
 
   // Función para calcular el precio ajustado según variantes de mano de obra
   const calcularPrecioConVariantes = async (precioBase: number, item: any, variantes: Record<string, string>): Promise<number> => {
@@ -375,6 +524,9 @@ export default function EditarCotizacionPage() {
   }
 
   const actualizarProducto = (id: string, campo: keyof ProductoItem, valor: any) => {
+    // Detectar si se está cambiando un campo que afecta el total
+    const campoAfectaTotal = ['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm', 'total'].includes(campo)
+    
     // Usar forma funcional de setState para preservar referencias a URLs blob
     setProductosList(prevList => prevList.map(item => {
       if (item.id === id && item.tipo === 'producto') {
@@ -419,24 +571,23 @@ export default function EditarCotizacionPage() {
           // Resetear total manual del producto para que use el calculado
           productoActualizado.totalManual = null
         }
-        
-        // Si se cambia cualquier campo del producto, resetear el total manual general para que se recalcule
-        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm', 'total'].includes(campo)) {
-          // Resetear total manual general para que use el calculado
-          setTotalManual(null)
-        }
-        
-        // Si se está editando el campo 'total', permitir cualquier valor (validación en onBlur)
-        if (campo === 'total') {
+        // Si se está editando el campo 'total' manualmente
+        else if (campo === 'total') {
           const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
-          productoActualizado.totalManual = valorNum
           productoActualizado.total = valorNum
+          productoActualizado.totalManual = valorNum
         }
         
         return productoActualizado
       }
       return item
     }))
+    
+    // Resetear totalManual del Total General DESPUÉS de actualizar productosList
+    // para que el total general se recalcule automáticamente cuando cambian los productos
+    if (campoAfectaTotal) {
+      setTotalManual(null)
+    }
   }
 
   // Estado para el combobox de productos/soportes
@@ -548,80 +699,56 @@ export default function EditarCotizacionPage() {
       // Guardar los nombres directamente (lazy loading)
       setCliente(cotizacion.cliente || '')
       setVendedor(cotizacion.vendedor || '')
-      
-      // Inicializar total manual con el total_final de la base de datos
-      if (cotizacion.total_final !== null && cotizacion.total_final !== undefined) {
-        setTotalManual(cotizacion.total_final)
-      }
 
-      // Cargar líneas desde JSON (ya vienen parseadas)
+      // Inicializar Total General con total_final de Supabase
+      // IMPORTANTE: Esto debe hacerse DESPUÉS de cargar las líneas para que no se sobrescriba
+      // Guardamos el valor para establecerlo después
+      const totalFinalDeBD = cotizacion.total_final !== undefined && cotizacion.total_final !== null 
+        ? cotizacion.total_final 
+        : null
+      
+      // ============================================================================
+      // CARGAR LÍNEAS usando función unificada normalizarLineaImportada
+      // ============================================================================
       if (lineas && lineas.length > 0) {
         const lineasConvertidas: ItemLista[] = lineas.map((linea: any, index: number) => {
-          // DETECCIÓN MEJORADA: Si tiene campos de producto, es un PRODUCTO (incluso si tipo no está definido)
-          // Esto corrige el problema con cotizaciones importadas de Odoo que no tienen tipo definido
-          const tieneCamposProducto = (linea.nombre_producto || linea.codigo_producto) && 
-                                      (linea.cantidad > 0 || linea.ancho || linea.alto || 
-                                       (linea.subtotal_linea && linea.subtotal_linea > 0) || 
-                                       (linea.precio_unitario && linea.precio_unitario > 0))
+          // Intentar normalizar como producto
+          const productoNormalizado = normalizarLineaImportada(linea, index)
+          if (productoNormalizado) {
+            return productoNormalizado
+          }
           
-          // Si tiene campos de producto, tratar como PRODUCTO (compatibilidad con Odoo y formato antiguo)
-          if (tieneCamposProducto || linea.tipo === 'Producto' || linea.tipo === 'producto') {
-            // Formato antiguo/importado: tiene codigo_producto, nombre_producto, etc.
-            if (linea.codigo_producto || linea.nombre_producto) {
-              // Parsear variantes si vienen como string
-              let variantes = null
-              if (linea.variantes) {
-                if (typeof linea.variantes === 'string') {
-                  try {
-                    variantes = JSON.parse(linea.variantes)
-                  } catch (e) {
-                    console.warn('Error parseando variantes:', e)
-                    variantes = null
-                  }
-                } else {
-                  variantes = linea.variantes
-                }
-              }
-
+          // Si es nota
+          if (linea.tipo === 'Nota' || linea.tipo === 'nota') {
+            return {
+              id: linea.id || `${index + 1}`,
+              tipo: 'nota' as const,
+              texto: linea.texto || linea.descripcion || ''
+            }
+          }
+          
+          // Si es sección
+          if (linea.tipo === 'Sección' || linea.tipo === 'Seccion' || linea.tipo === 'seccion') {
               return {
                 id: linea.id || `${index + 1}`,
-                tipo: 'producto' as const,
-                producto: linea.codigo_producto && linea.nombre_producto 
-                  ? `${linea.codigo_producto} - ${linea.nombre_producto}`
-                  : linea.producto || linea.nombre_producto || '',
-                // Asegurar que solo se use URL pública, nunca blob
-                imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
-                  ? linea.imagen 
-                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
-                    ? linea.imagen_url 
-                    : undefined,
-                imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
-                  ? linea.imagen 
-                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
-                    ? linea.imagen_url 
-                    : undefined,
-                descripcion: linea.descripcion || '',
-                cantidad: linea.cantidad || 1,
-                ancho: linea.ancho || 0,
-                alto: linea.alto || 0,
-                totalM2: linea.total_m2 || linea.totalM2 || 0,
-                udm: (linea.unidad_medida === 'm2' ? 'm²' : (linea.unidad_medida || linea.udm || 'm²')),
-                precio: linea.precio_unitario || linea.precio || 0,
-                comision: linea.comision_porcentaje || linea.comision || 0,
-                conIVA: linea.con_iva !== undefined ? linea.con_iva : (linea.conIVA !== undefined ? linea.conIVA : true),
-                conIT: linea.con_it !== undefined ? linea.con_it : (linea.conIT !== undefined ? linea.conIT : true),
-                total: linea.subtotal_linea || linea.total || 0,
-                esSoporte: linea.es_soporte || linea.esSoporte || false,
-                dimensionesBloqueadas: linea.es_soporte || linea.esSoporte || false,
-                variantes: variantes
-              }
+              tipo: 'seccion' as const,
+              texto: linea.texto || linea.nombre_producto || ''
             }
-            // Formato nuevo: ya viene como ProductoItem desde JSON
+          }
+          
+          // Fallback para formato nuevo (sin campos Odoo)
+          // Intentar normalizar también con la función unificada
+          if (linea.tipo === 'producto' && linea.producto !== undefined) {
+            const productoNormalizadoFallback = normalizarLineaImportada(linea, index)
+            if (productoNormalizadoFallback) {
+              return productoNormalizadoFallback
+            }
+            
+            // Si la función no lo normalizó, crear producto básico
             return {
               id: linea.id || `${index + 1}`,
               tipo: 'producto' as const,
               producto: linea.producto || '',
-              // Asegurar que solo se use URL pública, nunca blob
               imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
                 ? linea.imagen 
                 : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
@@ -643,67 +770,37 @@ export default function EditarCotizacionPage() {
               conIVA: linea.conIVA !== undefined ? linea.conIVA : true,
               conIT: linea.conIT !== undefined ? linea.conIT : true,
               total: linea.total || 0,
+              totalManual: linea.total || 0,
               esSoporte: linea.esSoporte || false,
               dimensionesBloqueadas: linea.dimensionesBloqueadas || linea.esSoporte || false
             }
-          } else if (linea.tipo === 'Nota' || linea.tipo === 'nota') {
-            return {
-              id: linea.id || `${index + 1}`,
-              tipo: 'nota' as const,
-              texto: linea.texto || linea.descripcion || ''
             }
-          } else if (linea.tipo === 'Sección' || linea.tipo === 'Seccion' || linea.tipo === 'seccion') {
-            // Solo tratar como sección si explícitamente es tipo Sección
+          
+          // Último recurso: sección vacía
             return {
               id: linea.id || `${index + 1}`,
               tipo: 'seccion' as const,
               texto: linea.texto || linea.nombre_producto || ''
-            }
-          } else {
-            // Fallback: Si no se puede determinar, tratar como producto si tiene nombre_producto
-            // Esto asegura que las líneas importadas de Odoo se reconozcan como productos
-            if (linea.nombre_producto) {
-              return {
-                id: linea.id || `${index + 1}`,
-                tipo: 'producto' as const,
-                producto: linea.nombre_producto,
-                // Asegurar que solo se use URL pública, nunca blob
-                imagen: (linea.imagen && !linea.imagen.startsWith('blob:')) 
-                  ? linea.imagen 
-                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
-                    ? linea.imagen_url 
-                    : undefined,
-                imagenOriginalUrl: (linea.imagen && !linea.imagen.startsWith('blob:')) 
-                  ? linea.imagen 
-                  : (linea.imagen_url && !linea.imagen_url.startsWith('blob:')) 
-                    ? linea.imagen_url 
-                    : undefined,
-                descripcion: linea.descripcion || '',
-                cantidad: linea.cantidad || 1,
-                ancho: linea.ancho || 0,
-                alto: linea.alto || 0,
-                totalM2: linea.total_m2 || 0,
-                udm: (linea.unidad_medida === 'm2' ? 'm²' : (linea.unidad_medida || 'm²')),
-                precio: linea.precio_unitario || 0,
-                comision: linea.comision_porcentaje || linea.comision || 0,
-                conIVA: linea.con_iva !== undefined ? linea.con_iva : true,
-                conIT: linea.con_it !== undefined ? linea.con_it : true,
-                total: linea.subtotal_linea || 0,
-                esSoporte: linea.es_soporte || false,
-                dimensionesBloqueadas: linea.es_soporte || false
-              }
-            }
-            // Último recurso: sección
-            return {
-              id: linea.id || `${index + 1}`,
-              tipo: 'seccion' as const,
-              texto: linea.texto || linea.nombre_producto || ''
-            }
           }
         })
         setProductosList(lineasConvertidas)
       } else {
         setProductosList([])
+      }
+      
+      // ============================================================================
+      // REGLA ABSOLUTA: Establecer totalManual DESPUÉS de cargar las líneas
+      // El Total General DEBE mostrar SIEMPRE el total_final de Supabase
+      // ============================================================================
+      if (totalFinalDeBD !== null) {
+        // Usar setTimeout para asegurar que se establece después de que React actualice el estado
+        setTimeout(() => {
+          setTotalManual(totalFinalDeBD)
+          console.log('💰 total_final de BD:', totalFinalDeBD)
+          console.log('✅ totalManual establecido con total_final de BD')
+        }, 0)
+      } else {
+        console.log('⚠️ No hay total_final en BD, se calculará desde subtotales')
       }
 
       toast.success('Cotización cargada correctamente')
@@ -1065,13 +1162,14 @@ export default function EditarCotizacionPage() {
     }
   }, [modalFechasSoporte.fechaInicio, modalFechasSoporte.meses])
 
-  // Calcular total de cada producto (usando manual si existe y es mayor)
+  // Calcular total de cada producto y el total calculado (precio mínimo esperado)
   const productosConTotal = productosList
     .filter((item): item is ProductoItem => item.tipo === 'producto')
     .map(producto => {
       // Detectar unidades (case-insensitive y considerar singular/plural)
       const udmLower = producto.udm?.toLowerCase().trim() || ''
       const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+      // Total calculado es el subtotal sin impuestos (precio mínimo por línea)
       const totalCalculado = calcularTotal(
         producto.cantidad,
         producto.totalM2,
@@ -1079,27 +1177,45 @@ export default function EditarCotizacionPage() {
         producto.comision,
         producto.conIVA,
         producto.conIT,
-        producto.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
+        producto.esSoporte || esUnidades,
         producto.udm
       )
       return {
         ...producto,
-        totalFinal: producto.totalManual !== null && producto.totalManual !== undefined && producto.totalManual >= totalCalculado 
-          ? producto.totalManual 
-          : totalCalculado
+        totalCalculado
       }
     })
   
-  const totalCalculado = productosConTotal.reduce((sum, producto) => sum + producto.totalFinal, 0)
+  // Total calculado mínimo: suma de subtotales calculados (sin impuestos)
+  const totalCalculado = productosConTotal.reduce((sum, producto) => sum + (producto.totalCalculado || 0), 0)
   
-  // Total general: usar manual si está disponible (viene de total_final de BD), sino usar calculado
-  const totalGeneral = totalManual !== null && totalManual !== undefined ? totalManual : totalCalculado
+  // ============================================================================
+  // REGLA PRINCIPAL: producto.total YA incluye impuestos si IVA/IT están activos
+  // Total General = suma de producto.total (valores finales que ve el usuario)
+  // O si hay totalManual (total_final de BD), usar ese directamente
+  // ============================================================================
+  // Total general real: suma de los totales de cada línea (que YA incluyen impuestos si están activos)
+  const totalGeneralReal = productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+  
+  // REGLA 6: totalGeneral SIEMPRE respeta totalManual si existe
+  // totalGeneralReal SOLO se usa como fallback en cotizaciones nuevas sin total_final
+  // Si totalManual es null, usar totalGeneralReal (suma automática de productos)
+  // Cuando cambian los productos, setTotalManual(null) resetea el total manual
+  // para que el total general se recalcule automáticamente desde totalGeneralReal
+  const totalGeneral = totalManual !== null && totalManual !== undefined ? totalManual : totalGeneralReal
+  
+  // Logs para depuración
+  if (totalManual !== null && totalManual !== undefined) {
+    console.log('🎯 totalManual final:', totalManual)
+    console.log('📦 totalGeneralReal:', totalGeneralReal)
+    console.log('💰 totalGeneral mostrado:', totalGeneral)
+  }
   
   // Handler para cambio del total manual (permite cualquier valor)
   const handleTotalChange = (valor: string) => {
     const valorNum = parseFloat(valor) || 0
-    setTotalManual(valorNum)
-  }
+      setTotalManual(valorNum)
+    }
   
   // Handler para onBlur del total general
   const handleTotalBlur = (valor: string) => {
@@ -1130,9 +1246,10 @@ export default function EditarCotizacionPage() {
       }
 
       // Validar que ningún producto tenga un total menor al calculado
+      // Validar cada producto individualmente
       for (const producto of productos) {
         const esUnidades = producto.udm?.toLowerCase().trim() === 'unidad' || producto.udm?.toLowerCase().trim() === 'unidades' || producto.udm?.toLowerCase().trim() === 'unidade'
-        const totalCalculado = calcularTotal(
+        const subtotalCalculado = calcularTotal(
           producto.cantidad,
           producto.totalM2,
           producto.precio,
@@ -1143,11 +1260,19 @@ export default function EditarCotizacionPage() {
           producto.udm
         )
         
-        if (producto.total < totalCalculado) {
-          toast.error(`El producto "${producto.producto}" tiene un total (${producto.total}) menor al precio calculado (${totalCalculado.toFixed(2)}). Por favor corrige el precio antes de guardar.`)
+        // Tolerancia del 1% para redondeos
+        if (producto.total < subtotalCalculado * 0.99) {
+          toast.error(`El producto "${producto.producto}" tiene un subtotal (${producto.total.toFixed(2)}) menor al calculado (${subtotalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
           setGuardando(false)
           return
         }
+      }
+
+      // Validar que el total general no sea menor al calculado
+      if (totalGeneralReal < totalCalculado * 0.99) {
+        toast.error(`El total general (${totalGeneralReal.toFixed(2)}) es menor al calculado (${totalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
+        setGuardando(false)
+        return
       }
 
       setGuardando(true)
@@ -1218,6 +1343,14 @@ export default function EditarCotizacionPage() {
       const lineas = productosList.map((item, index) => {
         if (item.tipo === 'producto') {
           const producto = item as ProductoItem
+          
+          // REGLA 2: subtotal_linea enviado = EXACTAMENTE el total que la UI está mostrando
+          // Si producto.totalManual existe → usar ese
+          // Si no existe → usar producto.total
+          const subtotalLineaEnviar = producto.totalManual !== null && producto.totalManual !== undefined
+            ? producto.totalManual
+            : producto.total
+          
           return {
             tipo: 'Producto' as const,
             codigo_producto: producto.producto.split(' - ')[0] || '',
@@ -1238,7 +1371,8 @@ export default function EditarCotizacionPage() {
             // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
             imagen: producto.imagen && !producto.imagen.startsWith('blob:') ? producto.imagen : null,
             variantes: producto.variantes || null,
-            subtotal_linea: producto.total
+            // REGLA 2: Enviar EXACTAMENTE el total que la UI muestra (sin recalcular)
+            subtotal_linea: subtotalLineaEnviar
           }
         } else if (item.tipo === 'nota') {
           const nota = item as NotaItem
@@ -1296,7 +1430,7 @@ export default function EditarCotizacionPage() {
         return
       }
 
-      const cotizacionData = {
+      const cotizacionData: any = {
         codigo: codigoCotizacion,
         cliente: clienteNombre,
         vendedor: vendedorNombre,
@@ -1304,6 +1438,15 @@ export default function EditarCotizacionPage() {
         estado: 'Pendiente' as const,
         vigencia_dias: parseInt(vigencia) || 30,
         lineas
+      }
+      
+      // REGLA 9: El valor final enviado al backend debe ser:
+      // total_manual !== null ? total_manual : totalGeneralReal
+      if (totalManual !== null && totalManual !== undefined) {
+        cotizacionData.total_final = totalManual
+        console.log('💰 Enviando total_final al backend (desde totalManual):', totalManual)
+      } else {
+        console.log('⚠️ No hay totalManual, se calculará desde subtotales')
       }
 
       // PATCH en lugar de POST
@@ -1524,6 +1667,12 @@ export default function EditarCotizacionPage() {
     try {
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
+        return
+      }
+
+      // Validar que el subtotal general no sea menor al calculado (con tolerancia del 1%)
+      if (totalGeneralReal < totalCalculado * 0.99) {
+        toast.error(`No se puede descargar. El subtotal (${totalGeneralReal.toFixed(2)}) es menor al calculado (${totalCalculado.toFixed(2)}). Por favor corrige antes de descargar.`)
         return
       }
 

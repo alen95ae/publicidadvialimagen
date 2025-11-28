@@ -152,6 +152,8 @@ export default function NuevaCotizacionPage() {
     return ancho * alto
   }
 
+  // Calcular total: el valor YA incluye impuestos si conIVA/conIT están activos
+  // Solo se RESTAN impuestos cuando se desmarcan los toggles
   const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, conIVA: boolean, conIT: boolean, esSoporte: boolean = false, udm?: string) => {
     // Para soportes: cantidad × precio (sin totalM2)
     // Para productos con unidad m²: cantidad × totalM2 × precio
@@ -171,18 +173,19 @@ export default function NuevaCotizacionPage() {
     
     const comisionTotal = subtotal * (comision / 100)
     
-    // Si no tiene IVA, descontar 13%
+    // Si no tiene IVA, descontar 13% (el total YA incluye IVA si está activo)
     if (!conIVA) {
       subtotal = subtotal * (1 - 0.13)
     }
     
-    // Si no tiene IT, descontar 3%
+    // Si no tiene IT, descontar 3% (el total YA incluye IT si está activo)
     if (!conIT) {
       subtotal = subtotal * (1 - 0.03)
     }
     
     return subtotal + comisionTotal
   }
+
 
   // Función para calcular el precio ajustado según variantes de mano de obra
   const calcularPrecioConVariantes = async (precioBase: number, item: any, variantes: Record<string, string>): Promise<number> => {
@@ -411,6 +414,9 @@ export default function NuevaCotizacionPage() {
   }
 
   const actualizarProducto = (id: string, campo: keyof ProductoItem, valor: any) => {
+    // Detectar si se está cambiando un campo que afecta el total
+    const campoAfectaTotal = ['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm', 'total'].includes(campo)
+    
     // Usar forma funcional de setState para preservar referencias a URLs blob
     setProductosList(prevList => prevList.map(item => {
       if (item.id === id && item.tipo === 'producto') {
@@ -458,18 +464,23 @@ export default function NuevaCotizacionPage() {
             productoActualizado.total = totalCalculado
           }
         }
-        
-        // Si se está editando el campo 'total', permitir cualquier valor (validación en onBlur)
-        if (campo === 'total') {
+        // Si se está editando el campo 'total' manualmente
+        else if (campo === 'total') {
           const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
-          productoActualizado.totalManual = valorNum
           productoActualizado.total = valorNum
+          productoActualizado.totalManual = valorNum
         }
         
         return productoActualizado
       }
       return item
     }))
+    
+    // Resetear totalManual del Total General DESPUÉS de actualizar productosList
+    // para que el total general se recalcule automáticamente cuando cambian los productos
+    if (campoAfectaTotal) {
+      setTotalManual(null)
+    }
   }
 
   // Estado para el combobox de productos/soportes
@@ -910,11 +921,14 @@ export default function NuevaCotizacionPage() {
     }
   }, [modalFechasSoporte.fechaInicio, modalFechasSoporte.meses])
 
-  // Calcular total de cada producto (usando manual si existe y es mayor)
+  // Calcular total de cada producto para validación
   const productosConTotal = productosList
     .filter((item): item is ProductoItem => item.tipo === 'producto')
     .map(producto => {
-      const esUnidades = producto.udm === 'unidad' || producto.udm === 'unidades'
+      const udmLower = producto.udm?.toLowerCase().trim() || ''
+      const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+      
+      // Total calculado es el subtotal sin impuestos (precio mínimo por línea)
       const totalCalculado = calcularTotal(
         producto.cantidad,
         producto.totalM2,
@@ -922,31 +936,50 @@ export default function NuevaCotizacionPage() {
         producto.comision,
         producto.conIVA,
         producto.conIT,
-        producto.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
+        producto.esSoporte || esUnidades,
         producto.udm
       )
       return {
         ...producto,
-        totalFinal: producto.totalManual !== null && producto.totalManual !== undefined && producto.totalManual >= totalCalculado 
-          ? producto.totalManual 
-          : totalCalculado
+        totalCalculado
       }
     })
   
-  const totalCalculado = productosConTotal.reduce((sum, producto) => sum + producto.totalFinal, 0)
+  // Total calculado mínimo: suma de totales calculados (para validación)
+  const totalCalculado = productosConTotal.reduce((sum, producto) => sum + (producto.totalCalculado || 0), 0)
   
-  // Total general: usar manual si es mayor al calculado, sino usar calculado
-  const totalGeneral = totalManual !== null && totalManual >= totalCalculado ? totalManual : totalCalculado
+  // ============================================================================
+  // REGLA PRINCIPAL: producto.total YA incluye impuestos si IVA/IT están activos
+  // Total General = suma de producto.total (valores finales que ve el usuario)
+  // ============================================================================
+  // Total general real: suma de los totales de cada línea (que YA incluyen impuestos si están activos)
+  const totalGeneralReal = productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+  
+  // REGLA 6: totalGeneral SIEMPRE respeta totalManual si existe
+  // totalGeneralReal SOLO se usa como fallback en cotizaciones nuevas sin total_final
+  // Si totalManual es null, usar totalGeneralReal (suma automática de productos)
+  // Cuando cambian los productos, setTotalManual(null) resetea el total manual
+  // para que el total general se recalcule automáticamente desde totalGeneralReal
+  const totalGeneral = totalManual !== null && totalManual !== undefined ? totalManual : totalGeneralReal
+  
+  // Logs para depuración (solo en desarrollo)
+  if (process.env.NODE_ENV === 'development' && totalManual !== null && totalManual !== undefined) {
+    console.log('🎯 totalManual final:', totalManual)
+    console.log('📦 totalGeneralReal:', totalGeneralReal)
+    console.log('💰 totalGeneral mostrado:', totalGeneral)
+  }
   
   // Handler para cambio del total manual (permite cualquier valor, validación en onBlur)
   const handleTotalChange = (valor: string) => {
     const valorNum = parseFloat(valor) || 0
+    console.log('📝 handleTotalChange:', valor, '→', valorNum)
     setTotalManual(valorNum)
   }
   
   // Handler para onBlur del total general
   const handleTotalBlur = (valor: string) => {
     const valorNum = parseFloat(valor) || totalCalculado
+    console.log('📝 handleTotalBlur:', valor, '→', valorNum)
     if (valorNum < totalCalculado) {
       toast.warning("El total ingresado es menor al precio calculado. Se mantendrá el valor ingresado.")
     }
@@ -976,10 +1009,10 @@ export default function NuevaCotizacionPage() {
         return
       }
 
-      // Validar que ningún producto tenga un total menor al calculado
+      // Validar cada producto individualmente
       for (const producto of productos) {
         const esUnidades = producto.udm?.toLowerCase().trim() === 'unidad' || producto.udm?.toLowerCase().trim() === 'unidades' || producto.udm?.toLowerCase().trim() === 'unidade'
-        const totalCalculado = calcularTotal(
+        const subtotalCalculado = calcularTotal(
           producto.cantidad,
           producto.totalM2,
           producto.precio,
@@ -990,11 +1023,19 @@ export default function NuevaCotizacionPage() {
           producto.udm
         )
         
-        if (producto.total < totalCalculado) {
-          toast.error(`El producto "${producto.producto}" tiene un total (${producto.total}) menor al precio calculado (${totalCalculado.toFixed(2)}). Por favor corrige el precio antes de guardar.`)
+        // Tolerancia del 1% para redondeos
+        if (producto.total < subtotalCalculado * 0.99) {
+          toast.error(`El producto "${producto.producto}" tiene un subtotal (${producto.total.toFixed(2)}) menor al calculado (${subtotalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
           setGuardando(false)
           return
         }
+      }
+
+      // Validar que el subtotal general no sea menor al calculado
+      if (totalGeneralReal < totalCalculado * 0.99) {
+        toast.error(`El subtotal general (${totalGeneralReal.toFixed(2)}) es menor al calculado (${totalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
+        setGuardando(false)
+        return
       }
 
       setGuardando(true)
@@ -1061,7 +1102,12 @@ export default function NuevaCotizacionPage() {
             // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
             imagen: producto.imagen && !producto.imagen.startsWith('blob:') ? producto.imagen : null,
             variantes: producto.variantes || null,
-            subtotal_linea: producto.total
+            // REGLA 2: subtotal_linea enviado = EXACTAMENTE el total que la UI está mostrando
+            // Si producto.totalManual existe → usar ese
+            // Si no existe → usar producto.total
+            subtotal_linea: producto.totalManual !== null && producto.totalManual !== undefined
+              ? producto.totalManual
+              : producto.total
           }
         } else if (item.tipo === 'nota') {
           const nota = item as NotaItem
@@ -1110,7 +1156,7 @@ export default function NuevaCotizacionPage() {
       }
 
       // Preparar la cotización
-      const cotizacionData = {
+      const cotizacionData: any = {
         cliente: clienteSeleccionado.displayName || clienteSeleccionado.legalName || '',
         vendedor: vendedorSeleccionado.nombre || '',
         sucursal,
@@ -1118,8 +1164,23 @@ export default function NuevaCotizacionPage() {
         vigencia_dias: parseInt(vigencia) || 30,
         lineas
       }
+      
+      // REGLA 9: El valor final enviado al backend debe ser:
+      // total_manual !== null ? total_manual : totalGeneralReal
+      console.log('🔍 Estado antes de guardar - totalManual:', totalManual, 'totalGeneral:', totalGeneral, 'totalGeneralReal:', totalGeneralReal)
+      
+      if (totalManual !== null && totalManual !== undefined) {
+        cotizacionData.total_final = totalManual
+        console.log('💰 Enviando total_final al backend (desde totalManual):', totalManual)
+      } else if (totalGeneral !== totalGeneralReal) {
+        // Fallback: si totalGeneral es diferente, significa que el usuario lo editó
+        cotizacionData.total_final = totalGeneral
+        console.log('💰 Enviando total_final desde totalGeneral (editado por usuario):', totalGeneral)
+      } else {
+        console.log('⚠️ No hay totalManual ni edición, se calculará automáticamente desde subtotales')
+      }
 
-      console.log('📝 Guardando cotización:', cotizacionData)
+      console.log('📝 Guardando cotización:', JSON.stringify(cotizacionData, null, 2))
 
       // Enviar a la API
       const response = await fetch('/api/cotizaciones', {
@@ -1378,6 +1439,12 @@ export default function NuevaCotizacionPage() {
       
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
+        return
+      }
+
+      // Validar que el subtotal general no sea menor al calculado (con tolerancia del 1%)
+      if (totalGeneralReal < totalCalculado * 0.99) {
+        toast.error(`No se puede descargar. El subtotal (${totalGeneralReal.toFixed(2)}) es menor al calculado (${totalCalculado.toFixed(2)}). Por favor corrige antes de descargar.`)
         return
       }
 
@@ -2408,20 +2475,23 @@ export default function NuevaCotizacionPage() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    value={totalManual !== null && totalManual !== undefined ? totalManual : totalCalculado}
-                    onChange={(e) => handleTotalChange(e.target.value)}
-                    onBlur={(e) => handleTotalBlur(e.target.value)}
+                    value={totalGeneral}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      console.log('📝 Input onChange:', val)
+                      handleTotalChange(val)
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value
+                      console.log('📝 Input onBlur:', val)
+                      handleTotalBlur(val)
+                    }}
                     className="w-32 h-10 text-lg font-bold text-[#D54644] text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     step="0.01"
                   />
                   <span className="text-lg font-bold text-[#D54644]">Bs</span>
               </div>
               </div>
-              {totalManual !== null && totalManual !== undefined && totalManual !== totalCalculado && (
-                <p className="text-xs text-gray-500 mt-1 text-right">
-                  Total calculado: Bs {Number(totalCalculado).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>

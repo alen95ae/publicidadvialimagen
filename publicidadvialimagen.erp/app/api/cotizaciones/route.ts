@@ -80,27 +80,57 @@ export async function POST(request: NextRequest) {
     const lineas = body.lineas || []
     delete body.lineas
 
-    // Calcular totales
+    // Si viene total_final del frontend (usuario editó manualmente el Total General),
+    // ese valor ya incluye IVA/IT y debe usarse directamente
+    const totalFinalManual = body.total_final
+    delete body.total_final
+
+    // ============================================================================
+    // NUEVA LÓGICA: subtotal_linea YA es el total final (incluye impuestos si están activos)
+    // El backend NO suma impuestos adicionales
+    // ============================================================================
     let subtotal = 0
     let totalIVA = 0
     let totalIT = 0
+    let totalFinal = 0
 
     lineas.forEach((linea: any) => {
-      // Si es producto, tiene subtotal_linea
+      // Si es producto, tiene subtotal_linea (que YA es el total final)
       if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
-        const lineaSubtotal = linea.subtotal_linea || 0
-        subtotal += lineaSubtotal
-
-        if (linea.con_iva) {
-          totalIVA += lineaSubtotal * 0.13
-        }
-        if (linea.con_it) {
-          totalIT += lineaSubtotal * 0.03
+        const lineaTotal = linea.subtotal_linea || 0
+        subtotal += lineaTotal
+        
+        // Calcular IVA e IT para el desglose (solo informativo)
+        // Si con_iva y con_it están activos, el subtotal_linea ya los incluye
+        // Calculamos la base sin impuestos para el desglose
+        if (linea.con_iva && linea.con_it) {
+          const base = lineaTotal / 1.16
+          totalIVA += base * 0.13
+          totalIT += base * 0.03
+        } else if (linea.con_iva) {
+          const base = lineaTotal / 1.13
+          totalIVA += base * 0.13
+        } else if (linea.con_it) {
+          const base = lineaTotal / 1.03
+          totalIT += base * 0.03
         }
       }
     })
 
-    const totalFinal = subtotal + totalIVA + totalIT
+    // REGLA 10: Si hay total_final manual, usarlo DIRECTAMENTE
+    // Si no, usar la suma de subtotal_linea (que ya son totales finales)
+    if (totalFinalManual !== undefined && totalFinalManual !== null) {
+      totalFinal = totalFinalManual
+    } else {
+      totalFinal = subtotal // subtotal_linea ya incluye impuestos si están activos
+    }
+    
+    if (totalFinalManual !== undefined && totalFinalManual !== null) {
+      console.log('💰 Backend POST: Usando total_final manual (NO recalcula):', totalFinalManual)
+    } else {
+      console.log('💰 Backend POST: Calculando total_final desde subtotales:', totalFinal)
+      console.log('💰 Subtotal:', subtotal, 'IVA:', totalIVA, 'IT:', totalIT)
+    }
 
     // Limpiar campos que no existen en Supabase antes de crear
     const { vigencia_dias, ...camposLimpios } = body

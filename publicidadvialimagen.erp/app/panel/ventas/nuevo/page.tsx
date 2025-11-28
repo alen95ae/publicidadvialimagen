@@ -513,10 +513,10 @@ export default function NuevaCotizacionPage() {
     const cargarItems = async () => {
       setCargandoItems(true)
       try {
-        // Cargar productos y soportes en paralelo
+        // Cargar productos y soportes en paralelo (sin límite para obtener todos)
         const [productosRes, soportesRes] = await Promise.all([
-          fetch('/api/inventario?limit=100'),
-          fetch('/api/soportes?limit=100')
+          fetch('/api/inventario?limit=10000'),
+          fetch('/api/soportes?limit=10000')
         ])
 
         const [productosData, soportesData] = await Promise.all([

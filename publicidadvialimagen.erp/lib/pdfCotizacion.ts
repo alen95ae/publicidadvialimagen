@@ -327,7 +327,13 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
       pdf.text(producto.cantidad.toString(), tableX + colWidths[0] + colWidths[1] + colWidths[2] + 2, datosY)
       
       // CALCULAR Precio Unitario SOLO para el PDF (no viene de BD)
-      const precioUnitarioCalculado = producto.esSoporte 
+      // Para soportes: usar precio directamente
+      // Para productos con unidad "unidades": usar precio directamente
+      // Para productos con unidad m²: precio × ancho × alto
+      const udmLower = (producto.udm || '').toLowerCase().trim()
+      const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+      
+      const precioUnitarioCalculado = producto.esSoporte || esUnidades
         ? producto.precio 
         : (producto.precio * producto.ancho * producto.alto)
       

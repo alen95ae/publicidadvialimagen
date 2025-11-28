@@ -282,6 +282,8 @@ export default function EditarCotizacionPage() {
       dimensionesBloqueadas: false
     }
     setProductosList([...productosList, nuevoProducto])
+    // Resetear total manual general para que se recalcule
+    setTotalManual(null)
   }
 
   const agregarNota = () => {
@@ -305,6 +307,8 @@ export default function EditarCotizacionPage() {
   const eliminarProducto = (id: string) => {
     if (productosList.length > 1) {
       setProductosList(productosList.filter(p => p.id !== id))
+      // Resetear total manual general para que se recalcule
+      setTotalManual(null)
     }
   }
 
@@ -410,13 +414,16 @@ export default function EditarCotizacionPage() {
             productoActualizado.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
             productoActualizado.udm
           )
-          // Si hay un total manual establecido, mantenerlo (permitir edición libre)
-          // Solo recalcular automáticamente si no hay totalManual
-          if (productoActualizado.totalManual !== null && productoActualizado.totalManual !== undefined) {
-            productoActualizado.total = productoActualizado.totalManual
-          } else {
-            productoActualizado.total = totalCalculado
-          }
+          // Recalcular automáticamente el total cuando cambian los campos
+          productoActualizado.total = totalCalculado
+          // Resetear total manual del producto para que use el calculado
+          productoActualizado.totalManual = null
+        }
+        
+        // Si se cambia cualquier campo del producto, resetear el total manual general para que se recalcule
+        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm', 'total'].includes(campo)) {
+          // Resetear total manual general para que use el calculado
+          setTotalManual(null)
         }
         
         // Si se está editando el campo 'total', permitir cualquier valor (validación en onBlur)
@@ -541,6 +548,11 @@ export default function EditarCotizacionPage() {
       // Guardar los nombres directamente (lazy loading)
       setCliente(cotizacion.cliente || '')
       setVendedor(cotizacion.vendedor || '')
+      
+      // Inicializar total manual con el total_final de la base de datos
+      if (cotizacion.total_final !== null && cotizacion.total_final !== undefined) {
+        setTotalManual(cotizacion.total_final)
+      }
 
       // Cargar líneas desde JSON (ya vienen parseadas)
       if (lineas && lineas.length > 0) {
@@ -715,9 +727,10 @@ export default function EditarCotizacionPage() {
     const cargarItems = async () => {
       setCargandoItems(true)
       try {
+        // Cargar productos y soportes en paralelo (sin límite para obtener todos)
         const [productosRes, soportesRes] = await Promise.all([
-          fetch('/api/inventario?limit=100'),
-          fetch('/api/soportes?limit=100')
+          fetch('/api/inventario?limit=10000'),
+          fetch('/api/soportes?limit=10000')
         ])
 
         const [productosData, soportesData] = await Promise.all([
@@ -1079,19 +1092,19 @@ export default function EditarCotizacionPage() {
   
   const totalCalculado = productosConTotal.reduce((sum, producto) => sum + producto.totalFinal, 0)
   
-  // Total general: usar manual si es mayor al calculado, sino usar calculado
-  const totalGeneral = totalManual !== null && totalManual >= totalCalculado ? totalManual : totalCalculado
+  // Total general: usar manual si está disponible (viene de total_final de BD), sino usar calculado
+  const totalGeneral = totalManual !== null && totalManual !== undefined ? totalManual : totalCalculado
   
-  // Handler para cambio del total manual
+  // Handler para cambio del total manual (permite cualquier valor)
   const handleTotalChange = (valor: string) => {
     const valorNum = parseFloat(valor) || 0
-    if (valorNum >= totalCalculado) {
-      setTotalManual(valorNum)
-    } else {
-      setTotalManual(null)
-      // Mostrar toast de advertencia
-      toast.warning("El total no puede ser menor al precio calculado.")
-    }
+    setTotalManual(valorNum)
+  }
+  
+  // Handler para onBlur del total general
+  const handleTotalBlur = (valor: string) => {
+    const valorNum = parseFloat(valor) || totalCalculado
+    setTotalManual(valorNum)
   }
 
   // FUNCIÓN ESPECÍFICA DE EDITAR: Guardar cambios con PATCH
@@ -2573,7 +2586,7 @@ export default function EditarCotizacionPage() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    value={totalManual !== null && totalManual !== undefined ? totalManual : totalCalculado}
+                    value={totalGeneral}
                     onChange={(e) => handleTotalChange(e.target.value)}
                     onBlur={(e) => handleTotalBlur(e.target.value)}
                     className="w-32 h-10 text-lg font-bold text-[#D54644] text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -2582,11 +2595,6 @@ export default function EditarCotizacionPage() {
                   <span className="text-lg font-bold text-[#D54644]">Bs</span>
                 </div>
               </div>
-              {totalManual !== null && totalManual !== undefined && totalManual !== totalCalculado && (
-                <p className="text-xs text-gray-500 mt-1 text-right">
-                  Total calculado: Bs {Number(totalCalculado).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>

@@ -77,7 +77,10 @@ export async function getSoportes({
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  query = query.range(from, to);
+  // Ordenar por fecha de creación descendente (más recientes primero)
+  query = query
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   const { data, error, count } = await query;
 

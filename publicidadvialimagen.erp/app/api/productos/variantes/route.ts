@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener variantes de la base de datos
+    // IMPORTANTE: select('*') debe incluir precio_variante (JSONB)
     const { data: variantes, error } = await supabase
       .from('producto_variantes')
       .select('*')
@@ -29,11 +30,31 @@ export async function GET(request: NextRequest) {
       .order('combinacion', { ascending: true })
 
     if (error) {
-      console.error('Error obteniendo variantes:', error)
+      console.error('❌ Error obteniendo variantes:', error)
       return NextResponse.json(
         { error: 'Error al obtener variantes' },
         { status: 500 }
       )
+    }
+
+    // Log para verificar que precio_variante se está retornando
+    console.log(`📡 API GET /api/productos/variantes - Variantes encontradas: ${(variantes || []).length}`)
+    if (variantes && variantes.length > 0) {
+      variantes.forEach((v: any, index: number) => {
+        console.log(`  Variante ${index + 1}:`)
+        console.log(`    - combinacion: ${v.combinacion}`)
+        console.log(`    - precio_override: ${v.precio_override} (tipo: ${typeof v.precio_override})`)
+        console.log(`    - precio_calculado: ${v.precio_calculado} (tipo: ${typeof v.precio_calculado})`)
+        console.log(`    - precio_variante existe?: ${v.precio_variante ? 'SÍ' : 'NO'}`)
+        console.log(`    - precio_variante tipo: ${typeof v.precio_variante}`)
+        if (v.precio_variante) {
+          if (typeof v.precio_variante === 'string') {
+            console.log(`    - precio_variante (string, primeros 200 chars): ${v.precio_variante.substring(0, 200)}`)
+          } else {
+            console.log(`    - precio_variante (objeto): ${JSON.stringify(v.precio_variante).substring(0, 200)}`)
+          }
+        }
+      })
     }
 
     return NextResponse.json({

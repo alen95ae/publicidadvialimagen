@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { 
-  Plus, 
-  Trash2, 
+import {
+  Plus,
+  Trash2,
   Camera,
   Calculator,
   Save,
@@ -48,29 +48,29 @@ const sucursales = [
 ]
 
 const productos = [
-  { 
-    id: "ADH-001", 
+  {
+    id: "ADH-001",
     nombre: "ADHESIVO + INSTALACIÓN",
     descripcion: "Material: Adhesivo blanco con protección uv y anti hongos Calidad: 1440 dpi's Acabado: Corte a diseño con adhesivo impreso",
     precio: 95.00,
     unidad: "m²"
   },
-  { 
-    id: "VIN-002", 
+  {
+    id: "VIN-002",
     nombre: "VINILO AUTOMOTRIZ",
     descripcion: "Material: Vinilo automotriz de alta calidad con adhesivo profesional. Resistente a la intemperie y fácil aplicación.",
     precio: 120.00,
     unidad: "m²"
   },
-  { 
-    id: "LON-003", 
+  {
+    id: "LON-003",
     nombre: "LONA PUBLICITARIA",
     descripcion: "Material: Lona de PVC 440g con ojetes metálicos. Ideal para publicidad exterior y eventos.",
     precio: 85.00,
     unidad: "m²"
   },
-  { 
-    id: "COR-004", 
+  {
+    id: "COR-004",
     nombre: "CORPLAST",
     descripcion: "Material: Coroplast 3mm con impresión digital. Perfecto para señalización y publicidad.",
     precio: 75.00,
@@ -121,6 +121,7 @@ export default function NuevaCotizacionPage() {
   const [cliente, setCliente] = useState("")
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
+  const [plazo, setPlazo] = useState("")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
   const [cotizacionId, setCotizacionId] = useState<string>("")
@@ -170,19 +171,19 @@ export default function NuevaCotizacionPage() {
         subtotal = cantidad * totalM2 * precio
       }
     }
-    
+
     const comisionTotal = subtotal * (comision / 100)
-    
+
     // Si no tiene IVA, descontar 13% (el total YA incluye IVA si está activo)
     if (!conIVA) {
       subtotal = subtotal * (1 - 0.13)
     }
-    
+
     // Si no tiene IT, descontar 3% (el total YA incluye IT si está activo)
     if (!conIT) {
       subtotal = subtotal * (1 - 0.03)
     }
-    
+
     return subtotal + comisionTotal
   }
 
@@ -195,15 +196,19 @@ export default function NuevaCotizacionPage() {
     }
 
     // PRIMERO: Intentar obtener precio desde producto_variantes
+    // Incluir la sucursal seleccionada en la cotización para buscar la variante correcta
     if (item.producto_id || item.id) {
       try {
         const { obtenerPrecioVariante } = await import('@/lib/variantes/obtenerPrecioVariante')
         const precioVariante = await obtenerPrecioVariante(
           item.producto_id || item.id,
           variantes,
-          precioBase
+          precioBase,
+          sucursal || undefined // Pasar la sucursal seleccionada en la cotización
         )
-        
+
+        console.log(`💰 Precio obtenido para variante con sucursal ${sucursal}:`, precioVariante)
+
         // Si el precio variante es diferente al base, significa que se encontró una variante
         if (precioVariante !== precioBase) {
           return precioVariante
@@ -259,10 +264,10 @@ export default function NuevaCotizacionPage() {
         for (const [nombreVariante, valorVariante] of Object.entries(variantes)) {
           const nombreVarianteLower = nombreVariante.toLowerCase()
           // Verificar si el nombre de la variante contiene el nombre del recurso o viceversa
-          if (nombreVarianteLower.includes(nombreRecurso) || 
-              nombreRecurso.includes(nombreVarianteLower) ||
-              nombreVarianteLower.includes(codigoRecurso) ||
-              codigoRecurso.includes(nombreVarianteLower)) {
+          if (nombreVarianteLower.includes(nombreRecurso) ||
+            nombreRecurso.includes(nombreVarianteLower) ||
+            nombreVarianteLower.includes(codigoRecurso) ||
+            codigoRecurso.includes(nombreVarianteLower)) {
             varianteEncontrada = { nombre: nombreVariante, valor: valorVariante as string }
             break
           }
@@ -273,8 +278,8 @@ export default function NuevaCotizacionPage() {
           const recursoNombreReceta = (itemReceta.recurso_nombre || '').toLowerCase()
           for (const [nombreVariante, valorVariante] of Object.entries(variantes)) {
             const nombreVarianteLower = nombreVariante.toLowerCase()
-            if (nombreVarianteLower.includes(recursoNombreReceta) || 
-                recursoNombreReceta.includes(nombreVarianteLower)) {
+            if (nombreVarianteLower.includes(recursoNombreReceta) ||
+              recursoNombreReceta.includes(nombreVarianteLower)) {
               varianteEncontrada = { nombre: nombreVariante, valor: valorVariante as string }
               break
             }
@@ -372,7 +377,7 @@ export default function NuevaCotizacionPage() {
   const moverItem = (index: number, direccion: 'arriba' | 'abajo') => {
     const newIndex = direccion === 'arriba' ? index - 1 : index + 1
     if (newIndex < 0 || newIndex >= productosList.length) return
-    
+
     const newList = [...productosList]
     const [movedItem] = newList.splice(index, 1)
     newList.splice(newIndex, 0, movedItem)
@@ -405,7 +410,7 @@ export default function NuevaCotizacionPage() {
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault()
     if (draggedIndex === null || draggedIndex === dropIndex) return
-    
+
     const newList = [...productosList]
     const [movedItem] = newList.splice(draggedIndex, 1)
     newList.splice(dropIndex, 0, movedItem)
@@ -416,7 +421,7 @@ export default function NuevaCotizacionPage() {
   const actualizarProducto = (id: string, campo: keyof ProductoItem, valor: any) => {
     // Detectar si se está cambiando un campo que afecta el total
     const campoAfectaTotal = ['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm', 'total'].includes(campo)
-    
+
     // Usar forma funcional de setState para preservar referencias a URLs blob
     setProductosList(prevList => prevList.map(item => {
       if (item.id === id && item.tipo === 'producto') {
@@ -425,21 +430,21 @@ export default function NuevaCotizacionPage() {
         if ((campo === 'ancho' || campo === 'alto') && producto.dimensionesBloqueadas) {
           return producto
         }
-        
+
         // Asegurar que cantidad sea mínimo 1 (solo si no es string vacío)
         if (campo === 'cantidad' && valor !== '' && valor < 1) {
           valor = 1
         }
-        
+
         const productoActualizado = { ...producto, [campo]: valor }
-        
+
         // Recalcular totalM2 si cambian ancho o alto (solo si no son strings vacíos)
         if (campo === 'ancho' || campo === 'alto') {
           const anchoVal = campo === 'ancho' ? (valor === '' ? 0 : valor) : producto.ancho
           const altoVal = campo === 'alto' ? (valor === '' ? 0 : valor) : producto.alto
           productoActualizado.totalM2 = calcularTotalM2(anchoVal, altoVal)
         }
-        
+
         // Recalcular total si cambian los valores relevantes (convertir strings vacíos a 0)
         // Solo recalcular si no es el campo 'total' (para permitir edición manual)
         if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm'].includes(campo)) {
@@ -470,12 +475,12 @@ export default function NuevaCotizacionPage() {
           productoActualizado.total = valorNum
           productoActualizado.totalManual = valorNum
         }
-        
+
         return productoActualizado
       }
       return item
     }))
-    
+
     // Resetear totalManual del Total General DESPUÉS de actualizar productosList
     // para que el total general se recalcule automáticamente cuando cambian los productos
     if (campoAfectaTotal) {
@@ -488,7 +493,7 @@ export default function NuevaCotizacionPage() {
   const [todosLosItems, setTodosLosItems] = useState<any[]>([])
   const [cargandoItems, setCargandoItems] = useState(false)
   const [filteredItems, setFilteredItems] = useState<Record<string, any[]>>({})
-  
+
   // Estado para el modal de variantes
   const [modalVariantes, setModalVariantes] = useState<{
     open: boolean
@@ -501,7 +506,7 @@ export default function NuevaCotizacionPage() {
     itemData: null,
     variantesSeleccionadas: {}
   })
-  
+
   // Estado para el modal de fechas de soporte
   const [modalFechasSoporte, setModalFechasSoporte] = useState<{
     open: boolean
@@ -585,7 +590,7 @@ export default function NuevaCotizacionPage() {
         setCargandoClientes(false)
       }
     }
-    
+
     cargarClientes()
   }, [])
 
@@ -595,21 +600,21 @@ export default function NuevaCotizacionPage() {
       setCargandoComerciales(true)
       try {
         const response = await fetch('/api/public/comerciales')
-        
+
         if (!response.ok) {
           console.error('❌ Error en respuesta de comerciales:', response.status, response.statusText)
           setTodosLosComerciales([])
           return
         }
-        
+
         const data = await response.json()
         console.log('✅ Comerciales recibidos:', data.users?.length || 0)
-        
+
         // El endpoint ya filtra solo usuarios con vendedor=true
         const vendedores = data.users || []
         setTodosLosComerciales(vendedores)
         setFilteredComerciales(vendedores.slice(0, 20))
-        
+
         // Predefinir el usuario actual si es vendedor
         if (!vendedor) {
           try {
@@ -637,7 +642,7 @@ export default function NuevaCotizacionPage() {
         setCargandoComerciales(false)
       }
     }
-    
+
     cargarComerciales()
   }, [])
 
@@ -670,15 +675,15 @@ export default function NuevaCotizacionPage() {
     }
 
     const search = searchValue.toLowerCase().trim()
-    
+
     const filtered = todosLosItems.filter((item: any) => {
       const codigo = (item.codigo || '').toLowerCase()
       const nombre = (item.nombre || '').toLowerCase()
-      
+
       // Buscar solo al inicio del código o del nombre
       return codigo.startsWith(search) || nombre.startsWith(search)
     }).slice(0, 15) // Limitar a 15 resultados máximo
-    
+
     setFilteredItems(prev => ({ ...prev, [productoId]: filtered }))
   }
 
@@ -688,16 +693,16 @@ export default function NuevaCotizacionPage() {
       setFilteredClientes(todosLosClientes.slice(0, 50))
       return
     }
-    
+
     const search = query.toLowerCase().trim()
     const filtered = todosLosClientes.filter((cliente: any) => {
       const nombre = (cliente.displayName || '').toLowerCase()
       const empresa = (cliente.legalName || '').toLowerCase()
-      
+
       // Buscar en cualquier parte del nombre o empresa (no solo al inicio)
       return nombre.includes(search) || empresa.includes(search)
     }).slice(0, 100) // Limitar a 100 resultados coincidentes
-    
+
     setFilteredClientes(filtered)
   }
 
@@ -707,21 +712,21 @@ export default function NuevaCotizacionPage() {
       setFilteredComerciales(todosLosComerciales.slice(0, 20))
       return
     }
-    
+
     const search = query.toLowerCase().trim()
     const filtered = todosLosComerciales.filter((comercial: any) => {
       const nombre = (comercial.nombre || '').toLowerCase()
-      
+
       // Buscar al inicio del nombre
       return nombre.startsWith(search)
     }).slice(0, 15) // Limitar a 15 resultados máximo
-    
+
     setFilteredComerciales(filtered)
   }
 
   const seleccionarProducto = (id: string, item: any) => {
     const esSoporte = item.tipo === 'soporte'
-    
+
     // Si es soporte, abrir modal de fechas
     if (esSoporte) {
       setModalFechasSoporte({
@@ -736,9 +741,9 @@ export default function NuevaCotizacionPage() {
       setFilteredItems(prev => ({ ...prev, [id]: [] }))
       return
     }
-    
+
     const tieneVariantes = item.variantes && Array.isArray(item.variantes) && item.variantes.length > 0
-    
+
     // Si tiene variantes, abrir el modal
     if (tieneVariantes) {
       setModalVariantes({
@@ -751,7 +756,7 @@ export default function NuevaCotizacionPage() {
       setFilteredItems(prev => ({ ...prev, [id]: [] }))
       return
     }
-    
+
     // Si no tiene variantes ni es soporte, continuar normalmente
     aplicarSeleccionProducto(id, item, {}, '', '', undefined).catch(err => {
       console.error('Error aplicando selección de producto:', err)
@@ -759,13 +764,13 @@ export default function NuevaCotizacionPage() {
     setOpenCombobox(prev => ({ ...prev, [id]: false }))
     setFilteredItems(prev => ({ ...prev, [id]: [] }))
   }
-  
+
   const aplicarSeleccionProducto = async (id: string, item: any, variantes: Record<string, string>, fechaInicio: string, fechaFin: string, mesesAlquiler?: number) => {
     const esSoporte = item.tipo === 'soporte'
-    
+
     // Generar descripción con variantes o fechas
     let descripcionFinal = item.descripcion || ''
-    
+
     if (esSoporte && fechaInicio && fechaFin) {
       // Para soportes: código + título + fechas
       descripcionFinal = `[${item.codigo}] ${item.nombre} - Del ${fechaInicio} al ${fechaFin}`
@@ -783,39 +788,39 @@ export default function NuevaCotizacionPage() {
             // Eliminar palabras individuales repetidas
             .replace(/\b(\w+)\s+\1\b/gi, '$1')
             .trim()
-          
+
           // Si después de limpiar queda vacío o muy corto, usar el original simplificado
           if (!nombreLimpio || nombreLimpio.length < 3) {
             nombreLimpio = nombre.split(' ').slice(0, 2).join(' ')
           }
-          
+
           // Limpiar el valor (eliminar códigos de color como #ffffff y dos puntos al final)
           let valorLimpio = valor
             .replace(/#[0-9a-fA-F]{6}/g, '')
             .replace(/:+\s*$/g, '') // Eliminar dos puntos al final
             .trim()
-          
+
           return `${nombreLimpio}: ${valorLimpio}`
         })
         .join(', ')
       descripcionFinal = `[${item.codigo}] ${item.nombre} - ${variantesTexto}`
     }
-    
+
     // Calcular precio base
     let precioFinal = item.precio || 0
-    
+
     // Si hay variantes y no es soporte, calcular precio ajustado según variantes de mano de obra
     if (!esSoporte && Object.keys(variantes).length > 0 && item.receta) {
       precioFinal = await calcularPrecioConVariantes(precioFinal, item, variantes)
     }
-    
+
     // Si es soporte, cargar la imagen principal del soporte
     let imagenUrl: string | undefined = undefined
-    
+
     if (esSoporte && item.imagenPrincipal) {
       imagenUrl = item.imagenPrincipal
     }
-    
+
     // Crear un objeto con todas las actualizaciones
     setProductosList(productosList.map(itemLista => {
       if (itemLista.id === id && itemLista.tipo === 'producto') {
@@ -823,15 +828,15 @@ export default function NuevaCotizacionPage() {
         const ancho = esSoporte && item.ancho ? parseFloat(item.ancho) : producto.ancho
         const alto = esSoporte && item.alto ? parseFloat(item.alto) : producto.alto
         const totalM2 = calcularTotalM2(ancho, alto)
-        
+
         // Para soportes, la cantidad es el número de meses
         const cantidad = esSoporte && mesesAlquiler ? mesesAlquiler : (producto.cantidad || 1)
-        
+
         const udmFinal = esSoporte ? 'mes' : (item.unidad === 'm2' ? 'm²' : (item.unidad || 'm²'))
         // Detectar unidades (case-insensitive y considerar singular/plural)
         const udmLower = udmFinal.toLowerCase().trim()
         const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
-        
+
         const productoActualizado: ProductoItem = {
           ...producto,
           producto: `${item.codigo} - ${item.nombre}`,  // Guardar en formato "CODIGO - NOMBRE"
@@ -847,12 +852,12 @@ export default function NuevaCotizacionPage() {
           cantidad: cantidad,
           variantes: Object.keys(variantes).length > 0 ? variantes : null
         }
-        
+
         // Cargar imagen del soporte si está disponible
         if (esSoporte && imagenUrl) {
           productoActualizado.imagen = imagenUrl
         }
-        
+
         // Recalcular total automáticamente al seleccionar producto
         // Para unidades: total = cantidad × precio (como en soportes)
         const totalCalculado = calcularTotal(
@@ -867,13 +872,13 @@ export default function NuevaCotizacionPage() {
         )
         productoActualizado.total = totalCalculado
         productoActualizado.totalManual = null // Resetear total manual al seleccionar nuevo producto
-        
+
         return productoActualizado
       }
       return itemLista
     }))
   }
-  
+
   const confirmarVariantes = async () => {
     await aplicarSeleccionProducto(
       modalVariantes.productoId,
@@ -885,7 +890,7 @@ export default function NuevaCotizacionPage() {
     )
     setModalVariantes({ open: false, productoId: '', itemData: null, variantesSeleccionadas: {} })
   }
-  
+
   const confirmarFechasSoporte = async () => {
     await aplicarSeleccionProducto(
       modalFechasSoporte.productoId,
@@ -897,22 +902,22 @@ export default function NuevaCotizacionPage() {
     )
     setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })
   }
-  
+
   // Función para calcular la fecha fin basada en fecha inicio y meses
   const calcularFechaFin = (fechaInicio: string, meses: number): string => {
     if (!fechaInicio) return ''
-    
+
     const fecha = new Date(fechaInicio)
     fecha.setMonth(fecha.getMonth() + meses)
-    
+
     // Formatear a YYYY-MM-DD
     const year = fecha.getFullYear()
     const month = String(fecha.getMonth() + 1).padStart(2, '0')
     const day = String(fecha.getDate()).padStart(2, '0')
-    
+
     return `${year}-${month}-${day}`
   }
-  
+
   // Efecto para calcular automáticamente la fecha fin
   useEffect(() => {
     if (modalFechasSoporte.fechaInicio && modalFechasSoporte.meses) {
@@ -927,7 +932,7 @@ export default function NuevaCotizacionPage() {
     .map(producto => {
       const udmLower = producto.udm?.toLowerCase().trim() || ''
       const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
-      
+
       // Total calculado es el subtotal sin impuestos (precio mínimo por línea)
       const totalCalculado = calcularTotal(
         producto.cantidad,
@@ -944,38 +949,38 @@ export default function NuevaCotizacionPage() {
         totalCalculado
       }
     })
-  
+
   // Total calculado mínimo: suma de totales calculados (para validación)
   const totalCalculado = productosConTotal.reduce((sum, producto) => sum + (producto.totalCalculado || 0), 0)
-  
+
   // ============================================================================
   // REGLA PRINCIPAL: producto.total YA incluye impuestos si IVA/IT están activos
   // Total General = suma de producto.total (valores finales que ve el usuario)
   // ============================================================================
   // Total general real: suma de los totales de cada línea (que YA incluyen impuestos si están activos)
   const totalGeneralReal = productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
-  
+
   // REGLA 6: totalGeneral SIEMPRE respeta totalManual si existe
   // totalGeneralReal SOLO se usa como fallback en cotizaciones nuevas sin total_final
   // Si totalManual es null, usar totalGeneralReal (suma automática de productos)
   // Cuando cambian los productos, setTotalManual(null) resetea el total manual
   // para que el total general se recalcule automáticamente desde totalGeneralReal
   const totalGeneral = totalManual !== null && totalManual !== undefined ? totalManual : totalGeneralReal
-  
+
   // Logs para depuración (solo en desarrollo)
   if (process.env.NODE_ENV === 'development' && totalManual !== null && totalManual !== undefined) {
     console.log('🎯 totalManual final:', totalManual)
     console.log('📦 totalGeneralReal:', totalGeneralReal)
     console.log('💰 totalGeneral mostrado:', totalGeneral)
   }
-  
+
   // Handler para cambio del total manual (permite cualquier valor, validación en onBlur)
   const handleTotalChange = (valor: string) => {
     const valorNum = parseFloat(valor) || 0
     console.log('📝 handleTotalChange:', valor, '→', valorNum)
     setTotalManual(valorNum)
   }
-  
+
   // Handler para onBlur del total general
   const handleTotalBlur = (valor: string) => {
     const valorNum = parseFloat(valor) || totalCalculado
@@ -1022,7 +1027,7 @@ export default function NuevaCotizacionPage() {
           producto.esSoporte || esUnidades,
           producto.udm
         )
-        
+
         // Tolerancia del 1% para redondeos
         if (producto.total < subtotalCalculado * 0.99) {
           toast.error(`El producto "${producto.producto}" tiene un subtotal (${producto.total.toFixed(2)}) menor al calculado (${subtotalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
@@ -1048,14 +1053,14 @@ export default function NuevaCotizacionPage() {
               const formData = new FormData()
               formData.append('file', producto.imagenFile)
               // Nota: En nueva cotización, el lineaId no existe aún, se actualizará al guardar
-              
+
               const response = await fetch('/api/cotizaciones/image', {
                 method: 'POST',
                 body: formData
               })
-              
+
               const data = await response.json()
-              
+
               if (data.success && data.data.publicUrl) {
                 // Actualizar el producto con la URL de Supabase
                 actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
@@ -1162,13 +1167,14 @@ export default function NuevaCotizacionPage() {
         sucursal,
         estado: 'Pendiente' as const,
         vigencia_dias: parseInt(vigencia) || 30,
+        plazo,
         lineas
       }
-      
+
       // REGLA 9: El valor final enviado al backend debe ser:
       // total_manual !== null ? total_manual : totalGeneralReal
       console.log('🔍 Estado antes de guardar - totalManual:', totalManual, 'totalGeneral:', totalGeneral, 'totalGeneralReal:', totalGeneralReal)
-      
+
       if (totalManual !== null && totalManual !== undefined) {
         cotizacionData.total_final = totalManual
         console.log('💰 Enviando total_final al backend (desde totalManual):', totalManual)
@@ -1204,7 +1210,7 @@ export default function NuevaCotizacionPage() {
       setEstadoCotizacion('Pendiente')
 
       toast.success(`Cotización ${cotizacionCreada.codigo} guardada exitosamente`)
-      
+
       // Solo redirigir si se solicita explícitamente
       if (redirigir) {
         setTimeout(() => {
@@ -1246,7 +1252,7 @@ export default function NuevaCotizacionPage() {
 
     try {
       setModalAprobacion(prev => ({ ...prev, cargando: true, open: false }))
-      
+
       const response = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`)
       const data = await response.json()
 
@@ -1281,13 +1287,13 @@ export default function NuevaCotizacionPage() {
 
     try {
       setGuardando(true)
-      
+
       // Primero guardar la cotización (sin redirigir)
       await handleGuardar(false)
-      
+
       // Esperar un momento para que se actualice el estado
       await new Promise(resolve => setTimeout(resolve, 500))
-      
+
       // Luego actualizar el estado a Aprobada
       const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
         method: 'PATCH',
@@ -1323,13 +1329,13 @@ export default function NuevaCotizacionPage() {
     try {
       setGuardando(true)
       setModalAprobacion(prev => ({ ...prev, open: false }))
-      
+
       // Primero guardar la cotización (sin redirigir)
       await handleGuardar(false)
-      
+
       // Esperar un momento para que se actualice el estado
       await new Promise(resolve => setTimeout(resolve, 500))
-      
+
       // Luego actualizar el estado de la cotización a Aprobada
       const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
         method: 'PATCH',
@@ -1392,7 +1398,7 @@ export default function NuevaCotizacionPage() {
         // Esperar un momento para que se actualice el estado
         await new Promise(resolve => setTimeout(resolve, 500))
       }
-      
+
       if (nuevoEstado === "Aprobada") {
         // Si se aprueba, cargar información de soportes (sin guardar todavía)
         // El guardado se hará cuando se confirme en el modal
@@ -1402,9 +1408,9 @@ export default function NuevaCotizacionPage() {
         if (cotizacionId) {
           await handleGuardar(false)
         }
-        
+
         setGuardando(true)
-        
+
         const response = await fetch(`/api/cotizaciones/${cotizacionId}`, {
           method: 'PATCH',
           headers: {
@@ -1436,7 +1442,7 @@ export default function NuevaCotizacionPage() {
         toast.error("Por favor guarda la cotización antes de descargarla")
         return
       }
-      
+
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
         return
@@ -1449,18 +1455,18 @@ export default function NuevaCotizacionPage() {
       }
 
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
-      
+
       // Buscar comercial por ID (UUID) o por nombre
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
-      
+
       // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
       if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
-        comercialSeleccionado = todosLosComerciales.find(c => 
+        comercialSeleccionado = todosLosComerciales.find(c =>
           c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
         )
       }
-      
+
       // Si aún no se encuentra, obtener el usuario actual de la sesión
       if (!comercialSeleccionado) {
         try {
@@ -1491,7 +1497,7 @@ export default function NuevaCotizacionPage() {
         productos: productosList,
         totalGeneral: totalGeneral
       })
-      
+
       toast.success("Cotización descargada exitosamente")
     } catch (error) {
       console.error("Error generando PDF:", error)
@@ -1505,25 +1511,25 @@ export default function NuevaCotizacionPage() {
         toast.error("Por favor guarda la cotización antes de descargar la OT")
         return
       }
-      
+
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
         return
       }
 
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
-      
+
       console.log('🔍 Buscando vendedor:', vendedor)
       console.log('🔍 Total comerciales:', todosLosComerciales.length)
-      
+
       // Buscar comercial por ID (UUID) o por nombre
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
-      
+
       // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
       if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
         console.log('🔍 Buscando por nombre:', vendedor)
-        comercialSeleccionado = todosLosComerciales.find(c => 
+        comercialSeleccionado = todosLosComerciales.find(c =>
           c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
         )
       }
@@ -1541,7 +1547,7 @@ export default function NuevaCotizacionPage() {
         productos: productosList,
         totalGeneral: totalGeneral
       })
-      
+
       toast.success("OT descargada exitosamente")
     } catch (error) {
       console.error("Error generando PDF OT:", error)
@@ -1553,1177 +1559,1193 @@ export default function NuevaCotizacionPage() {
     <>
       <Toaster position="top-right" />
       <div className="min-h-screen bg-gray-50">
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        {/* Barra de botones */}
-        <div className="flex justify-end gap-4 mb-6">
-          <Button 
-            variant="outline"
-            onClick={() => router.push('/panel/ventas/cotizaciones')}
-            disabled={guardando}
-          >
-            Descartar
-          </Button>
-          <Button 
-            onClick={handleGuardar}
-            disabled={guardando}
-            className="bg-[#D54644] hover:bg-[#B03A38] text-white"
-          >
-            <Save className="w-4 h-4 mr-2" />
-            {guardando ? 'Guardando...' : 'Guardar'}
-          </Button>
-        </div>
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Nuevo</h1>
-        </div>
+        {/* Main Content */}
+        <main className="container mx-auto px-6 py-8">
+          {/* Barra de botones */}
+          <div className="flex justify-end gap-4 mb-6">
+            <Button
+              variant="outline"
+              onClick={() => router.push('/panel/ventas/cotizaciones')}
+              disabled={guardando}
+            >
+              Descartar
+            </Button>
+            <Button
+              onClick={handleGuardar}
+              disabled={guardando}
+              className="bg-[#D54644] hover:bg-[#B03A38] text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {guardando ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </div>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">Nuevo</h1>
+          </div>
 
-        {/* Información General */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Información General</CardTitle>
-              {/* Botones de estado */}
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => actualizarEstado("Rechazada")}
-                  disabled={guardando || !cotizacionId || estadoCotizacion === "Rechazada"}
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Rechazada
-                </Button>
-                <Button 
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => actualizarEstado("Aprobada")}
-                  disabled={guardando || !cotizacionId || estadoCotizacion === "Aprobada"}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Aprobada
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Todos los campos y botones de descarga en una sola fila */}
-            <div className="flex gap-4">
-              {/* Cliente */}
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="cliente">Cliente</Label>
-                <Popover open={openClienteCombobox} onOpenChange={(open) => {
-                  setOpenClienteCombobox(open)
-                  if (open) {
-                    setFilteredClientes(todosLosClientes.slice(0, 50))
-                  }
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className={cn(
-                        "w-full justify-between",
-                        !cliente && "text-muted-foreground"
-                      )}
-                    >
-                      <span className="truncate">
-                        {cliente 
-                          ? todosLosClientes.find(c => c.id === cliente)?.displayName || "Seleccionar cliente"
-                          : "Seleccionar cliente"}
-                      </span>
-                      <Check className={cn("ml-2 h-4 w-4 shrink-0", cliente ? "opacity-100" : "opacity-0")} />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command shouldFilter={false} className="overflow-visible">
-                      <CommandInput 
-                        placeholder="Buscar cliente..."
-                        className="h-9 border-0 focus:ring-0"
-                        onValueChange={filtrarClientes}
-                      />
-                      <CommandList>
-                        <CommandEmpty>
-                          {cargandoClientes ? "Cargando..." : "No se encontraron clientes."}
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {filteredClientes.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={c.displayName}
-                              onSelect={() => {
-                                setCliente(c.id)
-                                setOpenClienteCombobox(false)
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
-                              <div className="flex flex-col">
-                                <span className="font-medium">{c.displayName}</span>
-                                {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              {/* Comercial */}
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="vendedor">Comercial</Label>
-                <Popover open={openComercialCombobox} onOpenChange={(open) => {
-                  setOpenComercialCombobox(open)
-                  if (open) {
-                    setFilteredComerciales(todosLosComerciales.slice(0, 20))
-                  }
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className={cn(
-                        "w-full justify-between",
-                        !vendedor && "text-muted-foreground"
-                      )}
-                    >
-                      <span className="truncate">
-                        {vendedor 
-                          ? todosLosComerciales.find(c => c.id === vendedor)?.nombre || "Seleccionar comercial"
-                          : "Seleccionar comercial"}
-                      </span>
-                      <Check className={cn("ml-2 h-4 w-4 shrink-0", vendedor ? "opacity-100" : "opacity-0")} />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command shouldFilter={false} className="overflow-visible">
-                      <CommandInput 
-                        placeholder="Buscar comercial..."
-                        className="h-9 border-0 focus:ring-0"
-                        onValueChange={filtrarComerciales}
-                      />
-                      <CommandList>
-                        <CommandEmpty>
-                          {cargandoComerciales ? "Cargando..." : "No se encontraron comerciales."}
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {filteredComerciales.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={c.nombre}
-                              onSelect={() => {
-                                setVendedor(c.id)
-                                setOpenComercialCombobox(false)
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
-                              <div className="flex flex-col">
-                                <span className="font-medium">{c.nombre}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              {/* Sucursal */}
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="sucursal">Sucursal</Label>
-                <Select value={sucursal} onValueChange={setSucursal}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar sucursal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sucursales.map((suc) => (
-                      <SelectItem key={suc.id} value={suc.nombre}>
-                        {suc.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Validez */}
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="vigencia">Validez</Label>
-                <Select value={vigencia} onValueChange={setVigencia}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar validez" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7">7 días</SelectItem>
-                    <SelectItem value="15">15 días</SelectItem>
-                    <SelectItem value="30">30 días</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Descargar OT */}
-              <div className="space-y-2 w-48">
-                <Label>&nbsp;</Label>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  disabled={!cotizacionId}
-                  onClick={descargarOTPDF}
-                  title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
-                >
-                  <Hammer className="w-4 h-4 mr-2" />
-                  Descargar OT
-                </Button>
-              </div>
-
-              {/* Descargar Cotización */}
-              <div className="space-y-2 w-48">
-                <Label>&nbsp;</Label>
-                <Button 
-                  onClick={descargarCotizacionPDF}
-                  className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
-                  disabled={!cotizacionId}
-                  title={!cotizacionId ? "Guarda la cotización antes de descargarla" : ""}
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Descargar Cotización
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tabla de Productos */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Productos y Servicios</CardTitle>
-            <CardDescription className="text-sm">
-              Agrega los productos y servicios para esta cotización
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900 w-16"></th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Producto/Soporte</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Imagen</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Descripción</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Cantidad</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Ancho</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Altura</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Totales en m²</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">UdM</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Precio</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900 whitespace-nowrap">Comisión %</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Impuestos</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productosList.map((item, index) => {
-                    // Renderizar nota
-                    if (item.tipo === 'nota') {
-                      const nota = item as NotaItem
-                      return (
-                        <tr 
-                          key={nota.id} 
-                          className="border-b border-gray-100"
-                          onDragOver={(e) => handleDragOver(e, index)}
-                          onDrop={(e) => handleDrop(e, index)}
-                        >
-                          <td className="py-1 px-2">
-                            <div className="flex items-center gap-0.5">
-                              <div
-                                draggable
-                                onDragStart={() => handleDragStart(index)}
-                                className="cursor-move"
-                              >
-                                <GripVertical className="w-3 h-3 text-gray-300" />
-                              </div>
-                              <div className="flex flex-col -space-y-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => moverItem(index, 'arriba')}
-                                  disabled={index === 0}
-                                  className="h-3 w-3 p-0 hover:bg-transparent"
-                                >
-                                  <ChevronUp className="w-2.5 h-2.5 text-gray-400" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => moverItem(index, 'abajo')}
-                                  disabled={index === productosList.length - 1}
-                                  className="h-3 w-3 p-0 hover:bg-transparent"
-                                >
-                                  <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
-                                </Button>
-                              </div>
-                            </div>
-                          </td>
-                          <td colSpan={12} className="py-1 px-2">
-                            <div className="flex items-center gap-2">
-                              <Input
-                                placeholder="Escribe una nota..."
-                                value={nota.texto}
-                                onChange={(e) => actualizarNota(nota.id, e.target.value)}
-                                className="w-full h-8 text-xs bg-white italic"
-                              />
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => eliminarProducto(nota.id)}
-                                className="h-8 w-8 p-0 flex items-center justify-center shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    }
-                    
-                    // Renderizar sección
-                    if (item.tipo === 'seccion') {
-                      const seccion = item as SeccionItem
-                      return (
-                        <tr 
-                          key={seccion.id} 
-                          className="border-b border-gray-100"
-                          onDragOver={(e) => handleDragOver(e, index)}
-                          onDrop={(e) => handleDrop(e, index)}
-                        >
-                          <td className="py-1 px-2">
-                            <div className="flex items-center gap-0.5">
-                              <div
-                                draggable
-                                onDragStart={() => handleDragStart(index)}
-                                className="cursor-move"
-                              >
-                                <GripVertical className="w-3 h-3 text-gray-300" />
-                              </div>
-                              <div className="flex flex-col -space-y-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => moverItem(index, 'arriba')}
-                                  disabled={index === 0}
-                                  className="h-3 w-3 p-0 hover:bg-transparent"
-                                >
-                                  <ChevronUp className="w-2.5 h-2.5 text-gray-400" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => moverItem(index, 'abajo')}
-                                  disabled={index === productosList.length - 1}
-                                  className="h-3 w-3 p-0 hover:bg-transparent"
-                                >
-                                  <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
-                                </Button>
-                              </div>
-                            </div>
-                          </td>
-                          <td colSpan={12} className="py-1 px-2">
-                            <div className="flex items-center gap-2">
-                              <Input
-                                placeholder="Escribe una sección..."
-                                value={seccion.texto}
-                                onChange={(e) => actualizarSeccion(seccion.id, e.target.value)}
-                                className="w-full h-8 text-xs bg-gray-100 font-bold"
-                              />
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => eliminarProducto(seccion.id)}
-                                className="h-8 w-8 p-0 flex items-center justify-center shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    }
-                    
-                    // Renderizar producto
-                    const producto = item as ProductoItem
-                    return (
-                    <tr 
-                      key={producto.id} 
-                      className="border-b border-gray-100"
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDrop={(e) => handleDrop(e, index)}
-                    >
-                      <td className="py-2 px-2">
-                        <div className="flex items-center gap-0.5">
-                          <div
-                            draggable
-                            onDragStart={() => handleDragStart(index)}
-                            className="cursor-move"
-                          >
-                            <GripVertical className="w-3 h-3 text-gray-300" />
-                          </div>
-                          <div className="flex flex-col -space-y-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => moverItem(index, 'arriba')}
-                              disabled={index === 0}
-                              className="h-3 w-3 p-0 hover:bg-transparent"
-                            >
-                              <ChevronUp className="w-2.5 h-2.5 text-gray-400" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => moverItem(index, 'abajo')}
-                              disabled={index === productosList.length - 1}
-                              className="h-3 w-3 p-0 hover:bg-transparent"
-                            >
-                              <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
-                            </Button>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-2 px-2">
-                        <Popover 
-                          open={openCombobox[producto.id] || false} 
-                          onOpenChange={(open) => {
-                            setOpenCombobox(prev => ({ ...prev, [producto.id]: open }))
-                            if (open) {
-                              // Al abrir, mostrar los primeros 20 items
-                              setFilteredItems(prev => ({ ...prev, [producto.id]: todosLosItems.slice(0, 20) }))
-                            }
-                          }}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                "w-48 h-8 text-xs justify-start px-2 overflow-hidden",
-                                !producto.producto && "text-muted-foreground"
-                              )}
-                            >
-                              <span className="truncate block">
-                                {producto.producto || "Agregar producto o soporte..."}
-                              </span>
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[400px] p-0" align="start">
-                            <Command shouldFilter={false} className="overflow-visible">
-                              <CommandInput 
-                                placeholder="Escribe código o nombre..."
-                                className="h-9 border-0 focus:ring-0"
-                                onValueChange={(value) => filtrarItems(producto.id, value)}
-                              />
-                              <CommandList>
-                                <CommandEmpty>
-                                  {cargandoItems ? "Cargando..." : "No se encontraron resultados."}
-                                </CommandEmpty>
-                                {(filteredItems[producto.id] || []).length > 0 && (
-                                  <>
-                                    {(filteredItems[producto.id] || []).filter((item: any) => item.tipo === 'producto').length > 0 && (
-                                      <CommandGroup heading="Productos">
-                                        {(filteredItems[producto.id] || [])
-                                          .filter((item: any) => item.tipo === 'producto')
-                                          .map((item: any) => (
-                                            <CommandItem
-                                              key={`producto-${item.id}`}
-                                              value={`${item.codigo} ${item.nombre}`}
-                                              onSelect={() => seleccionarProducto(producto.id, item)}
-                                              className="cursor-pointer"
-                                            >
-                                              <Check
-                                                className={cn(
-                                                  "mr-2 h-4 w-4",
-                                                  producto.producto === `${item.codigo} - ${item.nombre}` ? "opacity-100" : "opacity-0"
-                                                )}
-                                              />
-                                              <span className="text-xs truncate">
-                                                [{item.codigo}] {item.nombre}
-                                              </span>
-                                            </CommandItem>
-                                          ))}
-                                      </CommandGroup>
-                                    )}
-                                    {(filteredItems[producto.id] || []).filter((item: any) => item.tipo === 'soporte').length > 0 && (
-                                      <CommandGroup heading="Soportes">
-                                        {(filteredItems[producto.id] || [])
-                                          .filter((item: any) => item.tipo === 'soporte')
-                                          .map((item: any) => (
-                                            <CommandItem
-                                              key={`soporte-${item.id}`}
-                                              value={`${item.codigo} ${item.nombre}`}
-                                              onSelect={() => seleccionarProducto(producto.id, item)}
-                                              className="cursor-pointer"
-                                            >
-                                              <Check
-                                                className={cn(
-                                                  "mr-2 h-4 w-4",
-                                                  producto.producto === `${item.codigo} - ${item.nombre}` ? "opacity-100" : "opacity-0"
-                                                )}
-                                              />
-                                              <span className="text-xs truncate">
-                                                [{item.codigo}] {item.nombre}
-                                              </span>
-                                            </CommandItem>
-                                          ))}
-                                      </CommandGroup>
-                                    )}
-                                  </>
-                                )}
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <div className="relative w-16 h-16 border border-gray-300 rounded-md overflow-hidden bg-gray-50 flex items-center justify-center">
-                          {producto.imagen ? (
-                            <>
-                              <img 
-                                src={producto.imagen} 
-                                alt="Producto" 
-                                className="w-full h-full object-cover"
-                                onError={async (e) => {
-                                  console.error('❌ Error cargando imagen:', producto.imagen)
-                                  
-                                  // Si la imagen es blob, intentar subirla automáticamente
-                                  if (producto.imagen?.startsWith('blob:')) {
-                                    console.log('🔄 Detectada URL blob, intentando subir imagen...')
-                                    try {
-                                      // Obtener el blob desde la URL
-                                      const blobResponse = await fetch(producto.imagen)
-                                      const blob = await blobResponse.blob()
-                                      
-                                      // Crear un File desde el blob
-                                      const file = new File([blob], 'imagen.jpg', { type: blob.type })
-                                      
-                                      // Subir a Supabase
-                                      const formData = new FormData()
-                                      formData.append('file', file)
-                                      
-                                      const uploadResponse = await fetch('/api/cotizaciones/image', {
-                                        method: 'POST',
-                                        body: formData
-                                      })
-                                      
-                                      const uploadData = await uploadResponse.json()
-                                      
-                                      if (uploadData.success && uploadData.data.publicUrl) {
-                                        console.log('✅ Imagen blob subida correctamente:', uploadData.data.publicUrl)
-                                        actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
-                                        actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
-                                        // Revocar la URL blob
-                                        URL.revokeObjectURL(producto.imagen)
-                                      } else {
-                                        throw new Error(uploadData.error || 'Error al subir imagen')
-                                      }
-                                    } catch (uploadError) {
-                                      console.error('❌ Error subiendo imagen blob:', uploadError)
-                                      // Si falla, intentar con File si existe
-                                      const productoConFile = productosList.find(
-                                        (item): item is ProductoItem => 
-                                          item.id === producto.id && 
-                                          item.tipo === 'producto' &&
-                                          !!(item as ProductoItem).imagenFile
-                                      ) as ProductoItem | undefined
-                                      
-                                      if (productoConFile?.imagenFile) {
-                                        const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
-                                        actualizarProducto(producto.id, 'imagen', newBlobUrl)
-                                      } else {
-                                        e.currentTarget.style.display = 'none'
-                                      }
-                                    }
-                                  } else if (producto.imagenFile) {
-                                    // Si hay un File pero no se ha subido, subirlo
-                                    try {
-                                      const formData = new FormData()
-                                      formData.append('file', producto.imagenFile)
-                                      
-                                      const uploadResponse = await fetch('/api/cotizaciones/image', {
-                                        method: 'POST',
-                                        body: formData
-                                      })
-                                      
-                                      const uploadData = await uploadResponse.json()
-                                      
-                                      if (uploadData.success && uploadData.data.publicUrl) {
-                                        actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
-                                        actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
-                                        actualizarProducto(producto.id, 'imagenFile', undefined)
-                                      }
-                                    } catch (uploadError) {
-                                      console.error('❌ Error subiendo imagenFile:', uploadError)
-                                    }
-                                  } else if (producto.imagenOriginalUrl && producto.imagenOriginalUrl !== producto.imagen && !producto.imagenOriginalUrl.startsWith('blob:')) {
-                                    // Si hay una URL original diferente y válida, intentar usarla
-                                    console.log('🔄 Intentando cargar URL original:', producto.imagenOriginalUrl)
-                                    actualizarProducto(producto.id, 'imagen', producto.imagenOriginalUrl)
-                                  } else {
-                                    // Si no hay File ni URL original válida, ocultar
-                                    console.warn('⚠️ No se pudo cargar la imagen, ocultando')
-                                    e.currentTarget.style.display = 'none'
-                                  }
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  // Si es una URL temporal (blob), revocarla
-                                  if (producto.imagen && producto.imagen.startsWith('blob:')) {
-                                    URL.revokeObjectURL(producto.imagen)
-                                  }
-                                  actualizarProducto(producto.id, 'imagen', undefined)
-                                  actualizarProducto(producto.id, 'imagenFile', undefined)
-                                }}
-                                className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-red-600"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </>
-                          ) : (
-                            <label className="cursor-pointer w-full h-full flex items-center justify-center">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (!file) return
-                                  
-                                  // Validar tamaño (máximo 5MB)
-                                  const maxSize = 5 * 1024 * 1024 // 5MB
-                                  if (file.size > maxSize) {
-                                    toast.error('Tamaño máximo de 5MB superado')
-                                    e.target.value = '' // Limpiar el input
-                                    return
-                                  }
-                                  
-                                  // Crear URL temporal para preview
-                                  const previewUrl = URL.createObjectURL(file)
-                                  
-                                  // Guardar el File y la URL temporal
-                                  actualizarProducto(producto.id, 'imagenFile', file)
-                                  actualizarProducto(producto.id, 'imagen', previewUrl)
-                                }}
-                              />
-                              <Camera className="w-5 h-5 text-gray-400" />
-                            </label>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Textarea
-                          value={producto.descripcion}
-                          onChange={(e) => actualizarProducto(producto.id, 'descripcion', e.target.value)}
-                          className="w-48 h-16 resize-none text-xs"
-                          placeholder="Descripción del producto"
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={producto.cantidad}
-                          onChange={(e) => actualizarProducto(producto.id, 'cantidad', e.target.value === '' ? '' : parseFloat(e.target.value) || 1)}
-                          onBlur={(e) => {
-                            if (e.target.value === '' || parseFloat(e.target.value) < 1) {
-                              actualizarProducto(producto.id, 'cantidad', 1)
-                            }
-                          }}
-                          className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          step="0.01"
-                          min="1"
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={producto.ancho}
-                          onChange={(e) => actualizarProducto(producto.id, 'ancho', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                          onBlur={(e) => {
-                            if (e.target.value === '') {
-                              actualizarProducto(producto.id, 'ancho', 0)
-                            }
-                          }}
-                          className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          step="0.01"
-                          disabled={producto.dimensionesBloqueadas || producto.udm !== "m²"}
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={producto.alto}
-                          onChange={(e) => actualizarProducto(producto.id, 'alto', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                          onBlur={(e) => {
-                            if (e.target.value === '') {
-                              actualizarProducto(producto.id, 'alto', 0)
-                            }
-                          }}
-                          className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          step="0.01"
-                          disabled={producto.dimensionesBloqueadas || producto.udm !== "m²"}
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <div className="flex items-center gap-1 h-8">
-                          {producto.udm === "m²" ? (
-                            <>
-                              <span className="font-medium text-xs">{Number(producto.totalM2 || 0).toFixed(2)} m<sup>2</sup></span>
-                          <div className="flex items-center justify-center h-6 w-6">
-                            <Calculator className="w-3 h-3 text-red-500" />
-                          </div>
-                            </>
-                          ) : (
-                            <span className="font-medium text-xs text-gray-400">-</span>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Input
-                          value={producto.udm}
-                          onChange={(e) => actualizarProducto(producto.id, 'udm', e.target.value)}
-                          className="w-20 h-8 text-xs"
-                          disabled
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={producto.precio}
-                          onChange={(e) => actualizarProducto(producto.id, 'precio', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                          onBlur={(e) => {
-                            if (e.target.value === '') {
-                              actualizarProducto(producto.id, 'precio', 0)
-                            }
-                          }}
-                          className="w-20 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          step="0.01"
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={producto.comision}
-                          onChange={(e) => actualizarProducto(producto.id, 'comision', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                          onBlur={(e) => {
-                            if (e.target.value === '') {
-                              actualizarProducto(producto.id, 'comision', 0)
-                            }
-                          }}
-                          className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          step="0.01"
-                        />
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <div className="flex gap-1">
-                          {producto.conIVA && (
-                            <div className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs">
-                              <span>IVA</span>
-                              <button
-                                type="button"
-                                onClick={() => actualizarProducto(producto.id, 'conIVA', false)}
-                                className="hover:text-red-500"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-                          {!producto.conIVA && (
-                            <button
-                              type="button"
-                              onClick={() => actualizarProducto(producto.id, 'conIVA', true)}
-                              className="text-xs text-gray-400 hover:text-gray-600 underline"
-                            >
-                              + IVA
-                            </button>
-                          )}
-                          {producto.conIT && (
-                            <div className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs">
-                              <span>IT</span>
-                              <button
-                                type="button"
-                                onClick={() => actualizarProducto(producto.id, 'conIT', false)}
-                                className="hover:text-red-500"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-                          {!producto.conIT && (
-                            <button
-                              type="button"
-                              onClick={() => actualizarProducto(producto.id, 'conIT', true)}
-                              className="text-xs text-gray-400 hover:text-gray-600 underline"
-                            >
-                              + IT
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="py-2 px-2">
-                        <div className="flex items-center gap-1 h-8">
-                          {(() => {
-                            // Detectar unidades (case-insensitive y considerar singular/plural)
-                            const udmLower = producto.udm?.toLowerCase().trim() || ''
-                            const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
-                            const totalCalculado = calcularTotal(
-                              producto.cantidad,
-                              producto.totalM2,
-                              producto.precio,
-                              producto.comision,
-                              producto.conIVA,
-                              producto.conIT,
-                              producto.esSoporte || esUnidades, // Tratar unidades como soportes
-                              producto.udm
-                            )
-                            // Mostrar siempre el valor que el usuario está editando (total o totalManual)
-                            // Permitir edición libre, solo avisar en onBlur si es menor
-                            const valorActual = producto.total !== undefined && producto.total !== null 
-                              ? producto.total 
-                              : (producto.totalManual !== null && producto.totalManual !== undefined 
-                                  ? producto.totalManual 
-                                  : totalCalculado)
-                            
-                            return (
-                              <Input
-                                type="number"
-                                value={valorActual}
-                                onChange={(e) => {
-                                  const valor = e.target.value === '' ? '' : parseFloat(e.target.value)
-                                  // Permitir editar cualquier valor libremente (validación solo en onBlur)
-                                  if (valor === '') {
-                                    actualizarProducto(producto.id, 'total', 0)
-                                  } else {
-                                    actualizarProducto(producto.id, 'total', valor)
-                                  }
-                                }}
-                                onBlur={(e) => {
-                                  const valor = parseFloat(e.target.value) || 0
-                                  // Solo avisar si es menor al calculado, pero permitir el valor
-                                  if (valor < totalCalculado) {
-                                    toast.warning("El total ingresado es menor al precio calculado.")
-                                  }
-                                  // Guardar el valor (ya se guardó en onChange, pero asegurarnos)
-                                  actualizarProducto(producto.id, 'total', valor)
-                                }}
-                                className="w-24 h-8 text-xs font-medium text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                step="0.01"
-                              />
-                            )
-                          })()}
-                          <div className="flex items-center justify-center h-6 w-6">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => eliminarProducto(producto.id)}
-                          disabled={productosList.length === 1}
-                              className="h-6 w-6 p-0 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                              <Trash2 className="w-3 h-3" />
-                        </Button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            
-            {/* Botones de Acción */}
-            <div className="flex gap-3 mt-4">
-              <Button variant="outline" size="sm" onClick={agregarProducto} className="text-xs">
-                <Plus className="w-3 h-3 mr-1" />
-                Agregar un producto
-              </Button>
-              <Button variant="outline" size="sm" onClick={agregarSeccion} className="text-xs">
-                <Plus className="w-3 h-3 mr-1" />
-                Agregar una sección
-              </Button>
-              <Button variant="outline" size="sm" onClick={agregarNota} className="text-xs">
-                <Plus className="w-3 h-3 mr-1" />
-                Agregar nota
-              </Button>
-            </div>
-            
-            {/* Total General */}
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <div className="flex justify-between items-center gap-4">
-                <span className="text-sm font-semibold">Total General:</span>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={totalGeneral}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      console.log('📝 Input onChange:', val)
-                      handleTotalChange(val)
-                    }}
-                    onBlur={(e) => {
-                      const val = e.target.value
-                      console.log('📝 Input onBlur:', val)
-                      handleTotalBlur(val)
-                    }}
-                    className="w-32 h-10 text-lg font-bold text-[#D54644] text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    step="0.01"
-                  />
-                  <span className="text-lg font-bold text-[#D54644]">Bs</span>
-              </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
-
-      {/* Modal de selección de variantes */}
-      <Dialog open={modalVariantes.open} onOpenChange={(open) => !open && setModalVariantes({ open: false, productoId: '', itemData: null, variantesSeleccionadas: {} })}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Seleccionar variantes</DialogTitle>
-            <DialogDescription>
-              Producto: {modalVariantes.itemData?.nombre}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {modalVariantes.itemData?.variantes && Array.isArray(modalVariantes.itemData.variantes) && modalVariantes.itemData.variantes.length > 0 ? (
-              modalVariantes.itemData.variantes.map((variante: any, index: number) => {
-                // Limpiar el nombre de la variante
-                let nombreLimpio = variante.nombre
-                  // Eliminar nombre del producto (ej: "Lona frontligth")
-                  .replace(/Lona frontligth/gi, '')
-                  .replace(/LONA FRONTLIGTH/gi, '')
-                  // Eliminar frases completas repetidas (ej: "Instalación en valla Instalación en valla")
-                  .replace(/Instalación en valla\s+Instalación en valla/gi, 'Instalación en valla')
-                  .replace(/Desinstalación en valla\s+Desinstalación en valla/gi, 'Desinstalación en valla')
-                  // Eliminar palabras individuales repetidas
-                  .replace(/\b(\w+)\s+\1\b/gi, '$1')
-                  .trim()
-                
-                // Si queda vacío, usar el original
-                if (!nombreLimpio) {
-                  nombreLimpio = variante.nombre
-                }
-                
-                return (
-                  <div key={index} className="grid gap-2">
-                    <Label htmlFor={`variante-${index}`}>{nombreLimpio}</Label>
-                  <Select
-                    value={modalVariantes.variantesSeleccionadas[variante.nombre] || ''}
-                    onValueChange={(value) => 
-                      setModalVariantes(prev => ({
-                        ...prev,
-                        variantesSeleccionadas: {
-                          ...prev.variantesSeleccionadas,
-                          [variante.nombre]: value
-                        }
-                      }))
-                    }
+          {/* Información General */}
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Información General</CardTitle>
+                {/* Botones de estado */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => actualizarEstado("Rechazada")}
+                    disabled={guardando || !cotizacionId || estadoCotizacion === "Rechazada"}
                   >
-                    <SelectTrigger id={`variante-${index}`}>
-                      <SelectValue placeholder="Seleccionar" />
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Rechazada
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => actualizarEstado("Aprobada")}
+                    disabled={guardando || !cotizacionId || estadoCotizacion === "Aprobada"}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Aprobada
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Todos los campos y botones de descarga en una sola fila */}
+              <div className="flex gap-4">
+                {/* Cliente */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="cliente">Cliente</Label>
+                  <Popover open={openClienteCombobox} onOpenChange={(open) => {
+                    setOpenClienteCombobox(open)
+                    if (open) {
+                      setFilteredClientes(todosLosClientes.slice(0, 50))
+                    }
+                  }}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-between",
+                          !cliente && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="truncate">
+                          {cliente
+                            ? todosLosClientes.find(c => c.id === cliente)?.displayName || "Seleccionar cliente"
+                            : "Seleccionar cliente"}
+                        </span>
+                        <Check className={cn("ml-2 h-4 w-4 shrink-0", cliente ? "opacity-100" : "opacity-0")} />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false} className="overflow-visible">
+                        <CommandInput
+                          placeholder="Buscar cliente..."
+                          className="h-9 border-0 focus:ring-0"
+                          onValueChange={filtrarClientes}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {cargandoClientes ? "Cargando..." : "No se encontraron clientes."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {filteredClientes.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.displayName}
+                                onSelect={() => {
+                                  setCliente(c.id)
+                                  setOpenClienteCombobox(false)
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{c.displayName}</span>
+                                  {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Comercial */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="vendedor">Comercial</Label>
+                  <Popover open={openComercialCombobox} onOpenChange={(open) => {
+                    setOpenComercialCombobox(open)
+                    if (open) {
+                      setFilteredComerciales(todosLosComerciales.slice(0, 20))
+                    }
+                  }}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-between",
+                          !vendedor && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="truncate">
+                          {vendedor
+                            ? todosLosComerciales.find(c => c.id === vendedor)?.nombre || "Seleccionar comercial"
+                            : "Seleccionar comercial"}
+                        </span>
+                        <Check className={cn("ml-2 h-4 w-4 shrink-0", vendedor ? "opacity-100" : "opacity-0")} />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false} className="overflow-visible">
+                        <CommandInput
+                          placeholder="Buscar comercial..."
+                          className="h-9 border-0 focus:ring-0"
+                          onValueChange={filtrarComerciales}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            {cargandoComerciales ? "Cargando..." : "No se encontraron comerciales."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {filteredComerciales.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.nombre}
+                                onSelect={() => {
+                                  setVendedor(c.id)
+                                  setOpenComercialCombobox(false)
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", vendedor === c.id ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{c.nombre}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Sucursal */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="sucursal">Sucursal</Label>
+                  <Select value={sucursal} onValueChange={setSucursal}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar sucursal" />
                     </SelectTrigger>
                     <SelectContent>
-                      {variante.posibilidades && Array.isArray(variante.posibilidades) && variante.posibilidades.map((posibilidad: string, pIndex: number) => (
-                        <SelectItem key={pIndex} value={posibilidad}>
-                          {posibilidad}
+                      {sucursales.map((suc) => (
+                        <SelectItem key={suc.id} value={suc.nombre}>
+                          {suc.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                )
-              })
-            ) : (
-              <p className="text-sm text-muted-foreground">No hay variantes disponibles</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setModalVariantes({ open: false, productoId: '', itemData: null, variantesSeleccionadas: {} })}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={confirmarVariantes}
-              className="bg-[#D54644] hover:bg-[#B03A38]"
-              disabled={
-                modalVariantes.itemData?.variantes?.some((v: any) => 
-                  !modalVariantes.variantesSeleccionadas[v.nombre]
-                )
-              }
-            >
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Modal de selección de fechas para soportes */}
-      <Dialog open={modalFechasSoporte.open} onOpenChange={(open) => !open && setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Seleccionar fechas de alquiler</DialogTitle>
-            <DialogDescription>
-              Soporte: {modalFechasSoporte.itemData?.nombre}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="fecha-inicio">Fecha de inicio</Label>
-              <Input
-                id="fecha-inicio"
-                type="date"
-                value={modalFechasSoporte.fechaInicio}
-                onChange={(e) => setModalFechasSoporte(prev => ({ ...prev, fechaInicio: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="meses">Meses</Label>
-              <Select
-                value={modalFechasSoporte.meses.toString()}
-                onValueChange={(value) => setModalFechasSoporte(prev => ({ ...prev, meses: parseInt(value) }))}
-              >
-                <SelectTrigger id="meses">
-                  <SelectValue placeholder="Seleccionar meses" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mes) => (
-                    <SelectItem key={mes} value={mes.toString()}>
-                      {mes} {mes === 1 ? 'Mes' : 'Meses'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="fecha-fin">Fecha de fin</Label>
-              <Input
-                id="fecha-fin"
-                type="date"
-                value={modalFechasSoporte.fechaFin}
-                disabled
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={confirmarFechasSoporte}
-              className="bg-[#D54644] hover:bg-[#B03A38]"
-              disabled={!modalFechasSoporte.fechaInicio || !modalFechasSoporte.fechaFin}
-            >
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* Validez */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="vigencia">Validez</Label>
+                  <Select value={vigencia} onValueChange={setVigencia}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar validez" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">7 días</SelectItem>
+                      <SelectItem value="15">15 días</SelectItem>
+                      <SelectItem value="30">30 días</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-      {/* Modal de confirmación de aprobación con alquileres */}
-      <Dialog open={modalAprobacion.open} onOpenChange={(open) => !open && setModalAprobacion(prev => ({ ...prev, open: false }))}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>¿Seguro que quiere aprobar esta cotización?</DialogTitle>
-            <DialogDescription>
-              Se efectuarán las siguientes órdenes de alquiler:
-            </DialogDescription>
-          </DialogHeader>
-          
-          {modalAprobacion.soportesInfo.length > 0 ? (
-            <div className="max-h-[400px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-3 font-medium">Soporte</th>
-                    <th className="text-left py-2 px-3 font-medium">Fechas</th>
-                    <th className="text-right py-2 px-3 font-medium">Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {modalAprobacion.soportesInfo.map((info, index) => (
-                    <tr key={index} className="border-b">
-                      <td className="py-2 px-3">
-                        <div>
-                          <div className="font-medium">{info.soporte.codigo}</div>
-                          <div className="text-xs text-gray-500">{info.soporte.titulo}</div>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="text-xs">
-                          <div>Inicio: {new Date(info.fechaInicio).toLocaleDateString('es-ES')}</div>
-                          <div>Fin: {new Date(info.fechaFin).toLocaleDateString('es-ES')}</div>
-                          <div className="text-gray-500">({info.meses} mes{info.meses !== 1 ? 'es' : ''})</div>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="font-medium">
-                          Bs {Number(info.importe || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                      </td>
+                {/* Plazo */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="plazo">Plazo de Entrega</Label>
+                  <Input
+                    id="plazo"
+                    value={plazo}
+                    onChange={(e) => setPlazo(e.target.value)}
+                    placeholder="Ej: 5 días hábiles"
+                  />
+                </div>
+
+                {/* Descargar OT */}
+                <div className="space-y-2 w-48">
+                  <Label>&nbsp;</Label>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={!cotizacionId}
+                    onClick={descargarOTPDF}
+                    title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
+                  >
+                    <Hammer className="w-4 h-4 mr-2" />
+                    Descargar OT
+                  </Button>
+                </div>
+
+                {/* Descargar Cotización */}
+                <div className="space-y-2 w-48">
+                  <Label>&nbsp;</Label>
+                  <Button
+                    onClick={descargarCotizacionPDF}
+                    className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
+                    disabled={!cotizacionId}
+                    title={!cotizacionId ? "Guarda la cotización antes de descargarla" : ""}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descargar Cotización
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tabla de Productos */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Productos y Servicios</CardTitle>
+              <CardDescription className="text-sm">
+                Agrega los productos y servicios para esta cotización
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900 w-16"></th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Producto/Soporte</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Imagen</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Descripción</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Cantidad</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Ancho</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Altura</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Totales en m²</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">UdM</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Precio</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900 whitespace-nowrap">Comisión %</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Impuestos</th>
+                      <th className="text-left py-2 px-2 text-xs font-medium text-gray-900">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="py-4 text-center text-gray-500">
-              No hay soportes en esta cotización
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {productosList.map((item, index) => {
+                      // Renderizar nota
+                      if (item.tipo === 'nota') {
+                        const nota = item as NotaItem
+                        return (
+                          <tr
+                            key={nota.id}
+                            className="border-b border-gray-100"
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDrop(e, index)}
+                          >
+                            <td className="py-1 px-2">
+                              <div className="flex items-center gap-0.5">
+                                <div
+                                  draggable
+                                  onDragStart={() => handleDragStart(index)}
+                                  className="cursor-move"
+                                >
+                                  <GripVertical className="w-3 h-3 text-gray-300" />
+                                </div>
+                                <div className="flex flex-col -space-y-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moverItem(index, 'arriba')}
+                                    disabled={index === 0}
+                                    className="h-3 w-3 p-0 hover:bg-transparent"
+                                  >
+                                    <ChevronUp className="w-2.5 h-2.5 text-gray-400" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moverItem(index, 'abajo')}
+                                    disabled={index === productosList.length - 1}
+                                    className="h-3 w-3 p-0 hover:bg-transparent"
+                                  >
+                                    <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </td>
+                            <td colSpan={12} className="py-1 px-2">
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Escribe una nota..."
+                                  value={nota.texto}
+                                  onChange={(e) => actualizarNota(nota.id, e.target.value)}
+                                  className="w-full h-8 text-xs bg-white italic"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => eliminarProducto(nota.id)}
+                                  className="h-8 w-8 p-0 flex items-center justify-center shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setModalAprobacion(prev => ({ ...prev, open: false }))}
-              disabled={guardando}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={confirmarAprobacion}
-              disabled={guardando || modalAprobacion.cargando}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {guardando ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Procesando...
-                </>
+                      // Renderizar sección
+                      if (item.tipo === 'seccion') {
+                        const seccion = item as SeccionItem
+                        return (
+                          <tr
+                            key={seccion.id}
+                            className="border-b border-gray-100"
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDrop(e, index)}
+                          >
+                            <td className="py-1 px-2">
+                              <div className="flex items-center gap-0.5">
+                                <div
+                                  draggable
+                                  onDragStart={() => handleDragStart(index)}
+                                  className="cursor-move"
+                                >
+                                  <GripVertical className="w-3 h-3 text-gray-300" />
+                                </div>
+                                <div className="flex flex-col -space-y-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moverItem(index, 'arriba')}
+                                    disabled={index === 0}
+                                    className="h-3 w-3 p-0 hover:bg-transparent"
+                                  >
+                                    <ChevronUp className="w-2.5 h-2.5 text-gray-400" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => moverItem(index, 'abajo')}
+                                    disabled={index === productosList.length - 1}
+                                    className="h-3 w-3 p-0 hover:bg-transparent"
+                                  >
+                                    <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </td>
+                            <td colSpan={12} className="py-1 px-2">
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Escribe una sección..."
+                                  value={seccion.texto}
+                                  onChange={(e) => actualizarSeccion(seccion.id, e.target.value)}
+                                  className="w-full h-8 text-xs bg-gray-100 font-bold"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => eliminarProducto(seccion.id)}
+                                  className="h-8 w-8 p-0 flex items-center justify-center shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
+
+                      // Renderizar producto
+                      const producto = item as ProductoItem
+                      return (
+                        <tr
+                          key={producto.id}
+                          className="border-b border-gray-100"
+                          onDragOver={(e) => handleDragOver(e, index)}
+                          onDrop={(e) => handleDrop(e, index)}
+                        >
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-0.5">
+                              <div
+                                draggable
+                                onDragStart={() => handleDragStart(index)}
+                                className="cursor-move"
+                              >
+                                <GripVertical className="w-3 h-3 text-gray-300" />
+                              </div>
+                              <div className="flex flex-col -space-y-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => moverItem(index, 'arriba')}
+                                  disabled={index === 0}
+                                  className="h-3 w-3 p-0 hover:bg-transparent"
+                                >
+                                  <ChevronUp className="w-2.5 h-2.5 text-gray-400" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => moverItem(index, 'abajo')}
+                                  disabled={index === productosList.length - 1}
+                                  className="h-3 w-3 p-0 hover:bg-transparent"
+                                >
+                                  <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2 px-2">
+                            <Popover
+                              open={openCombobox[producto.id] || false}
+                              onOpenChange={(open) => {
+                                setOpenCombobox(prev => ({ ...prev, [producto.id]: open }))
+                                if (open) {
+                                  // Al abrir, mostrar los primeros 20 items
+                                  setFilteredItems(prev => ({ ...prev, [producto.id]: todosLosItems.slice(0, 20) }))
+                                }
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className={cn(
+                                    "w-48 h-8 text-xs justify-start px-2 overflow-hidden",
+                                    !producto.producto && "text-muted-foreground"
+                                  )}
+                                >
+                                  <span className="truncate block">
+                                    {producto.producto || "Agregar producto o soporte..."}
+                                  </span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[400px] p-0" align="start">
+                                <Command shouldFilter={false} className="overflow-visible">
+                                  <CommandInput
+                                    placeholder="Escribe código o nombre..."
+                                    className="h-9 border-0 focus:ring-0"
+                                    onValueChange={(value) => filtrarItems(producto.id, value)}
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>
+                                      {cargandoItems ? "Cargando..." : "No se encontraron resultados."}
+                                    </CommandEmpty>
+                                    {(filteredItems[producto.id] || []).length > 0 && (
+                                      <>
+                                        {(filteredItems[producto.id] || []).filter((item: any) => item.tipo === 'producto').length > 0 && (
+                                          <CommandGroup heading="Productos">
+                                            {(filteredItems[producto.id] || [])
+                                              .filter((item: any) => item.tipo === 'producto')
+                                              .map((item: any) => (
+                                                <CommandItem
+                                                  key={`producto-${item.id}`}
+                                                  value={`${item.codigo} ${item.nombre}`}
+                                                  onSelect={() => seleccionarProducto(producto.id, item)}
+                                                  className="cursor-pointer"
+                                                >
+                                                  <Check
+                                                    className={cn(
+                                                      "mr-2 h-4 w-4",
+                                                      producto.producto === `${item.codigo} - ${item.nombre}` ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                  />
+                                                  <span className="text-xs truncate">
+                                                    [{item.codigo}] {item.nombre}
+                                                  </span>
+                                                </CommandItem>
+                                              ))}
+                                          </CommandGroup>
+                                        )}
+                                        {(filteredItems[producto.id] || []).filter((item: any) => item.tipo === 'soporte').length > 0 && (
+                                          <CommandGroup heading="Soportes">
+                                            {(filteredItems[producto.id] || [])
+                                              .filter((item: any) => item.tipo === 'soporte')
+                                              .map((item: any) => (
+                                                <CommandItem
+                                                  key={`soporte-${item.id}`}
+                                                  value={`${item.codigo} ${item.nombre}`}
+                                                  onSelect={() => seleccionarProducto(producto.id, item)}
+                                                  className="cursor-pointer"
+                                                >
+                                                  <Check
+                                                    className={cn(
+                                                      "mr-2 h-4 w-4",
+                                                      producto.producto === `${item.codigo} - ${item.nombre}` ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                  />
+                                                  <span className="text-xs truncate">
+                                                    [{item.codigo}] {item.nombre}
+                                                  </span>
+                                                </CommandItem>
+                                              ))}
+                                          </CommandGroup>
+                                        )}
+                                      </>
+                                    )}
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <div className="relative w-16 h-16 border border-gray-300 rounded-md overflow-hidden bg-gray-50 flex items-center justify-center">
+                              {producto.imagen ? (
+                                <>
+                                  <img
+                                    src={producto.imagen}
+                                    alt="Producto"
+                                    className="w-full h-full object-cover"
+                                    onError={async (e) => {
+                                      console.error('❌ Error cargando imagen:', producto.imagen)
+
+                                      // Si la imagen es blob, intentar subirla automáticamente
+                                      if (producto.imagen?.startsWith('blob:')) {
+                                        console.log('🔄 Detectada URL blob, intentando subir imagen...')
+                                        try {
+                                          // Obtener el blob desde la URL
+                                          const blobResponse = await fetch(producto.imagen)
+                                          const blob = await blobResponse.blob()
+
+                                          // Crear un File desde el blob
+                                          const file = new File([blob], 'imagen.jpg', { type: blob.type })
+
+                                          // Subir a Supabase
+                                          const formData = new FormData()
+                                          formData.append('file', file)
+
+                                          const uploadResponse = await fetch('/api/cotizaciones/image', {
+                                            method: 'POST',
+                                            body: formData
+                                          })
+
+                                          const uploadData = await uploadResponse.json()
+
+                                          if (uploadData.success && uploadData.data.publicUrl) {
+                                            console.log('✅ Imagen blob subida correctamente:', uploadData.data.publicUrl)
+                                            actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
+                                            actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
+                                            // Revocar la URL blob
+                                            URL.revokeObjectURL(producto.imagen)
+                                          } else {
+                                            throw new Error(uploadData.error || 'Error al subir imagen')
+                                          }
+                                        } catch (uploadError) {
+                                          console.error('❌ Error subiendo imagen blob:', uploadError)
+                                          // Si falla, intentar con File si existe
+                                          const productoConFile = productosList.find(
+                                            (item): item is ProductoItem =>
+                                              item.id === producto.id &&
+                                              item.tipo === 'producto' &&
+                                              !!(item as ProductoItem).imagenFile
+                                          ) as ProductoItem | undefined
+
+                                          if (productoConFile?.imagenFile) {
+                                            const newBlobUrl = URL.createObjectURL(productoConFile.imagenFile)
+                                            actualizarProducto(producto.id, 'imagen', newBlobUrl)
+                                          } else {
+                                            e.currentTarget.style.display = 'none'
+                                          }
+                                        }
+                                      } else if (producto.imagenFile) {
+                                        // Si hay un File pero no se ha subido, subirlo
+                                        try {
+                                          const formData = new FormData()
+                                          formData.append('file', producto.imagenFile)
+
+                                          const uploadResponse = await fetch('/api/cotizaciones/image', {
+                                            method: 'POST',
+                                            body: formData
+                                          })
+
+                                          const uploadData = await uploadResponse.json()
+
+                                          if (uploadData.success && uploadData.data.publicUrl) {
+                                            actualizarProducto(producto.id, 'imagen', uploadData.data.publicUrl)
+                                            actualizarProducto(producto.id, 'imagenOriginalUrl', uploadData.data.publicUrl)
+                                            actualizarProducto(producto.id, 'imagenFile', undefined)
+                                          }
+                                        } catch (uploadError) {
+                                          console.error('❌ Error subiendo imagenFile:', uploadError)
+                                        }
+                                      } else if (producto.imagenOriginalUrl && producto.imagenOriginalUrl !== producto.imagen && !producto.imagenOriginalUrl.startsWith('blob:')) {
+                                        // Si hay una URL original diferente y válida, intentar usarla
+                                        console.log('🔄 Intentando cargar URL original:', producto.imagenOriginalUrl)
+                                        actualizarProducto(producto.id, 'imagen', producto.imagenOriginalUrl)
+                                      } else {
+                                        // Si no hay File ni URL original válida, ocultar
+                                        console.warn('⚠️ No se pudo cargar la imagen, ocultando')
+                                        e.currentTarget.style.display = 'none'
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Si es una URL temporal (blob), revocarla
+                                      if (producto.imagen && producto.imagen.startsWith('blob:')) {
+                                        URL.revokeObjectURL(producto.imagen)
+                                      }
+                                      actualizarProducto(producto.id, 'imagen', undefined)
+                                      actualizarProducto(producto.id, 'imagenFile', undefined)
+                                    }}
+                                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-red-600"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </>
+                              ) : (
+                                <label className="cursor-pointer w-full h-full flex items-center justify-center">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (!file) return
+
+                                      // Validar tamaño (máximo 5MB)
+                                      const maxSize = 5 * 1024 * 1024 // 5MB
+                                      if (file.size > maxSize) {
+                                        toast.error('Tamaño máximo de 5MB superado')
+                                        e.target.value = '' // Limpiar el input
+                                        return
+                                      }
+
+                                      // Crear URL temporal para preview
+                                      const previewUrl = URL.createObjectURL(file)
+
+                                      // Guardar el File y la URL temporal
+                                      actualizarProducto(producto.id, 'imagenFile', file)
+                                      actualizarProducto(producto.id, 'imagen', previewUrl)
+                                    }}
+                                  />
+                                  <Camera className="w-5 h-5 text-gray-400" />
+                                </label>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Textarea
+                              value={producto.descripcion}
+                              onChange={(e) => actualizarProducto(producto.id, 'descripcion', e.target.value)}
+                              className="w-48 h-16 resize-none text-xs"
+                              placeholder="Descripción del producto"
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Input
+                              type="number"
+                              value={producto.cantidad}
+                              onChange={(e) => actualizarProducto(producto.id, 'cantidad', e.target.value === '' ? '' : parseFloat(e.target.value) || 1)}
+                              onBlur={(e) => {
+                                if (e.target.value === '' || parseFloat(e.target.value) < 1) {
+                                  actualizarProducto(producto.id, 'cantidad', 1)
+                                }
+                              }}
+                              className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              step="0.01"
+                              min="1"
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Input
+                              type="number"
+                              value={producto.ancho}
+                              onChange={(e) => actualizarProducto(producto.id, 'ancho', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  actualizarProducto(producto.id, 'ancho', 0)
+                                }
+                              }}
+                              className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              step="0.01"
+                              disabled={producto.dimensionesBloqueadas || producto.udm !== "m²"}
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Input
+                              type="number"
+                              value={producto.alto}
+                              onChange={(e) => actualizarProducto(producto.id, 'alto', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  actualizarProducto(producto.id, 'alto', 0)
+                                }
+                              }}
+                              className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              step="0.01"
+                              disabled={producto.dimensionesBloqueadas || producto.udm !== "m²"}
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-1 h-8">
+                              {producto.udm === "m²" ? (
+                                <>
+                                  <span className="font-medium text-xs">{Number(producto.totalM2 || 0).toFixed(2)} m<sup>2</sup></span>
+                                  <div className="flex items-center justify-center h-6 w-6">
+                                    <Calculator className="w-3 h-3 text-red-500" />
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="font-medium text-xs text-gray-400">-</span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Input
+                              value={producto.udm}
+                              onChange={(e) => actualizarProducto(producto.id, 'udm', e.target.value)}
+                              className="w-20 h-8 text-xs"
+                              disabled
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Input
+                              type="number"
+                              value={producto.precio}
+                              onChange={(e) => actualizarProducto(producto.id, 'precio', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  actualizarProducto(producto.id, 'precio', 0)
+                                }
+                              }}
+                              className="w-20 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              step="0.01"
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <Input
+                              type="number"
+                              value={producto.comision}
+                              onChange={(e) => actualizarProducto(producto.id, 'comision', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  actualizarProducto(producto.id, 'comision', 0)
+                                }
+                              }}
+                              className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              step="0.01"
+                            />
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <div className="flex gap-1">
+                              {producto.conIVA && (
+                                <div className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs">
+                                  <span>IVA</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => actualizarProducto(producto.id, 'conIVA', false)}
+                                    className="hover:text-red-500"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                              {!producto.conIVA && (
+                                <button
+                                  type="button"
+                                  onClick={() => actualizarProducto(producto.id, 'conIVA', true)}
+                                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                                >
+                                  + IVA
+                                </button>
+                              )}
+                              {producto.conIT && (
+                                <div className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 rounded-full px-2 py-1 text-xs">
+                                  <span>IT</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => actualizarProducto(producto.id, 'conIT', false)}
+                                    className="hover:text-red-500"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                              {!producto.conIT && (
+                                <button
+                                  type="button"
+                                  onClick={() => actualizarProducto(producto.id, 'conIT', true)}
+                                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                                >
+                                  + IT
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-1 h-8">
+                              {(() => {
+                                // Detectar unidades (case-insensitive y considerar singular/plural)
+                                const udmLower = producto.udm?.toLowerCase().trim() || ''
+                                const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+                                const totalCalculado = calcularTotal(
+                                  producto.cantidad,
+                                  producto.totalM2,
+                                  producto.precio,
+                                  producto.comision,
+                                  producto.conIVA,
+                                  producto.conIT,
+                                  producto.esSoporte || esUnidades, // Tratar unidades como soportes
+                                  producto.udm
+                                )
+                                // Mostrar siempre el valor que el usuario está editando (total o totalManual)
+                                // Permitir edición libre, solo avisar en onBlur si es menor
+                                const valorActual = producto.total !== undefined && producto.total !== null
+                                  ? producto.total
+                                  : (producto.totalManual !== null && producto.totalManual !== undefined
+                                    ? producto.totalManual
+                                    : totalCalculado)
+
+                                return (
+                                  <Input
+                                    type="number"
+                                    value={valorActual}
+                                    onChange={(e) => {
+                                      const valor = e.target.value === '' ? '' : parseFloat(e.target.value)
+                                      // Permitir editar cualquier valor libremente (validación solo en onBlur)
+                                      if (valor === '') {
+                                        actualizarProducto(producto.id, 'total', 0)
+                                      } else {
+                                        actualizarProducto(producto.id, 'total', valor)
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      const valor = parseFloat(e.target.value) || 0
+                                      // Solo avisar si es menor al calculado, pero permitir el valor
+                                      if (valor < totalCalculado) {
+                                        toast.warning("El total ingresado es menor al precio calculado.")
+                                      }
+                                      // Guardar el valor (ya se guardó en onChange, pero asegurarnos)
+                                      actualizarProducto(producto.id, 'total', valor)
+                                    }}
+                                    className="w-24 h-8 text-xs font-medium text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    step="0.01"
+                                  />
+                                )
+                              })()}
+                              <div className="flex items-center justify-center h-6 w-6">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => eliminarProducto(producto.id)}
+                                  disabled={productosList.length === 1}
+                                  className="h-6 w-6 p-0 flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Botones de Acción */}
+              <div className="flex gap-3 mt-4">
+                <Button variant="outline" size="sm" onClick={agregarProducto} className="text-xs">
+                  <Plus className="w-3 h-3 mr-1" />
+                  Agregar un producto
+                </Button>
+                <Button variant="outline" size="sm" onClick={agregarSeccion} className="text-xs">
+                  <Plus className="w-3 h-3 mr-1" />
+                  Agregar una sección
+                </Button>
+                <Button variant="outline" size="sm" onClick={agregarNota} className="text-xs">
+                  <Plus className="w-3 h-3 mr-1" />
+                  Agregar nota
+                </Button>
+              </div>
+
+              {/* Total General */}
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-center gap-4">
+                  <span className="text-sm font-semibold">Total General:</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={totalGeneral}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        console.log('📝 Input onChange:', val)
+                        handleTotalChange(val)
+                      }}
+                      onBlur={(e) => {
+                        const val = e.target.value
+                        console.log('📝 Input onBlur:', val)
+                        handleTotalBlur(val)
+                      }}
+                      className="w-32 h-10 text-lg font-bold text-[#D54644] text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      step="0.01"
+                    />
+                    <span className="text-lg font-bold text-[#D54644]">Bs</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+
+        {/* Modal de selección de variantes */}
+        <Dialog open={modalVariantes.open} onOpenChange={(open) => !open && setModalVariantes({ open: false, productoId: '', itemData: null, variantesSeleccionadas: {} })}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Seleccionar variantes</DialogTitle>
+              <DialogDescription>
+                Producto: {modalVariantes.itemData?.nombre}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              {modalVariantes.itemData?.variantes && Array.isArray(modalVariantes.itemData.variantes) && modalVariantes.itemData.variantes.length > 0 ? (
+                modalVariantes.itemData.variantes
+                  // Filtrar la variante "Sucursal" porque se toma automáticamente de la cotización
+                  .filter((variante: any) => variante.nombre !== 'Sucursal' && variante.nombre !== 'sucursal')
+                  .map((variante: any, index: number) => {
+                    // Limpiar el nombre de la variante
+                    let nombreLimpio = variante.nombre
+                      // Eliminar nombre del producto (ej: "Lona frontligth")
+                      .replace(/Lona frontligth/gi, '')
+                      .replace(/LONA FRONTLIGTH/gi, '')
+                      // Eliminar frases completas repetidas (ej: "Instalación en valla Instalación en valla")
+                      .replace(/Instalación en valla\s+Instalación en valla/gi, 'Instalación en valla')
+                      .replace(/Desinstalación en valla\s+Desinstalación en valla/gi, 'Desinstalación en valla')
+                      // Eliminar palabras individuales repetidas
+                      .replace(/\b(\w+)\s+\1\b/gi, '$1')
+                      .trim()
+
+                    // Si queda vacío, usar el original
+                    if (!nombreLimpio) {
+                      nombreLimpio = variante.nombre
+                    }
+
+                    return (
+                      <div key={index} className="grid gap-2">
+                        <Label htmlFor={`variante-${index}`}>{nombreLimpio}</Label>
+                        <Select
+                          value={modalVariantes.variantesSeleccionadas[variante.nombre] || ''}
+                          onValueChange={(value) =>
+                            setModalVariantes(prev => ({
+                              ...prev,
+                              variantesSeleccionadas: {
+                                ...prev.variantesSeleccionadas,
+                                [variante.nombre]: value
+                              }
+                            }))
+                          }
+                        >
+                          <SelectTrigger id={`variante-${index}`}>
+                            <SelectValue placeholder="Seleccionar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {variante.posibilidades && Array.isArray(variante.posibilidades) && variante.posibilidades.map((posibilidad: string, pIndex: number) => (
+                              <SelectItem key={pIndex} value={posibilidad}>
+                                {posibilidad}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )
+                  })
               ) : (
-                'Confirmar y Aprobar'
+                <p className="text-sm text-muted-foreground">No hay variantes disponibles</p>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setModalVariantes({ open: false, productoId: '', itemData: null, variantesSeleccionadas: {} })}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmarVariantes}
+                className="bg-[#D54644] hover:bg-[#B03A38]"
+                disabled={
+                  modalVariantes.itemData?.variantes
+                    ?.filter((v: any) => v.nombre !== 'Sucursal' && v.nombre !== 'sucursal') // Excluir Sucursal de la validación
+                    ?.some((v: any) =>
+                      !modalVariantes.variantesSeleccionadas[v.nombre]
+                    )
+                }
+              >
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de selección de fechas para soportes */}
+        <Dialog open={modalFechasSoporte.open} onOpenChange={(open) => !open && setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Seleccionar fechas de alquiler</DialogTitle>
+              <DialogDescription>
+                Soporte: {modalFechasSoporte.itemData?.nombre}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="fecha-inicio">Fecha de inicio</Label>
+                <Input
+                  id="fecha-inicio"
+                  type="date"
+                  value={modalFechasSoporte.fechaInicio}
+                  onChange={(e) => setModalFechasSoporte(prev => ({ ...prev, fechaInicio: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="meses">Meses</Label>
+                <Select
+                  value={modalFechasSoporte.meses.toString()}
+                  onValueChange={(value) => setModalFechasSoporte(prev => ({ ...prev, meses: parseInt(value) }))}
+                >
+                  <SelectTrigger id="meses">
+                    <SelectValue placeholder="Seleccionar meses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mes) => (
+                      <SelectItem key={mes} value={mes.toString()}>
+                        {mes} {mes === 1 ? 'Mes' : 'Meses'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="fecha-fin">Fecha de fin</Label>
+                <Input
+                  id="fecha-fin"
+                  type="date"
+                  value={modalFechasSoporte.fechaFin}
+                  disabled
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmarFechasSoporte}
+                className="bg-[#D54644] hover:bg-[#B03A38]"
+                disabled={!modalFechasSoporte.fechaInicio || !modalFechasSoporte.fechaFin}
+              >
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de confirmación de aprobación con alquileres */}
+        <Dialog open={modalAprobacion.open} onOpenChange={(open) => !open && setModalAprobacion(prev => ({ ...prev, open: false }))}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>¿Seguro que quiere aprobar esta cotización?</DialogTitle>
+              <DialogDescription>
+                Se efectuarán las siguientes órdenes de alquiler:
+              </DialogDescription>
+            </DialogHeader>
+
+            {modalAprobacion.soportesInfo.length > 0 ? (
+              <div className="max-h-[400px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 font-medium">Soporte</th>
+                      <th className="text-left py-2 px-3 font-medium">Fechas</th>
+                      <th className="text-right py-2 px-3 font-medium">Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modalAprobacion.soportesInfo.map((info, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="py-2 px-3">
+                          <div>
+                            <div className="font-medium">{info.soporte.codigo}</div>
+                            <div className="text-xs text-gray-500">{info.soporte.titulo}</div>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="text-xs">
+                            <div>Inicio: {new Date(info.fechaInicio).toLocaleDateString('es-ES')}</div>
+                            <div>Fin: {new Date(info.fechaFin).toLocaleDateString('es-ES')}</div>
+                            <div className="text-gray-500">({info.meses} mes{info.meses !== 1 ? 'es' : ''})</div>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <div className="font-medium">
+                            Bs {Number(info.importe || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-4 text-center text-gray-500">
+                No hay soportes en esta cotización
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setModalAprobacion(prev => ({ ...prev, open: false }))}
+                disabled={guardando}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmarAprobacion}
+                disabled={guardando || modalAprobacion.cargando}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {guardando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  'Confirmar y Aprobar'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </>
   )
 }

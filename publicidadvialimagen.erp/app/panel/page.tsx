@@ -2,11 +2,13 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Handshake, ChevronRight, Monitor, Users } from "lucide-react";
 import Link from "next/link";
 import ERPModulesGrid from "@/components/erp-modules-grid";
 import PanelMetrics from "@/components/panel-metrics";
 import PanelNotifications from "@/components/panel-notifications";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export default async function PanelPage() {
   const cookieStore = await cookies();
@@ -19,18 +21,42 @@ export default async function PanelPage() {
     redirect("/login");
   }
 
+  // Obtener el nombre del rol desde la base de datos
+  let roleName = user.role || 'invitado';
+  if (user.sub) {
+    try {
+      const supabase = getSupabaseServer();
+      const { data: userData } = await supabase
+        .from('usuarios')
+        .select('rol_id')
+        .eq('id', user.sub)
+        .single();
+      
+      if (userData?.rol_id) {
+        const { data: roleData } = await supabase
+          .from('roles')
+          .select('nombre')
+          .eq('id', userData.rol_id)
+          .single();
+        
+        if (roleData?.nombre) {
+          roleName = roleData.nombre;
+        }
+      }
+    } catch (error) {
+      console.error('Error obteniendo nombre del rol:', error);
+    }
+  }
 
   return (
       <div className="p-6 space-y-8">
         {/* Header */}
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-bold text-gray-900">Panel Principal</h1>
-            {user.role && (
-              <span className="px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-full">
-                {user.role === 'vendedor' ? 'Vendedor' : user.role === 'admin' ? 'Administrador' : 'Ventas'}
-              </span>
-            )}
+            <Badge className="bg-red-100 text-red-800 text-sm font-semibold px-3 py-1 rounded-full">
+              {roleName.toUpperCase()}
+            </Badge>
           </div>
           <p className="text-gray-600 mt-2">
             Bienvenido al panel de control de PublicidadVialImagen

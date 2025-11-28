@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession } from '@/lib/auth'
 import { getUserByIdSupabase } from '@/lib/supabaseUsers'
+import { getSupabaseServer } from '@/lib/supabaseServer'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,6 +24,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
+    // Asegurar que tenemos el nombre del rol correcto
+    let roleName = user.rol || payload.role || 'invitado'
+    if (user.rol_id && !user.rol) {
+      // Si tenemos rol_id pero no el nombre, obtenerlo
+      const supabase = getSupabaseServer()
+      const { data: roleData } = await supabase
+        .from('roles')
+        .select('nombre')
+        .eq('id', user.rol_id)
+        .single()
+      
+      if (roleData?.nombre) {
+        roleName = roleData.nombre
+      }
+    }
+
     return NextResponse.json({
       success: true,
       user: {
@@ -31,8 +48,8 @@ export async function GET(request: NextRequest) {
         email: user.email || payload.email,
         name: user.nombre || payload.name, // Cambiado 'nombre' a 'name' para el header
         nombre: user.nombre || payload.name, // Mantener 'nombre' para compatibilidad con cotizaciones
-        rol: user.rol || payload.role,
-        role: user.rol || payload.role, // Agregar 'role' para compatibilidad con header
+        rol: roleName,
+        role: roleName, // Agregar 'role' para compatibilidad con header
         imagen_usuario: user.imagen_usuario || null,
         vendedor: user.vendedor ?? false,
       }

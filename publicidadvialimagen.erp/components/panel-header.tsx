@@ -137,7 +137,7 @@ interface Notification {
 export default function PanelHeader() {
   const router = useRouter()
   const pathname = usePathname()
-  const { tieneFuncionTecnica, puedeVer, esAdmin } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeVer } = usePermisosContext()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -150,8 +150,8 @@ export default function PanelHeader() {
   useEffect(() => {
     fetchUser()
     fetchNotifications()
-    // Actualizar notificaciones cada 5 segundos (más frecuente para mejor UX)
-    const interval = setInterval(fetchNotifications, 5000)
+    // Actualizar notificaciones cada 30 segundos
+    const interval = setInterval(fetchNotifications, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -207,58 +207,33 @@ export default function PanelHeader() {
       if (response.ok) {
         const data = await response.json()
         const allNotifications = data.notificaciones || []
-        
-        console.log(`📊 [NOTIFICACIONES] Total recibidas del backend: ${allNotifications.length}`);
-        console.log(`📊 [NOTIFICACIONES] Mensajes: ${data.mensajes || 0}, Solicitudes: ${data.solicitudes || 0}`);
-        
-        // Obtener permisos del usuario para logs
-        const esAdminMensajes = esAdmin("mensajes");
-        const tieneVerSolicitudes = tieneFuncionTecnica("ver solicitudes cotizacion");
-        
-        console.log(`📊 [NOTIFICACIONES] Permisos del usuario:`);
-        console.log(`   - Admin mensajes: ${esAdminMensajes}`);
-        console.log(`   - Ver solicitudes cotizacion: ${tieneVerSolicitudes}`);
-        
         // Filtrar las notificaciones ya leídas usando el estado actual
         setReadNotifications((currentRead) => {
           const unreadNotifications = allNotifications.filter(
             (n: Notification) => {
               // Filtrar notificaciones ya leídas
-              if (currentRead.has(n.id)) {
+              if (currentRead.has(n.id)) return false
+              
+              // Filtrar notificaciones de mensajes si no tiene permiso ver mensajes
+              if (n.type === "mensaje" && !puedeVer("mensajes")) {
                 return false
               }
               
-              // Filtrar notificaciones de mensajes: SOLO admins de mensajes
-              if (n.type === "mensaje") {
-                const puedeVerNotificacion = esAdmin("mensajes");
-                console.log(`🔍 [NOTIFICACIONES] Filtro mensajes: ¿es admin? ${puedeVerNotificacion}`);
-                if (!puedeVerNotificacion) {
-                  return false
-                }
-              }
-              
-              // Filtrar notificaciones de solicitudes: solo usuarios con función técnica
-              if (n.type === "solicitud") {
-                const puedeVerNotificacion = tieneFuncionTecnica("ver solicitudes cotizacion");
-                console.log(`🔍 [NOTIFICACIONES] Filtro solicitudes: ¿tiene permiso? ${puedeVerNotificacion}`);
-                if (!puedeVerNotificacion) {
-                  return false
-                }
+              // Filtrar notificaciones de solicitudes si no tiene función técnica ver solicitudes cotizacion
+              if (n.type === "solicitud" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                return false
               }
               
               return true
             }
           )
-          
-          console.log(`✅ [NOTIFICACIONES] Notificaciones después del filtro: ${unreadNotifications.length}`);
-          
           setNotifications(unreadNotifications)
           setNotificationCount(unreadNotifications.length)
           return currentRead
         })
       } else {
         // Si la respuesta no es OK, simplemente no mostrar notificaciones
-        console.warn("❌ [NOTIFICACIONES] API returned non-OK status:", response.status)
+        console.warn("Notifications API returned non-OK status:", response.status)
         setNotifications([])
         setNotificationCount(0)
       }
@@ -486,9 +461,16 @@ export default function PanelHeader() {
                         {getInitials()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium text-gray-800">
-                      {getUserName()}
-                    </span>
+                    <div className="flex flex-col items-start">
+                      <span className="text-sm font-medium text-gray-800">
+                        {getUserName()}
+                      </span>
+                      {user.role && (
+                        <Badge className="bg-red-100 text-red-800 text-[10px] px-1.5 py-0 mt-0.5 h-4 rounded-full">
+                          {user.role.toUpperCase()}
+                        </Badge>
+                      )}
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -497,9 +479,9 @@ export default function PanelHeader() {
                       <p className="text-sm font-medium">{getUserName()}</p>
                       <p className="text-xs text-gray-500">{user.email}</p>
                       {user.role && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          {user.role === 'vendedor' ? 'Vendedor' : user.role === 'admin' ? 'Administrador' : 'Ventas'}
-                        </p>
+                        <Badge className="bg-red-100 text-red-800 text-[10px] px-2 py-0.5 w-fit mt-1 rounded-full">
+                          {user.role.toUpperCase()}
+                        </Badge>
                       )}
                     </div>
                   </DropdownMenuLabel>

@@ -173,13 +173,16 @@ export async function GET(request: NextRequest) {
           throw soportesError
         }
 
-        // Contar soportes por estado
+        // Contar soportes por estado (omitir "No disponible")
         const conteo: Record<string, number> = {}
         if (soportesData) {
           soportesData.forEach((s: any) => {
             const estado = s.estado || 'Sin estado'
             const estadoLabel = mapearEstado(estado)
-            conteo[estadoLabel] = (conteo[estadoLabel] || 0) + 1
+            // Omitir "No disponible"
+            if (estadoLabel.toLowerCase() !== 'no disponible') {
+              conteo[estadoLabel] = (conteo[estadoLabel] || 0) + 1
+            }
           })
         }
 

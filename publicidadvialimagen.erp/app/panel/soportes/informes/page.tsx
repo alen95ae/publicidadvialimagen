@@ -443,10 +443,11 @@ export default function InformesPage() {
                                 const value = data.value as number
                                 const name = data.name || ''
                                 if (grafico.tipo === 'estado') {
+                                  const valueInt = Math.round(value)
                                   return (
                                     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
                                       <p className="font-medium text-gray-900">{name}</p>
-                                      <p className="text-sm text-gray-600">{value} {value === 1 ? 'soporte' : 'soportes'}</p>
+                                      <p className="text-sm text-gray-600">{valueInt} {valueInt === 1 ? 'Soporte' : 'Soportes'}</p>
                                     </div>
                                   )
                                 } else {
@@ -471,22 +472,40 @@ export default function InformesPage() {
                     {/* Leyenda */}
                     <div className="mt-4 space-y-2 max-h-48 overflow-y-auto">
                       {grafico.datos.map((item, i) => {
-                        const formattedValue = new Intl.NumberFormat("es-ES", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        }).format(item.value)
-                        return (
-                          <div key={i} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-4 h-4 rounded-full"
-                                style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                              />
-                              <span className="text-sm text-gray-700">{item.name}</span>
+                        // Si es tipo 'estado', mostrar números enteros con "Soportes"
+                        if (grafico.tipo === 'estado') {
+                          const value = Math.round(item.value)
+                          return (
+                            <div key={i} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-4 h-4 rounded-full"
+                                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                                />
+                                <span className="text-sm text-gray-700">{item.name}</span>
+                              </div>
+                              <span className="text-sm font-medium">{value} {value === 1 ? 'Soporte' : 'Soportes'}</span>
                             </div>
-                            <span className="text-sm font-medium">{formattedValue} Bs</span>
-                          </div>
-                        )
+                          )
+                        } else {
+                          // Para otros tipos, mostrar formato de moneda
+                          const formattedValue = new Intl.NumberFormat("es-ES", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          }).format(item.value)
+                          return (
+                            <div key={i} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-4 h-4 rounded-full"
+                                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                                />
+                                <span className="text-sm text-gray-700">{item.name}</span>
+                              </div>
+                              <span className="text-sm font-medium">{formattedValue} Bs</span>
+                            </div>
+                          )
+                        }
                       })}
                     </div>
                   </>

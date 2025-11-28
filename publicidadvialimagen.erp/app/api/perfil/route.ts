@@ -36,15 +36,15 @@ export async function PUT(request: NextRequest) {
       const supabase = getSupabaseServer();
       const { data: userData } = await supabase
         .from('usuarios')
-        .select('password_hash')
+        .select('passwordhash')
         .eq('id', userId)
         .single();
 
-      if (!userData || !userData.password_hash) {
+      if (!userData || !userData.passwordhash) {
         return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
       }
 
-      const isValidPassword = await bcrypt.compare(passwordActual, userData.password_hash);
+      const isValidPassword = await bcrypt.compare(passwordActual, userData.passwordhash);
       if (!isValidPassword) {
         return NextResponse.json({ error: "Contraseña actual incorrecta" }, { status: 400 });
       }

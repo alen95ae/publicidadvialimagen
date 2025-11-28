@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Mail, User, Lock, Upload, Loader2 } from "lucide-react"
+import { Mail, User, Lock, Upload, Loader2, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 
 export default function ProfilePage() {
@@ -27,6 +27,9 @@ export default function ProfilePage() {
 
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [showPasswordActual, setShowPasswordActual] = useState(false)
+  const [showPasswordNueva, setShowPasswordNueva] = useState(false)
+  const [showPasswordConfirmar, setShowPasswordConfirmar] = useState(false)
 
   useEffect(() => {
     fetchUser()
@@ -276,35 +279,83 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="passwordActual">Contraseña Actual</Label>
-                  <Input
-                    id="passwordActual"
-                    type="password"
-                    value={formData.passwordActual}
-                    onChange={(e) => setFormData({ ...formData, passwordActual: e.target.value })}
-                    placeholder="Ingresa tu contraseña actual"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="passwordActual"
+                      type={showPasswordActual ? "text" : "password"}
+                      value={formData.passwordActual}
+                      onChange={(e) => setFormData({ ...formData, passwordActual: e.target.value })}
+                      placeholder="Ingresa tu contraseña actual"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPasswordActual(!showPasswordActual)}
+                    >
+                      {showPasswordActual ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
               </div>
 
                 <div>
                   <Label htmlFor="passwordNueva">Nueva Contraseña</Label>
-                  <Input
-                    id="passwordNueva"
-                    type="password"
-                    value={formData.passwordNueva}
-                    onChange={(e) => setFormData({ ...formData, passwordNueva: e.target.value })}
-                    placeholder="Ingresa tu nueva contraseña"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="passwordNueva"
+                      type={showPasswordNueva ? "text" : "password"}
+                      value={formData.passwordNueva}
+                      onChange={(e) => setFormData({ ...formData, passwordNueva: e.target.value })}
+                      placeholder="Ingresa tu nueva contraseña"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPasswordNueva(!showPasswordNueva)}
+                    >
+                      {showPasswordNueva ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
               </div>
 
                 <div>
                   <Label htmlFor="passwordNuevaConfirmar">Confirmar Nueva Contraseña</Label>
-                  <Input
-                    id="passwordNuevaConfirmar"
-                    type="password"
-                    value={formData.passwordNuevaConfirmar}
-                    onChange={(e) => setFormData({ ...formData, passwordNuevaConfirmar: e.target.value })}
-                    placeholder="Confirma tu nueva contraseña"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="passwordNuevaConfirmar"
+                      type={showPasswordConfirmar ? "text" : "password"}
+                      value={formData.passwordNuevaConfirmar}
+                      onChange={(e) => setFormData({ ...formData, passwordNuevaConfirmar: e.target.value })}
+                      placeholder="Confirma tu nueva contraseña"
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPasswordConfirmar(!showPasswordConfirmar)}
+                    >
+                      {showPasswordConfirmar ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

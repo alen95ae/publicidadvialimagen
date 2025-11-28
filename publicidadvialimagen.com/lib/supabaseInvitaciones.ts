@@ -156,3 +156,4 @@ export async function updateInvitacion(
   return supabaseToInvitacion(data as InvitacionSupabase)
 }
 
+

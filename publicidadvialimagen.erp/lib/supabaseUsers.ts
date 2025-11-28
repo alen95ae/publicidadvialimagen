@@ -221,6 +221,24 @@ export async function getUserByIdSupabase(userId: string): Promise<any | null> {
 
   if (!data) return null
 
+  // Obtener el nombre del rol desde la tabla roles
+  let roleName = 'invitado'
+  if (data.rol_id) {
+    try {
+      const { data: roleData } = await supabase
+        .from('roles')
+        .select('nombre')
+        .eq('id', data.rol_id)
+        .single()
+      
+      if (roleData?.nombre) {
+        roleName = roleData.nombre
+      }
+    } catch (error) {
+      console.error('Error obteniendo nombre del rol:', error)
+    }
+  }
+
   const usuario = supabaseToUsuario(data as UsuarioSupabase)
   return {
     ...usuario,
@@ -228,7 +246,8 @@ export async function getUserByIdSupabase(userId: string): Promise<any | null> {
     vendedor: data.vendedor ?? false,
     email: data.email,
     nombre: data.nombre,
-    rol: data.rol || 'invitado',
+    rol: roleName,
+    rol_id: data.rol_id || null,
   }
 }
 

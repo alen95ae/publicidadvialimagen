@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev -p 3000",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "dev:bun": "bun run dev",
     "lint": "next lint",
     "start": "next start",
     "verify": "node verify-deployment-ready.js",

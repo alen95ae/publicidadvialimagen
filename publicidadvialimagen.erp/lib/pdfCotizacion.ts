@@ -41,8 +41,11 @@ interface DatosCotizacion {
   sucursal: string // Se usa para determinar qué dirección mostrar
   vendedor: string
   vendedorEmail?: string // Email del comercial
+  vendedorNumero?: string | null // Número de teléfono del usuario que descarga la cotización
   productos: ItemLista[]
   totalGeneral: number
+  vigencia?: number | null // Días de validez
+  plazo?: string | null // Plazo de entrega
 }
 
 // Función auxiliar para cargar el logo
@@ -416,6 +419,28 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   // Resetear color de texto
   pdf.setTextColor(0, 0, 0)
 
+  // Agregar información de validez y plazo de entrega después de la tabla
+  yPosition += totalRowHeight + 10 // Espacio después del total
+  
+  // Verificar si hay espacio suficiente, si no, nueva página
+  if (yPosition + 20 > 270) {
+    pdf.addPage()
+    yPosition = 20
+  }
+  
+  pdf.setFontSize(10)
+  pdf.setFont('helvetica', 'normal')
+  
+  // Validez - siempre mostrar (usar valor por defecto si no existe)
+  const vigenciaValor = datos.vigencia ?? 30
+  pdf.text(`Validez: ${vigenciaValor} días`, tableX, yPosition)
+  yPosition += 7
+  
+  // Plazo de entrega - mostrar siempre (con texto por defecto si no existe)
+  const plazoTexto = datos.plazo && datos.plazo.trim() !== '' ? datos.plazo : 'A convenir'
+  pdf.text(`Plazo de Entrega: ${plazoTexto}`, tableX, yPosition)
+  yPosition += 7
+
   // Agregar footers con paginación a todas las páginas
   const totalPages = pdf.getNumberOfPages()
   const pageHeight = 297 // Altura total de una página A4
@@ -440,22 +465,40 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
     pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerTextY)
     
     // Separador 1 (entre izquierda y centro)
-    pdf.text('|', 70, footerTextY)
+    pdf.text('|', 65, footerTextY)
     
-    // Centro (centrado en la página): publicidadvialimagen.com
-    pdf.text('publicidadvialimagen.com', 105, footerTextY, { align: 'center' })
+    // Centro: publicidadvialimagen.com (movido más a la izquierda)
+    pdf.text('publicidadvialimagen.com', 70, footerTextY)
     
-    // Separador 2 (entre centro y derecha)
-    pdf.text('|', 140, footerTextY)
+    // Separador 2 (entre web y email/número)
+    const webTextWidth = pdf.getTextWidth('publicidadvialimagen.com')
+    const separator2X = 70 + webTextWidth + 5
+    pdf.text('|', separator2X, footerTextY)
     
-    // Derecha (antes de la paginación): email (si existe)
+    // Email y número del usuario que descarga (si existen)
+    let rightContentX = separator2X + 5
     if (datos.vendedorEmail) {
-      pdf.text(datos.vendedorEmail, 145, footerTextY)
+      pdf.text(datos.vendedorEmail, rightContentX, footerTextY)
+      rightContentX += pdf.getTextWidth(datos.vendedorEmail) + 5
+      
+      // Separador entre email y número
+      if (datos.vendedorNumero) {
+        pdf.text('|', rightContentX, footerTextY)
+        rightContentX += 5
+      }
     }
     
-    // Separador 3 (entre email y paginación)
-    if (datos.vendedorEmail) {
-      pdf.text('|', 190, footerTextY)
+    // Número de teléfono (si existe)
+    if (datos.vendedorNumero) {
+      pdf.text(datos.vendedorNumero, rightContentX, footerTextY)
+      rightContentX += pdf.getTextWidth(datos.vendedorNumero) + 5
+    }
+    
+    // Separador final (antes de paginación) si hay email o número
+    // Asegurar que haya al menos 15mm de espacio para la paginación
+    const paginationStartX = 195
+    if (rightContentX < paginationStartX - 5) {
+      pdf.text('|', paginationStartX - 5, footerTextY)
     }
     
     // Extremo derecho: Paginación

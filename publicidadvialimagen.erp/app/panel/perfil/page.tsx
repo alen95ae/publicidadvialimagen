@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Mail, User, Lock, Upload, Loader2, Eye, EyeOff } from "lucide-react"
+import { Mail, User, Lock, Upload, Loader2, Eye, EyeOff, Phone } from "lucide-react"
 import { toast } from "sonner"
 
 export default function ProfilePage() {
@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     nombre: "",
     email: "",
+    telefono: "",
     passwordActual: "",
     passwordNueva: "",
     passwordNuevaConfirmar: "",
@@ -46,6 +47,7 @@ export default function ProfilePage() {
         setFormData({
           nombre: data.user.name || "",
           email: data.user.email || "",
+          telefono: data.user.numero || "",
           passwordActual: "",
           passwordNueva: "",
           passwordNuevaConfirmar: "",
@@ -153,6 +155,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           nombre: formData.nombre,
           email: formData.email,
+          telefono: formData.telefono,
           passwordActual: formData.passwordActual || undefined,
           passwordNueva: formData.passwordNueva || undefined,
         }),
@@ -270,6 +273,17 @@ export default function ProfilePage() {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="tu@email.com"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="telefono">Teléfono</Label>
+              <Input
+                id="telefono"
+                type="tel"
+                value={formData.telefono}
+                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                placeholder="Ej: +591 70000000"
               />
             </div>
 

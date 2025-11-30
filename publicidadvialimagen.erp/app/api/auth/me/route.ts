@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
         role: roleName, // Agregar 'role' para compatibilidad con header
         imagen_usuario: user.imagen_usuario || null,
         vendedor: user.vendedor ?? false,
+        numero: user.numero || null,
       }
     })
   } catch (error) {

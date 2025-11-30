@@ -13,6 +13,7 @@ export type Cotizacion = {
   total_it: number | null;
   total_final: number | null;
   vigencia: number | null;
+  plazo: string | null;
   cantidad_items: number | null;
   lineas_cotizacion: number | null;
   fecha_creacion: string;
@@ -31,6 +32,7 @@ export interface CotizacionInput {
   total_it?: number;
   total_final?: number;
   vigencia?: number;
+  plazo?: string | null;
   cantidad_items?: number;
   lineas_cotizacion?: number;
 }
@@ -99,9 +101,9 @@ export async function getCotizaciones(options?: {
   }
 
   if (process.env.NODE_ENV === 'development') {
-    console.log('✅ [getCotizaciones] Consulta exitosa:', { 
-      dataLength: data?.length || 0, 
-      count: count || 0 
+    console.log('✅ [getCotizaciones] Consulta exitosa:', {
+      dataLength: data?.length || 0,
+      count: count || 0
     })
   }
 
@@ -115,7 +117,7 @@ export async function getCotizaciones(options?: {
         const vigenciaDias = cotizacion.vigencia || 30
         const fechaVencimiento = new Date(fechaCreacion)
         fechaVencimiento.setDate(fechaVencimiento.getDate() + vigenciaDias)
-        
+
         if (ahora > fechaVencimiento && cotizacion.estado !== 'Vencida') {
           // Actualizar estado a Vencida en la base de datos
           try {
@@ -168,7 +170,7 @@ export async function getCotizacionById(id: string) {
     const fechaVencimiento = new Date(fechaCreacion)
     fechaVencimiento.setDate(fechaVencimiento.getDate() + vigenciaDias)
     const ahora = new Date()
-    
+
     if (ahora > fechaVencimiento && data.estado !== 'Vencida') {
       // Actualizar estado a Vencida en la base de datos
       try {
@@ -189,19 +191,20 @@ export async function createCotizacion(cotizacion: CotizacionInput) {
   const supabase = getSupabaseServer();
 
   const insertData = {
-      codigo: cotizacion.codigo || "",
-      cliente: cotizacion.cliente || null,
-      vendedor: cotizacion.vendedor || null,
-      sucursal: cotizacion.sucursal || null,
-      estado: cotizacion.estado || "Pendiente",
-      subtotal: cotizacion.subtotal || 0,
-      total_iva: cotizacion.total_iva || 0,
-      total_it: cotizacion.total_it || 0,
-      total_final: cotizacion.total_final || 0,
-      vigencia: cotizacion.vigencia || 30,
-      cantidad_items: cotizacion.cantidad_items || 0,
-      lineas_cotizacion: cotizacion.lineas_cotizacion || 0,
-    }
+    codigo: cotizacion.codigo || "",
+    cliente: cotizacion.cliente || null,
+    vendedor: cotizacion.vendedor || null,
+    sucursal: cotizacion.sucursal || null,
+    estado: cotizacion.estado || "Pendiente",
+    subtotal: cotizacion.subtotal || 0,
+    total_iva: cotizacion.total_iva || 0,
+    total_it: cotizacion.total_it || 0,
+    total_final: cotizacion.total_final || 0,
+    vigencia: cotizacion.vigencia || 30,
+    plazo: cotizacion.plazo || null,
+    cantidad_items: cotizacion.cantidad_items || 0,
+    lineas_cotizacion: cotizacion.lineas_cotizacion || 0,
+  }
 
   if (process.env.NODE_ENV === 'development') {
     console.log('📝 [createCotizacion] Insertando cotización:', JSON.stringify(insertData, null, 2))
@@ -249,6 +252,7 @@ export async function updateCotizacion(
   if (cotizacion.total_it !== undefined) updateData.total_it = cotizacion.total_it;
   if (cotizacion.total_final !== undefined) updateData.total_final = cotizacion.total_final;
   if (cotizacion.vigencia !== undefined) updateData.vigencia = cotizacion.vigencia;
+  if (cotizacion.plazo !== undefined) updateData.plazo = cotizacion.plazo;
   if (cotizacion.cantidad_items !== undefined) updateData.cantidad_items = cotizacion.cantidad_items;
   if (cotizacion.lineas_cotizacion !== undefined) updateData.lineas_cotizacion = cotizacion.lineas_cotizacion;
 
@@ -313,7 +317,7 @@ export async function generarSiguienteCodigoCotizacion(): Promise<string> {
     const ahora = new Date();
     const mes = (ahora.getMonth() + 1).toString().padStart(2, '0'); // 01-12
     const año = ahora.getFullYear().toString().slice(-2); // Últimos 2 dígitos del año
-    
+
     // Obtener todas las cotizaciones
     const result = await getCotizaciones({ limit: 10000 });
     const cotizaciones = result.data;
@@ -330,10 +334,10 @@ export async function generarSiguienteCodigoCotizacion(): Promise<string> {
 
     // Número inicial mínimo: 1500
     const numeroInicial = 1500;
-    
+
     // Si no hay cotizaciones del mes/año actual, empezar desde 1500
     // Si hay cotizaciones, usar el máximo entre el número máximo encontrado + 1 y 1500
-    const siguiente = numeros.length > 0 
+    const siguiente = numeros.length > 0
       ? Math.max(Math.max(...numeros) + 1, numeroInicial)
       : numeroInicial;
 

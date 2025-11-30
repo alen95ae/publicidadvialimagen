@@ -360,6 +360,67 @@ export default function CotizacionesPage() {
       const cotizacion = data.data.cotizacion
       const lineas = data.data.lineas || []
       
+      // Función para calcular el subtotal sin impuestos
+      // REGLA: El frontend NUNCA aplica IVA ni IT. Solo calcula subtotal sin impuestos.
+      const calcularSubtotalSinImpuestos = (cantidad: number, totalM2: number, precio: number, comision: number, esSoporte: boolean = false, udm?: string) => {
+        let subtotal: number
+        if (esSoporte) {
+          subtotal = cantidad * precio
+        } else {
+          const udmLower = (udm || '').toLowerCase().trim()
+          if (udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade') {
+            subtotal = cantidad * precio
+          } else {
+            subtotal = cantidad * totalM2 * precio
+          }
+        }
+        
+        const comisionTotal = subtotal * (comision / 100)
+        
+        // NUNCA aplicar IVA/IT aquí - eso lo hace el backend
+        return subtotal + comisionTotal
+      }
+      
+      // Validar cada producto individualmente
+      const lineasProductos = lineas.filter((linea: any) => 
+        linea.tipo === 'Producto' || linea.tipo === 'producto' || (linea.nombre_producto || linea.codigo_producto)
+      )
+      
+      for (const linea of lineasProductos) {
+        const esUnidades = (linea.unidad_medida || '').toLowerCase().trim() === 'unidad' || 
+                          (linea.unidad_medida || '').toLowerCase().trim() === 'unidades' || 
+                          (linea.unidad_medida || '').toLowerCase().trim() === 'unidade'
+        
+        const subtotalCalculado = calcularSubtotalSinImpuestos(
+          linea.cantidad || 1,
+          linea.total_m2 || 0,
+          linea.precio_unitario || 0,
+          linea.comision_porcentaje || linea.comision || 0,
+          linea.es_soporte || esUnidades,
+          linea.unidad_medida
+        )
+        
+        const subtotalLinea = linea.subtotal_linea || 0
+        
+        if (subtotalLinea < subtotalCalculado * 0.99) { // Tolerancia del 1% para redondeos
+          const nombreProducto = linea.nombre_producto || linea.codigo_producto || 'Producto'
+          toast.error(`El producto "${nombreProducto}" tiene un subtotal (${subtotalLinea.toFixed(2)}) menor al calculado (${subtotalCalculado.toFixed(2)}). Por favor corrige antes de descargar.`)
+          setDescargandoPDF(null)
+          return
+        }
+      }
+      
+      // Calcular el subtotal general (sin impuestos) sumando todos los productos
+      let subtotalGeneral = 0
+      lineasProductos.forEach((linea: any) => {
+        subtotalGeneral += linea.subtotal_linea || 0
+      })
+      
+      const totalFinal = cotizacion.total_final || 0
+      
+      // El total_final del backend ya incluye IVA/IT, no necesitamos validar aquí
+      // La validación de precios mínimos ya se hizo arriba para cada línea
+      
       // Obtener el email del vendedor
       let vendedorEmail: string | undefined = undefined
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -399,6 +460,20 @@ export default function CotizacionesPage() {
         }
       } catch (error) {
         console.error('Error obteniendo email del vendedor:', error)
+      }
+      
+      // Obtener el número del usuario actual
+      let usuarioActualNumero: string | null = null
+      try {
+        const currentUserRes = await fetch('/api/auth/me')
+        if (currentUserRes.ok) {
+          const currentUserData = await currentUserRes.json()
+          if (currentUserData.success && currentUserData.user) {
+            usuarioActualNumero = currentUserData.user.numero || null
+          }
+        }
+      } catch (error) {
+        console.error('Error obteniendo número del usuario:', error)
       }
       
       // Convertir líneas al formato esperado por el generador de PDF
@@ -482,8 +557,11 @@ export default function CotizacionesPage() {
         sucursal: cotizacion.sucursal || '',
         vendedor: cotizacion.vendedor || '',
         vendedorEmail: vendedorEmail,
+        vendedorNumero: usuarioActualNumero,
         productos: productos,
-        totalGeneral: cotizacion.total_final || 0
+        totalGeneral: cotizacion.total_final || 0,
+        vigencia: cotizacion.vigencia || 30,
+        plazo: cotizacion.plazo || null
       })
       
       toast.success('PDF descargado correctamente')

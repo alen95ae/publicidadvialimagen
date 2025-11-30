@@ -161,6 +161,7 @@ export async function updateUserSupabase(
     password_hash?: string
     imagen_usuario?: any
     vendedor?: boolean
+    numero?: string
   }
 ): Promise<Usuario | null> {
   const updateData: any = {
@@ -175,6 +176,7 @@ export async function updateUserSupabase(
   if (updates.password_hash !== undefined) updateData.passwordhash = updates.password_hash
   if (updates.imagen_usuario !== undefined) updateData.imagen_usuario = updates.imagen_usuario
   if (updates.vendedor !== undefined) updateData.vendedor = updates.vendedor
+  if (updates.numero !== undefined) updateData.numero = updates.numero
 
   const { data, error } = await supabase
     .from('usuarios')
@@ -248,6 +250,7 @@ export async function getUserByIdSupabase(userId: string): Promise<any | null> {
     nombre: data.nombre,
     rol: roleName,
     rol_id: data.rol_id || null,
+    numero: data.numero || null,
   }
 }
 

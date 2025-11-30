@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { 
-  getCotizaciones, 
-  createCotizacion, 
+import {
+  getCotizaciones,
+  createCotizacion,
   updateCotizacion,
   generarSiguienteCodigoCotizacion
 } from '@/lib/supabaseCotizaciones'
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     console.log('🔍 Cotizaciones search params:', { pageSize, page, estado, cliente, vendedor })
 
     // Obtener datos de Supabase
-    const result = await getCotizaciones({ 
+    const result = await getCotizaciones({
       estado: estado || undefined,
       cliente: cliente || undefined,
       vendedor: vendedor || undefined,
@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
     const errorDetails = error instanceof Error ? error.stack : String(error)
     console.error('❌ Error details:', errorDetails)
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: errorMessage,
         details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
       },
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
         const lineaTotal = linea.subtotal_linea || 0
         subtotal += lineaTotal
-        
+
         // Calcular IVA e IT para el desglose (solo informativo)
         // Si con_iva y con_it están activos, el subtotal_linea ya los incluye
         // Calculamos la base sin impuestos para el desglose
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     } else {
       totalFinal = subtotal // subtotal_linea ya incluye impuestos si están activos
     }
-    
+
     if (totalFinalManual !== undefined && totalFinalManual !== null) {
       console.log('💰 Backend POST: Usando total_final manual (NO recalcula):', totalFinalManual)
     } else {
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     // Limpiar campos que no existen en Supabase antes de crear
     const { vigencia_dias, ...camposLimpios } = body
-    
+
     // Crear la cotización (encabezado) - Solo campos que existen en Supabase
     const nuevaCotizacion = await createCotizacion({
       codigo,
@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
       total_it: totalIT,
       total_final: totalFinal,
       vigencia: vigencia_dias || 30, // Frontend envía vigencia_dias, mapeamos a vigencia
+      plazo: camposLimpios.plazo || null,
       cantidad_items: lineas.length,
       lineas_cotizacion: lineas.length
     })
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest) {
 
         lineasCreadas = await createMultipleLineas(lineasData)
         console.log('✅ Líneas creadas correctamente:', lineasCreadas.length)
-        
+
         // Actualizar lineas_cotizacion en el encabezado con el número real de líneas creadas
         if (lineasCreadas.length > 0) {
           await updateCotizacion(nuevaCotizacion.id, {
@@ -234,8 +235,8 @@ export async function POST(request: NextRequest) {
     const errorDetails = error instanceof Error ? error.stack : String(error)
     console.error('❌ Error details:', errorDetails)
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: errorMessage,
         details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
       },

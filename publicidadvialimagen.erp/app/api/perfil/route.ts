@@ -19,11 +19,12 @@ export async function PUT(request: NextRequest) {
 
     const userId = session.sub;
     const body = await request.json();
-    const { nombre, email, passwordActual, passwordNueva } = body;
+    const { nombre, email, telefono, passwordActual, passwordNueva } = body;
 
     const updateData: {
       nombre?: string;
       email?: string;
+      numero?: string;
       password_hash?: string;
     } = {};
 
@@ -63,6 +64,10 @@ export async function PUT(request: NextRequest) {
 
     if (nombre !== undefined) {
       updateData.nombre = nombre;
+    }
+
+    if (telefono !== undefined) {
+      updateData.numero = telefono;
     }
 
     const updatedUser = await updateUserSupabase(userId, updateData);

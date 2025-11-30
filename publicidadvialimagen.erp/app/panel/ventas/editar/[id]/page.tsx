@@ -1696,13 +1696,17 @@ export default function EditarCotizacionPage() {
         )
       }
 
-      // Si aún no se encuentra, obtener el usuario actual de la sesión
-      if (!comercialSeleccionado) {
-        try {
-          const currentUserRes = await fetch('/api/auth/me')
-          if (currentUserRes.ok) {
-            const currentUserData = await currentUserRes.json()
-            if (currentUserData.success && currentUserData.user) {
+      // Obtener el usuario actual para el número de teléfono
+      let usuarioActualNumero: string | null = null
+      try {
+        const currentUserRes = await fetch('/api/auth/me')
+        if (currentUserRes.ok) {
+          const currentUserData = await currentUserRes.json()
+          if (currentUserData.success && currentUserData.user) {
+            usuarioActualNumero = currentUserData.user.numero || null
+            
+            // Si aún no se encuentra el comercial, usar el usuario actual
+            if (!comercialSeleccionado) {
               comercialSeleccionado = {
                 id: currentUserData.user.id,
                 nombre: currentUserData.user.nombre,
@@ -1711,9 +1715,9 @@ export default function EditarCotizacionPage() {
               }
             }
           }
-        } catch (error) {
-          console.error('Error obteniendo usuario actual:', error)
         }
+      } catch (error) {
+        console.error('Error obteniendo usuario actual:', error)
       }
 
       await generarPDFCotizacion({
@@ -1723,8 +1727,11 @@ export default function EditarCotizacionPage() {
         sucursal: sucursal || '',
         vendedor: comercialSeleccionado?.nombre || vendedor,
         vendedorEmail: comercialSeleccionado?.email || undefined,
+        vendedorNumero: usuarioActualNumero,
         productos: productosList,
-        totalGeneral: totalGeneral
+        totalGeneral: totalGeneral,
+        vigencia: vigencia ? parseInt(vigencia) : 30,
+        plazo: plazo || null
       })
 
       toast.success("Cotización descargada exitosamente")
@@ -2031,6 +2038,7 @@ export default function EditarCotizacionPage() {
                     value={plazo}
                     onChange={(e) => setPlazo(e.target.value)}
                     placeholder="Ej: 5 días hábiles"
+                    className="h-9"
                   />
                 </div>
 

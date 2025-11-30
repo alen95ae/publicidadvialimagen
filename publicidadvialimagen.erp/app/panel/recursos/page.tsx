@@ -55,6 +55,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { normalizeText } from "@/lib/utils"
 
 // Tipo para los items de recursos
 interface RecursoItem {
@@ -236,10 +237,18 @@ export default function RecursosPage() {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (searchTerm) params.set('q', searchTerm)
+      // NO enviar 'q' al backend - haremos búsqueda completa en frontend
+      // if (searchTerm) params.set('q', searchTerm)
       if (selectedCategory) params.set('categoria', selectedCategory)
-      params.set('page', page.toString())
-      params.set('limit', '50')
+      
+      // Si hay búsqueda, cargar más datos para filtrar en frontend
+      if (searchTerm && searchTerm.trim() !== '') {
+        params.set('page', '1')
+        params.set('limit', '10000') // Límite alto para obtener todos y filtrar en frontend
+      } else {
+        params.set('page', page.toString())
+        params.set('limit', '50')
+      }
       
       console.log('Fetching recursos from:', `/api/recursos?${params.toString()}`)
       const response = await fetch(`/api/recursos?${params.toString()}`)
@@ -248,7 +257,23 @@ export default function RecursosPage() {
         const result = await response.json()
         console.log('Received data:', result)
         console.log('Pagination info:', result.pagination)
-        setItems(result.data || [])
+        let itemsData = result.data || []
+        
+        // Si hay búsqueda, filtrar en el frontend con normalización flexible
+        if (searchTerm && searchTerm.trim() !== '') {
+          const normalizedSearch = normalizeText(searchTerm.trim())
+          itemsData = itemsData.filter((item: any) => {
+            const normalizedCode = normalizeText(item.codigo || '')
+            const normalizedNombre = normalizeText(item.nombre || '')
+            const normalizedCategoria = normalizeText(item.categoria || '')
+            
+            return normalizedCode.includes(normalizedSearch) ||
+                   normalizedNombre.includes(normalizedSearch) ||
+                   normalizedCategoria.includes(normalizedSearch)
+          })
+        }
+        
+        setItems(itemsData)
         setPagination(result.pagination || pagination)
         setCurrentPage(page)
       } else {
@@ -304,15 +329,11 @@ export default function RecursosPage() {
   // Estado para vista (lista o galería)
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
 
-  // Filtrar items basado en búsqueda y categoría
+  // Filtrar items basado en búsqueda y categoría (ya filtrado en fetchItems si hay búsqueda)
   const filteredItems = items.filter(item => {
-    const matchesSearch = searchTerm === "" || 
-      item.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-    
+    // Si no hay búsqueda activa, solo filtrar por categoría
     const matchesCategory = selectedCategory === "" || item.categoria === selectedCategory
-    
-    return matchesSearch && matchesCategory
+    return matchesCategory
   })
 
 

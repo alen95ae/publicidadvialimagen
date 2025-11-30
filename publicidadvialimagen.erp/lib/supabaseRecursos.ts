@@ -267,10 +267,11 @@ export async function getRecursosPage(page: number = 1, pageSize: number = 50, q
       .from('recursos')
       .select('*', { count: 'exact' })
     
-    // Aplicar filtros
-    if (query) {
-      queryBuilder = queryBuilder.or(`codigo.ilike.%${query}%,nombre.ilike.%${query}%,categoria.ilike.%${query}%`)
-    }
+    // TEXT SEARCH - Deshabilitado en backend para hacer búsqueda flexible en frontend
+    // La búsqueda se hará completamente en el frontend con normalización de acentos, puntos, etc.
+    // if (query) {
+    //   queryBuilder = queryBuilder.or(`codigo.ilike.%${query}%,nombre.ilike.%${query}%,categoria.ilike.%${query}%`)
+    // }
     
     if (categoria) {
       queryBuilder = queryBuilder.eq('categoria', categoria)

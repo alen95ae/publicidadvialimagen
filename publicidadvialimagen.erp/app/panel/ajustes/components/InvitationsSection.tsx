@@ -9,13 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Copy, ExternalLink, Clock, CheckCircle, XCircle, Key } from "lucide-react";
+import { Plus, Copy, ExternalLink, Clock, CheckCircle, XCircle, Key, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Invitation {
   id: string;
   email: string;
   rol: string;
+  rolNombre: string; // Obligatorio - siempre debe venir del backend
   token: string;
   estado: "pendiente" | "usado" | "expirado";
   fechaCreacion: string;
@@ -240,11 +241,45 @@ export default function InvitationsSection() {
     }
   };
 
+  const handleEliminarInvitacion = async (id: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar esta invitación?")) {
+      return;
+    }
 
-  const getRoleName = (roleId: string) => {
-    const role = roles.find(r => r.id === roleId);
-    return role ? role.nombre : roleId;
+    try {
+      const response = await fetch(`/api/ajustes/invitaciones`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: "Invitación eliminada correctamente",
+        });
+        loadInvitations();
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Error al eliminar invitación",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al eliminar invitación",
+        variant: "destructive",
+      });
+    }
   };
+
+
+  // Función eliminada - ya no se necesita porque el backend siempre devuelve rolNombre
 
   const getStatusBadge = (estado: string) => {
     switch (estado) {
@@ -426,18 +461,19 @@ export default function InvitationsSection() {
               <TableHead>Fecha Creación</TableHead>
               <TableHead>Expira</TableHead>
               <TableHead>Enlace</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
+                <TableCell colSpan={7} className="text-center py-8">
                   Cargando invitaciones...
                 </TableCell>
               </TableRow>
             ) : filteredInvitations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   No se encontraron invitaciones
                 </TableCell>
               </TableRow>
@@ -446,7 +482,7 @@ export default function InvitationsSection() {
                 <TableRow key={invitation.id}>
                   <TableCell className="font-medium">{invitation.email}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{getRoleName(invitation.rol)}</Badge>
+                    <Badge variant="secondary">{invitation.rolNombre}</Badge>
                   </TableCell>
                   <TableCell>
                     {getStatusBadge(invitation.estado)}
@@ -481,6 +517,19 @@ export default function InvitationsSection() {
                         disabled={invitation.estado !== "pendiente"}
                       >
                         <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        title="Eliminar"
+                        onClick={() => handleEliminarInvitacion(invitation.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>

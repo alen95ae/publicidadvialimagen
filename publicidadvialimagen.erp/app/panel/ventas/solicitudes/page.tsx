@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast, Toaster } from "sonner"
+import { normalizeText } from "@/lib/utils"
 
 // Datos de ejemplo para las solicitudes de cotización
 const solicitudes = [
@@ -460,11 +461,22 @@ export default function SolicitudesPage() {
   }
 
   const filteredSolicitudes = solicitudesList.filter(solicitud => {
-    const matchesSearch = solicitud.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      solicitud.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      solicitud.contacto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      solicitud.comentarios.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      solicitud.soporte.toLowerCase().includes(searchTerm.toLowerCase())
+    // Búsqueda flexible con normalización
+    let matchesSearch = true
+    if (searchTerm && searchTerm.trim() !== '') {
+      const normalizedSearch = normalizeText(searchTerm.trim())
+      const normalizedCode = normalizeText(solicitud.codigo || '')
+      const normalizedEmpresa = normalizeText(solicitud.empresa || '')
+      const normalizedContacto = normalizeText(solicitud.contacto || '')
+      const normalizedComentarios = normalizeText(solicitud.comentarios || '')
+      const normalizedSoporte = normalizeText(solicitud.soporte || '')
+      
+      matchesSearch = normalizedCode.includes(normalizedSearch) ||
+        normalizedEmpresa.includes(normalizedSearch) ||
+        normalizedContacto.includes(normalizedSearch) ||
+        normalizedComentarios.includes(normalizedSearch) ||
+        normalizedSoporte.includes(normalizedSearch)
+    }
     
     const matchesEstado = estadoFilter.length === 0 || estadoFilter.includes(solicitud.estado)
     

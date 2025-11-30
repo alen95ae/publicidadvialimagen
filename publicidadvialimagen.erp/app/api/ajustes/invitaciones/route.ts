@@ -9,6 +9,7 @@ import {
   updateInvitacion
 } from "@/lib/supabaseInvitaciones";
 import { findUserByEmailSupabase } from "@/lib/supabaseUsers";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 // GET - Obtener invitaciones
 export async function GET(request: NextRequest) {
@@ -32,17 +33,130 @@ export async function GET(request: NextRequest) {
     // Obtener invitaciones de Supabase
     const invitations = await getAllInvitaciones(statusFilter || undefined);
     
-    // Mapear al formato esperado por el frontend
-    const invitationsFormatted = invitations.map(inv => ({
-      id: inv.id,
-      email: inv.email,
-      rol: inv.rol,
-      token: inv.token,
-      estado: inv.estado,
-      fechaCreacion: inv.fechaCreacion,
-      fechaExpiracion: inv.fechaExpiracion,
-      fechaUso: inv.fechaUso || null,
-      enlace: inv.enlace
+    // Obtener todos los roles para mapear IDs a nombres (igual que en usuarios)
+    const supabase = getSupabaseServer();
+    const { data: rolesData, error: rolesError } = await supabase
+      .from('roles')
+      .select('id, nombre');
+    
+    if (rolesError) {
+      console.error('❌ Error obteniendo roles:', rolesError);
+      return NextResponse.json({ error: "Error al obtener roles" }, { status: 500 });
+    }
+    
+    if (!rolesData || rolesData.length === 0) {
+      console.error('❌ No se encontraron roles en la base de datos');
+      return NextResponse.json({ error: "No se encontraron roles" }, { status: 500 });
+    }
+    
+    // Crear un mapa de roles por ID (igual que en usuarios)
+    const rolesMap = new Map<string, string>();
+    rolesData.forEach((role: any) => {
+      rolesMap.set(role.id, role.nombre);
+    });
+    
+    // Obtener mapeo de permiso_id a rol_id por si el valor guardado es un permiso_id
+    const { data: rolPermisosData, error: rolPermisosError } = await supabase
+      .from('rol_permisos')
+      .select('rol_id, permiso_id');
+    
+    if (rolPermisosError) {
+      console.error('❌ Error obteniendo rol_permisos:', rolPermisosError);
+      // No retornar error aquí, solo continuar sin el mapeo de permisos
+    }
+    
+    // Crear un mapa de permiso_id -> array de rol_id
+    const permisoToRolIdsMap = new Map<string, string[]>();
+    if (rolPermisosData) {
+      rolPermisosData.forEach((rp: any) => {
+        if (!permisoToRolIdsMap.has(rp.permiso_id)) {
+          permisoToRolIdsMap.set(rp.permiso_id, []);
+        }
+        permisoToRolIdsMap.get(rp.permiso_id)!.push(rp.rol_id);
+      });
+    }
+    
+    // Mapear al formato esperado por el frontend (igual que en usuarios)
+    const invitationsFormatted = await Promise.all(invitations.map(async (inv) => {
+      const rolValue = inv.rol?.trim(); // Limpiar espacios en blanco
+      let rolNombre: string = "Sin rol";
+      
+      if (!rolValue) {
+        return {
+          id: inv.id,
+          email: inv.email,
+          rol: inv.rol,
+          rolNombre: "Sin rol",
+          token: inv.token,
+          estado: inv.estado,
+          fechaCreacion: inv.fechaCreacion,
+          fechaExpiracion: inv.fechaExpiracion,
+          fechaUso: inv.fechaUso || null,
+          enlace: inv.enlace
+        };
+      }
+      
+      // Intentar obtener el nombre del rol
+      // Primero intentar si el valor es un rol_id directo (caso más común cuando se crea desde el formulario)
+      if (rolesMap.has(rolValue)) {
+        rolNombre = rolesMap.get(rolValue)!;
+      } else {
+        // Si no se encuentra como rol_id, puede ser un permiso_id, buscar el rol que tiene ese permiso
+        const rolIdsFromPermiso = permisoToRolIdsMap.get(rolValue);
+        if (rolIdsFromPermiso && rolIdsFromPermiso.length > 0) {
+          // Tomar el primer rol que tiene ese permiso
+          const firstRolId = rolIdsFromPermiso[0];
+          if (rolesMap.has(firstRolId)) {
+            rolNombre = rolesMap.get(firstRolId)!;
+          }
+        } else {
+          // Si no se encuentra en los mapas, hacer consulta directa a la BD (como en usuarios)
+          try {
+            const { data: roleData } = await supabase
+              .from('roles')
+              .select('nombre')
+              .eq('id', rolValue)
+              .single();
+            
+            if (roleData?.nombre) {
+              rolNombre = roleData.nombre;
+            }
+          } catch (error) {
+            // Si falla, intentar buscar como permiso_id y obtener el rol asociado
+            const { data: permisoData } = await supabase
+              .from('rol_permisos')
+              .select('rol_id')
+              .eq('permiso_id', rolValue)
+              .limit(1)
+              .single();
+            
+            if (permisoData?.rol_id) {
+              const { data: roleDataFromPermiso } = await supabase
+                .from('roles')
+                .select('nombre')
+                .eq('id', permisoData.rol_id)
+                .single();
+              
+              if (roleDataFromPermiso?.nombre) {
+                rolNombre = roleDataFromPermiso.nombre;
+              }
+            }
+          }
+        }
+      }
+      
+      return {
+        id: inv.id,
+        email: inv.email,
+        rol: inv.rol, // Mantener el ID original para compatibilidad
+        rolNombre: rolNombre, // SIEMPRE devolver el nombre del rol
+        token: inv.token,
+        estado: inv.estado,
+        fechaCreacion: inv.fechaCreacion,
+        fechaExpiracion: inv.fechaExpiracion,
+        fechaUso: inv.fechaUso || null,
+        enlace: inv.enlace
+      };
     }));
 
     return NextResponse.json({ invitations: invitationsFormatted });
@@ -212,6 +326,47 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ message: "Invitación actualizada correctamente" });
   } catch (error) {
     console.error("Error al actualizar invitación:", error);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+  }
+}
+
+// DELETE - Eliminar invitación
+export async function DELETE(request: NextRequest) {
+  try {
+    // Verificar autenticación y permisos de administrador
+    const token = request.cookies.get("session")?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Token de sesión no encontrado" }, { status: 401 });
+    }
+    
+    const session = await verifySession(token);
+    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
+    const isAdmin = session?.role === "admin";
+    
+    if (!session || (!isAdmin && !isDeveloper)) {
+      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+    }
+
+    const { id } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: "ID de invitación requerido" }, { status: 400 });
+    }
+
+    const supabase = getSupabaseServer();
+    const { error } = await supabase
+      .from('invitaciones')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error al eliminar invitación:", error);
+      return NextResponse.json({ error: "Error al eliminar invitación" }, { status: 500 });
+    }
+
+    return NextResponse.json({ message: "Invitación eliminada correctamente" });
+  } catch (error) {
+    console.error("Error al eliminar invitación:", error);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

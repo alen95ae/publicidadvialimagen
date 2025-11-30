@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { ProtectRoute } from "@/components/protect-route"
+import { normalizeText } from "@/lib/utils"
 
 // Tipo para los items de ajustes de inventario
 interface AjusteInventarioItem {
@@ -359,11 +360,18 @@ function AjustesInventarioPageContent() {
     }
   }
 
-  // Filtrar items basado en búsqueda y sucursal
+  // Filtrar items basado en búsqueda y sucursal con normalización flexible
   const filteredItems = ajustesItems.filter(item => {
-    const matchesSearch = searchTerm === "" || 
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.varianteCombinacion.toLowerCase().includes(searchTerm.toLowerCase())
+    // Búsqueda flexible con normalización
+    let matchesSearch = true
+    if (searchTerm && searchTerm.trim() !== '') {
+      const normalizedSearch = normalizeText(searchTerm.trim())
+      const normalizedNombre = normalizeText(item.nombre || '')
+      const normalizedVariante = normalizeText(item.varianteCombinacion || '')
+      
+      matchesSearch = normalizedNombre.includes(normalizedSearch) ||
+        normalizedVariante.includes(normalizedSearch)
+    }
     
     const matchesSucursal = selectedSucursal === "all" || item.sucursal === selectedSucursal
     

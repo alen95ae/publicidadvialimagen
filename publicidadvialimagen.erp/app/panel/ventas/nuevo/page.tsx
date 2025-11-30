@@ -1467,28 +1467,24 @@ export default function NuevaCotizacionPage() {
         )
       }
 
-      // Obtener el usuario actual para el número de teléfono
-      let usuarioActualNumero: string | null = null
-      try {
-        const currentUserRes = await fetch('/api/auth/me')
-        if (currentUserRes.ok) {
-          const currentUserData = await currentUserRes.json()
-          if (currentUserData.success && currentUserData.user) {
-            usuarioActualNumero = currentUserData.user.numero || null
-            
-            // Si aún no se encuentra el comercial, usar el usuario actual
-            if (!comercialSeleccionado) {
-              comercialSeleccionado = {
-                id: currentUserData.user.id,
-                nombre: currentUserData.user.nombre,
-                email: currentUserData.user.email,
-                rol: currentUserData.user.rol,
-              }
+      // Obtener el número del comercial asignado (no del usuario que descarga)
+      let vendedorNumero: string | null = null
+      if (comercialSeleccionado?.numero) {
+        vendedorNumero = comercialSeleccionado.numero
+      } else if (comercialSeleccionado?.id) {
+        // Si no tiene número pero tiene ID, intentar obtenerlo del endpoint de comerciales
+        try {
+          const comercialesResponse = await fetch(`/api/public/comerciales`)
+          if (comercialesResponse.ok) {
+            const comercialesData = await comercialesResponse.json()
+            const comercial = comercialesData.users?.find((u: any) => u.id === comercialSeleccionado.id)
+            if (comercial) {
+              vendedorNumero = comercial.numero || null
             }
           }
+        } catch (error) {
+          console.error('Error obteniendo número del comercial:', error)
         }
-      } catch (error) {
-        console.error('Error obteniendo usuario actual:', error)
       }
 
       await generarPDFCotizacion({
@@ -1498,7 +1494,7 @@ export default function NuevaCotizacionPage() {
         sucursal: sucursal || '',
         vendedor: comercialSeleccionado?.nombre || '',
         vendedorEmail: comercialSeleccionado?.email || undefined,
-        vendedorNumero: usuarioActualNumero,
+        vendedorNumero: vendedorNumero, // Usar el número del comercial asignado, no del usuario que descarga
         productos: productosList,
         totalGeneral: totalGeneral,
         vigencia: vigencia ? parseInt(vigencia) : 30,

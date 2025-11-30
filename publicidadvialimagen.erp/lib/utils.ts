@@ -6,8 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Normaliza un texto removiendo tildes y convirtiendo a minúsculas
- * Útil para búsquedas que ignoran tildes (ej: "cívica" = "civica")
+ * Normaliza un texto removiendo tildes, puntos, espacios extra y convirtiendo a minúsculas
+ * Útil para búsquedas flexibles que ignoran acentos, puntos, espacios, etc.
+ * Ejemplos:
+ * - "Av. De Las Américas" → "av de las americas"
+ * - "Cara A" → "cara a"
+ * - "Peñarol" → "penarol"
  */
 export function normalizeText(text: string): string {
   if (!text) return ''
@@ -15,6 +19,9 @@ export function normalizeText(text: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Remover diacríticos (tildes)
+    .replace(/\./g, '') // Remover puntos
+    .replace(/\s+/g, ' ') // Normalizar espacios múltiples a uno solo
+    .trim()
 }
 
 /**

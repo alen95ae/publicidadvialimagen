@@ -5,6 +5,9 @@ import { getSoportes, createSoporte } from "@/lib/supabaseSoportes"
 import { soporteToSupport, buildSupabasePayload } from "./helpers"
 import { uploadImage } from "@/lib/supabaseUpload"
 import { requirePermiso } from "@/lib/permisos"
+import { addHistorialEvento } from "@/lib/supabaseHistorial"
+import { verifySession } from "@/lib/auth"
+import { cookies } from "next/headers"
 
 export async function GET(request: Request) {
   try {
@@ -74,6 +77,9 @@ export async function POST(req: Request) {
     if (permisoCheck instanceof Response) {
       return permisoCheck;
     }
+    
+    // Obtener userId del permiso check para usar en historial
+    const userId = (permisoCheck && !(permisoCheck instanceof Response)) ? permisoCheck.userId : null
 
     // Detectar si viene como FormData (con archivos) o JSON
     const contentType = req.headers.get("content-type") || ""
@@ -165,6 +171,41 @@ export async function POST(req: Request) {
     
     // Crear en Supabase
     const soporte = await createSoporte(supabasePayload)
+
+    // Registrar en historial
+    try {
+      // Si no tenemos userId del permiso check, intentar obtenerlo de la sesión
+      let userUuid: string | null = userId
+      
+      if (!userUuid) {
+        const cookieStore = await cookies()
+        const token = cookieStore.get("session")?.value
+        
+        if (token) {
+          try {
+            const session = await verifySession(token)
+            userUuid = session?.sub || null
+          } catch (e) {
+            console.warn('No se pudo obtener sesión para historial:', e)
+          }
+        }
+      }
+      
+      await addHistorialEvento({
+        soporte_id: soporte.id,
+        tipo_evento: 'CREACION',
+        descripcion: `Soporte creado: ${supabasePayload.titulo || supabasePayload.codigo || 'Sin título'}`,
+        realizado_por: userUuid, // UUID del usuario
+        datos: {
+          codigo: supabasePayload.codigo,
+          titulo: supabasePayload.titulo
+        }
+      })
+      
+      console.log('✅ Evento de creación registrado en historial')
+    } catch (historialError) {
+      console.error('⚠️ Error registrando historial de creación (no crítico):', historialError)
+    }
 
     // Convertir directamente al formato del frontend
     return NextResponse.json(soporteToSupport(soporte), { status: 201 })

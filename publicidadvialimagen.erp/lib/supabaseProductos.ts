@@ -320,11 +320,12 @@ export async function getProductosPage(page: number = 1, pageSize: number = 25, 
       .from('productos')
       .select('*', { count: 'exact' })
     
-    // Aplicar filtros (normalizado sin tildes)
-    if (query) {
-      const normalizedQuery = normalizeText(query)
-      queryBuilder = queryBuilder.or(`codigo.ilike.%${normalizedQuery}%,nombre.ilike.%${normalizedQuery}%,categoria.ilike.%${normalizedQuery}%`)
-    }
+    // TEXT SEARCH - Deshabilitado en backend para hacer búsqueda flexible en frontend
+    // La búsqueda se hará completamente en el frontend con normalización de acentos, puntos, etc.
+    // if (query) {
+    //   const normalizedQuery = normalizeText(query)
+    //   queryBuilder = queryBuilder.or(`codigo.ilike.%${normalizedQuery}%,nombre.ilike.%${normalizedQuery}%,categoria.ilike.%${normalizedQuery}%`)
+    // }
     
     if (categoria) {
       queryBuilder = queryBuilder.eq('categoria', categoria)

@@ -51,15 +51,15 @@ export async function getSoportes({
     .from("soportes")
     .select("*", { count: "exact" });
 
-  // TEXT SEARCH (normalizado sin tildes)
-  if (q.trim() !== "") {
-    const term = `%${normalizeText(q.trim())}%`;
-    // Nota: Supabase no tiene una función nativa para ignorar tildes,
-    // así que normalizamos el término de búsqueda antes de enviarlo
-    query = query.or(
-      `codigo.ilike.${term},titulo.ilike.${term},ciudad.ilike.${term},tipo_soporte.ilike.${term}`
-    );
-  }
+  // TEXT SEARCH - Deshabilitado en backend para hacer búsqueda flexible en frontend
+  // La búsqueda se hará completamente en el frontend con normalización de acentos, puntos, etc.
+  // Esto permite búsquedas más flexibles que ignoran acentos, puntos y espacios
+  // if (q.trim() !== "") {
+  //   const term = `%${normalizeText(q.trim())}%`;
+  //   query = query.or(
+  //     `codigo.ilike.${term},titulo.ilike.${term},ciudad.ilike.${term},tipo_soporte.ilike.${term}`
+  //   );
+  // }
 
   // STATUS
   if (status) {

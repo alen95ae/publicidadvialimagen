@@ -28,6 +28,7 @@ import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { normalizeText } from "@/lib/utils"
 
 interface Cotizacion {
   id: string
@@ -292,11 +293,18 @@ export default function CotizacionesPage() {
 
   // Filtrar cotizaciones (solo filtros del frontend, la paginación se hace en el backend)
   const filteredCotizaciones = cotizaciones.filter(cotizacion => {
-    // Filtro de búsqueda (código, cliente, vendedor) - solo si no se está usando búsqueda en backend
-    const matchesSearch = !searchTerm || 
-      cotizacion.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cotizacion.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cotizacion.vendedor?.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filtro de búsqueda flexible (código, cliente, vendedor) con normalización
+    let matchesSearch = true
+    if (searchTerm && searchTerm.trim() !== '') {
+      const normalizedSearch = normalizeText(searchTerm.trim())
+      const normalizedCode = normalizeText(cotizacion.codigo || '')
+      const normalizedCliente = normalizeText(cotizacion.cliente || '')
+      const normalizedVendedor = normalizeText(cotizacion.vendedor || '')
+      
+      matchesSearch = normalizedCode.includes(normalizedSearch) ||
+        normalizedCliente.includes(normalizedSearch) ||
+        normalizedVendedor.includes(normalizedSearch)
+    }
     
     // Filtro por vendedor
     const matchesVendedor = filtroVendedor === "all" || cotizacion.vendedor === filtroVendedor
@@ -421,8 +429,9 @@ export default function CotizacionesPage() {
       // El total_final del backend ya incluye IVA/IT, no necesitamos validar aquí
       // La validación de precios mínimos ya se hizo arriba para cada línea
       
-      // Obtener el email del vendedor
+      // Obtener el email y número del comercial asignado a la cotización
       let vendedorEmail: string | undefined = undefined
+      let vendedorNumero: string | null = null
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       
       try {
@@ -444,36 +453,15 @@ export default function CotizacionesPage() {
           
           if (vendedor) {
             vendedorEmail = vendedor.email
-            console.log('✅ Email del vendedor encontrado:', vendedorEmail)
+            vendedorNumero = vendedor.numero || null
+            console.log('✅ Email del comercial asignado encontrado:', vendedorEmail)
+            console.log('✅ Número del comercial asignado encontrado:', vendedorNumero)
           } else {
-            console.log('⚠️ No se encontró vendedor en comerciales, obteniendo usuario actual')
-            // Si no se encuentra, usar el usuario actual
-            const currentUserRes = await fetch('/api/auth/me')
-            if (currentUserRes.ok) {
-              const currentUserData = await currentUserRes.json()
-              if (currentUserData.success && currentUserData.user) {
-                vendedorEmail = currentUserData.user.email
-                console.log('✅ Email del usuario actual:', vendedorEmail)
-              }
-            }
+            console.log('⚠️ No se encontró comercial asignado en comerciales')
           }
         }
       } catch (error) {
-        console.error('Error obteniendo email del vendedor:', error)
-      }
-      
-      // Obtener el número del usuario actual
-      let usuarioActualNumero: string | null = null
-      try {
-        const currentUserRes = await fetch('/api/auth/me')
-        if (currentUserRes.ok) {
-          const currentUserData = await currentUserRes.json()
-          if (currentUserData.success && currentUserData.user) {
-            usuarioActualNumero = currentUserData.user.numero || null
-          }
-        }
-      } catch (error) {
-        console.error('Error obteniendo número del usuario:', error)
+        console.error('Error obteniendo datos del comercial asignado:', error)
       }
       
       // Convertir líneas al formato esperado por el generador de PDF
@@ -557,7 +545,7 @@ export default function CotizacionesPage() {
         sucursal: cotizacion.sucursal || '',
         vendedor: cotizacion.vendedor || '',
         vendedorEmail: vendedorEmail,
-        vendedorNumero: usuarioActualNumero,
+        vendedorNumero: vendedorNumero, // Usar el número del comercial asignado, no del usuario que descarga
         productos: productos,
         totalGeneral: cotizacion.total_final || 0,
         vigencia: cotizacion.vigencia || 30,

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { api } from "@/lib/fetcher"
+import { normalizeText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -15,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Upload, LayoutGrid, List, ArrowUpDown, X } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Upload, LayoutGrid, List, ArrowUpDown, X, FolderClock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
@@ -166,14 +167,15 @@ export default function SoportesPage() {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (query) params.set('q', query)
+      // NO enviar 'q' al backend - haremos búsqueda completa en frontend
+      // if (query) params.set('q', query)
       if (statusFilter.length) params.set('status', statusFilter.join(','))
       if (cityFilter) params.set('city', cityFilter)
       
-      // Si hay ordenamiento activo, cargar todos los datos sin paginación
-      if (sortColumn) {
+      // Si hay búsqueda o ordenamiento, cargar más datos para filtrar en frontend
+      if (query || sortColumn) {
         params.set('page', '1')
-        params.set('limit', '10000') // Límite muy alto para obtener todos
+        params.set('limit', '10000') // Límite muy alto para obtener todos y filtrar en frontend
       } else {
         params.set('page', page.toString())
         params.set('limit', '50')
@@ -190,8 +192,33 @@ export default function SoportesPage() {
         
         // Asegurar que supports sea siempre un array
         const supportsData = result.data || result
-        const supportsArray = Array.isArray(supportsData) ? supportsData : []
-        console.log('📊 Supports data:', supportsArray)
+        let supportsArray = Array.isArray(supportsData) ? supportsData : []
+        
+        // Si hay búsqueda, filtrar en el frontend con normalización flexible
+        if (query && query.trim() !== '') {
+          const normalizedQuery = normalizeText(query.trim())
+          console.log('🔍 Normalized query:', normalizedQuery)
+          supportsArray = supportsArray.filter((support: Support) => {
+            const normalizedCode = normalizeText(support.code || '')
+            const normalizedTitle = normalizeText(support.title || '')
+            const normalizedCity = normalizeText(support.city || '')
+            const normalizedType = normalizeText(support.type || '')
+            
+            const matches = normalizedCode.includes(normalizedQuery) ||
+                   normalizedTitle.includes(normalizedQuery) ||
+                   normalizedCity.includes(normalizedQuery) ||
+                   normalizedType.includes(normalizedQuery)
+            
+            if (matches) {
+              console.log('✅ Match found:', support.title, 'for query:', query)
+            }
+            
+            return matches
+          })
+          console.log('📊 Filtered results:', supportsArray.length)
+        }
+        
+        console.log('📊 Supports data after filtering:', supportsArray)
         console.log('📊 Is array:', Array.isArray(supportsArray))
         
         // Si hay ordenamiento, guardar todos los datos y aplicar paginación después
@@ -504,19 +531,22 @@ export default function SoportesPage() {
     }
     
     const downloadPromise = async () => {
-      // Obtener el email del usuario actual (igual que en cotizaciones)
+      // Obtener el email y número del usuario actual (igual que en cotizaciones)
       let userEmail = ''
+      let userNumero: string | null = null
       try {
         const userResponse = await fetch('/api/auth/me')
         if (userResponse.ok) {
           const userData = await userResponse.json()
           if (userData.success && userData.user) {
             userEmail = userData.user.email || ''
+            userNumero = userData.user.numero || null
             console.log('📧 Email del usuario obtenido:', userEmail)
+            console.log('📱 Número del usuario obtenido:', userNumero)
           }
         }
       } catch (error) {
-        console.error('Error obteniendo email del usuario:', error)
+        console.error('Error obteniendo datos del usuario:', error)
       }
       
       // Determinar disponibilidad según statusFilter
@@ -548,13 +578,17 @@ export default function SoportesPage() {
         }
       }
       
-      // Construir URL con IDs, email y filtros
+      // Construir URL con IDs, email, número y filtros
       const params = new URLSearchParams({
         ids: ids.join(',')
       })
       
       if (userEmail) {
         params.append('email', userEmail)
+      }
+      
+      if (userNumero) {
+        params.append('numero', userNumero)
       }
       
       if (disponibilidad) {
@@ -1225,6 +1259,16 @@ export default function SoportesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            title="Historial"
+                            onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
+                            className="flex-1 text-[10px] h-6 px-1"
+                          >
+                            <FolderClock className="w-2.5 h-2.5 mr-0.5" />
+                            Historial
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             title="Eliminar"
                             onClick={() => handleDelete(support.id)}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
@@ -1423,6 +1467,15 @@ export default function SoportesPage() {
                               <Edit className="w-4 h-4" />
                             </Button>
                           </PermisoEditar>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
+                            title="Ver historial"
+                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
+                          >
+                            <FolderClock className="w-4 h-4" />
+                          </Button>
                           <PermisoEliminar modulo="soportes">
                             <Button
                               variant="ghost"

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { getSoporteById, updateSoporte, deleteSoporte } from "@/lib/supabaseSoportes"
 import { buildSupabasePayload, rowToSupport } from "../helpers"
 import { requirePermiso } from "@/lib/permisos"
+import { addHistorialEvento } from "@/lib/supabaseHistorial"
+import { verifySession } from "@/lib/auth"
+import { cookies } from "next/headers"
 
 export async function GET(_:Request,{ params }:{ params:Promise<{id:string}> }) {
   try{
@@ -33,6 +36,9 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
     if (permisoCheck instanceof Response) {
       return permisoCheck;
     }
+    
+    // Obtener userId del permiso check para usar en historial
+    const userId = (permisoCheck && !(permisoCheck instanceof Response)) ? permisoCheck.userId : null
 
     const { id } = await params
     const body = await req.json()
@@ -111,6 +117,88 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
       console.log('✅ Soporte actualizado en Supabase:', updated.id)
       console.log('🔗 Google Maps Link guardado:', updated.enlace_maps)
       
+      // Registrar en historial
+      try {
+        // Obtener ID del usuario (ya tenemos userId del permiso check, pero verificamos por si acaso)
+        let userUuid: string | null = userId
+        
+        // Si no tenemos userId del permiso check, intentar obtenerlo de la sesión
+        if (!userUuid) {
+          const cookieStore = await cookies()
+          const token = cookieStore.get("session")?.value
+          
+          if (token) {
+            try {
+              const session = await verifySession(token)
+              userUuid = session?.sub || null
+            } catch (e) {
+              console.warn('No se pudo obtener sesión para historial:', e)
+            }
+          }
+        }
+        
+        // Detectar cambios para crear descripción
+        const cambios: string[] = []
+        const datosHistorial: Record<string, any> = {}
+        
+        if (cleanPayload.estado && existing.estado !== cleanPayload.estado) {
+          cambios.push('estado')
+          datosHistorial.estado_anterior = existing.estado
+          datosHistorial.estado_nuevo = cleanPayload.estado
+        }
+        if (cleanPayload.precio_mensual !== undefined && existing.precio_mensual !== cleanPayload.precio_mensual) {
+          cambios.push('precio mensual')
+          datosHistorial.valor_anterior = existing.precio_mensual
+          datosHistorial.valor_nuevo = cleanPayload.precio_mensual
+        }
+        if (cleanPayload.titulo && existing.titulo !== cleanPayload.titulo) {
+          cambios.push('título')
+        }
+        if (cleanPayload.ancho !== undefined && existing.ancho !== cleanPayload.ancho) {
+          cambios.push('ancho')
+        }
+        if (cleanPayload.alto !== undefined && existing.alto !== cleanPayload.alto) {
+          cambios.push('alto')
+        }
+        if (cleanPayload.ciudad && existing.ciudad !== cleanPayload.ciudad) {
+          cambios.push('ciudad')
+        }
+        if (cleanPayload.tipo_soporte && existing.tipo_soporte !== cleanPayload.tipo_soporte) {
+          cambios.push('tipo de soporte')
+        }
+        if (cleanPayload.iluminacion !== undefined && existing.iluminacion !== cleanPayload.iluminacion) {
+          cambios.push('iluminación')
+        }
+        if (cleanPayload.enlace_maps && existing.enlace_maps !== cleanPayload.enlace_maps) {
+          cambios.push('ubicación')
+        }
+        
+        // Determinar tipo de evento
+        let tipoEvento: 'EDICION' | 'CAMBIO_ESTADO' = 'EDICION'
+        if (cambios.length === 1 && cambios[0] === 'estado') {
+          tipoEvento = 'CAMBIO_ESTADO'
+        }
+        
+        // Crear descripción
+        const descripcion = cambios.length > 0
+          ? `Se ${tipoEvento === 'CAMBIO_ESTADO' ? 'cambió el estado' : 'modificaron los siguientes campos'}: ${cambios.join(', ')}`
+          : 'Se actualizó el soporte'
+        
+        // Insertar en historial
+        await addHistorialEvento({
+          soporte_id: typeof soporteId === 'number' ? soporteId : parseInt(String(soporteId)),
+          tipo_evento: tipoEvento,
+          descripcion,
+          realizado_por: userUuid, // UUID del usuario, no email
+          datos: Object.keys(datosHistorial).length > 0 ? datosHistorial : null
+        })
+        
+        console.log('✅ Evento de historial registrado')
+      } catch (historialError) {
+        // No fallar la actualización si el historial falla
+        console.error('⚠️ Error registrando historial (no crítico):', historialError)
+      }
+      
       // updateSoporte devuelve un Soporte directamente, no con .fields
       const result = rowToSupport({ id: updated.id, ...updated })
       console.log('📤 Respuesta al cliente:', {
@@ -181,6 +269,45 @@ export async function DELETE(_:Request,{ params }:{ params:Promise<{id:string}> 
     
     if (!existing) {
       return NextResponse.json({ error:"Soporte no encontrado" }, { status:404 })
+    }
+    
+    // Obtener userId del permiso check para usar en historial
+    const userId = (permisoCheck && !(permisoCheck instanceof Response)) ? permisoCheck.userId : null
+    
+    // Registrar en historial antes de eliminar
+    try {
+      // Si no tenemos userId del permiso check, intentar obtenerlo de la sesión
+      let userUuid: string | null = userId
+      
+      if (!userUuid) {
+        const cookieStore = await cookies()
+        const token = cookieStore.get("session")?.value
+        
+        if (token) {
+          try {
+            const session = await verifySession(token)
+            userUuid = session?.sub || null
+          } catch (e) {
+            console.warn('No se pudo obtener sesión para historial:', e)
+          }
+        }
+      }
+      
+      const soporteIdNum = typeof existing.id === 'number' ? existing.id : parseInt(String(existing.id))
+      await addHistorialEvento({
+        soporte_id: soporteIdNum,
+        tipo_evento: 'ELIMINACION',
+        descripcion: `Soporte eliminado: ${existing.titulo || existing.codigo || 'Sin título'}`,
+        realizado_por: userUuid, // UUID del usuario
+        datos: {
+          codigo: existing.codigo,
+          titulo: existing.titulo
+        }
+      })
+      
+      console.log('✅ Evento de eliminación registrado en historial')
+    } catch (historialError) {
+      console.error('⚠️ Error registrando historial de eliminación (no crítico):', historialError)
     }
     
     await deleteSoporte(id)

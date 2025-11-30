@@ -55,7 +55,7 @@ import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { includesIgnoreAccents } from "@/lib/utils"
+import { includesIgnoreAccents, normalizeText } from "@/lib/utils"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Tipo para los items del inventario
@@ -278,10 +278,18 @@ export default function InventarioPage() {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (searchTerm) params.set('q', searchTerm)
+      // NO enviar 'q' al backend - haremos búsqueda completa en frontend
+      // if (searchTerm) params.set('q', searchTerm)
       if (selectedCategory) params.set('categoria', selectedCategory)
-      params.set('page', page.toString())
-      params.set('limit', '50')
+      
+      // Si hay búsqueda, cargar más datos para filtrar en frontend
+      if (searchTerm && searchTerm.trim() !== '') {
+        params.set('page', '1')
+        params.set('limit', '10000') // Límite alto para obtener todos y filtrar en frontend
+      } else {
+        params.set('page', page.toString())
+        params.set('limit', '50')
+      }
       
       console.log('Fetching inventario from:', `/api/inventario?${params.toString()}`)
       const response = await fetch(`/api/inventario?${params.toString()}`)
@@ -289,7 +297,23 @@ export default function InventarioPage() {
       if (response.ok) {
         const result = await response.json()
         console.log('Received data:', result)
-        setItems(result.data || [])
+        let itemsData = result.data || []
+        
+        // Si hay búsqueda, filtrar en el frontend con normalización flexible
+        if (searchTerm && searchTerm.trim() !== '') {
+          const normalizedSearch = normalizeText(searchTerm.trim())
+          itemsData = itemsData.filter((item: any) => {
+            const normalizedCode = normalizeText(item.codigo || '')
+            const normalizedNombre = normalizeText(item.nombre || '')
+            const normalizedCategoria = normalizeText(item.categoria || '')
+            
+            return normalizedCode.includes(normalizedSearch) ||
+                   normalizedNombre.includes(normalizedSearch) ||
+                   normalizedCategoria.includes(normalizedSearch)
+          })
+        }
+        
+        setItems(itemsData)
         setPagination(result.pagination || pagination)
         setCurrentPage(page)
       } else {

@@ -10,6 +10,65 @@ import path from 'path'
 import sharp from 'sharp'
 
 /**
+ * Función para crear slug SEO-friendly (igual que en la web)
+ */
+function createSlug(text: string | undefined | null): string {
+  if (!text) return ''
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[áàäâã]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöôõ]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n')
+    .replace(/[ç]/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/**
+ * Función para normalizar el nombre del archivo eliminando acentos y caracteres especiales
+ * Mantiene espacios y guiones para legibilidad
+ */
+function normalizeFileName(text: string): string {
+  if (!text) return ''
+  return text
+    .trim()
+    .replace(/[áàäâãÁÀÄÂÃ]/g, 'a')
+    .replace(/[éèëêÉÈËÊ]/g, 'e')
+    .replace(/[íìïîÍÌÏÎ]/g, 'i')
+    .replace(/[óòöôõÓÒÖÔÕ]/g, 'o')
+    .replace(/[úùüûÚÙÜÛ]/g, 'u')
+    .replace(/[ñÑ]/g, 'n')
+    .replace(/[çÇ]/g, 'c')
+    .replace(/[^a-zA-Z0-9\s\-_\.]/g, '') // Mantener letras, números, espacios, guiones, guiones bajos y puntos
+    .replace(/\s+/g, ' ') // Normalizar espacios múltiples
+    .trim()
+}
+
+/**
+ * Función para generar URL del soporte en la web pública
+ */
+function getSoporteWebUrl(soporteTitle: string, soporteId?: string, soporteCode?: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://publicidadvialimagen.com'
+  const slug = createSlug(soporteTitle)
+  
+  // Si hay slug, usarlo; si no, usar el ID o código como fallback
+  if (slug) {
+    return `${baseUrl}/vallas-publicitarias/${slug}`
+  } else if (soporteId && soporteId.trim() !== '') {
+    return `${baseUrl}/vallas-publicitarias/${soporteId}`
+  } else if (soporteCode && soporteCode.trim() !== '') {
+    return `${baseUrl}/vallas-publicitarias/${soporteCode}`
+  }
+  
+  return `${baseUrl}/vallas-publicitarias`
+}
+
+/**
  * Construye el nombre del archivo PDF según los filtros y selección
  */
 function buildPDFFileName({
@@ -59,8 +118,9 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const ids = url.searchParams.get('ids')
     
-    // Obtener el email del parámetro de URL (igual que en cotizaciones)
+    // Obtener el email y número del parámetro de URL (igual que en cotizaciones)
     const userEmail = url.searchParams.get('email') || undefined
+    const userNumero = url.searchParams.get('numero') || undefined
     
     // Obtener parámetros para el nombre del archivo
     const disponibilidad = url.searchParams.get('disponibilidad') || undefined
@@ -121,7 +181,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Generar PDF
-    const pdf = await generatePDF(supports, userEmail)
+    const pdf = await generatePDF(supports, userEmail, userNumero)
     
     // Construir nombre del archivo dinámico
     let fileName = buildPDFFileName({
@@ -130,13 +190,18 @@ export async function GET(request: NextRequest) {
       soporte: soporteTitulo,
     })
     
+    // Normalizar el nombre del archivo: eliminar acentos y caracteres especiales
+    fileName = normalizeFileName(fileName)
+    
     // Limpiar el nombre del archivo: eliminar espacios y caracteres extra al final
     fileName = fileName.trim().replace(/[_\s]+$/, '').replace(/\s+/g, ' ')
     
-    // Configurar headers para descarga (sin acentos para evitar problemas)
+    // Configurar headers para descarga con codificación correcta
     const headers = new Headers()
     headers.set('Content-Type', 'application/pdf')
-    headers.set('Content-Disposition', `attachment; filename="${fileName}"`)
+    // Usar encodeURIComponent para caracteres especiales y también proporcionar versión ASCII
+    const encodedFileName = encodeURIComponent(fileName)
+    headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodedFileName}`)
     
     return new NextResponse(pdf, { headers })
   } catch (error) {
@@ -145,9 +210,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer> {
+async function generatePDF(supports: any[], userEmail?: string, userNumero?: string): Promise<Buffer> {
   try {
-    console.log('📄 Generando PDF catálogo con email:', userEmail)
+    console.log('📄 Generando PDF catálogo con email:', userEmail, 'y número:', userNumero)
     const currentDate = new Date().toLocaleDateString('es-ES')
     const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
@@ -340,8 +405,17 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
             
             if (imageBase64) {
               try {
+                const imageX = 15
+                const imageY = yPosition
+                const imageWidth = 130
+                const imageHeight = 90
+                
                 // Aumentar tamaño de 120x80 a 130x90, más a la izquierda
-                pdf.addImage(imageBase64, imageFormat, 15, yPosition, 130, 90)
+                pdf.addImage(imageBase64, imageFormat, imageX, imageY, imageWidth, imageHeight)
+                
+                // Agregar enlace clickeable a la imagen para abrir en página web
+                const webUrl = getSoporteWebUrl(support.title, support.id, support.code)
+                pdf.link(imageX, imageY, imageWidth, imageHeight, { url: webUrl })
                 
                 // Agregar marca de agua sobre la imagen (más grande y que salga de la imagen)
                 if (logoBase64Watermark) {
@@ -353,8 +427,8 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                   const watermarkHeight = watermarkWidth / aspectRatio
                   
                   // Centrar sobre la imagen pero que salga un poco
-                  const imageCenterX = 15 + 130 / 2
-                  const imageCenterY = yPosition + 90 / 2
+                  const imageCenterX = imageX + imageWidth / 2
+                  const imageCenterY = imageY + imageHeight / 2
                   
                   // Rotar 45 grados
                   pdf.addImage(
@@ -371,6 +445,12 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
                   
                   pdf.restoreGraphicsState()
                 }
+                
+                // Agregar indicador visual de que es clickeable (debajo de la imagen)
+                pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
+                pdf.setFontSize(6)
+                pdf.setFont('helvetica', 'normal')
+                pdf.text('Clic para abrir en página web', imageX + imageWidth/2, imageY + imageHeight + 3, { align: 'center' })
               } catch (pdfError) {
                 console.error('❌ Error agregando imagen al PDF:', pdfError)
               }
@@ -642,18 +722,19 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
       pdf.setDrawColor(180, 180, 180)
       
       // Preparar datos para la tabla (4 columnas x 3 filas)
+      // Cada celda tiene un objeto con label (en negrita) y value (normal)
       const tableData = [
         [
-          `Código: ${support.code}`,
-          `Tipo de soporte: ${support.type}`,
-          `Sustrato de impresión: Lona`,
-          `Período de alquiler: Mensual`
+          { label: 'Código:', value: support.code || 'N/A' },
+          { label: 'Tipo de soporte:', value: support.type || 'N/A' },
+          { label: 'Sustrato de impresión:', value: 'Lona' },
+          { label: 'Período de alquiler:', value: 'Mensual' }
         ],
         [
-          `Ciudad: ${support.city}`,
-          `Medidas: ${support.widthM}m × ${support.heightM}m`,
-          `Divisa: Bs`,
-          `Costo de Producción: ${(() => {
+          { label: 'Ciudad:', value: support.city || 'N/A' },
+          { label: 'Medidas:', value: `${support.widthM || 'N/A'}m × ${support.heightM || 'N/A'}m` },
+          { label: 'Divisa:', value: 'Bs' },
+          { label: 'Costo de Producción:', value: `${(() => {
             // SIEMPRE recalcular área desde ancho × alto (ignorar valor guardado)
             const areaCalculada = (support.widthM || 0) * (support.heightM || 0)
             const areaFinal = areaCalculada > 0 ? areaCalculada : (support.areaM2 || 0)
@@ -661,13 +742,13 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
               return (support.sustrato_precio_venta * areaFinal).toLocaleString('es-ES', { maximumFractionDigits: 2 })
             }
             return 'N/A'
-          })()} Bs`
+          })()} Bs` }
         ],
         [
-          `Zona: ${support.zona || 'N/A'}`,
-          `Iluminación: ${support.lighting || 'No'}`,
-          `Impactos diarios: ${support.impactosDiarios?.toLocaleString() || 'N/A'}`,
-          `Costo de alquiler: ${support.priceMonth?.toLocaleString() || 'N/A'} Bs`
+          { label: 'Zona:', value: support.zona || 'N/A' },
+          { label: 'Iluminación:', value: support.lighting || 'No' },
+          { label: 'Impactos diarios:', value: support.impactosDiarios?.toLocaleString() || 'N/A' },
+          { label: 'Costo de alquiler:', value: `${support.priceMonth?.toLocaleString() || 'N/A'} Bs` }
         ]
       ]
       
@@ -685,18 +766,37 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
           pdf.setLineWidth(0.2)
           pdf.rect(cellX, cellY, colWidths[col], rowHeight, 'FD') // FD = Fill and Draw
           
-          // Texto (más grande)
+          // Texto con label en negrita y value en normal
           pdf.setTextColor(0, 0, 0)
           pdf.setFontSize(11) // Aumentado de 9 a 11
-          pdf.setFont('helvetica', 'normal')
+          
+          const cellData = tableData[row][col]
+          const label = cellData.label
+          const value = cellData.value
           
           // Ajustar texto si es muy largo
-          const text = tableData[row][col]
           const maxWidth = colWidths[col] - 4
-          const textLines = pdf.splitTextToSize(text, maxWidth)
           const textY = cellY + (rowHeight / 2) + 3 // Ajustado para centrar mejor
+          const startX = cellX + 3
           
-          pdf.text(textLines, cellX + 3, textY)
+          // Escribir label en negrita
+          pdf.setFont('helvetica', 'bold')
+          const labelWidth = pdf.getTextWidth(label)
+          pdf.text(label, startX, textY)
+          
+          // Escribir value en normal (con ajuste de texto si es necesario)
+          pdf.setFont('helvetica', 'normal')
+          const valueMaxWidth = maxWidth - labelWidth - 1 // Espacio disponible para el valor
+          const valueLines = pdf.splitTextToSize(value, valueMaxWidth)
+          
+          // Si el valor cabe en una línea, escribirlo en la misma línea
+          if (valueLines.length === 1) {
+            pdf.text(value, startX + labelWidth + 1, textY)
+          } else {
+            // Si necesita múltiples líneas, escribir la primera línea
+            pdf.text(valueLines[0], startX + labelWidth + 1, textY)
+            // Las líneas adicionales se escribirían debajo, pero por simplicidad solo mostramos la primera
+          }
           
           currentX += colWidths[col]
         }
@@ -741,25 +841,63 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
       
       // Distribuir el footer con separadores (igual que en cotización)
       // Izquierda: © 2025 Publicidad Vial Imagen
-      pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerY + 7)
+      const leftText = `© ${currentYear} Publicidad Vial Imagen`
+      pdf.text(leftText, 5, footerY + 7)
       
-      // Separador 1 (entre izquierda y centro)
-      pdf.text('|', 75, footerY + 7)
+      // Separador 1 (después del texto izquierdo)
+      const leftTextWidth = pdf.getTextWidth(leftText)
+      const separator1X = 5 + leftTextWidth + 5
+      pdf.text('|', separator1X, footerY + 7)
       
-      // Centro (centrado en la página): publicidadvialimagen.com
-      pdf.text('publicidadvialimagen.com', pageWidth / 2, footerY + 7, { align: 'center' })
-      
-      // Separador 2 (entre centro y derecha)
-      pdf.text('|', 220, footerY + 7)
-      
-      // Derecha (antes de la paginación): email (si existe)
+      // Calcular espacio para el contenido derecho (email, número, paginación)
+      let rightContentWidth = 0
       if (userEmail && userEmail.trim() !== '') {
-        pdf.text(userEmail, 225, footerY + 7)
+        rightContentWidth += pdf.getTextWidth(userEmail) + 5
+        if (userNumero && userNumero.trim() !== '') {
+          rightContentWidth += 5 + pdf.getTextWidth('|') + 5 // Separador entre email y número
+        }
+      }
+      if (userNumero && userNumero.trim() !== '') {
+        rightContentWidth += pdf.getTextWidth(userNumero) + 5
+      }
+      const paginationText = `${i}/${totalPages}`
+      rightContentWidth += pdf.getTextWidth(paginationText) + 5
+      if ((userEmail && userEmail.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
+        rightContentWidth += 5 + pdf.getTextWidth('|') // Separador final antes de paginación
       }
       
-      // Separador 3 (entre email y paginación) - solo si hay email
+      // Separador 2 (antes del contenido derecho) - incluyendo espacio para el separador mismo
+      const separatorWidth = pdf.getTextWidth('|')
+      const separator2X = pageWidth - 5 - rightContentWidth - separatorWidth
+      pdf.text('|', separator2X, footerY + 7)
+      
+      // Centro: publicidadvialimagen.com (centrado entre los dos separadores)
+      const webText = 'publicidadvialimagen.com'
+      const centerX = (separator1X + separator2X) / 2
+      pdf.text(webText, centerX, footerY + 7, { align: 'center' })
+      
+      // Derecha (antes de la paginación): email y número (si existen)
+      let rightContentX = separator2X + 5
       if (userEmail && userEmail.trim() !== '') {
-        pdf.text('|', 270, footerY + 7)
+        pdf.text(userEmail, rightContentX, footerY + 7)
+        rightContentX += pdf.getTextWidth(userEmail) + 5
+        
+        // Separador entre email y número
+        if (userNumero && userNumero.trim() !== '') {
+          pdf.text('|', rightContentX, footerY + 7)
+          rightContentX += 5
+        }
+      }
+      
+      // Número de teléfono (si existe)
+      if (userNumero && userNumero.trim() !== '') {
+        pdf.text(userNumero, rightContentX, footerY + 7)
+        rightContentX += pdf.getTextWidth(userNumero) + 5
+      }
+      
+      // Separador final (antes de paginación) si hay email o número
+      if ((userEmail && userEmail.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
+        pdf.text('|', rightContentX, footerY + 7)
       }
       
       // Extremo derecho: Paginación

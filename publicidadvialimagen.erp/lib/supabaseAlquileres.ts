@@ -523,13 +523,26 @@ export async function getAllAlquileresParaActualizarSoportes() {
   return (data || []) as Alquiler[];
 }
 
-// Obtener alquileres de una cotización específica
+// Obtener alquileres de una cotización específica con información del soporte
 export async function getAlquileresPorCotizacion(cotizacionId: string) {
   const supabase = getSupabaseServer();
 
   const { data, error } = await supabase
     .from("alquileres")
-    .select("*")
+    .select(`
+      *,
+      soportes:soporte_id (
+        id,
+        codigo,
+        titulo,
+        zona,
+        ciudad,
+        pais,
+        latitud,
+        longitud,
+        imagen_principal
+      )
+    `)
     .eq("cotizacion_id", cotizacionId);
 
   if (error) {
@@ -537,7 +550,7 @@ export async function getAlquileresPorCotizacion(cotizacionId: string) {
     throw error;
   }
 
-  return (data || []) as Alquiler[];
+  return (data || []) as any[];
 }
 
 // Cancelar (eliminar) todos los alquileres de una cotización

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { generarPDFCotizacion, generarPDFOT } from "@/lib/pdfCotizacion"
+import { Badge } from "@/components/ui/badge"
 
 const sucursales = [
   { id: "1", nombre: "La Paz" },
@@ -89,6 +90,46 @@ export default function EditarCotizacionPage() {
   const [estadoCotizacion, setEstadoCotizacion] = useState<"Pendiente" | "Aprobada" | "Rechazada" | "Vencida">("Pendiente")
   const [fechaCreacion, setFechaCreacion] = useState<string>("")
   const [totalManual, setTotalManual] = useState<number | null>(null) // Total manual editado por el usuario
+  const [requiereNuevaAprobacion, setRequiereNuevaAprobacion] = useState(false)
+  const [tieneAlquileres, setTieneAlquileres] = useState(false)
+  
+  // 🔥 SISTEMA DE CONFIRMACIÓN SEGURO (sin bucles)
+  const [requiereConfirmacion, setRequiereConfirmacion] = useState(false)
+  const [confirmacionRegeneracionAceptada, setConfirmacionRegeneracionAceptada] = useState(false)
+  const guardadoEnCursoRef = useRef(false)
+  
+  // Estado para modal de regeneración de alquileres
+  const [modalRegenerarAlquileres, setModalRegenerarAlquileres] = useState<{
+    open: boolean
+    alquileresEliminar: Array<{
+      id: string
+      codigo: string
+      soporte: {
+        codigo: string | null
+        titulo: string | null
+        zona: string | null
+        ciudad: string | null
+        pais: string | null
+        imagen_principal: string | null
+      } | null
+      inicio: string
+      fin: string
+      precio: number
+    }>
+    alquileresCrear: Array<{
+      soporte: { codigo: string | null; titulo: string | null }
+      fechaInicio: string
+      fechaFin: string
+      meses: number
+      importe: number
+    }>
+    cargando: boolean
+  }>({
+    open: false,
+    alquileresEliminar: [],
+    alquileresCrear: [],
+    cargando: false
+  })
 
   // Estados comunes con nueva cotización
   const [cliente, setCliente] = useState("")
@@ -701,6 +742,20 @@ export default function EditarCotizacionPage() {
         }
       }
       setEstadoCotizacion(estadoCalculado as "Pendiente" | "Aprobada" | "Rechazada" | "Vencida")
+      
+      // Cargar requiere_nueva_aprobacion
+      setRequiereNuevaAprobacion(cotizacion.requiere_nueva_aprobacion === true)
+      
+      // Verificar si tiene alquileres asociados
+      try {
+        const responseAlquileres = await fetch(`/api/alquileres?cotizacion_id=${cotizacionId}`)
+        if (responseAlquileres.ok) {
+          const dataAlquileres = await responseAlquileres.json()
+          setTieneAlquileres(dataAlquileres.data && dataAlquileres.data.length > 0)
+        }
+      } catch (error) {
+        console.warn('Error verificando alquileres:', error)
+      }
 
       // Guardar los nombres directamente (lazy loading)
       setCliente(cotizacion.cliente || '')
@@ -1200,22 +1255,14 @@ export default function EditarCotizacionPage() {
   // Total General = suma de producto.total (valores finales que ve el usuario)
   // O si hay totalManual (total_final de BD), usar ese directamente
   // ============================================================================
-  // Total general real: suma de los totales de cada línea (que YA incluyen impuestos si están activos)
-  const totalGeneralReal = productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+  // 🔥 OPTIMIZACIÓN: Usar useMemo para evitar renders innecesarios
+  const totalGeneralReal = useMemo(() => {
+    return productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+  }, [productosConTotal])
 
-  // REGLA 6: totalGeneral SIEMPRE respeta totalManual si existe
-  // totalGeneralReal SOLO se usa como fallback en cotizaciones nuevas sin total_final
-  // Si totalManual es null, usar totalGeneralReal (suma automática de productos)
-  // Cuando cambian los productos, setTotalManual(null) resetea el total manual
-  // para que el total general se recalcule automáticamente desde totalGeneralReal
-  const totalGeneral = totalManual !== null && totalManual !== undefined ? totalManual : totalGeneralReal
-
-  // Logs para depuración
-  if (totalManual !== null && totalManual !== undefined) {
-    console.log('🎯 totalManual final:', totalManual)
-    console.log('📦 totalGeneralReal:', totalGeneralReal)
-    console.log('💰 totalGeneral mostrado:', totalGeneral)
-  }
+  const totalGeneral = useMemo(() => {
+    return totalManual !== null && totalManual !== undefined ? totalManual : totalGeneralReal
+  }, [totalManual, totalGeneralReal])
 
   // Handler para cambio del total manual (permite cualquier valor)
   const handleTotalChange = (valor: string) => {
@@ -1229,9 +1276,126 @@ export default function EditarCotizacionPage() {
     setTotalManual(valorNum)
   }
 
-  // FUNCIÓN ESPECÍFICA DE EDITAR: Guardar cambios con PATCH
-  const handleGuardar = async (redirigir: boolean = true) => {
+  // Función para cargar información de alquileres a eliminar y crear
+  const cargarInfoRegeneracionAlquileres = async () => {
     try {
+      setModalRegenerarAlquileres(prev => ({ ...prev, cargando: true, open: false }))
+      console.log('📋 Cargando información de regeneración de alquileres...')
+      
+      // Obtener alquileres existentes
+      const responseAlquileres = await fetch(`/api/alquileres?cotizacion_id=${cotizacionId}`)
+      const dataAlquileres = await responseAlquileres.json()
+      const alquileresExistentes = dataAlquileres.data || []
+      
+      // Calcular los nuevos alquileres basándose en los datos actuales del formulario
+      const productos = productosList.filter((item): item is ProductoItem => item.tipo === 'producto')
+      const lineas = productos.map((item) => {
+        const producto = item as ProductoItem
+        return {
+          tipo: 'Producto' as const,
+          codigo_producto: producto.producto.split(' - ')[0] || '',
+          nombre_producto: producto.producto.split(' - ')[1] || producto.producto,
+          descripcion: producto.descripcion || '',
+          cantidad: producto.cantidad,
+          ancho: producto.ancho,
+          alto: producto.alto,
+          total_m2: producto.totalM2,
+          unidad_medida: producto.udm,
+          precio_unitario: producto.precio,
+          comision_porcentaje: producto.comision,
+          con_iva: producto.conIVA,
+          con_it: producto.conIT,
+          es_soporte: producto.esSoporte || false,
+          subtotal_linea: producto.totalManual !== null && producto.totalManual !== undefined
+            ? producto.totalManual
+            : producto.total
+        }
+      })
+      
+      // Llamar al endpoint con los datos actuales para calcular los nuevos alquileres
+      const lineasSoportes = lineas.filter(l => l.es_soporte)
+      const responseNuevos = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          calcular_solo: true, // Flag para indicar que solo queremos calcular, no crear
+          lineas: lineasSoportes
+        })
+      })
+      
+      let soportesNuevos = []
+      if (responseNuevos.ok) {
+        const dataNuevos = await responseNuevos.json()
+        soportesNuevos = dataNuevos.data?.soportesInfo || []
+      } else {
+        // Fallback: usar el endpoint GET (pero puede tener datos antiguos)
+        const responseNuevosGet = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`)
+        const dataNuevosGet = await responseNuevosGet.json()
+        soportesNuevos = dataNuevosGet.data?.soportesInfo || []
+      }
+      
+      // Formatear alquileres a eliminar con información completa del soporte
+      const alquileresEliminar = alquileresExistentes.map((a: any) => ({
+        id: a.id,
+        codigo: a.codigo,
+        soporte: a.soportes ? {
+          codigo: a.soportes.codigo || null,
+          titulo: a.soportes.titulo || null,
+          zona: a.soportes.zona || null,
+          ciudad: a.soportes.ciudad || null,
+          pais: a.soportes.pais || null,
+          imagen_principal: a.soportes.imagen_principal || null
+        } : null,
+        inicio: a.inicio,
+        fin: a.fin,
+        precio: a.precio || 0
+      }))
+      
+      // Formatear alquileres a crear - usar los datos calculados
+      const alquileresCrear = soportesNuevos.map((info: any) => ({
+        soporte: {
+          codigo: info.soporte?.codigo || null,
+          titulo: info.soporte?.titulo || null
+        },
+        fechaInicio: info.fechaInicio,
+        fechaFin: info.fechaFin,
+        meses: info.meses,
+        importe: info.importe
+      }))
+      
+      console.log('✅ Información cargada:', {
+        eliminar: alquileresEliminar.length,
+        crear: alquileresCrear.length
+      })
+      
+      // Abrir modal y marcar que requiere confirmación
+      setRequiereConfirmacion(true)
+      setModalRegenerarAlquileres({
+        open: true,
+        alquileresEliminar,
+        alquileresCrear,
+        cargando: false
+      })
+    } catch (error) {
+      console.error('Error cargando información de regeneración:', error)
+      toast.error('Error al cargar información de alquileres')
+      setModalRegenerarAlquileres(prev => ({ ...prev, cargando: false, open: false }))
+    }
+  }
+
+  // FUNCIÓN ESPECÍFICA DE EDITAR: Guardar cambios con PATCH
+  const handleGuardar = async (opciones?: { redirigir?: boolean; forzarRegeneracion?: boolean }) => {
+    const redirigir = opciones?.redirigir !== false // Por defecto true
+    const forzarRegeneracion = opciones?.forzarRegeneracion === true
+    
+    // Prevenir dobles guardados
+    if (guardadoEnCursoRef.current) {
+      console.warn('⚠️ handleGuardar ya está en curso, ignorando llamada duplicada')
+      return
+    }
+    
+    try {
+      guardadoEnCursoRef.current = true
       if (!cliente) {
         toast.error("Por favor selecciona un cliente")
         return
@@ -1456,6 +1620,51 @@ export default function EditarCotizacionPage() {
         console.log('⚠️ No hay totalManual, se calculará desde subtotales')
       }
 
+      // ============================================================================
+      // 🔥 DETECTAR CAMBIOS EN COTIZACIÓN APROBADA CON ALQUILERES (LÓGICA SEGURA)
+      // ============================================================================
+      const esAprobada = estadoCotizacion === 'Aprobada'
+      const tieneAlquileresActivos = tieneAlquileres
+      
+      // Si se fuerza regeneración o ya está confirmado, enviar flag directamente
+      if (forzarRegeneracion || confirmacionRegeneracionAceptada) {
+        cotizacionData.regenerar_alquileres = true
+        console.log('✅ Enviando regenerar_alquileres: true al backend')
+      } else if (esAprobada && tieneAlquileresActivos) {
+        // Verificar cambios SOLO si no está confirmado y no se fuerza
+        try {
+          const responseActual = await fetch(`/api/cotizaciones/${cotizacionId}`)
+          const dataActual = await responseActual.json()
+          const lineasActuales = dataActual.data?.lineas || []
+          const soportesActuales = lineasActuales.filter((l: any) => l.es_soporte === true)
+          const soportesNuevos = lineas.filter((l: any) => l.es_soporte === true)
+          
+          // Detectar cambios: cantidad, códigos, o descripciones (fechas)
+          const hayCambios = 
+            soportesActuales.length !== soportesNuevos.length ||
+            soportesNuevos.some((nuevo: any) => {
+              const actual = soportesActuales.find((a: any) => a.codigo_producto === nuevo.codigo_producto)
+              return !actual || actual.descripcion !== nuevo.descripcion
+            }) ||
+            soportesActuales.some((actual: any) => {
+              const nuevo = soportesNuevos.find((n: any) => n.codigo_producto === actual.codigo_producto)
+              return !nuevo
+            })
+          
+          if (hayCambios && !requiereConfirmacion) {
+            // ⚠️ NO DEBE VOLVER A ABRIR EL MODAL DESPUÉS DE QUE EL USUARIO YA ACEPTÓ
+            console.log('🔄 Detectados cambios en soportes, abriendo modal de confirmación')
+            setRequiereConfirmacion(true)
+            await cargarInfoRegeneracionAlquileres()
+            guardadoEnCursoRef.current = false
+            setGuardando(false)
+            return
+          }
+        } catch (error) {
+          console.warn('⚠️ Error verificando cambios en soportes:', error)
+        }
+      }
+
       // PATCH en lugar de POST
       const response = await fetch(`/api/cotizaciones/${cotizacionId}`, {
         method: 'PATCH',
@@ -1465,13 +1674,96 @@ export default function EditarCotizacionPage() {
         body: JSON.stringify(cotizacionData)
       })
 
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Error al actualizar la cotización')
+      // 🔥 PARSEO ROBUSTO: Intentar parsear la respuesta como JSON
+      let data: any = {}
+      try {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const text = await response.text()
+          if (text && text.trim()) {
+            data = JSON.parse(text)
+          } else {
+            console.warn('⚠️ Respuesta vacía del backend')
+            data = { success: false, error: 'Respuesta vacía del servidor' }
+          }
+        } else {
+          const text = await response.text()
+          console.error('❌ Respuesta no es JSON:', { contentType, text: text.substring(0, 200) })
+          throw new Error(`Error del servidor (${response.status}): Respuesta no es JSON válido`)
+        }
+      } catch (parseError) {
+        console.error('❌ Error parseando respuesta del backend:', parseError)
+        console.error('   Response status:', response.status)
+        console.error('   Response statusText:', response.statusText)
+        // Si no se puede parsear, usar un mensaje genérico
+        throw new Error(`Error del servidor (${response.status}): No se pudo parsear la respuesta`)
       }
 
-      toast.success(`Cotización ${codigoCotizacion} actualizada exitosamente`)
+      if (!response.ok) {
+        // Si el backend requiere confirmación Y no está ya confirmado
+        if (data.error === 'REQUIERE_CONFIRMACION' && !confirmacionRegeneracionAceptada && !forzarRegeneracion) {
+          console.log('🔄 Backend requiere confirmación, abriendo modal')
+          setRequiereConfirmacion(true)
+          await cargarInfoRegeneracionAlquileres()
+          guardadoEnCursoRef.current = false
+          setGuardando(false)
+          return
+        }
+        // Log detallado del error para debugging
+        console.error('❌ Error del backend al actualizar cotización:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          message: data.message,
+          data: data
+        })
+        const errorMessage = data.error || data.message || `Error del servidor (${response.status}: ${response.statusText})`
+        throw new Error(errorMessage)
+      }
+
+      if (!data.success) {
+        // Log detallado del error para debugging
+        console.error('Error en respuesta del backend (success=false):', {
+          error: data.error,
+          message: data.message,
+          data: data
+        })
+        throw new Error(data.error || data.message || 'Error al actualizar la cotización')
+      }
+
+      // Si se regeneraron alquileres, actualizar estados
+      if (confirmacionRegeneracionAceptada || forzarRegeneracion) {
+        const eliminados = modalRegenerarAlquileres.alquileresEliminar.length
+        const creados = modalRegenerarAlquileres.alquileresCrear.length
+        
+        // Si el estado final es Aprobada, significa que se crearon los nuevos alquileres automáticamente
+        if (data.data?.estado === 'Aprobada') {
+          setRequiereNuevaAprobacion(false)
+          setEstadoCotizacion('Aprobada')
+          setTieneAlquileres(true)
+          toast.success(`Cotización actualizada y regenerada. ${eliminados} alquiler(es) eliminado(s) y ${creados} nuevo(s) alquiler(es) creado(s).`)
+        } else if (data.data?.requiere_nueva_aprobacion) {
+          setRequiereNuevaAprobacion(true)
+          setEstadoCotizacion('Pendiente')
+          toast.success(`Cotización actualizada. ${eliminados} alquiler(es) eliminado(s). Debes aprobar nuevamente para generar ${creados} nuevo(s) alquiler(es).`)
+        } else {
+          toast.success(`Cotización ${codigoCotizacion} actualizada exitosamente`)
+        }
+        
+        // Resetear estados de confirmación
+        setConfirmacionRegeneracionAceptada(false)
+        setRequiereConfirmacion(false)
+      } else {
+        toast.success(`Cotización ${codigoCotizacion} actualizada exitosamente`)
+      }
+      
+      // Cerrar modal después de completar exitosamente
+      setModalRegenerarAlquileres({ 
+        open: false, 
+        alquileresEliminar: [],
+        alquileresCrear: [],
+        cargando: false
+      })
 
       // Solo redirigir si se solicita explícitamente
       if (redirigir) {
@@ -1481,10 +1773,14 @@ export default function EditarCotizacionPage() {
       }
 
     } catch (error) {
-      console.error('Error actualizando cotización:', error)
+      console.error('❌ Error actualizando cotización:', error)
       toast.error(error instanceof Error ? error.message : 'Error al actualizar la cotización')
     } finally {
+      guardadoEnCursoRef.current = false
       setGuardando(false)
+      if (modalRegenerarAlquileres.cargando) {
+        setModalRegenerarAlquileres(prev => ({ ...prev, cargando: false }))
+      }
     }
   }
 
@@ -1541,7 +1837,7 @@ export default function EditarCotizacionPage() {
       setGuardando(true)
 
       // Primero guardar la cotización (sin redirigir)
-      await handleGuardar(false)
+      await handleGuardar({ redirigir: false })
 
       // Luego actualizar el estado a Aprobada
       const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
@@ -1575,7 +1871,7 @@ export default function EditarCotizacionPage() {
       setModalAprobacion(prev => ({ ...prev, open: false }))
 
       // Primero guardar la cotización (sin redirigir)
-      await handleGuardar(false)
+      await handleGuardar({ redirigir: false })
 
       // Luego actualizar el estado de la cotización a Aprobada
       const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
@@ -1622,6 +1918,18 @@ export default function EditarCotizacionPage() {
       }
 
       setEstadoCotizacion('Aprobada')
+      // Si se aprobó después de editar, resetear requiere_nueva_aprobacion
+      if (requiereNuevaAprobacion) {
+        setRequiereNuevaAprobacion(false)
+        // Actualizar en BD
+        await fetch(`/api/cotizaciones/${cotizacionId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ requiere_nueva_aprobacion: false })
+        })
+      }
     } catch (error) {
       console.error('Error aprobando cotización:', error)
       toast.error(error instanceof Error ? error.message : 'Error al aprobar la cotización')
@@ -1642,7 +1950,7 @@ export default function EditarCotizacionPage() {
         setGuardando(true)
 
         // Guardar la cotización (sin redirigir)
-        await handleGuardar(false)
+        await handleGuardar({ redirigir: false })
 
         // Luego actualizar estado
         const response = await fetch(`/api/cotizaciones/${cotizacionId}`, {
@@ -1810,7 +2118,7 @@ export default function EditarCotizacionPage() {
               Descartar
             </Button>
             <Button
-              onClick={handleGuardar}
+              onClick={() => handleGuardar({ redirigir: false })}
               disabled={guardando}
               className="bg-[#D54644] hover:bg-[#B03A38] text-white"
             >
@@ -1842,13 +2150,21 @@ export default function EditarCotizacionPage() {
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white"
                     onClick={() => actualizarEstado("Aprobada")}
-                    disabled={guardando || estadoCotizacion === "Aprobada"}
+                    disabled={guardando || (estadoCotizacion === "Aprobada" && !requiereNuevaAprobacion)}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Aprobada
+                    {requiereNuevaAprobacion ? 'Aprobar de nuevo' : 'Aprobada'}
                   </Button>
                 </div>
               </div>
+              {/* Badge Requiere nueva aprobación */}
+              {requiereNuevaAprobacion && (
+                <div className="mt-3">
+                  <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
+                    ⚠️ Requiere nueva aprobación
+                  </Badge>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {/* Todos los campos y botones de descarga en una sola fila */}
@@ -2915,6 +3231,198 @@ export default function EditarCotizacionPage() {
                 disabled={!modalFechasSoporte.fechaInicio || !modalFechasSoporte.fechaFin}
               >
                 Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de regeneración de alquileres por edición */}
+        <Dialog open={modalRegenerarAlquileres.open} onOpenChange={(open) => {
+          if (!open) {
+            setRequiereConfirmacion(false)
+            setModalRegenerarAlquileres({ 
+              open: false, 
+              alquileresEliminar: [],
+              alquileresCrear: [],
+              cargando: false
+            })
+          }
+        }}>
+          <DialogContent className="sm:max-w-[700px]">
+            <DialogHeader>
+              <DialogTitle>⚠️ Cotización con alquileres generados</DialogTitle>
+              <DialogDescription>
+                Esta cotización ya tiene alquileres generados. Se eliminarán los actuales y se crearán nuevos.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-6">
+              {/* Alquileres a eliminar */}
+              {modalRegenerarAlquileres.alquileresEliminar.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-red-700 mb-2">
+                    Alquileres que se eliminarán ({modalRegenerarAlquileres.alquileresEliminar.length}):
+                  </h4>
+                  <div className="max-h-[200px] overflow-y-auto border rounded-md">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-red-50">
+                          <th className="text-left py-2 px-3 font-medium">Código</th>
+                          <th className="text-left py-2 px-3 font-medium">Soporte</th>
+                          <th className="text-left py-2 px-3 font-medium">Fechas</th>
+                          <th className="text-right py-2 px-3 font-medium">Precio</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modalRegenerarAlquileres.alquileresEliminar.map((alq, index) => (
+                          <tr key={alq.id || index} className="border-b">
+                            <td className="py-2 px-3 font-medium">{alq.codigo}</td>
+
+                            <td className="py-2 px-3">
+                              {alq.soporte ? (
+                                <div>
+                                  <div className="font-medium">{alq.soporte.codigo || 'N/A'}</div>
+                                  <div className="text-xs text-gray-500">{alq.soporte.titulo || 'Sin título'}</div>
+
+                                  {(alq.soporte.zona || alq.soporte.ciudad) && (
+                                    <div className="text-xs text-gray-400">
+                                      {[alq.soporte.zona, alq.soporte.ciudad].filter(Boolean).join(', ')}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Soporte sin datos</span>
+                              )}
+                            </td>
+
+                            <td className="py-2 px-3 text-xs">
+                              {new Date(alq.inicio).toLocaleDateString('es-ES')} →{" "}
+                              {new Date(alq.fin).toLocaleDateString('es-ES')}
+                            </td>
+
+                            <td className="py-2 px-3 text-right">
+                              <div className="font-medium">
+                                Bs {Number(alq.precio || 0).toLocaleString('es-ES', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Alquileres a crear */}
+              {modalRegenerarAlquileres.alquileresCrear.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-green-700 mb-2">
+                    Alquileres que se crearán ({modalRegenerarAlquileres.alquileresCrear.length}):
+                  </h4>
+                  <div className="max-h-[200px] overflow-y-auto border rounded-md">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-green-50">
+                          <th className="text-left py-2 px-3 font-medium">Soporte</th>
+                          <th className="text-left py-2 px-3 font-medium">Fechas</th>
+                          <th className="text-right py-2 px-3 font-medium">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modalRegenerarAlquileres.alquileresCrear.map((info, index) => (
+                          <tr key={index} className="border-b">
+                            <td className="py-2 px-3">
+                              <div>
+                                <div className="font-medium">{info.soporte.codigo}</div>
+                                <div className="text-xs text-gray-500">{info.soporte.titulo}</div>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="text-xs">
+                                <div>Inicio: {new Date(info.fechaInicio).toLocaleDateString('es-ES')}</div>
+                                <div>Fin: {new Date(info.fechaFin).toLocaleDateString('es-ES')}</div>
+                                <div className="text-gray-500">({info.meses} mes{info.meses !== 1 ? 'es' : ''})</div>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <div className="font-medium">
+                                Bs {Number(info.importe || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {modalRegenerarAlquileres.alquileresEliminar.length === 0 && modalRegenerarAlquileres.alquileresCrear.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  {modalRegenerarAlquileres.cargando ? 'Cargando información...' : 'No hay cambios en los alquileres'}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRequiereConfirmacion(false)
+                  setModalRegenerarAlquileres({ 
+                    open: false, 
+                    alquileresEliminar: [],
+                    alquileresCrear: [],
+                    cargando: false
+                  })
+                }}
+                disabled={guardando || modalRegenerarAlquileres.cargando}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={async () => {
+                  // Prevenir múltiples clics
+                  if (guardando || modalRegenerarAlquileres.cargando || guardadoEnCursoRef.current) {
+                    console.warn('⚠️ Guardado ya en curso, ignorando clic')
+                    return
+                  }
+                  
+                  console.log('✅ Usuario confirmó regeneración de alquileres')
+                  
+                  // 🔥 SISTEMA SEGURO: Marcar confirmación y cerrar modal
+                  setConfirmacionRegeneracionAceptada(true)
+                  setRequiereConfirmacion(false)
+                  setModalRegenerarAlquileres(prev => ({ 
+                    ...prev, 
+                    open: false,
+                    cargando: true 
+                  }))
+                  
+                  // Llamar handleGuardar con forzarRegeneracion
+                  try {
+                    await handleGuardar({ redirigir: false, forzarRegeneracion: true })
+                  } catch (error) {
+                    console.error('❌ Error en handleGuardar desde modal:', error)
+                    // En caso de error, resetear estados para permitir reintento
+                    setConfirmacionRegeneracionAceptada(false)
+                    setRequiereConfirmacion(true)
+                  }
+                }}
+                disabled={guardando || modalRegenerarAlquileres.cargando}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                {guardando || modalRegenerarAlquileres.cargando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  'Continuar y Regenerar'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

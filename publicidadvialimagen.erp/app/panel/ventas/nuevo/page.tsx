@@ -32,6 +32,18 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { generarPDFCotizacion, generarPDFOT } from "@/lib/pdfCotizacion"
+import { calcularTotalM2, calcularTotal, calcularPrecioConVariantes } from '@/lib/calculosInternos'
+import {
+  subirImagenes,
+  prepararLineas,
+  prepararPayload,
+  guardarCotizacionNueva,
+  actualizarEstadoCotizacion,
+  crearAlquileres,
+  generarDatosParaModalAprobacion,
+  sincronizarLineas,
+  type ProductoItem as ProductoItemType
+} from '@/hooks/useCotizacionFlujo'
 
 // Datos de ejemplo para los desplegables
 const clientes = [
@@ -149,166 +161,6 @@ export default function NuevaCotizacionPage() {
     }
   ])
 
-  const calcularTotalM2 = (ancho: number, alto: number) => {
-    return ancho * alto
-  }
-
-  // Calcular total: el valor YA incluye impuestos si conIVA/conIT están activos
-  // Solo se RESTAN impuestos cuando se desmarcan los toggles
-  const calcularTotal = (cantidad: number, totalM2: number, precio: number, comision: number, conIVA: boolean, conIT: boolean, esSoporte: boolean = false, udm?: string) => {
-    // Para soportes: cantidad × precio (sin totalM2)
-    // Para productos con unidad m²: cantidad × totalM2 × precio
-    // Para productos con unidad "unidad" o "unidades": cantidad × precio (sin totalM2)
-    let subtotal: number
-    if (esSoporte) {
-      subtotal = cantidad * precio
-    } else {
-      const udmLower = (udm || '').toLowerCase().trim()
-      if (udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade') {
-        subtotal = cantidad * precio
-      } else {
-        // Para m²: cantidad × totalM2 × precio
-        subtotal = cantidad * totalM2 * precio
-      }
-    }
-
-    const comisionTotal = subtotal * (comision / 100)
-
-    // Si no tiene IVA, descontar 13% (el total YA incluye IVA si está activo)
-    if (!conIVA) {
-      subtotal = subtotal * (1 - 0.13)
-    }
-
-    // Si no tiene IT, descontar 3% (el total YA incluye IT si está activo)
-    if (!conIT) {
-      subtotal = subtotal * (1 - 0.03)
-    }
-
-    return subtotal + comisionTotal
-  }
-
-
-  // Función para calcular el precio ajustado según variantes de mano de obra
-  const calcularPrecioConVariantes = async (precioBase: number, item: any, variantes: Record<string, string>): Promise<number> => {
-    // Si no hay variantes, retornar el precio base
-    if (!variantes || Object.keys(variantes).length === 0) {
-      return precioBase
-    }
-
-    // PRIMERO: Intentar obtener precio desde producto_variantes
-    // Incluir la sucursal seleccionada en la cotización para buscar la variante correcta
-    if (item.producto_id || item.id) {
-      try {
-        const { obtenerPrecioVariante } = await import('@/lib/variantes/obtenerPrecioVariante')
-        const precioVariante = await obtenerPrecioVariante(
-          item.producto_id || item.id,
-          variantes,
-          precioBase,
-          sucursal || undefined // Pasar la sucursal seleccionada en la cotización
-        )
-
-        console.log(`💰 Precio obtenido para variante con sucursal ${sucursal}:`, precioVariante)
-
-        // Si el precio variante es diferente al base, significa que se encontró una variante
-        if (precioVariante !== precioBase) {
-          return precioVariante
-        }
-        // Si es igual, continuar con el cálculo manual (puede que no exista la variante en BD)
-      } catch (error) {
-        console.warn('Error obteniendo precio variante, usando cálculo manual:', error)
-        // Continuar con cálculo manual
-      }
-    }
-
-    // Si no hay receta, retornar el precio base
-    if (!item.receta || !Array.isArray(item.receta) || item.receta.length === 0) {
-      return precioBase
-    }
-
-    try {
-      // Cargar recursos para obtener información de categoría
-      const recursosRes = await fetch('/api/recursos')
-      if (!recursosRes.ok) {
-        return precioBase
-      }
-      const recursosData = await recursosRes.json()
-      const recursos = recursosData.data || []
-
-      // Crear un mapa de recursos por ID para acceso rápido
-      const recursosMap = new Map(recursos.map((r: any) => [r.id, r]))
-
-      let precioAjustado = precioBase
-      let precioManoObraTotal = 0
-
-      // Recorrer la receta para encontrar recursos de mano de obra
-      for (const itemReceta of item.receta) {
-        const recursoId = itemReceta.recurso_id || itemReceta.recursoId
-        if (!recursoId) continue
-
-        const recurso = recursosMap.get(recursoId)
-        if (!recurso) continue
-
-        // Verificar si el recurso es de categoría "Mano de Obra"
-        const categoria = (recurso.categoria || '').toLowerCase().trim()
-        if (categoria !== 'mano de obra') {
-          continue
-        }
-
-        // Buscar si hay una variante que corresponda a este recurso
-        // Las variantes pueden tener el nombre del recurso o un nombre relacionado
-        const nombreRecurso = (recurso.nombre || '').toLowerCase()
-        const codigoRecurso = (recurso.codigo || '').toLowerCase()
-
-        // Buscar variante que coincida con el nombre o código del recurso
-        let varianteEncontrada: { nombre: string; valor: string } | null = null
-        for (const [nombreVariante, valorVariante] of Object.entries(variantes)) {
-          const nombreVarianteLower = nombreVariante.toLowerCase()
-          // Verificar si el nombre de la variante contiene el nombre del recurso o viceversa
-          if (nombreVarianteLower.includes(nombreRecurso) ||
-            nombreRecurso.includes(nombreVarianteLower) ||
-            nombreVarianteLower.includes(codigoRecurso) ||
-            codigoRecurso.includes(nombreVarianteLower)) {
-            varianteEncontrada = { nombre: nombreVariante, valor: valorVariante as string }
-            break
-          }
-        }
-
-        // Si no se encontró variante por nombre, intentar buscar por el nombre del recurso en la receta
-        if (!varianteEncontrada && itemReceta.recurso_nombre) {
-          const recursoNombreReceta = (itemReceta.recurso_nombre || '').toLowerCase()
-          for (const [nombreVariante, valorVariante] of Object.entries(variantes)) {
-            const nombreVarianteLower = nombreVariante.toLowerCase()
-            if (nombreVarianteLower.includes(recursoNombreReceta) ||
-              recursoNombreReceta.includes(nombreVarianteLower)) {
-              varianteEncontrada = { nombre: nombreVariante, valor: valorVariante as string }
-              break
-            }
-          }
-        }
-
-        // Si se encontró una variante y su valor es "no", restar el precio del recurso
-        if (varianteEncontrada) {
-          const valorVariante = varianteEncontrada.valor.toLowerCase().trim()
-          if (valorVariante === 'no') {
-            // Calcular el precio del recurso (cantidad * coste)
-            const cantidadReceta = parseFloat(itemReceta.cantidad) || 0
-            const costeRecurso = parseFloat(recurso.coste) || 0
-            const precioRecurso = cantidadReceta * costeRecurso
-            precioManoObraTotal += precioRecurso
-          }
-        }
-      }
-
-      // Restar el total de manos de obra con valor "no" del precio base
-      precioAjustado = precioBase - precioManoObraTotal
-
-      // Asegurar que el precio no sea negativo
-      return Math.max(0, precioAjustado)
-    } catch (error) {
-      console.error('Error calculando precio con variantes:', error)
-      return precioBase
-    }
-  }
 
   const agregarProducto = () => {
     const nuevoProducto: ProductoItem = {
@@ -422,70 +274,85 @@ export default function NuevaCotizacionPage() {
     // Detectar si se está cambiando un campo que afecta el total
     const campoAfectaTotal = ['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm', 'total'].includes(campo)
 
+    // ERROR #7: Evitar race condition usando prevList dentro del callback
     // Usar forma funcional de setState para preservar referencias a URLs blob
-    setProductosList(prevList => prevList.map(item => {
-      if (item.id === id && item.tipo === 'producto') {
-        const producto = item as ProductoItem
-        // No permitir cambiar ancho/alto si están bloqueadas (dimensiones de soporte)
-        if ((campo === 'ancho' || campo === 'alto') && producto.dimensionesBloqueadas) {
-          return producto
-        }
+    setProductosList(prevList => {
+      const nuevaLista = prevList.map(item => {
+        if (item.id === id && item.tipo === 'producto') {
+          const producto = item as ProductoItem
+          // No permitir cambiar ancho/alto si están bloqueadas (dimensiones de soporte)
+          if ((campo === 'ancho' || campo === 'alto') && producto.dimensionesBloqueadas) {
+            return producto
+          }
 
-        // Asegurar que cantidad sea mínimo 1 (solo si no es string vacío)
-        if (campo === 'cantidad' && valor !== '' && valor < 1) {
-          valor = 1
-        }
+          // Asegurar que cantidad sea mínimo 1 (solo si no es string vacío)
+          if (campo === 'cantidad' && valor !== '' && valor < 1) {
+            valor = 1
+          }
 
-        const productoActualizado = { ...producto, [campo]: valor }
+          const productoActualizado = { ...producto, [campo]: valor }
 
-        // Recalcular totalM2 si cambian ancho o alto (solo si no son strings vacíos)
-        if (campo === 'ancho' || campo === 'alto') {
-          const anchoVal = campo === 'ancho' ? (valor === '' ? 0 : valor) : producto.ancho
-          const altoVal = campo === 'alto' ? (valor === '' ? 0 : valor) : producto.alto
-          productoActualizado.totalM2 = calcularTotalM2(anchoVal, altoVal)
-        }
+          // Recalcular totalM2 si cambian ancho o alto (solo si no son strings vacíos)
+          if (campo === 'ancho' || campo === 'alto') {
+            const anchoVal = campo === 'ancho' ? (valor === '' ? 0 : valor) : producto.ancho
+            const altoVal = campo === 'alto' ? (valor === '' ? 0 : valor) : producto.alto
+            productoActualizado.totalM2 = calcularTotalM2(anchoVal, altoVal)
+          }
 
-        // Recalcular total si cambian los valores relevantes (convertir strings vacíos a 0)
-        // Solo recalcular si no es el campo 'total' (para permitir edición manual)
-        if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm'].includes(campo)) {
-          // Detectar unidades (case-insensitive y considerar singular/plural)
-          const udmLower = productoActualizado.udm?.toLowerCase().trim() || ''
-          const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
-          const totalCalculado = calcularTotal(
-            productoActualizado.cantidad === '' ? 0 : productoActualizado.cantidad,
-            productoActualizado.totalM2,
-            productoActualizado.precio === '' ? 0 : productoActualizado.precio,
-            productoActualizado.comision === '' ? 0 : productoActualizado.comision,
-            productoActualizado.conIVA,
-            productoActualizado.conIT,
-            productoActualizado.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
-            productoActualizado.udm
-          )
-          // Si hay un total manual establecido, mantenerlo (permitir edición libre)
-          // Solo recalcular automáticamente si no hay totalManual
-          if (productoActualizado.totalManual !== null && productoActualizado.totalManual !== undefined) {
-            productoActualizado.total = productoActualizado.totalManual
-          } else {
+          // Recalcular total si cambian los valores relevantes (convertir strings vacíos a 0)
+          // Solo recalcular si no es el campo 'total' (para permitir edición manual)
+          if (['cantidad', 'ancho', 'alto', 'precio', 'comision', 'conIVA', 'conIT', 'udm'].includes(campo)) {
+            // Detectar unidades (case-insensitive y considerar singular/plural)
+            const udmLower = productoActualizado.udm?.toLowerCase().trim() || ''
+            const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+            const totalCalculado = calcularTotal(
+              productoActualizado.cantidad === '' ? 0 : productoActualizado.cantidad,
+              productoActualizado.totalM2,
+              productoActualizado.precio === '' ? 0 : productoActualizado.precio,
+              productoActualizado.comision === '' ? 0 : productoActualizado.comision,
+              productoActualizado.conIVA,
+              productoActualizado.conIT,
+              productoActualizado.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
+              productoActualizado.udm
+            )
+            // Recalcular automáticamente el total cuando cambian los campos
             productoActualizado.total = totalCalculado
+            // Resetear total manual del producto para que use el calculado
+            productoActualizado.totalManual = null
+          }
+          // Si se está editando el campo 'total' manualmente
+          else if (campo === 'total') {
+            const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
+            productoActualizado.total = valorNum
+            productoActualizado.totalManual = valorNum
+          }
+
+          return productoActualizado
+        }
+        return item
+      })
+
+      // MEJORA A6: Solo resetear totalManual del Total General si se cambia un campo
+      // que afecta el total de un producto, PERO solo si no hay totalManual en ese producto.
+      // Si el producto tiene totalManual, respetarlo y NO resetear el total general.
+      // Esto evita que se pierda la edición manual del usuario.
+      // ERROR #7: Usar nuevaLista (prevList actualizado) en lugar de productosList para evitar race condition
+      if (campoAfectaTotal && campo !== 'total') {
+        // Solo resetear si el producto no tiene totalManual (para evitar inconsistencias)
+        const producto = nuevaLista.find(item => item.id === id && item.tipo === 'producto') as ProductoItem | undefined
+        if (producto && (producto.totalManual === null || producto.totalManual === undefined)) {
+          // Solo resetear totalManual del Total General si ningún producto tiene totalManual
+          const tieneAlgunTotalManual = nuevaLista.some(item => 
+            item.tipo === 'producto' && (item as ProductoItem).totalManual !== null && (item as ProductoItem).totalManual !== undefined
+          )
+          if (!tieneAlgunTotalManual) {
+            setTotalManual(null)
           }
         }
-        // Si se está editando el campo 'total' manualmente
-        else if (campo === 'total') {
-          const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
-          productoActualizado.total = valorNum
-          productoActualizado.totalManual = valorNum
-        }
-
-        return productoActualizado
       }
-      return item
-    }))
 
-    // Resetear totalManual del Total General DESPUÉS de actualizar productosList
-    // para que el total general se recalcule automáticamente cuando cambian los productos
-    if (campoAfectaTotal) {
-      setTotalManual(null)
-    }
+      return nuevaLista
+    })
   }
 
   // Estado para el combobox de productos/soportes
@@ -811,7 +678,13 @@ export default function NuevaCotizacionPage() {
 
     // Si hay variantes y no es soporte, calcular precio ajustado según variantes de mano de obra
     if (!esSoporte && Object.keys(variantes).length > 0 && item.receta) {
-      precioFinal = await calcularPrecioConVariantes(precioFinal, item, variantes)
+      precioFinal = await calcularPrecioConVariantes(
+        precioFinal,
+        item,
+        variantes,
+        sucursal || undefined,
+        (message) => toast.warning(message) // Callback para mostrar warnings
+      )
     }
 
     // Si es soporte, cargar la imagen principal del soporte
@@ -1045,107 +918,26 @@ export default function NuevaCotizacionPage() {
 
       setGuardando(true)
 
-      // Primero subir todas las imágenes nuevas y actualizar el estado
-      const productosConImagenes = await Promise.all(
-        productos.map(async (producto) => {
-          if (producto.imagenFile) {
-            try {
-              const formData = new FormData()
-              formData.append('file', producto.imagenFile)
-              // Nota: En nueva cotización, el lineaId no existe aún, se actualizará al guardar
-
-              const response = await fetch('/api/cotizaciones/image', {
-                method: 'POST',
-                body: formData
-              })
-
-              const data = await response.json()
-
-              if (data.success && data.data.publicUrl) {
-                // Actualizar el producto con la URL de Supabase
-                actualizarProducto(producto.id, 'imagen', data.data.publicUrl)
-                actualizarProducto(producto.id, 'imagenFile', undefined)
-                return { ...producto, imagen: data.data.publicUrl, imagenFile: undefined }
-              } else {
-                throw new Error(data.error || 'Error al subir la imagen')
-              }
-            } catch (error) {
-              console.error('Error subiendo imagen:', error)
-              toast.error(`Error al subir imagen del producto ${producto.producto}`)
-              setGuardando(false)
-              throw error
-            }
-          }
-          return producto
-        })
+      // MEJORA B3: Subir imágenes ANTES de preparar líneas, evitando race conditions
+      const urlsImagenesActualizadas = await subirImagenes(
+        productos,
+        (productoId, error) => {
+          const producto = productos.find(p => p.id === productoId)
+          toast.error(`Error al subir imagen del producto ${producto?.producto || productoId}`)
+        }
       )
 
-      // Esperar un momento para que el estado se actualice
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // MEJORA B3: Actualizar estado de productos con URLs nuevas (sin setTimeout)
+      if (urlsImagenesActualizadas.size > 0) {
+        const productosListActualizados = sincronizarLineas(productosList, urlsImagenesActualizadas)
+        setProductosList(productosListActualizados)
+      }
 
-      // Preparar las líneas de cotización usando el estado actualizado
-      const lineas = productosList.map((item, index) => {
-        if (item.tipo === 'producto') {
-          const producto = item as ProductoItem
-          return {
-            tipo: 'Producto' as const,
-            codigo_producto: producto.producto.split(' - ')[0] || '',
-            nombre_producto: producto.producto.split(' - ')[1] || producto.producto,
-            descripcion: producto.descripcion || '',
-            cantidad: producto.cantidad,
-            ancho: producto.ancho,
-            alto: producto.alto,
-            total_m2: producto.totalM2,
-            unidad_medida: producto.udm,
-            precio_unitario: producto.precio,
-            comision_porcentaje: producto.comision,
-            con_iva: producto.conIVA,
-            con_it: producto.conIT,
-            es_soporte: producto.esSoporte || false,
-            orden: index + 1,
-            // Asegurar que solo se guarde URL de Supabase, no URLs blob
-            // Nota: La tabla solo tiene la columna 'imagen', no 'imagen_url'
-            imagen: producto.imagen && !producto.imagen.startsWith('blob:') ? producto.imagen : null,
-            variantes: producto.variantes || null,
-            // REGLA 2: subtotal_linea enviado = EXACTAMENTE el total que la UI está mostrando
-            // Si producto.totalManual existe → usar ese
-            // Si no existe → usar producto.total
-            subtotal_linea: producto.totalManual !== null && producto.totalManual !== undefined
-              ? producto.totalManual
-              : producto.total
-          }
-        } else if (item.tipo === 'nota') {
-          const nota = item as NotaItem
-          return {
-            tipo: 'Nota' as const,
-            descripcion: nota.texto,
-            cantidad: 0,
-            unidad_medida: '',
-            precio_unitario: 0,
-            comision_porcentaje: 0,
-            con_iva: false,
-            con_it: false,
-            es_soporte: false,
-            orden: index + 1,
-            subtotal_linea: 0
-          }
-        } else {
-          const seccion = item as SeccionItem
-          return {
-            tipo: 'Sección' as const,
-            nombre_producto: seccion.texto,
-            cantidad: 0,
-            unidad_medida: '',
-            precio_unitario: 0,
-            comision_porcentaje: 0,
-            con_iva: false,
-            con_it: false,
-            es_soporte: false,
-            orden: index + 1,
-            subtotal_linea: 0
-          }
-        }
-      })
+      // MEJORA B3: Preparar líneas usando las URLs actualizadas (sin esperar setTimeout)
+      const lineas = prepararLineas(
+        urlsImagenesActualizadas.size > 0 ? sincronizarLineas(productosList, urlsImagenesActualizadas) : productosList,
+        urlsImagenesActualizadas
+      )
 
       // Obtener nombres de cliente y vendedor (actualmente guardamos IDs)
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
@@ -1153,69 +945,45 @@ export default function NuevaCotizacionPage() {
 
       if (!clienteSeleccionado) {
         toast.error("Cliente no encontrado")
+        setGuardando(false)
         return
       }
       if (!vendedorSeleccionado) {
         toast.error("Vendedor no encontrado")
+        setGuardando(false)
         return
       }
 
-      // Preparar la cotización
-      const cotizacionData: any = {
-        cliente: clienteSeleccionado.displayName || clienteSeleccionado.legalName || '',
-        vendedor: vendedorSeleccionado.nombre || '',
-        sucursal,
-        estado: 'Pendiente' as const,
-        vigencia_dias: parseInt(vigencia) || 30,
-        plazo,
-        lineas
-      }
-
-      // REGLA 9: El valor final enviado al backend debe ser:
-      // total_manual !== null ? total_manual : totalGeneralReal
-      console.log('🔍 Estado antes de guardar - totalManual:', totalManual, 'totalGeneral:', totalGeneral, 'totalGeneralReal:', totalGeneralReal)
-
-      if (totalManual !== null && totalManual !== undefined) {
-        cotizacionData.total_final = totalManual
-        console.log('💰 Enviando total_final al backend (desde totalManual):', totalManual)
-      } else if (totalGeneral !== totalGeneralReal) {
-        // Fallback: si totalGeneral es diferente, significa que el usuario lo editó
-        cotizacionData.total_final = totalGeneral
-        console.log('💰 Enviando total_final desde totalGeneral (editado por usuario):', totalGeneral)
-      } else {
-        console.log('⚠️ No hay totalManual ni edición, se calculará automáticamente desde subtotales')
-      }
+      // MEJORA B5: Preparar payload usando función unificada
+      const cotizacionData = prepararPayload(
+        lineas,
+        {
+          cliente: clienteSeleccionado.displayName || clienteSeleccionado.legalName || '',
+          vendedor: vendedorSeleccionado.nombre || '',
+          sucursal,
+          vigencia,
+          plazo,
+          totalManual,
+          totalGeneralReal,
+          totalGeneral
+        }
+      )
 
       console.log('📝 Guardando cotización:', JSON.stringify(cotizacionData, null, 2))
 
-      // Enviar a la API
-      const response = await fetch('/api/cotizaciones', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(cotizacionData)
-      })
+      // MEJORA B1, B5: Guardar usando función unificada (sin setTimeout)
+      const cotizacionCreada = await guardarCotizacionNueva(cotizacionData)
 
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Error al guardar la cotización')
-      }
-
-      // Guardar el ID de la cotización creada para poder actualizar el estado
-      const cotizacionCreada = data.data.cotizacion
+      // Actualizar estado con la cotización creada
       setCotizacionId(cotizacionCreada.id)
-      setCodigoCotizacion(cotizacionCreada.codigo || "")
+      setCodigoCotizacion(cotizacionCreada.codigo)
       setEstadoCotizacion('Pendiente')
 
       toast.success(`Cotización ${cotizacionCreada.codigo} guardada exitosamente`)
 
-      // Solo redirigir si se solicita explícitamente
+      // MEJORA B1: Redirigir sin setTimeout (usar router directamente)
       if (redirigir) {
-        setTimeout(() => {
-          router.push('/panel/ventas/cotizaciones')
-        }, 1000)
+        router.push('/panel/ventas/cotizaciones')
       }
 
     } catch (error) {
@@ -1243,7 +1011,7 @@ export default function NuevaCotizacionPage() {
     cargando: false
   })
 
-  // Función para cargar información de soportes antes de aprobar
+  // MEJORA B4: Función para cargar información de soportes con datos frescos
   const cargarSoportesParaAprobacion = async () => {
     if (!cotizacionId) {
       toast.error("Debes guardar la cotización primero")
@@ -1253,18 +1021,16 @@ export default function NuevaCotizacionPage() {
     try {
       setModalAprobacion(prev => ({ ...prev, cargando: true, open: false }))
 
-      const response = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`)
-      const data = await response.json()
+      // MEJORA B4: Generar datos frescos basados en el estado actual
+      const productos = productosList.filter((item): item is ProductoItem => item.tipo === 'producto')
+      const lineas = prepararLineas(productosList)
+      const soportesInfo = await generarDatosParaModalAprobacion(cotizacionId, lineas)
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Error al obtener información de soportes')
-      }
-
-      if (data.data.soportesInfo && data.data.soportesInfo.length > 0) {
+      if (soportesInfo.length > 0) {
         // Hay soportes, mostrar modal de confirmación
         setModalAprobacion({
           open: true,
-          soportesInfo: data.data.soportesInfo,
+          soportesInfo,
           cargando: false
         })
       } else {
@@ -1278,7 +1044,7 @@ export default function NuevaCotizacionPage() {
     }
   }
 
-  // Función para aprobar sin soportes (sin modal)
+  // MEJORA B1, B2: Función para aprobar sin soportes (sin setTimeout)
   const confirmarAprobacionSinSoportes = async () => {
     if (!cotizacionId) {
       toast.error("Debes guardar la cotización primero")
@@ -1288,26 +1054,11 @@ export default function NuevaCotizacionPage() {
     try {
       setGuardando(true)
 
-      // Primero guardar la cotización (sin redirigir)
+      // Guardar la cotización (sin redirigir)
       await handleGuardar(false)
 
-      // Esperar un momento para que se actualice el estado
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Luego actualizar el estado a Aprobada
-      const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ estado: 'Aprobada' })
-      })
-
-      const dataEstado = await responseEstado.json()
-
-      if (!responseEstado.ok || !dataEstado.success) {
-        throw new Error(dataEstado.error || 'Error al actualizar el estado')
-      }
+      // MEJORA B1, B2: Actualizar estado a Aprobada sin setTimeout
+      await actualizarEstadoCotizacion(cotizacionId, 'Aprobada')
 
       setEstadoCotizacion('Aprobada')
       toast.success('Cotización guardada y aprobada exitosamente')
@@ -1319,7 +1070,7 @@ export default function NuevaCotizacionPage() {
     }
   }
 
-  // Función para confirmar la aprobación y crear alquileres (desde el modal)
+  // MEJORA B1, B2, B4: Función para confirmar la aprobación y crear alquileres (sin setTimeout, datos frescos)
   const confirmarAprobacion = async () => {
     if (!cotizacionId) {
       toast.error("Debes guardar la cotización primero")
@@ -1330,52 +1081,27 @@ export default function NuevaCotizacionPage() {
       setGuardando(true)
       setModalAprobacion(prev => ({ ...prev, open: false }))
 
-      // Primero guardar la cotización (sin redirigir)
+      // Guardar la cotización (sin redirigir)
       await handleGuardar(false)
 
-      // Esperar un momento para que se actualice el estado
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // MEJORA B1, B2: Actualizar estado a Aprobada sin setTimeout
+      await actualizarEstadoCotizacion(cotizacionId, 'Aprobada')
 
-      // Luego actualizar el estado de la cotización a Aprobada
-      const responseEstado = await fetch(`/api/cotizaciones/${cotizacionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ estado: 'Aprobada' })
-      })
+      // MEJORA B4: Obtener datos frescos de soportes (no usar modalAprobacion.soportesInfo que puede estar desactualizado)
+      const productos = productosList.filter((item): item is ProductoItem => item.tipo === 'producto')
+      const lineas = prepararLineas(productosList)
+      const tieneSoportes = productos.some(p => p.esSoporte)
 
-      const dataEstado = await responseEstado.json()
-
-      if (!responseEstado.ok || !dataEstado.success) {
-        throw new Error(dataEstado.error || 'Error al actualizar el estado')
-      }
-
-      // Crear alquileres para los soportes
-      const soportesInfo = modalAprobacion.soportesInfo
-      if (soportesInfo.length > 0) {
-        const responseAlquileres = await fetch(`/api/cotizaciones/${cotizacionId}/crear-alquileres`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        })
-
-        const dataAlquileres = await responseAlquileres.json()
-
-        if (!responseAlquileres.ok || !dataAlquileres.success) {
+      // Crear alquileres si hay soportes
+      if (tieneSoportes) {
+        try {
+          const resultado = await crearAlquileres(cotizacionId)
+          toast.success(`Cotización guardada, aprobada y ${resultado.alquileresCreados.length} alquiler(es) creado(s) exitosamente`)
+        } catch (error) {
           // Revertir el estado de la cotización si falla la creación de alquileres
-          await fetch(`/api/cotizaciones/${cotizacionId}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ estado: estadoCotizacion })
-          })
-          throw new Error(dataAlquileres.error || 'Error al crear alquileres')
+          await actualizarEstadoCotizacion(cotizacionId, estadoCotizacion as 'Pendiente' | 'Aprobada' | 'Rechazada' | 'Vencida')
+          throw error
         }
-
-        toast.success(`Cotización guardada, aprobada y ${dataAlquileres.data.alquileresCreados.length} alquiler(es) creado(s) exitosamente`)
       } else {
         toast.success('Cotización guardada y aprobada exitosamente')
       }
@@ -1389,14 +1115,13 @@ export default function NuevaCotizacionPage() {
     }
   }
 
-  // Función para actualizar el estado de la cotización
+  // MEJORA B1: Función para actualizar el estado de la cotización (sin setTimeout)
   const actualizarEstado = async (nuevoEstado: "Aprobada" | "Rechazada") => {
     try {
       // Si no hay cotizacionId, guardar primero (sin redirigir)
       if (!cotizacionId) {
         await handleGuardar(false)
-        // Esperar un momento para que se actualice el estado
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // El handleGuardar actualiza el cotizacionId, no necesitamos setTimeout
       }
 
       if (nuevoEstado === "Aprobada") {
@@ -1411,19 +1136,8 @@ export default function NuevaCotizacionPage() {
 
         setGuardando(true)
 
-        const response = await fetch(`/api/cotizaciones/${cotizacionId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ estado: nuevoEstado })
-        })
-
-        const data = await response.json()
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Error al actualizar el estado')
-        }
+        // MEJORA B1: Usar función unificada sin setTimeout
+        await actualizarEstadoCotizacion(cotizacionId || '', nuevoEstado)
 
         setEstadoCotizacion(nuevoEstado)
         toast.success(`Cotización guardada y marcada como ${nuevoEstado}`)

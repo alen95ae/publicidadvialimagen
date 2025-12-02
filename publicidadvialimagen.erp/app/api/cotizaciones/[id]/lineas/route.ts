@@ -37,7 +37,20 @@ export async function POST(
 ) {
   try {
     const cotizacionId = params.id
-    const body = await request.json()
+    // ERROR #6: Manejar error en request.json() de forma robusta
+    let body: any
+    try {
+      body = await request.json()
+    } catch (jsonError) {
+      console.error('❌ [POST /api/cotizaciones/[id]/lineas] Error parseando JSON:', jsonError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El cuerpo de la solicitud no es un JSON válido'
+        },
+        { status: 400 }
+      )
+    }
     console.log('📝 Creando línea para cotización:', cotizacionId)
 
     // Verificar que la cotización existe

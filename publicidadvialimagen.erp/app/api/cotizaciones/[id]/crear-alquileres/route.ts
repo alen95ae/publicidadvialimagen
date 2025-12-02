@@ -5,6 +5,13 @@ import {
   cancelarAlquileresCotizacion
 } from '@/lib/helpersAlquileres'
 import { getAlquileresPorCotizacion } from '@/lib/supabaseAlquileres'
+import {
+  getUsuarioAutenticado,
+  verificarAccesoCotizacion,
+  verificarSoporteExiste,
+  validarYNormalizarLineas
+} from '@/lib/cotizacionesBackend'
+import { getLineasByCotizacionId } from '@/lib/supabaseCotizacionLineas'
 
 export async function GET(
   request: Request,
@@ -12,7 +19,29 @@ export async function GET(
 ) {
   try {
     const { id: cotizacionId } = await params
-    console.log('🔍 Obteniendo información de soportes para alquiler:', cotizacionId)
+    console.log('🔍 [GET /api/cotizaciones/[id]/crear-alquileres] Obteniendo información de soportes para alquiler:', cotizacionId)
+
+    // ============================================================================
+    // C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
+    // ============================================================================
+    const usuario = await getUsuarioAutenticado(request as NextRequest)
+    if (!usuario) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado. Debes iniciar sesión.' },
+        { status: 401 }
+      )
+    }
+
+    // ============================================================================
+    // C3: VERIFICAR ACCESO A LA COTIZACIÓN
+    // ============================================================================
+    const tieneAcceso = await verificarAccesoCotizacion(cotizacionId, usuario)
+    if (!tieneAcceso) {
+      return NextResponse.json(
+        { success: false, error: 'No tienes permiso para ver esta cotización.' },
+        { status: 403 }
+      )
+    }
 
     const { cotizacion, soportesInfo } = await getSoportesParaAlquiler(cotizacionId)
 
@@ -56,10 +85,52 @@ export async function POST(
     const { id: cotizacionId } = await params
     const body = await request.json().catch(() => ({}))
     const { calcular_solo, lineas } = body
+
+    // ============================================================================
+    // C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
+    // ============================================================================
+    const usuario = await getUsuarioAutenticado(request as NextRequest)
+    if (!usuario) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado. Debes iniciar sesión.' },
+        { status: 401 }
+      )
+    }
+
+    // ============================================================================
+    // C3: VERIFICAR ACCESO A LA COTIZACIÓN
+    // ============================================================================
+    const tieneAcceso = await verificarAccesoCotizacion(cotizacionId, usuario)
+    if (!tieneAcceso) {
+      return NextResponse.json(
+        { success: false, error: 'No tienes permiso para crear alquileres para esta cotización.' },
+        { status: 403 }
+      )
+    }
     
     // Si es solo para calcular (para el modal), usar las líneas proporcionadas
     if (calcular_solo && lineas) {
-      console.log('🔍 Calculando alquileres para modal (sin crear):', cotizacionId)
+      console.log('🔍 [POST /api/cotizaciones/[id]/crear-alquileres] Calculando alquileres para modal (sin crear):', cotizacionId)
+      
+      // ============================================================================
+      // C6: VALIDAR Y NORMALIZAR LÍNEAS
+      // ============================================================================
+      const lineasNormalizadas = validarYNormalizarLineas(lineas)
+      
+      // ============================================================================
+      // C6: VERIFICAR QUE LOS SOPORTES EXISTAN
+      // ============================================================================
+      for (const linea of lineasNormalizadas) {
+        if (linea.tipo === 'Producto' && linea.es_soporte && linea.codigo_producto) {
+          const soporteExiste = await verificarSoporteExiste(linea.codigo_producto)
+          if (!soporteExiste) {
+            return NextResponse.json(
+              { success: false, error: `El soporte con código ${linea.codigo_producto} no existe.` },
+              { status: 400 }
+            )
+          }
+        }
+      }
       
       // Simular el cálculo usando las líneas proporcionadas
       const { getSoportes } = await import('@/lib/supabaseSoportes')
@@ -70,8 +141,8 @@ export async function POST(
       
       const soportesInfo = []
       
-      for (const linea of lineas) {
-        if (!linea.codigo_producto) continue
+      for (const linea of lineasNormalizadas) {
+        if (!linea.codigo_producto || linea.tipo !== 'Producto' || !linea.es_soporte) continue
         
         const soporte = todosSoportes.find((s: any) => s.codigo === linea.codigo_producto)
         if (!soporte) continue
@@ -125,7 +196,7 @@ export async function POST(
       }
       
       // 🔥 GARANTIZAR JSON VÁLIDO SIEMPRE
-      console.log('✅ Calculando alquileres completado:', soportesInfo.length, 'soportes')
+      console.log('✅ [POST /api/cotizaciones/[id]/crear-alquileres] Calculando alquileres completado:', soportesInfo.length, 'soportes')
       return NextResponse.json({
         success: true,
         data: {
@@ -134,13 +205,44 @@ export async function POST(
       })
     }
     
-    console.log('📝 Creando alquileres para cotización:', cotizacionId)
+    console.log('📝 [POST /api/cotizaciones/[id]/crear-alquileres] Creando alquileres para cotización:', cotizacionId)
 
+    // ============================================================================
+    // C5: VALIDAR QUE LAS LÍNEAS EXISTAN Y SEAN SOPORTES
+    // ============================================================================
+    const lineasCotizacion = await getLineasByCotizacionId(cotizacionId)
+    const lineasSoportes = lineasCotizacion.filter(l => l.es_soporte === true)
+    
+    if (lineasSoportes.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Esta cotización no tiene soportes para crear alquileres.' },
+        { status: 400 }
+      )
+    }
+
+    // Verificar que todos los soportes existan
+    for (const linea of lineasSoportes) {
+      if (linea.codigo_producto) {
+        const soporteExiste = await verificarSoporteExiste(linea.codigo_producto)
+        if (!soporteExiste) {
+          return NextResponse.json(
+            { success: false, error: `El soporte con código ${linea.codigo_producto} no existe.` },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // ============================================================================
+    // C5: TRANSACCIÓN - Cancelar alquileres antiguos y crear nuevos
+    // ============================================================================
     // Verificar si ya existen alquileres para esta cotización
     const alquileresExistentes = await getAlquileresPorCotizacion(cotizacionId)
     
     if (alquileresExistentes.length > 0) {
-      await cancelarAlquileresCotizacion(cotizacionId)
+      console.log(`🔄 [POST /api/cotizaciones/[id]/crear-alquileres] Cancelando ${alquileresExistentes.length} alquiler(es) existente(s)`)
+      await cancelarAlquileresCotizacion(cotizacionId, true) // Registrar historial
+      console.log(`✅ [POST /api/cotizaciones/[id]/crear-alquileres] Alquileres antiguos cancelados`)
     }
 
     // Crear nuevos alquileres

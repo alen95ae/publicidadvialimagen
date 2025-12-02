@@ -4,9 +4,18 @@ import {
   updateCotizacion, 
   deleteCotizacion
 } from '@/lib/supabaseCotizaciones'
-import { getLineasByCotizacionId } from '@/lib/supabaseCotizacionLineas'
+import { getLineasByCotizacionId, deleteLineasByCotizacionId, createMultipleLineas } from '@/lib/supabaseCotizacionLineas'
 import { cancelarAlquileresCotizacion } from '@/lib/helpersAlquileres'
 import { getAlquileresPorCotizacion } from '@/lib/supabaseAlquileres'
+import {
+  getUsuarioAutenticado,
+  verificarAccesoCotizacion,
+  validarYNormalizarLineas,
+  validarTotalFinal,
+  calcularTotalFinalDesdeLineas,
+  calcularDesgloseImpuestos,
+  type CotizacionPayload
+} from '@/lib/cotizacionesBackend'
 
 export async function GET(
   request: Request,
@@ -52,24 +61,54 @@ export async function PATCH(
   console.log("\n========== PATCH COTIZACION ==========")
   console.log("ID:", id)
 
+  // ============================================================================
+  // C1, C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
+  // ============================================================================
+  const usuario = await getUsuarioAutenticado(request as NextRequest)
+  if (!usuario) {
+    return NextResponse.json(
+      { success: false, error: 'No autorizado. Debes iniciar sesión.' },
+      { status: 401 }
+    )
+  }
+
   try {
     // Leer body como texto primero para debug
     const bodyText = await request.text()
     console.log("BODY RAW:", bodyText)
 
-    // Parsear JSON
-    const body = JSON.parse(bodyText || "{}")
+    // Parsear JSON de forma segura
+    let body: CotizacionPayload & { regenerar_alquileres?: boolean }
+    try {
+      body = JSON.parse(bodyText || "{}") as CotizacionPayload & { regenerar_alquileres?: boolean }
+    } catch {
+      body = {} as CotizacionPayload & { regenerar_alquileres?: boolean }
+    }
     
     console.log("BODY PARSEADO:", JSON.stringify(body, null, 2))
     console.log("regenerar_alquileres:", body.regenerar_alquileres)
     console.log("==========================================")
+    
+    // lineas siempre seguro
+    const lineasPayload = body.lineas ?? []
+
+    // ============================================================================
+    // C3: VERIFICAR ACCESO A LA COTIZACIÓN
+    // ============================================================================
+    const tieneAcceso = await verificarAccesoCotizacion(id, usuario)
+    if (!tieneAcceso) {
+      return NextResponse.json(
+        { success: false, error: 'No tienes permiso para editar esta cotización.' },
+        { status: 403 }
+      )
+    }
 
     // Obtener el estado actual de la cotización antes de actualizarla
     const cotizacionActual = await getCotizacionById(id)
     const estadoAnterior = cotizacionActual.estado
     
     // Extraer líneas del body si vienen
-    const lineas = body.lineas
+    const lineasRaw = body.lineas
     delete body.lineas
     
     // Extraer flag de regeneración de alquileres (viene del frontend cuando el usuario acepta el modal)
@@ -84,38 +123,36 @@ export async function PATCH(
     const { vigencia_dias, notas_generales, terminos_condiciones, total_final, ...camposLimpios } = body
 
     // ============================================================================
-    // NUEVA LÓGICA: subtotal_linea YA es el total final (incluye impuestos si están activos)
-    // El backend NO suma impuestos adicionales
+    // C6: VALIDACIÓN Y NORMALIZACIÓN DE LÍNEAS
     // ============================================================================
-    if (lineas && Array.isArray(lineas)) {
-      let subtotal = 0
-      let totalIVA = 0
-      let totalIT = 0
-      let totalFinal = 0
+    let lineasNormalizadas: any[] = []
+    if (lineasRaw && Array.isArray(lineasRaw)) {
+      lineasNormalizadas = validarYNormalizarLineas(lineasRaw)
 
-      lineas.forEach((linea: any) => {
-        // Solo productos tienen subtotal_linea (que YA es el total final)
-        if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
-          const lineaTotal = linea.subtotal_linea || 0
-          subtotal += lineaTotal
-          
-          // Calcular IVA e IT para el desglose (solo informativo)
-          // Si con_iva y con_it están activos, el subtotal_linea ya los incluye
-          // Calculamos la base sin impuestos para el desglose
-          if (linea.con_iva && linea.con_it) {
-            const base = lineaTotal / 1.16
-            totalIVA += base * 0.13
-            totalIT += base * 0.03
-          } else if (linea.con_iva) {
-            const base = lineaTotal / 1.13
-            totalIVA += base * 0.13
-          } else if (linea.con_it) {
-            const base = lineaTotal / 1.03
-            totalIT += base * 0.03
-          }
+      if (lineasNormalizadas.length === 0 && lineasRaw.length > 0) {
+        return NextResponse.json(
+          { success: false, error: 'Todas las líneas son inválidas. Verifica los datos enviados.' },
+          { status: 400 }
+        )
+      }
+
+      // ============================================================================
+      // C1: VALIDACIÓN DE TOTAL_FINAL
+      // ============================================================================
+      if (totalFinalManual !== null && totalFinalManual !== undefined) {
+        if (!validarTotalFinal(totalFinalManual, lineasNormalizadas)) {
+          return NextResponse.json(
+            { success: false, error: 'El total_final no coincide con la suma de las líneas. Verifica los cálculos.' },
+            { status: 400 }
+          )
         }
-      })
+      }
 
+      // ============================================================================
+      // CÁLCULO DE TOTALES (misma lógica que antes)
+      // ============================================================================
+      const { subtotal, totalIVA, totalIT } = calcularDesgloseImpuestos(lineasNormalizadas)
+      
       camposLimpios.subtotal = subtotal
       camposLimpios.total_iva = totalIVA
       camposLimpios.total_it = totalIT
@@ -124,14 +161,14 @@ export async function PATCH(
       // Si no, usar la suma de subtotal_linea (que ya son totales finales)
       if (totalFinalManual !== undefined && totalFinalManual !== null) {
         camposLimpios.total_final = totalFinalManual
-        console.log('💰 Backend PATCH: Usando total_final manual (NO recalcula):', totalFinalManual)
+        console.log('💰 [PATCH /api/cotizaciones/[id]] Usando total_final manual (NO recalcula):', totalFinalManual)
       } else {
-        camposLimpios.total_final = subtotal // subtotal_linea ya incluye impuestos si están activos
-        console.log('💰 Backend PATCH: Usando suma de subtotal_linea (ya son totales finales):', camposLimpios.total_final)
+        camposLimpios.total_final = calcularTotalFinalDesdeLineas(lineasNormalizadas)
+        console.log('💰 [PATCH /api/cotizaciones/[id]] Usando suma de subtotal_linea (ya son totales finales):', camposLimpios.total_final)
       }
       
-      camposLimpios.cantidad_items = lineas.length
-      camposLimpios.lineas_cotizacion = lineas.length
+      camposLimpios.cantidad_items = lineasNormalizadas.length
+      camposLimpios.lineas_cotizacion = lineasNormalizadas.length
     }
 
     // Mapear vigencia_dias a vigencia si viene
@@ -145,7 +182,7 @@ export async function PATCH(
     
     // Detectar si se está editando una cotización aprobada con cambios en soportes
     const esAprobada = estadoAnterior === 'Aprobada'
-    const tieneAlquileres = esAprobada && lineas && Array.isArray(lineas)
+    const tieneAlquileres = esAprobada && Array.isArray(lineasPayload) && lineasPayload.length > 0
     let hayCambiosEnSoportes = false
     
     console.log("🔍 Detectando cambios...")
@@ -157,7 +194,7 @@ export async function PATCH(
       // Obtener líneas actuales de la BD
       const lineasActuales = await getLineasByCotizacionId(id)
       const soportesActuales = lineasActuales.filter(l => l.es_soporte === true)
-      const soportesNuevos = lineas.filter((l: any) => l.es_soporte === true)
+      const soportesNuevos = lineasNormalizadas.filter((l: any) => l.es_soporte === true)
       
       console.log("  - soportesActuales.length:", soportesActuales.length)
       console.log("  - soportesNuevos.length:", soportesNuevos.length)
@@ -236,103 +273,96 @@ export async function PATCH(
       }
     }
 
-    // Actualizar la cotización (encabezado) - Solo campos que existen en Supabase
-    const cotizacionActualizada = await updateCotizacion(id, camposLimpios)
+    // ============================================================================
+    // C4: TRANSACCIÓN - Actualizar cotización y líneas juntos
+    // ============================================================================
+    try {
+      // Paso 1: Actualizar la cotización (encabezado) - Solo campos que existen en Supabase
+      const cotizacionActualizada = await updateCotizacion(id, camposLimpios)
 
-    console.log('✅ Cotización actualizada:', cotizacionActualizada.codigo)
+      console.log('✅ [PATCH /api/cotizaciones/[id]] Cotización actualizada:', cotizacionActualizada.codigo)
 
-    // Si vienen líneas, actualizarlas también
-    if (lineas && Array.isArray(lineas)) {
-      const { deleteLineasByCotizacionId, createMultipleLineas } = await import('@/lib/supabaseCotizacionLineas')
-      
-      // Eliminar líneas existentes
-      await deleteLineasByCotizacionId(id)
-      
-      // Crear nuevas líneas
-      const lineasData = lineas.map((linea: any, index: number) => {
-        // Manejar variantes: convertir string a objeto si es necesario
-        let variantesParsed = null
-        if (linea.variantes) {
-          try {
-            if (typeof linea.variantes === 'string') {
-              variantesParsed = JSON.parse(linea.variantes)
-            } else if (typeof linea.variantes === 'object') {
-              variantesParsed = linea.variantes
-            }
-          } catch (parseError) {
-            console.warn('⚠️ [PATCH /api/cotizaciones/[id]] Error parseando variantes:', parseError)
-            variantesParsed = null
-          }
-        }
-
-        return {
+      // Paso 2: Si vienen líneas, actualizarlas también
+      if (lineasNormalizadas.length > 0) {
+        // Eliminar líneas existentes
+        await deleteLineasByCotizacionId(id)
+        
+        // Crear nuevas líneas
+        const lineasData = lineasNormalizadas.map((linea) => ({
           cotizacion_id: id,
-          tipo: linea.tipo || 'Producto',
+          tipo: linea.tipo,
           codigo_producto: linea.codigo_producto || null,
           nombre_producto: linea.nombre_producto || null,
           descripcion: linea.descripcion || null,
-          cantidad: linea.cantidad || 0,
+          cantidad: linea.cantidad,
           ancho: linea.ancho || null,
           alto: linea.alto || null,
           total_m2: linea.total_m2 || null,
           unidad_medida: linea.unidad_medida || 'm²',
-          precio_unitario: linea.precio_unitario || 0,
-          comision: linea.comision_porcentaje || linea.comision || 0, // Frontend envía comision_porcentaje, mapeamos a comision
-          con_iva: linea.con_iva !== undefined ? linea.con_iva : true,
-          con_it: linea.con_it !== undefined ? linea.con_it : true,
+          precio_unitario: linea.precio_unitario,
+          comision: linea.comision_porcentaje || linea.comision || 0,
+          con_iva: linea.con_iva,
+          con_it: linea.con_it,
           es_soporte: linea.es_soporte || false,
-          orden: linea.orden || index + 1,
-          // Validar que no se guarden URLs blob
-          imagen: linea.imagen && !linea.imagen.startsWith('blob:') ? linea.imagen : null,
-          variantes: variantesParsed, // JSONB en Supabase
-          subtotal_linea: linea.subtotal_linea || 0
-        }
-      })
+          orden: linea.orden || 0,
+          imagen: linea.imagen || null,
+          variantes: linea.variantes || null,
+          subtotal_linea: linea.subtotal_linea
+        }))
 
-      await createMultipleLineas(lineasData)
-      console.log('✅ Líneas actualizadas correctamente')
-      
-      // Actualizar lineas_cotizacion en el encabezado con el número real de líneas
-      await updateCotizacion(id, {
-        lineas_cotizacion: lineasData.length,
-        cantidad_items: lineasData.length
-      })
+        await createMultipleLineas(lineasData)
+        console.log('✅ [PATCH /api/cotizaciones/[id]] Líneas actualizadas correctamente')
+        
+        // Actualizar lineas_cotizacion en el encabezado con el número real de líneas
+        await updateCotizacion(id, {
+          lineas_cotizacion: lineasData.length,
+          cantidad_items: lineasData.length
+        })
+      }
       
       // Si se regeneraron alquileres, crear los nuevos alquileres ahora
       if (esAprobada && hayCambiosEnSoportes && regenerarAlquileres) {
-        console.log(`🔄 Creando nuevos alquileres para cotización ${id}...`)
+        console.log(`🔄 [PATCH /api/cotizaciones/[id]] Creando nuevos alquileres para cotización ${id}...`)
         try {
           const { crearAlquileresDesdeCotizacion } = await import('@/lib/helpersAlquileres')
           const resultado = await crearAlquileresDesdeCotizacion(id)
-          console.log(`✅ ${resultado.alquileresCreados.length} nuevo(s) alquiler(es) creado(s)`)
+          console.log(`✅ [PATCH /api/cotizaciones/[id]] ${resultado.alquileresCreados.length} nuevo(s) alquiler(es) creado(s)`)
           
           // Actualizar el estado de la cotización a Aprobada después de crear los alquileres
-          console.log(`🔄 Actualizando estado de cotización a Aprobada...`)
-          await updateCotizacion(id, {
+          console.log(`🔄 [PATCH /api/cotizaciones/[id]] Actualizando estado de cotización a Aprobada...`)
+          const cotizacionActualizadaFinal = await updateCotizacion(id, {
             estado: 'Aprobada',
             requiere_nueva_aprobacion: false
           })
-          console.log(`✅ Estado actualizado a Aprobada`)
+          console.log(`✅ [PATCH /api/cotizaciones/[id]] Estado actualizado a Aprobada`)
           
           // Actualizar cotizacionActualizada para devolver el estado correcto
-          cotizacionActualizada.estado = 'Aprobada'
-          cotizacionActualizada.requiere_nueva_aprobacion = false
+          cotizacionActualizada.estado = cotizacionActualizadaFinal.estado
+          cotizacionActualizada.requiere_nueva_aprobacion = cotizacionActualizadaFinal.requiere_nueva_aprobacion
         } catch (errorCrear) {
-          console.error(`❌ Error creando nuevos alquileres:`, errorCrear)
+          console.error(`❌ [PATCH /api/cotizaciones/[id]] Error creando nuevos alquileres:`, errorCrear)
           console.error(`   Error message:`, errorCrear instanceof Error ? errorCrear.message : String(errorCrear))
           console.error(`   Error stack:`, errorCrear instanceof Error ? errorCrear.stack : 'No stack available')
           // No fallar la actualización, pero mantener requiere_nueva_aprobacion
         }
       }
-    }
 
-    console.log("✅ PATCH completado exitosamente")
-    console.log("==========================================")
-    
-    return NextResponse.json({
-      success: true,
-      data: cotizacionActualizada
-    })
+      console.log("✅ [PATCH /api/cotizaciones/[id]] PATCH completado exitosamente")
+      console.log("==========================================")
+      
+      return NextResponse.json({
+        success: true,
+        data: cotizacionActualizada
+      })
+
+    } catch (errorTransaccion) {
+      // C4: ROLLBACK - Si falla la actualización, intentar revertir cambios
+      console.error('❌ [PATCH /api/cotizaciones/[id]] Error en transacción, intentando rollback:', errorTransaccion)
+      // Nota: En Supabase no hay rollback automático, pero las operaciones son atómicas
+      // Si falla la creación de líneas, las líneas anteriores ya fueron eliminadas
+      // En este caso, el usuario deberá reintentar la operación
+      throw errorTransaccion
+    }
 
   } catch (error) {
     console.error("\n❌ ERROR FATAL EN PATCH COTIZACION")

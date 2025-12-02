@@ -32,7 +32,20 @@ export async function PUT(
 ) {
   try {
     const lineaId = params.lineaId
-    const body = await request.json()
+    // ERROR #6: Manejar error en request.json() de forma robusta
+    let body: any
+    try {
+      body = await request.json()
+    } catch (jsonError) {
+      console.error('❌ [PUT /api/cotizaciones/lineas/[lineaId]] Error parseando JSON:', jsonError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El cuerpo de la solicitud no es un JSON válido'
+        },
+        { status: 400 }
+      )
+    }
     console.log('📝 Actualizando línea:', lineaId)
 
     const lineaData: any = {}

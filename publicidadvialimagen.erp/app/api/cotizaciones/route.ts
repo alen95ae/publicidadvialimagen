@@ -3,9 +3,20 @@ import {
   getCotizaciones,
   createCotizacion,
   updateCotizacion,
+  deleteCotizacion,
   generarSiguienteCodigoCotizacion
 } from '@/lib/supabaseCotizaciones'
 import { createMultipleLineas } from '@/lib/supabaseCotizacionLineas'
+import {
+  getUsuarioAutenticado,
+  verificarClienteExiste,
+  verificarVendedorExiste,
+  validarYNormalizarLineas,
+  validarTotalFinal,
+  calcularTotalFinalDesdeLineas,
+  calcularDesgloseImpuestos,
+  type CotizacionPayload
+} from '@/lib/cotizacionesBackend'
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,141 +76,157 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // ============================================================================
+  // C1, C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
+  // ============================================================================
+  const usuario = await getUsuarioAutenticado(request)
+  if (!usuario) {
+    return NextResponse.json(
+      { success: false, error: 'No autorizado. Debes iniciar sesión.' },
+      { status: 401 }
+    )
+  }
+
   try {
-    const body = await request.json()
-    console.log('📝 Creando nueva cotización:', JSON.stringify(body, null, 2))
+    // ERROR #1: Manejar error en request.json() de forma robusta
+    let body: CotizacionPayload
+    try {
+      body = await request.json() as CotizacionPayload
+    } catch (jsonError) {
+      console.error('❌ [POST /api/cotizaciones] Error parseando JSON:', jsonError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El cuerpo de la solicitud no es un JSON válido'
+        },
+        { status: 400 }
+      )
+    }
+    console.log('📝 [POST /api/cotizaciones] Creando nueva cotización')
+
+    // ============================================================================
+    // C6: VALIDACIÓN Y NORMALIZACIÓN DE LÍNEAS
+    // ============================================================================
+    const lineasRaw = body.lineas || []
+    const lineasNormalizadas = validarYNormalizarLineas(lineasRaw)
+
+    if (lineasNormalizadas.length === 0 && lineasRaw.length > 0) {
+      return NextResponse.json(
+        { success: false, error: 'Todas las líneas son inválidas. Verifica los datos enviados.' },
+        { status: 400 }
+      )
+    }
+
+    // ============================================================================
+    // C1: VALIDACIÓN DE TOTAL_FINAL
+    // ============================================================================
+    const totalFinalManual = body.total_final
+    if (totalFinalManual !== null && totalFinalManual !== undefined) {
+      if (!validarTotalFinal(totalFinalManual, lineasNormalizadas)) {
+        return NextResponse.json(
+          { success: false, error: 'El total_final no coincide con la suma de las líneas. Verifica los cálculos.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // ============================================================================
+    // VALIDACIÓN DE CLIENTE Y VENDEDOR
+    // ============================================================================
+    if (body.cliente) {
+      const clienteExiste = await verificarClienteExiste(body.cliente)
+      if (!clienteExiste) {
+        console.warn('⚠️ [POST /api/cotizaciones] Cliente no encontrado, pero continuando (puede ser nombre)')
+      }
+    }
+
+    if (body.vendedor) {
+      const vendedorExiste = await verificarVendedorExiste(body.vendedor)
+      if (!vendedorExiste) {
+        console.warn('⚠️ [POST /api/cotizaciones] Vendedor no encontrado, pero continuando (puede ser nombre)')
+      }
+    }
 
     // Generar código si no viene en el body
     let codigo = body.codigo
     if (!codigo) {
       codigo = await generarSiguienteCodigoCotizacion()
-      console.log('🔢 Código generado:', codigo)
+      console.log('🔢 [POST /api/cotizaciones] Código generado:', codigo)
     }
 
-    // Extraer líneas del body
-    const lineas = body.lineas || []
-    delete body.lineas
-
-    // Si viene total_final del frontend (usuario editó manualmente el Total General),
-    // ese valor ya incluye IVA/IT y debe usarse directamente
-    const totalFinalManual = body.total_final
-    delete body.total_final
-
     // ============================================================================
-    // NUEVA LÓGICA: subtotal_linea YA es el total final (incluye impuestos si están activos)
-    // El backend NO suma impuestos adicionales
+    // CÁLCULO DE TOTALES (misma lógica que antes)
     // ============================================================================
-    let subtotal = 0
-    let totalIVA = 0
-    let totalIT = 0
-    let totalFinal = 0
-
-    lineas.forEach((linea: any) => {
-      // Si es producto, tiene subtotal_linea (que YA es el total final)
-      if (linea.tipo === 'Producto' || linea.tipo === 'producto') {
-        const lineaTotal = linea.subtotal_linea || 0
-        subtotal += lineaTotal
-
-        // Calcular IVA e IT para el desglose (solo informativo)
-        // Si con_iva y con_it están activos, el subtotal_linea ya los incluye
-        // Calculamos la base sin impuestos para el desglose
-        if (linea.con_iva && linea.con_it) {
-          const base = lineaTotal / 1.16
-          totalIVA += base * 0.13
-          totalIT += base * 0.03
-        } else if (linea.con_iva) {
-          const base = lineaTotal / 1.13
-          totalIVA += base * 0.13
-        } else if (linea.con_it) {
-          const base = lineaTotal / 1.03
-          totalIT += base * 0.03
-        }
-      }
-    })
-
+    const { subtotal, totalIVA, totalIT } = calcularDesgloseImpuestos(lineasNormalizadas)
+    
     // REGLA 10: Si hay total_final manual, usarlo DIRECTAMENTE
     // Si no, usar la suma de subtotal_linea (que ya son totales finales)
-    if (totalFinalManual !== undefined && totalFinalManual !== null) {
-      totalFinal = totalFinalManual
-    } else {
-      totalFinal = subtotal // subtotal_linea ya incluye impuestos si están activos
-    }
+    const totalFinal = totalFinalManual !== undefined && totalFinalManual !== null
+      ? totalFinalManual
+      : calcularTotalFinalDesdeLineas(lineasNormalizadas)
 
     if (totalFinalManual !== undefined && totalFinalManual !== null) {
-      console.log('💰 Backend POST: Usando total_final manual (NO recalcula):', totalFinalManual)
+      console.log('💰 [POST /api/cotizaciones] Usando total_final manual (NO recalcula):', totalFinalManual)
     } else {
-      console.log('💰 Backend POST: Calculando total_final desde subtotales:', totalFinal)
-      console.log('💰 Subtotal:', subtotal, 'IVA:', totalIVA, 'IT:', totalIT)
+      console.log('💰 [POST /api/cotizaciones] Calculando total_final desde subtotales:', totalFinal)
+      console.log('💰 [POST /api/cotizaciones] Subtotal:', subtotal, 'IVA:', totalIVA, 'IT:', totalIT)
     }
 
     // Limpiar campos que no existen en Supabase antes de crear
     const { vigencia_dias, ...camposLimpios } = body
 
-    // Crear la cotización (encabezado) - Solo campos que existen en Supabase
-    const nuevaCotizacion = await createCotizacion({
-      codigo,
-      cliente: camposLimpios.cliente || '',
-      vendedor: camposLimpios.vendedor || '',
-      sucursal: camposLimpios.sucursal || 'La Paz',
-      estado: camposLimpios.estado || 'Pendiente',
-      subtotal,
-      total_iva: totalIVA,
-      total_it: totalIT,
-      total_final: totalFinal,
-      vigencia: vigencia_dias || 30, // Frontend envía vigencia_dias, mapeamos a vigencia
-      plazo: camposLimpios.plazo || null,
-      cantidad_items: lineas.length,
-      lineas_cotizacion: lineas.length
-    })
+    // ============================================================================
+    // C4: TRANSACCIÓN - Crear cotización y líneas juntos
+    // ============================================================================
+    let nuevaCotizacion: any = null
+    let lineasCreadas: any[] = []
 
-    console.log('✅ Cotización creada correctamente:', nuevaCotizacion.id)
+    try {
+      // Paso 1: Crear la cotización (encabezado)
+      nuevaCotizacion = await createCotizacion({
+        codigo,
+        cliente: camposLimpios.cliente || '',
+        vendedor: camposLimpios.vendedor || '',
+        sucursal: camposLimpios.sucursal || 'La Paz',
+        estado: camposLimpios.estado || 'Pendiente',
+        subtotal,
+        total_iva: totalIVA,
+        total_it: totalIT,
+        total_final: totalFinal,
+        vigencia: vigencia_dias || 30,
+        plazo: camposLimpios.plazo || null,
+        cantidad_items: lineasNormalizadas.length,
+        lineas_cotizacion: lineasNormalizadas.length
+      })
 
-    // Crear las líneas de cotización
-    let lineasCreadas = []
-    if (lineas.length > 0) {
-      try {
-        // Mapear líneas al formato de Supabase
-        const lineasData = lineas.map((linea: any, index: number) => {
-          // Manejar variantes: convertir string a objeto si es necesario
-          let variantesParsed = null
-          if (linea.variantes) {
-            try {
-              if (typeof linea.variantes === 'string') {
-                variantesParsed = JSON.parse(linea.variantes)
-              } else if (typeof linea.variantes === 'object') {
-                variantesParsed = linea.variantes
-              }
-            } catch (parseError) {
-              console.warn('⚠️ [POST /api/cotizaciones] Error parseando variantes:', parseError)
-              variantesParsed = null
-            }
-          }
+      console.log('✅ [POST /api/cotizaciones] Cotización creada correctamente:', nuevaCotizacion.id)
 
-          return {
-            cotizacion_id: nuevaCotizacion.id,
-            tipo: linea.tipo || 'Producto',
-            codigo_producto: linea.codigo_producto || null,
-            nombre_producto: linea.nombre_producto || null,
-            descripcion: linea.descripcion || null,
-            cantidad: linea.cantidad || 0,
-            ancho: linea.ancho || null,
-            alto: linea.alto || null,
-            total_m2: linea.total_m2 || null,
-            unidad_medida: linea.unidad_medida || 'm²',
-            precio_unitario: linea.precio_unitario || 0,
-            comision: linea.comision_porcentaje || linea.comision || 0, // Frontend envía comision_porcentaje, mapeamos a comision
-            con_iva: linea.con_iva !== undefined ? linea.con_iva : true,
-            con_it: linea.con_it !== undefined ? linea.con_it : true,
-            es_soporte: linea.es_soporte || false,
-            orden: linea.orden || index + 1,
-            imagen: linea.imagen || null,
-            variantes: variantesParsed, // JSONB en Supabase
-            subtotal_linea: linea.subtotal_linea || 0
-          }
-        })
+      // Paso 2: Crear las líneas de cotización
+      if (lineasNormalizadas.length > 0) {
+        const lineasData = lineasNormalizadas.map((linea) => ({
+          cotizacion_id: nuevaCotizacion.id,
+          tipo: linea.tipo,
+          codigo_producto: linea.codigo_producto || null,
+          nombre_producto: linea.nombre_producto || null,
+          descripcion: linea.descripcion || null,
+          cantidad: linea.cantidad,
+          ancho: linea.ancho || null,
+          alto: linea.alto || null,
+          total_m2: linea.total_m2 || null,
+          unidad_medida: linea.unidad_medida || 'm²',
+          precio_unitario: linea.precio_unitario,
+          comision: linea.comision_porcentaje || linea.comision || 0,
+          con_iva: linea.con_iva,
+          con_it: linea.con_it,
+          es_soporte: linea.es_soporte || false,
+          orden: linea.orden || 0,
+          imagen: linea.imagen || null,
+          variantes: linea.variantes || null,
+          subtotal_linea: linea.subtotal_linea
+        }))
 
         lineasCreadas = await createMultipleLineas(lineasData)
-        console.log('✅ Líneas creadas correctamente:', lineasCreadas.length)
+        console.log('✅ [POST /api/cotizaciones] Líneas creadas correctamente:', lineasCreadas.length)
 
         // Actualizar lineas_cotizacion en el encabezado con el número real de líneas creadas
         if (lineasCreadas.length > 0) {
@@ -208,32 +235,37 @@ export async function POST(request: NextRequest) {
             cantidad_items: lineasCreadas.length
           })
         }
-      } catch (lineaError) {
-        // Si falla la creación de líneas, eliminar la cotización
-        console.error('❌ Error creando líneas, eliminando cotización:', lineaError)
-        try {
-          const { deleteCotizacion } = await import('@/lib/supabaseCotizaciones')
-          await deleteCotizacion(nuevaCotizacion.id)
-        } catch (deleteError) {
-          console.error('❌ Error eliminando cotización después de fallo:', deleteError)
-        }
-        throw new Error('Error al crear líneas de cotización: ' + (lineaError instanceof Error ? lineaError.message : 'Error desconocido'))
       }
+
+      // Éxito: retornar respuesta
+      return NextResponse.json({
+        success: true,
+        data: {
+          cotizacion: nuevaCotizacion,
+          lineas: lineasCreadas
+        }
+      })
+
+    } catch (errorCrear) {
+      // C4: ROLLBACK - Si falla la creación de líneas, eliminar la cotización
+      if (nuevaCotizacion) {
+        console.error('❌ [POST /api/cotizaciones] Error creando líneas, eliminando cotización:', errorCrear)
+        try {
+          await deleteCotizacion(nuevaCotizacion.id)
+          console.log('✅ [POST /api/cotizaciones] Cotización eliminada (rollback)')
+        } catch (deleteError) {
+          console.error('❌ [POST /api/cotizaciones] Error eliminando cotización después de fallo:', deleteError)
+        }
+      }
+      throw errorCrear
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        cotizacion: nuevaCotizacion,
-        lineas: lineasCreadas
-      }
-    })
-
   } catch (error) {
-    console.error('❌ Error creando cotización:', error)
+    console.error('❌ [POST /api/cotizaciones] Error creando cotización:', error)
     const errorMessage = error instanceof Error ? error.message : 'Error al crear cotización'
     const errorDetails = error instanceof Error ? error.stack : String(error)
-    console.error('❌ Error details:', errorDetails)
+    console.error('❌ [POST /api/cotizaciones] Error details:', errorDetails)
+    
     return NextResponse.json(
       {
         success: false,

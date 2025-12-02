@@ -5,7 +5,21 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    const { url } = await request.json()
+    // ERROR #5: Manejar error en request.json() de forma robusta
+    let body: { url?: string }
+    try {
+      body = await request.json()
+    } catch (jsonError) {
+      console.error('❌ [DELETE IMAGE] Error parseando JSON:', jsonError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El cuerpo de la solicitud no es un JSON válido'
+        },
+        { status: 400 }
+      )
+    }
+    const { url } = body
 
     if (!url) {
       return NextResponse.json({ success: false, error: 'No URL provided' }, { status: 400 })

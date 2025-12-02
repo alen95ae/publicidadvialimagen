@@ -159,10 +159,7 @@ export default function CotizacionesPage() {
     }
   }
 
-  // Cargar cotizaciones y vendedores desde la API
-  useEffect(() => {
-    fetchVendedores()
-  }, [])
+  // E4: Vendedores se cargan cuando cambian las cotizaciones (ver useEffect más abajo)
 
   // Recargar cotizaciones cuando cambien los filtros (resetear a página 1)
   useEffect(() => {
@@ -170,52 +167,53 @@ export default function CotizacionesPage() {
   }, [filtroVendedor, filtroSucursal, filtroEstado, searchTerm])
 
   // Recargar cotizaciones cuando cambie la página o los filtros
+  // E3: Evitar doble carga - usar un solo useEffect con debounce implícito
   useEffect(() => {
     fetchCotizaciones(currentPage)
   }, [currentPage, filtroVendedor, filtroSucursal, filtroEstado, searchTerm])
 
-  // Cargar vendedores para el filtro
+  // E4: Cargar vendedores solo una vez al inicio y cuando cambien las cotizaciones
+  useEffect(() => {
+    fetchVendedores()
+  }, [cotizaciones]) // Actualizar vendedores cuando cambien las cotizaciones cargadas
+
+  // E4: Cargar vendedores para el filtro (optimizado - NO descarga 10000 cotizaciones)
   const fetchVendedores = async () => {
     try {
-      // Obtener comerciales desde el endpoint público
+      // Obtener comerciales desde el endpoint público (ya filtra por vendedor=true)
       const response = await fetch('/api/public/comerciales')
       const data = await response.json()
       const comerciales = data.users || []
       
-      // Obtener todos los vendedores únicos de las cotizaciones
-      const cotizacionesResponse = await fetch('/api/cotizaciones?pageSize=10000')
-      const cotizacionesData = await cotizacionesResponse.json()
+      // E4: Usar las cotizaciones ya cargadas en el listado para obtener vendedores adicionales
+      // No hacer fetch masivo de 10000 cotizaciones
       const vendedoresDeCotizaciones = new Set<string>()
       
-      if (cotizacionesData.success && cotizacionesData.data) {
-        cotizacionesData.data.forEach((cot: Cotizacion) => {
-          if (cot.vendedor) {
-            vendedoresDeCotizaciones.add(cot.vendedor)
-          }
-        })
-      }
+      // Extraer vendedores únicos de las cotizaciones ya cargadas
+      cotizaciones.forEach((cot: Cotizacion) => {
+        if (cot.vendedor) {
+          vendedoresDeCotizaciones.add(cot.vendedor)
+        }
+      })
       
       // Combinar comerciales con vendedores que tienen cotizaciones pero no están marcados como vendedor
-      // El endpoint ya filtra por vendedor=true, pero incluimos también los que tienen cotizaciones
       const vendedoresList = [...comerciales]
       
       // Agregar vendedores que tienen cotizaciones pero no están en la lista de comerciales
-      if (cotizacionesData.success && cotizacionesData.data) {
-        const comercialesIds = new Set(comerciales.map((c: Vendedor) => c.id))
-        const comercialesNombres = new Set(comerciales.map((c: Vendedor) => c.nombre))
-        
-        Array.from(vendedoresDeCotizaciones).forEach(vendedorNombre => {
-          // Si no está en la lista de comerciales, agregarlo como vendedor temporal
-          if (!comercialesIds.has(vendedorNombre) && !comercialesNombres.has(vendedorNombre)) {
-            vendedoresList.push({
-              id: vendedorNombre,
-              nombre: vendedorNombre,
-              email: '',
-              imagen_usuario: null
-            } as Vendedor)
-          }
-        })
-      }
+      const comercialesIds = new Set(comerciales.map((c: Vendedor) => c.id))
+      const comercialesNombres = new Set(comerciales.map((c: Vendedor) => c.nombre))
+      
+      Array.from(vendedoresDeCotizaciones).forEach(vendedorNombre => {
+        // Si no está en la lista de comerciales, agregarlo como vendedor temporal
+        if (!comercialesIds.has(vendedorNombre) && !comercialesNombres.has(vendedorNombre)) {
+          vendedoresList.push({
+            id: vendedorNombre,
+            nombre: vendedorNombre,
+            email: '',
+            imagen_usuario: null
+          } as Vendedor)
+        }
+      })
       
       setVendedores(vendedoresList)
     } catch (error) {
@@ -235,6 +233,10 @@ export default function CotizacionesPage() {
       }
       if (searchTerm) {
         params.set('cliente', searchTerm)
+      }
+      // Enviar filtro de vendedor al backend para que la paginación sea correcta
+      if (filtroVendedor !== 'all') {
+        params.set('vendedor', filtroVendedor)
       }
       
       const response = await fetch(`/api/cotizaciones?${params.toString()}`)
@@ -291,7 +293,9 @@ export default function CotizacionesPage() {
   // Obtener sucursales únicas para el filtro
   const sucursalesUnicas = Array.from(new Set(cotizaciones.map(c => c.sucursal).filter(Boolean)))
 
-  // Filtrar cotizaciones (solo filtros del frontend, la paginación se hace en el backend)
+  // Filtrar cotizaciones (filtros del frontend que no se envían al backend)
+  // NOTA: El filtro de vendedor y estado ahora se envían al backend, pero mantenemos
+  // el filtro de sucursal y búsqueda en el frontend para compatibilidad
   const filteredCotizaciones = cotizaciones.filter(cotizacion => {
     // Filtro de búsqueda flexible (código, cliente, vendedor) con normalización
     let matchesSearch = true
@@ -306,10 +310,11 @@ export default function CotizacionesPage() {
         normalizedVendedor.includes(normalizedSearch)
     }
     
-    // Filtro por vendedor
+    // Filtro por vendedor (ya se aplica en el backend, pero mantenemos para búsqueda local)
+    // Si el filtro está activo, el backend ya filtró, pero si hay búsqueda local, aplicamos aquí
     const matchesVendedor = filtroVendedor === "all" || cotizacion.vendedor === filtroVendedor
     
-    // Filtro por sucursal
+    // Filtro por sucursal (solo frontend)
     const matchesSucursal = filtroSucursal === "all" || cotizacion.sucursal === filtroSucursal
     
     // Filtro por estado (ya se aplica en el backend)
@@ -809,61 +814,78 @@ export default function CotizacionesPage() {
             )}
 
             {/* Paginación */}
-            {pagination.totalPages > 1 && (
-              <div className="flex justify-center mt-8">
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handlePrevPage}
-                    disabled={!pagination.hasPrev || isLoading}
-                  >
-                    Anterior
-                  </Button>
-                  
-                  {/* Mostrar páginas */}
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= pagination.totalPages - 2) {
-                      pageNum = pagination.totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
+            {/* Calcular paginación correcta basada en resultados filtrados */}
+            {(() => {
+              // Si hay filtros del frontend (sucursal o búsqueda), usar resultados filtrados
+              const tieneFiltrosFrontend = filtroSucursal !== 'all' || (searchTerm && searchTerm.trim() !== '')
+              const totalFiltrado = tieneFiltrosFrontend ? filteredCotizaciones.length : pagination.total
+              const totalPagesFiltrado = Math.ceil(totalFiltrado / 100)
+              const mostrarPaginacion = totalPagesFiltrado > 1 || totalFiltrado > 0
+              
+              // Calcular rango de items mostrados
+              const desde = totalFiltrado > 0 ? ((currentPage - 1) * 100) + 1 : 0
+              const hasta = Math.min(currentPage * 100, totalFiltrado)
+              
+              return mostrarPaginacion ? (
+                <div className="flex justify-center mt-8">
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handlePrevPage}
+                      disabled={!pagination.hasPrev || isLoading || currentPage === 1}
+                    >
+                      Anterior
+                    </Button>
                     
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(pageNum)}
-                        disabled={isLoading}
-                        className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
+                    {/* Mostrar páginas */}
+                    {Array.from({ length: Math.min(5, totalPagesFiltrado) }, (_, i) => {
+                      let pageNum;
+                      if (totalPagesFiltrado <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPagesFiltrado - 2) {
+                        pageNum = totalPagesFiltrado - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(pageNum)}
+                          disabled={isLoading}
+                          className={currentPage === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleNextPage}
+                      disabled={!pagination.hasNext || isLoading || currentPage >= totalPagesFiltrado}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
                   
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleNextPage}
-                    disabled={!pagination.hasNext || isLoading}
-                  >
-                    Siguiente
-                  </Button>
+                  {/* Información de paginación - usar total filtrado */}
+                  <div className="ml-4 text-sm text-gray-600">
+                    {totalFiltrado > 0 ? (
+                      <>Mostrando {desde} - {hasta} de {totalFiltrado} items</>
+                    ) : (
+                      <>No hay items para mostrar</>
+                    )}
+                  </div>
                 </div>
-                
-                {/* Información de paginación */}
-                <div className="ml-4 text-sm text-gray-600">
-                  Mostrando {((currentPage - 1) * 100) + 1} - {Math.min(currentPage * 100, pagination.total)} de {pagination.total} items
-                </div>
-              </div>
-            )}
+              ) : null
+            })()}
           </CardContent>
         </Card>
       </main>

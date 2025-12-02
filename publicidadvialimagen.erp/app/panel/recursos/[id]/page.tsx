@@ -405,18 +405,25 @@ export default function RecursoDetailPage() {
       
       toast.loading("Subiendo imagen...", { id: 'upload-image' })
       
-      const response = await fetch('/api/uploads', { 
+      const uploadTargetId = isNewRecurso ? 'new' : id
+      const response = await fetch(`/api/recursos/${uploadTargetId}/image`, { 
         method: 'POST', 
         body: formDataUpload 
       })
       
-      if (response.ok) {
-        const { url } = await response.json()
-        handleChange("imagen_portada", url)
-        toast.success("Imagen cargada correctamente", { id: 'upload-image' })
+      const responseData = await response.json().catch(() => ({}))
+      
+      if (response.ok && responseData.success !== false) {
+        const publicUrl = responseData.data?.publicUrl
+        if (publicUrl) {
+          handleChange("imagen_portada", publicUrl)
+          toast.success("Imagen subida a Supabase Storage correctamente", { id: 'upload-image' })
+        } else {
+          throw new Error("No se recibió la URL de la imagen")
+        }
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.error || "Error al cargar la imagen"
+        const errorMessage = responseData.error || "Error al cargar la imagen"
+        console.error("❌ [FRONTEND] Error en respuesta de upload:", errorMessage)
         toast.error(errorMessage, { id: 'upload-image' })
       }
     } catch (error) {

@@ -134,3 +134,51 @@ export async function getUsuarioPorEmail(email: string): Promise<{ id: string; n
   };
 }
 
+/**
+ * Registrar evento de alquiler creado desde cotización
+ */
+export async function registrarAlquilerCreado(
+  soporteId: number,
+  cotizacionId: string,
+  inicio: string,
+  fin: string,
+  total: number,
+  realizadoPor?: string | null
+): Promise<HistorialEvento> {
+  return addHistorialEvento({
+    soporte_id: soporteId,
+    tipo_evento: 'ALQUILER',
+    descripcion: `Alquiler generado desde cotización editada (${cotizacionId})`,
+    realizado_por: realizadoPor || null,
+    datos: {
+      cotizacion_id: cotizacionId,
+      inicio,
+      fin,
+      total,
+      origen: 'cotizacion_editada'
+    }
+  });
+}
+
+/**
+ * Registrar evento de alquiler eliminado por edición de cotización
+ */
+export async function registrarAlquilerEliminado(
+  soporteId: number,
+  cotizacionId: string,
+  alquilerCodigo: string,
+  realizadoPor?: string | null
+): Promise<HistorialEvento> {
+  return addHistorialEvento({
+    soporte_id: soporteId,
+    tipo_evento: 'ELIMINACION',
+    descripcion: `Alquiler ${alquilerCodigo} eliminado debido a edición de cotización (${cotizacionId})`,
+    realizado_por: realizadoPor || null,
+    datos: {
+      cotizacion_id: cotizacionId,
+      alquiler_codigo: alquilerCodigo,
+      motivo: 'edicion_cotizacion'
+    }
+  });
+}
+

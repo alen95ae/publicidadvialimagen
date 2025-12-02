@@ -462,7 +462,7 @@ export default function HomePage() {
           {/* Imagen a la derecha en desktop, primera en móvil */}
           <div className="relative h-[300px] sm:h-[400px] rounded-2xl overflow-hidden order-1 lg:order-2">
             <Image
-              src="/vallas_publicitarias_en_bolivia.png"
+              src="/publicidad_exterior_en_bolivia.png"
               alt="Vallas Publicitarias en Bolivia"
               fill
               className="object-cover rounded-2xl"

@@ -190,3 +190,85 @@ export async function requirePermiso(
   return { userId: session.sub, userEmail: session.email, permisos };
 }
 
+/**
+ * Helper para verificar permisos técnicos en APIs del backend
+ * Retorna un objeto con userId y permisos si tiene permiso, o un NextResponse con error si no lo tiene
+ * Esta función es específica para permisos técnicos que tienen acciones personalizadas
+ */
+export async function requirePermisoTecnico(
+  accion: string
+): Promise<{ userId: string; userEmail?: string; permisos: PermisosMatrix } | Response> {
+  const { NextResponse } = await import("next/server");
+  const { verifySession } = await import("./auth");
+  const { cookies } = await import("next/headers");
+  const { getSupabaseServer } = await import("./supabaseServer");
+  
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+  
+  if (!token) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const session = await verifySession(token);
+  if (!session || !session.sub) {
+    return NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
+  }
+
+  const isDeveloper = session.email?.toLowerCase() === "alen95ae@gmail.com";
+  
+  if (isDeveloper) {
+    const permisos = await getPermisos(session.sub, session.email);
+    return { userId: session.sub, userEmail: session.email, permisos };
+  }
+
+  const supabase = getSupabaseServer();
+
+  // Obtener rol_id del usuario
+  const { data: userData } = await supabase
+    .from('usuarios')
+    .select('rol_id')
+    .eq('id', session.sub)
+    .single();
+
+  if (!userData || !userData.rol_id) {
+    return NextResponse.json(
+      { error: `No tienes permiso para ${accion}` },
+      { status: 403 }
+    );
+  }
+
+  // Buscar el permiso técnico específico
+  const { data: permisoData } = await supabase
+    .from('permisos')
+    .select('id')
+    .eq('modulo', 'tecnico')
+    .eq('accion', accion)
+    .single();
+
+  if (!permisoData) {
+    return NextResponse.json(
+      { error: `Permiso técnico '${accion}' no encontrado` },
+      { status: 500 }
+    );
+  }
+
+  // Verificar si el rol tiene este permiso
+  const { data: rolPermisoData } = await supabase
+    .from('rol_permisos')
+    .select('permiso_id')
+    .eq('rol_id', userData.rol_id)
+    .eq('permiso_id', permisoData.id)
+    .single();
+
+  if (!rolPermisoData) {
+    return NextResponse.json(
+      { error: `No tienes permiso para ${accion}` },
+      { status: 403 }
+    );
+  }
+
+  const permisos = await getPermisos(session.sub, session.email);
+  return { userId: session.sub, userEmail: session.email, permisos };
+}
+

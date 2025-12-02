@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     // Consultar usuarios con vendedor = true
     const { data, error } = await supabase
       .from("usuarios")
-      .select("id, nombre, email, vendedor, imagen_usuario")
+      .select("id, nombre, email, vendedor, imagen_usuario, numero")
       .eq("vendedor", true)
       .order("nombre", { ascending: true });
 

@@ -9,6 +9,10 @@ import {
   cancelarAlquileresDeCotizacion,
   getAlquileresVigentesPorSoporte
 } from './supabaseAlquileres'
+import { 
+  registrarAlquilerCreado, 
+  registrarAlquilerEliminado 
+} from './supabaseHistorial'
 
 /**
  * Obtener información de los soportes que se crearán alquileres al aprobar una cotización
@@ -153,6 +157,20 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
       // Actualizar estado del soporte a "Ocupado"
       await updateSoporte(String(info.soporte.id), { estado: 'Ocupado' })
       
+      // Registrar evento en historial del soporte
+      try {
+        await registrarAlquilerCreado(
+          typeof info.soporte.id === 'number' ? info.soporte.id : parseInt(String(info.soporte.id)),
+          cotizacionId,
+          info.fechaInicio,
+          info.fechaFin,
+          info.importe
+        )
+      } catch (historialError) {
+        // No fallar si el historial falla, solo loguear
+        console.warn('⚠️ Error registrando historial de alquiler creado:', historialError)
+      }
+      
       // Generar siguiente código
       const match = siguienteCodigo.match(/ALQ-(\d+)/)
       if (match) {
@@ -268,12 +286,32 @@ export async function actualizarEstadoSoportesAlquileres() {
 }
 
 // Cancelar alquileres de una cotización y actualizar estados de soportes
-export async function cancelarAlquileresCotizacion(cotizacionId: string) {
+export async function cancelarAlquileresCotizacion(cotizacionId: string, registrarHistorial: boolean = true) {
   try {
     console.log(`🗑️ [cancelarAlquileresCotizacion] Iniciando para cotización ${cotizacionId}...`);
     
     // Cancelar alquileres y obtener soportes afectados
     const resultado = await cancelarAlquileresDeCotizacion(cotizacionId);
+    
+    // Registrar eventos en historial si se solicita
+    if (registrarHistorial) {
+      for (const alquiler of resultado.alquileresCancelados) {
+        try {
+          const soporteId = typeof alquiler.soporte_id === 'number' 
+            ? alquiler.soporte_id 
+            : parseInt(String(alquiler.soporte_id));
+          
+          await registrarAlquilerEliminado(
+            soporteId,
+            cotizacionId,
+            alquiler.codigo
+          );
+        } catch (historialError) {
+          // No fallar si el historial falla, solo loguear
+          console.warn(`⚠️ Error registrando historial de alquiler eliminado ${alquiler.codigo}:`, historialError);
+        }
+      }
+    }
     
     // Actualizar estado de cada soporte afectado
     for (const soporteId of resultado.soportesAfectados) {

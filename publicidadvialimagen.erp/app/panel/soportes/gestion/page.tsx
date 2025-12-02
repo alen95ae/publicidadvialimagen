@@ -17,11 +17,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Upload, LayoutGrid, List, ArrowUpDown, X, FolderClock } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
-import { Permiso, PermisoEditar, PermisoEliminar } from "@/components/permiso"
+import { Permiso, PermisoEditar, PermisoEliminar, PermisoTecnico } from "@/components/permiso"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Constantes para colores de estado (formato Airtable)
@@ -58,6 +59,7 @@ interface Support {
 
 export default function SoportesPage() {
   const { tieneFuncionTecnica, puedeEditar, loading: permisosLoading } = usePermisosContext()
+  const puedeReservar = tieneFuncionTecnica("reservar soportes")
   const [supports, setSupports] = useState<Support[]>([])
   const [allSupports, setAllSupports] = useState<Support[]>([]) // Para almacenar todos los soportes cuando hay ordenamiento
   const [loading, setLoading] = useState(true)
@@ -490,6 +492,32 @@ export default function SoportesPage() {
   const handleDiscardChanges = () => {
     setEditedSupports({})
     toast.info("Cambios descartados")
+  }
+
+  // Manejar toggle de reservado
+  const handleToggleReservado = async (supportId: string, checked: boolean, currentStatus: string) => {
+    try {
+      const response = await api(`/api/soportes/${supportId}/reservar`, {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          reservar: checked,
+          estado_anterior: checked ? currentStatus : null,
+          desde_boton: true // Indicar que viene del botón de reservar (aplicar 48h)
+        })
+      })
+
+      if (response.ok) {
+        toast.success(checked ? "Soporte marcado como reservado" : "Reserva cancelada")
+        fetchSupports()
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || 'Error al actualizar el estado')
+      }
+    } catch (error) {
+      console.error('Error al cambiar estado de reserva:', error)
+      toast.error("Error de conexión")
+    }
   }
 
   // Función para manejar el ordenamiento
@@ -1256,16 +1284,18 @@ export default function SoportesPage() {
                             <Edit className="w-2.5 h-2.5 mr-0.5" />
                             Editar
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Historial"
-                            onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
-                            className="flex-1 text-[10px] h-6 px-1"
-                          >
-                            <FolderClock className="w-2.5 h-2.5 mr-0.5" />
-                            Historial
-                          </Button>
+                          <PermisoTecnico accion="ver historial soportes">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Historial"
+                              onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
+                              className="flex-1 text-[10px] h-6 px-1"
+                            >
+                              <FolderClock className="w-2.5 h-2.5 mr-0.5" />
+                              Historial
+                            </Button>
+                          </PermisoTecnico>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1325,6 +1355,9 @@ export default function SoportesPage() {
                     <TableHead>Ubicación</TableHead>
                     <TableHead className="text-center">Dimensiones (m)</TableHead>
                     <TableHead>Precio/Mes</TableHead>
+                    {!permisosLoading && puedeReservar && (
+                      <TableHead className="text-center">Reservado</TableHead>
+                    )}
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -1424,6 +1457,18 @@ export default function SoportesPage() {
                           </div>
                         )}
                       </TableCell>
+                      {!permisosLoading && puedeReservar && (
+                        <TableCell>
+                          <div className="flex items-center justify-center">
+                            <Switch
+                              checked={support.status === 'Reservado'}
+                              onCheckedChange={(checked) => handleToggleReservado(support.id, checked, support.status)}
+                              disabled={!puedeReservar}
+                              className="data-[state=checked]:bg-yellow-500 data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-yellow-600 data-[state=unchecked]:hover:bg-gray-400 transition-colors"
+                            />
+                          </div>
+                        </TableCell>
+                      )}
                       <TableCell>
                         {selected[support.id] && puedeEditar("soportes") ? (
                           <Select 
@@ -1467,15 +1512,17 @@ export default function SoportesPage() {
                               <Edit className="w-4 h-4" />
                             </Button>
                           </PermisoEditar>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
-                            title="Ver historial"
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <FolderClock className="w-4 h-4" />
-                          </Button>
+                          <PermisoTecnico accion="ver historial soportes">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
+                              title="Ver historial"
+                              className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
+                            >
+                              <FolderClock className="w-4 h-4" />
+                            </Button>
+                          </PermisoTecnico>
                           <PermisoEliminar modulo="soportes">
                             <Button
                               variant="ghost"

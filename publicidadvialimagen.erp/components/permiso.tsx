@@ -67,3 +67,28 @@ export function PermisoEliminar({ modulo, children, fallback = null }: { modulo:
   return <Permiso modulo={modulo} accion="eliminar">{children}</Permiso>;
 }
 
+/**
+ * Componente que muestra contenido solo si el usuario tiene un permiso técnico específico
+ */
+export function PermisoTecnico({ accion, children, fallback = null }: { accion: string; children: ReactNode; fallback?: ReactNode }) {
+  const { tieneFuncionTecnica, loading, permisos } = usePermisosContext();
+
+  // Esperar a que los permisos se carguen antes de verificar
+  if (loading) {
+    return null;
+  }
+
+  // Si no hay permisos cargados, no mostrar nada (más seguro)
+  if (!permisos || Object.keys(permisos).length === 0) {
+    return <>{fallback}</>;
+  }
+
+  // Verificar el permiso técnico específico
+  if (tieneFuncionTecnica(accion)) {
+    return <>{children}</>;
+  }
+
+  // Si no tiene permiso, mostrar fallback o nada
+  return <>{fallback}</>;
+}
+

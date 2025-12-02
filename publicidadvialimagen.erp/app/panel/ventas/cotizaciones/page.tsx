@@ -432,6 +432,7 @@ export default function CotizacionesPage() {
       // Obtener el email y número del comercial asignado a la cotización
       let vendedorEmail: string | undefined = undefined
       let vendedorNumero: string | null = null
+      let vendedor: any = null
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       
       try {
@@ -439,7 +440,6 @@ export default function CotizacionesPage() {
         const comercialesResponse = await fetch(`/api/public/comerciales`)
         if (comercialesResponse.ok) {
           const comercialesData = await comercialesResponse.json()
-          let vendedor
           
           // Buscar por ID (UUID) o por nombre
           if (cotizacion.vendedor && uuidRegex.test(cotizacion.vendedor)) {
@@ -456,6 +456,7 @@ export default function CotizacionesPage() {
             vendedorNumero = vendedor.numero || null
             console.log('✅ Email del comercial asignado encontrado:', vendedorEmail)
             console.log('✅ Número del comercial asignado encontrado:', vendedorNumero)
+            console.log('✅ Nombre del comercial encontrado:', vendedor.nombre)
           } else {
             console.log('⚠️ No se encontró comercial asignado en comerciales')
           }
@@ -538,12 +539,24 @@ export default function CotizacionesPage() {
         }
       })
       
+      // Obtener el nombre del comercial para el PDF
+      let nombreVendedor = cotizacion.vendedor || ''
+      if (vendedor && vendedor.nombre) {
+        nombreVendedor = vendedor.nombre
+      }
+      
+      console.log('📄 Generando PDF con:', {
+        vendedor: nombreVendedor,
+        vendedorEmail,
+        vendedorNumero
+      })
+      
       // Generar el PDF
       await generarPDFCotizacion({
         codigo: cotizacion.codigo || codigo,
         cliente: cotizacion.cliente || '',
         sucursal: cotizacion.sucursal || '',
-        vendedor: cotizacion.vendedor || '',
+        vendedor: nombreVendedor,
         vendedorEmail: vendedorEmail,
         vendedorNumero: vendedorNumero, // Usar el número del comercial asignado, no del usuario que descarga
         productos: productos,

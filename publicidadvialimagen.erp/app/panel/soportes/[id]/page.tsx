@@ -18,11 +18,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, ImageIcon } from "lucide-react"
+import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, ImageIcon, FolderClock } from "lucide-react"
 import { toast } from "sonner"
 import SupportMap from "@/components/support-map"
 import dynamic from "next/dynamic";
-import { PermisoEditar, PermisoEliminar } from "@/components/permiso"
+import { PermisoEditar, PermisoEliminar, PermisoTecnico } from "@/components/permiso"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 
 const EditableLeafletMap = dynamic(() => import("@/components/maps/EditableLeafletMap"), { ssr: false });
@@ -582,6 +582,15 @@ export default function SoporteDetailPage() {
           <div className="flex items-center gap-4">
             {!editing ? (
               <>
+                <PermisoTecnico accion="ver historial soportes">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/panel/soportes/${id}/historial`)}
+                  >
+                    <FolderClock className="w-4 h-4 mr-2" />
+                    Historial
+                  </Button>
+                </PermisoTecnico>
                 <PermisoEditar modulo="soportes">
                   <Button
                     variant="outline"
@@ -618,6 +627,15 @@ export default function SoporteDetailPage() {
               </>
             ) : (
               <>
+                <PermisoTecnico accion="ver historial soportes">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/panel/soportes/${id}/historial`)}
+                  >
+                    <FolderClock className="w-4 h-4 mr-2" />
+                    Historial
+                  </Button>
+                </PermisoTecnico>
                 <Button
                   variant="outline"
                   onClick={() => {

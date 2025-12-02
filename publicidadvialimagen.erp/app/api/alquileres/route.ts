@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAlquileres, createAlquiler } from '@/lib/supabaseAlquileres'
+import { getAlquileres, createAlquiler, getAlquileresPorCotizacion } from '@/lib/supabaseAlquileres'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,20 +13,31 @@ export async function GET(request: NextRequest) {
     const soporte_id = searchParams.get('soporte_id') || undefined
     const fecha_inicio = searchParams.get('fecha_inicio') || undefined
     const fecha_fin = searchParams.get('fecha_fin') || undefined
+    const cotizacion_id = searchParams.get('cotizacion_id') || undefined
 
-    console.log('🔍 Alquileres search params:', { pageSize, page, estado, cliente, vendedor, search, soporte_id, fecha_inicio, fecha_fin })
+    console.log('🔍 Alquileres search params:', { pageSize, page, estado, cliente, vendedor, search, soporte_id, fecha_inicio, fecha_fin, cotizacion_id })
 
-    const result = await getAlquileres({
-      estado,
-      cliente,
-      vendedor,
-      search,
-      soporte_id,
-      fecha_inicio,
-      fecha_fin,
-      page,
-      limit: pageSize
-    })
+    // Si se filtra por cotizacion_id, usar función específica
+    let result
+    if (cotizacion_id) {
+      const alquileres = await getAlquileresPorCotizacion(cotizacion_id)
+      result = {
+        data: alquileres,
+        count: alquileres.length
+      }
+    } else {
+      result = await getAlquileres({
+        estado,
+        cliente,
+        vendedor,
+        search,
+        soporte_id,
+        fecha_inicio,
+        fecha_fin,
+        page,
+        limit: pageSize
+      })
+    }
 
     console.log('📊 Alquileres data length:', result.data.length)
     console.log('📊 Alquileres count:', result.count)

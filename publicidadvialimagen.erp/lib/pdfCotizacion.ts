@@ -166,7 +166,30 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   
   if (datos.vendedor) {
     const anchoFecha = pdf.getTextWidth(`Fecha: ${currentDate}`)
-    pdf.text(`Comercial: ${datos.vendedor}`, xPosition + anchoFecha + 15, yPosition)
+    const textoComercial = datos.vendedorNumero 
+      ? `Comercial: ${datos.vendedor} - ${datos.vendedorNumero}`
+      : `Comercial: ${datos.vendedor}`
+    
+    // Debug: verificar que el número se esté pasando
+    console.log('📞 [generarPDFCotizacion] vendedor:', datos.vendedor)
+    console.log('📞 [generarPDFCotizacion] vendedorNumero:', datos.vendedorNumero)
+    console.log('📞 [generarPDFCotizacion] textoComercial:', textoComercial)
+    
+    // Verificar que el texto no se salga de la página
+    const anchoTextoComercial = pdf.getTextWidth(textoComercial)
+    const posicionInicioComercial = xPosition + anchoFecha + 15
+    const anchoDisponible = pageWidth - posicionInicioComercial - 15 // Margen derecho
+    
+    if (anchoTextoComercial > anchoDisponible) {
+      // Si el texto es muy largo, poner el número en la siguiente línea
+      pdf.text(`Comercial: ${datos.vendedor}`, posicionInicioComercial, yPosition)
+      if (datos.vendedorNumero) {
+        yPosition += 5
+        pdf.text(`Tel: ${datos.vendedorNumero}`, posicionInicioComercial, yPosition)
+      }
+    } else {
+      pdf.text(textoComercial, posicionInicioComercial, yPosition)
+    }
   }
   
   yPosition += 6
@@ -596,7 +619,10 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
   
   if (datos.vendedor) {
     const anchoFecha = pdf.getTextWidth(`Fecha: ${currentDate}`)
-    pdf.text(`Comercial: ${datos.vendedor}`, xPosition + anchoFecha + 15, yPosition)
+    const textoComercial = datos.vendedorNumero 
+      ? `Comercial: ${datos.vendedor} - ${datos.vendedorNumero}`
+      : `Comercial: ${datos.vendedor}`
+    pdf.text(textoComercial, xPosition + anchoFecha + 15, yPosition)
   }
   
   yPosition += 6

@@ -16,6 +16,7 @@ export type Cotizacion = {
   plazo: string | null;
   cantidad_items: number | null;
   lineas_cotizacion: number | null;
+  requiere_nueva_aprobacion: boolean | null;
   fecha_creacion: string;
   fecha_actualizacion: string;
 };
@@ -35,6 +36,7 @@ export interface CotizacionInput {
   plazo?: string | null;
   cantidad_items?: number;
   lineas_cotizacion?: number;
+  requiere_nueva_aprobacion?: boolean;
 }
 
 // Obtener todas las cotizaciones con filtros opcionales
@@ -255,6 +257,7 @@ export async function updateCotizacion(
   if (cotizacion.plazo !== undefined) updateData.plazo = cotizacion.plazo;
   if (cotizacion.cantidad_items !== undefined) updateData.cantidad_items = cotizacion.cantidad_items;
   if (cotizacion.lineas_cotizacion !== undefined) updateData.lineas_cotizacion = cotizacion.lineas_cotizacion;
+  if (cotizacion.requiere_nueva_aprobacion !== undefined) updateData.requiere_nueva_aprobacion = cotizacion.requiere_nueva_aprobacion;
 
   // Actualizar fecha_actualizacion automáticamente
   updateData.fecha_actualizacion = new Date().toISOString();

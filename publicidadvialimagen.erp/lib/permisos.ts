@@ -2,10 +2,11 @@ import { getSupabaseServer } from "./supabaseServer";
 
 export interface PermisosMatrix {
   [modulo: string]: {
-    ver: boolean;
-    editar: boolean;
-    eliminar: boolean;
-    admin: boolean;
+    ver?: boolean;
+    editar?: boolean;
+    eliminar?: boolean;
+    admin?: boolean;
+    [accion: string]: boolean | undefined; // Permite acciones personalizadas (permisos técnicos)
   };
 }
 
@@ -29,14 +30,17 @@ export async function getPermisos(userId: string, userEmail?: string): Promise<P
     const permisosMatrix: PermisosMatrix = {};
     (permisosData || []).forEach(permiso => {
       if (!permisosMatrix[permiso.modulo]) {
-        permisosMatrix[permiso.modulo] = {
-          ver: false,
-          editar: false,
-          eliminar: false,
-          admin: false,
-        };
+        permisosMatrix[permiso.modulo] = {};
       }
-      permisosMatrix[permiso.modulo][permiso.accion as keyof typeof permisosMatrix[string]] = true;
+      // Para módulos normales, inicializar acciones estándar si no existen
+      if (permiso.modulo !== 'tecnico') {
+        if (permisosMatrix[permiso.modulo].ver === undefined) permisosMatrix[permiso.modulo].ver = false;
+        if (permisosMatrix[permiso.modulo].editar === undefined) permisosMatrix[permiso.modulo].editar = false;
+        if (permisosMatrix[permiso.modulo].eliminar === undefined) permisosMatrix[permiso.modulo].eliminar = false;
+        if (permisosMatrix[permiso.modulo].admin === undefined) permisosMatrix[permiso.modulo].admin = false;
+      }
+      // Asignar el permiso (funciona para acciones estándar y personalizadas)
+      permisosMatrix[permiso.modulo][permiso.accion] = true;
     });
 
     return permisosMatrix;
@@ -72,14 +76,17 @@ export async function getPermisos(userId: string, userEmail?: string): Promise<P
   const permisosMatrix: PermisosMatrix = {};
   (permisosData || []).forEach(permiso => {
     if (!permisosMatrix[permiso.modulo]) {
-      permisosMatrix[permiso.modulo] = {
-        ver: false,
-        editar: false,
-        eliminar: false,
-        admin: false,
-      };
+      permisosMatrix[permiso.modulo] = {};
     }
-    permisosMatrix[permiso.modulo][permiso.accion as keyof typeof permisosMatrix[string]] = permisoIds.includes(permiso.id);
+    // Para módulos normales, inicializar acciones estándar si no existen
+    if (permiso.modulo !== 'tecnico') {
+      if (permisosMatrix[permiso.modulo].ver === undefined) permisosMatrix[permiso.modulo].ver = false;
+      if (permisosMatrix[permiso.modulo].editar === undefined) permisosMatrix[permiso.modulo].editar = false;
+      if (permisosMatrix[permiso.modulo].eliminar === undefined) permisosMatrix[permiso.modulo].eliminar = false;
+      if (permisosMatrix[permiso.modulo].admin === undefined) permisosMatrix[permiso.modulo].admin = false;
+    }
+    // Asignar el permiso (funciona para acciones estándar y personalizadas)
+    permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
   });
 
   // Aplicar lógica: si admin=true, forzar todos a true
@@ -100,13 +107,18 @@ export async function getPermisos(userId: string, userEmail?: string): Promise<P
 export function tienePermiso(
   permisos: PermisosMatrix,
   modulo: string,
-  accion: "ver" | "editar" | "eliminar" | "admin"
+  accion: "ver" | "editar" | "eliminar" | "admin" | string
 ): boolean {
   const moduloPermisos = permisos[modulo];
   if (!moduloPermisos) return false;
 
-  // Si tiene admin, tiene todos los permisos
-  if (moduloPermisos.admin) return true;
+  // Si tiene admin (solo para módulos no técnicos), tiene todos los permisos estándar
+  if (modulo !== 'tecnico' && moduloPermisos.admin) {
+    // Para módulos normales, admin da acceso a ver, editar, eliminar
+    if (accion === 'ver' || accion === 'editar' || accion === 'eliminar' || accion === 'admin') {
+      return true;
+    }
+  }
 
   return moduloPermisos[accion] || false;
 }

@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabaseServer";
 
 // Tipo base igual a la tabla real de Supabase
 export type Cotizacion = {
@@ -313,48 +313,56 @@ export async function deleteCotizacion(id: string) {
   return { success: true };
 }
 
-// Generar siguiente código de cotización en formato COT-MM-AA-00000
+/**
+ * Generar siguiente código de cotización en formato COT-MM-AA-00000
+ * 
+ * D1: Usa RPC seguro en lugar de limit=10000 + buscar máximo
+ * 
+ * Esta función ahora usa la función RPC generar_codigo_cotizacion()
+ * que utiliza la tabla secuencias para generar códigos de forma segura
+ * y atómica, evitando race conditions.
+ * 
+ * Mantiene EXACTAMENTE el mismo formato de código visible para el usuario.
+ */
 export async function generarSiguienteCodigoCotizacion(): Promise<string> {
   try {
-    // Obtener mes y año actual
-    const ahora = new Date();
-    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0'); // 01-12
-    const año = ahora.getFullYear().toString().slice(-2); // Últimos 2 dígitos del año
+    const supabase = getSupabaseAdmin()
+    
+    // D1: Usar RPC seguro en lugar de limit=10000
+    const { data, error } = await supabase.rpc('generar_codigo_cotizacion')
 
-    // Obtener todas las cotizaciones
-    const result = await getCotizaciones({ limit: 10000 });
-    const cotizaciones = result.data;
+    if (error) {
+      console.error('❌ [generarSiguienteCodigoCotizacion] Error en RPC:', error)
+      throw error
+    }
 
-    // Filtrar cotizaciones con el formato COT-MM-AA-XXXXX del mes/año actual
-    const patronActual = new RegExp(`^COT-${mes}-${año}-(\\d+)$`);
-    const numeros = cotizaciones
-      .map((c) => {
-        if (!c.codigo) return null;
-        const match = c.codigo.match(patronActual);
-        return match ? parseInt(match[1], 10) : null;
-      })
-      .filter((n) => n !== null && !isNaN(n!)) as number[];
+    if (!data) {
+      throw new Error('RPC generar_codigo_cotizacion no retornó datos')
+    }
 
-    // Número inicial mínimo: 1500
-    const numeroInicial = 1500;
+    // El RPC debe retornar el código en el formato COT-MM-AA-00000
+    // IMPORTANTE: Retornar exactamente lo que devuelve el RPC, sin formateo adicional
+    const codigo = String(data).trim()
 
-    // Si no hay cotizaciones del mes/año actual, empezar desde 1500
-    // Si hay cotizaciones, usar el máximo entre el número máximo encontrado + 1 y 1500
-    const siguiente = numeros.length > 0
-      ? Math.max(Math.max(...numeros) + 1, numeroInicial)
-      : numeroInicial;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [generarSiguienteCodigoCotizacion] Código generado por RPC:', codigo)
+      console.log('✅ [generarSiguienteCodigoCotizacion] Tipo de dato:', typeof codigo)
+    }
 
-    // Formatear con 5 dígitos
-    const numeroFormateado = siguiente.toString().padStart(5, '0');
-
-    return `COT-${mes}-${año}-${numeroFormateado}`;
+    // Retornar el código exactamente como viene del RPC, sin modificar
+    return codigo
   } catch (error) {
-    console.error("Error generando código de cotización:", error);
+    console.error("❌ [generarSiguienteCodigoCotizacion] Error generando código de cotización:", error)
+    
     // Fallback: retornar código con formato nuevo pero número 01500
-    const ahora = new Date();
-    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0');
-    const año = ahora.getFullYear().toString().slice(-2);
-    return `COT-${mes}-${año}-01500`;
+    // Este fallback mantiene el mismo comportamiento que antes
+    const ahora = new Date()
+    const mes = (ahora.getMonth() + 1).toString().padStart(2, '0')
+    const año = ahora.getFullYear().toString().slice(-2)
+    const codigoFallback = `COT-${mes}-${año}-01500`
+    
+    console.warn(`⚠️ [generarSiguienteCodigoCotizacion] Usando fallback: ${codigoFallback}`)
+    return codigoFallback
   }
 }
 

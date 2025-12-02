@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 
 export interface PermisosMatrix {
   [modulo: string]: {
-    ver: boolean;
-    editar: boolean;
-    eliminar: boolean;
-    admin: boolean;
+    ver?: boolean;
+    editar?: boolean;
+    eliminar?: boolean;
+    admin?: boolean;
+    [accion: string]: boolean | undefined; // Permite acciones personalizadas (permisos técnicos)
   };
 }
 
@@ -50,10 +51,16 @@ export function usePermisos() {
     const moduloPermisos = permisos[modulo];
     if (!moduloPermisos) return false;
 
-    // Si tiene admin, tiene todos los permisos
-    if (moduloPermisos.admin) return true;
+    // Si tiene admin (solo para módulos no técnicos), tiene todos los permisos estándar
+    if (modulo !== 'tecnico' && moduloPermisos.admin) {
+      // Para módulos normales, admin da acceso a ver, editar, eliminar
+      if (accion === 'ver' || accion === 'editar' || accion === 'eliminar' || accion === 'admin') {
+        return true;
+      }
+    }
 
-    return moduloPermisos[accion as keyof typeof moduloPermisos] || false;
+    // Acceder directamente a la propiedad (funciona para acciones estándar y personalizadas)
+    return (moduloPermisos as Record<string, boolean | undefined>)[accion] || false;
   };
 
   // Helper para verificar si puede ver el módulo
@@ -78,6 +85,15 @@ export function usePermisos() {
 
   // Helper para verificar funciones técnicas
   const tieneFuncionTecnica = (accion: string): boolean => {
+    // Si tiene admin en cualquier módulo, tiene todos los permisos técnicos
+    const tieneAdmin = Object.keys(permisos).some(modulo => 
+      modulo !== 'tecnico' && permisos[modulo]?.admin === true
+    );
+    
+    if (tieneAdmin) {
+      return true;
+    }
+    
     return tienePermiso("tecnico", accion);
   };
 

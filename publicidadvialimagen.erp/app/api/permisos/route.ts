@@ -44,6 +44,14 @@ export async function GET(request: NextRequest) {
         }
         permisosMatrix[permiso.modulo][permiso.accion] = true;
       });
+      
+      // Log para depuración de permisos técnicos
+      const permisosTecnicos = permisosMatrix['tecnico'] || {};
+      console.log('🔍 [Permisos API] Desarrollador - Permisos técnicos:', {
+        total: Object.keys(permisosTecnicos).length,
+        permisos: permisosTecnicos,
+        'ver historial soportes': permisosTecnicos['ver historial soportes']
+      });
 
       // Asegurar que sitio_web tenga todos los permisos si no existe
       if (!permisosMatrix['sitio_web'] && !permisosMatrix['sitio'] && !permisosMatrix['web']) {
@@ -95,13 +103,39 @@ export async function GET(request: NextRequest) {
       permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
     });
 
-    // Aplicar lógica: si admin=true, forzar todos a true
+    // Aplicar lógica: si admin=true en cualquier módulo, dar todos los permisos técnicos
+    const tieneAdminEnAlgunModulo = Object.keys(permisosMatrix).some(modulo => 
+      modulo !== 'tecnico' && permisosMatrix[modulo].admin === true
+    );
+
+    // Si tiene admin en algún módulo, dar todos los permisos técnicos
+    if (tieneAdminEnAlgunModulo) {
+      const permisosTecnicos = permisosData?.filter(p => p.modulo === 'tecnico') || [];
+      permisosTecnicos.forEach(permiso => {
+        if (!permisosMatrix['tecnico']) {
+          permisosMatrix['tecnico'] = {};
+        }
+        permisosMatrix['tecnico'][permiso.accion] = true;
+      });
+      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados:', permisosTecnicos.length);
+    }
+
+    // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)
     Object.keys(permisosMatrix).forEach(modulo => {
-      if (permisosMatrix[modulo].admin) {
+      if (modulo !== 'tecnico' && permisosMatrix[modulo].admin) {
         permisosMatrix[modulo].ver = true;
         permisosMatrix[modulo].editar = true;
         permisosMatrix[modulo].eliminar = true;
       }
+    });
+
+    // Log para depuración de permisos técnicos
+    const permisosTecnicos = permisosMatrix['tecnico'] || {};
+    console.log('🔍 [Permisos API] Permisos técnicos para usuario:', {
+      userId,
+      tieneAdmin: tieneAdminEnAlgunModulo,
+      permisosTecnicos,
+      'ver historial soportes': permisosTecnicos['ver historial soportes']
     });
 
     // Log para depuración del módulo sitio

@@ -60,18 +60,48 @@ export function useProductoVariantes(productoId: string | null) {
         ? data.data 
         : []
       
+      // Función auxiliar para normalizar valores que pueden venir como objetos vacíos
+      const normalizeValue = (value: any): number | null => {
+        if (value === null || value === undefined) return null
+        if (typeof value === 'number' && !isNaN(value) && isFinite(value)) return value
+        if (typeof value === 'string') {
+          const parsed = parseFloat(value)
+          if (!isNaN(parsed) && isFinite(parsed)) return parsed
+        }
+        // Si es un objeto vacío o cualquier otro tipo, retornar null
+        return null
+      }
+
       // Asegurar que todas las variantes tengan los campos necesarios
       const variantesValidas = variantesData
         .filter((v: any) => v && v.id && v.combinacion)
-        .map((v: any) => ({
-          ...v,
-          coste_override: v.coste_override ?? null,
-          precio_override: v.precio_override ?? null,
-          margen_override: v.margen_override ?? null,
-          precio_variante: v.precio_variante ?? null,
-          coste_calculado: v.coste_calculado ?? v.coste_base ?? 0,
-          precio_calculado: v.precio_calculado ?? v.precio_base ?? 0
-        }))
+        .map((v: any) => {
+          try {
+            return {
+              ...v,
+              coste_override: normalizeValue(v.coste_override),
+              precio_override: normalizeValue(v.precio_override),
+              margen_override: normalizeValue(v.margen_override),
+              precio_variante: v.precio_variante && typeof v.precio_variante === 'object' && Object.keys(v.precio_variante).length > 0 
+                ? v.precio_variante 
+                : null,
+              coste_calculado: normalizeValue(v.coste_calculado) ?? normalizeValue(v.coste_base) ?? 0,
+              precio_calculado: normalizeValue(v.precio_calculado) ?? normalizeValue(v.precio_base) ?? 0
+            }
+          } catch (error) {
+            console.error('Error normalizando variante:', v, error)
+            // Retornar una variante con valores por defecto si hay error
+            return {
+              ...v,
+              coste_override: null,
+              precio_override: null,
+              margen_override: null,
+              precio_variante: null,
+              coste_calculado: 0,
+              precio_calculado: 0
+            }
+          }
+        })
       
       setVariantes(variantesValidas)
       return variantesValidas
@@ -266,19 +296,49 @@ export function useProductoVariantes(productoId: string | null) {
       const data = await response.json()
       const variantesRegeneradas = Array.isArray(data.variantes) ? data.variantes : []
       
+      // Función auxiliar para normalizar valores que pueden venir como objetos vacíos
+      const normalizeValue = (value: any): number | null => {
+        if (value === null || value === undefined) return null
+        if (typeof value === 'number' && !isNaN(value) && isFinite(value)) return value
+        if (typeof value === 'string') {
+          const parsed = parseFloat(value)
+          if (!isNaN(parsed) && isFinite(parsed)) return parsed
+        }
+        // Si es un objeto vacío o cualquier otro tipo, retornar null
+        return null
+      }
+
       // Actualizar estado con las variantes regeneradas
       if (variantesRegeneradas.length > 0) {
         const variantesValidas = variantesRegeneradas
           .filter((v: any) => v && v.id && v.combinacion)
-          .map((v: any) => ({
-            ...v,
-            coste_override: v.coste_override ?? null,
-            precio_override: v.precio_override ?? null,
-            margen_override: v.margen_override ?? null,
-            precio_variante: v.precio_variante ?? null,
-            coste_calculado: v.coste_calculado ?? v.coste_base ?? 0,
-            precio_calculado: v.precio_calculado ?? v.precio_base ?? 0
-          }))
+          .map((v: any) => {
+            try {
+              return {
+                ...v,
+                coste_override: normalizeValue(v.coste_override),
+                precio_override: normalizeValue(v.precio_override),
+                margen_override: normalizeValue(v.margen_override),
+                precio_variante: v.precio_variante && typeof v.precio_variante === 'object' && Object.keys(v.precio_variante).length > 0 
+                  ? v.precio_variante 
+                  : null,
+                coste_calculado: normalizeValue(v.coste_calculado) ?? normalizeValue(v.coste_base) ?? 0,
+                precio_calculado: normalizeValue(v.precio_calculado) ?? normalizeValue(v.precio_base) ?? 0
+              }
+            } catch (error) {
+              console.error('Error normalizando variante regenerada:', v, error)
+              // Retornar una variante con valores por defecto si hay error
+              return {
+                ...v,
+                coste_override: null,
+                precio_override: null,
+                margen_override: null,
+                precio_variante: null,
+                coste_calculado: 0,
+                precio_calculado: 0
+              }
+            }
+          })
         
         setVariantes(variantesValidas)
         toast.success(`${variantesValidas.length} variante(s) generada(s)`)

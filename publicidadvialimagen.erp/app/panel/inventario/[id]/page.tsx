@@ -49,7 +49,6 @@ interface Producto {
   unidad_medida: string
   coste: number
   precio_venta: number
-  cantidad: number
   mostrar_en_web?: boolean
 }
 
@@ -65,7 +64,6 @@ type ProductoFormState = {
   unidad_medida: string
   coste: string
   precio_venta: string
-  cantidad: string
   mostrar_en_web: boolean
 }
 
@@ -106,24 +104,20 @@ export default function ProductoDetailPage() {
   const savedCostRef = useRef<number | null>(null)
   const lastCalculatedCostRef = useRef(0)
   
-  // Estados para calculadora de precios
-  const [priceRowIdCounter, setPriceRowIdCounter] = useState(5)
-  const [priceRows, setPriceRows] = useState([
-    { id: 1, campo: "Coste", porcentaje: 0, valor: 0 },
-    { id: 2, campo: "Utilidad (U)", porcentaje: 28, valor: 0 },
-    { id: 3, campo: "Comisión (C)", porcentaje: 8, valor: 0 },
-    { id: 4, campo: "Factura (F)", porcentaje: 16, valor: 0 }
-  ])
-  const [totalPrice, setTotalPrice] = useState(0)
-  const [editablePrice, setEditablePrice] = useState<string>("")
-  const isPriceManuallyEditedRef = useRef(false)
-  const hasManualPriceRef = useRef(false)
-  const savedPriceRef = useRef<number | null>(null)
-  const lastCalculatedPriceRef = useRef(0)
+  // Estados para calculadora de precios (estructura estática)
+  const defaultPriceRows = [
+    { id: 1, campo: "Coste", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
+    { id: 2, campo: "Precio", porcentaje: null, valor: 0, editable: true, porcentajeConfig: null },
+    { id: 3, campo: "Factura", porcentaje: 16, valor: 0, editable: true, porcentajeConfig: 16 },
+    { id: 4, campo: "IUE", porcentaje: 2, valor: 0, editable: true, porcentajeConfig: 2 },
+    { id: 5, campo: "Costos totales", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
+    { id: 6, campo: "Utilidad bruta", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
+    { id: 7, campo: "Comision", porcentaje: 12, valor: 0, editable: true, porcentajeConfig: 12 },
+    { id: 8, campo: "Utilidad neta", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null }
+  ]
+  const [priceRows, setPriceRows] = useState(defaultPriceRows)
   const [isApplyingPrice, setIsApplyingPrice] = useState(false)
   const [priceApplied, setPriceApplied] = useState(false)
-  const [utilidadReal, setUtilidadReal] = useState<number>(0)
-  const [objetivoUtilidadReal, setObjetivoUtilidadReal] = useState<string>("")
   
   // Estados para variantes del producto (solo visualización, importadas de recursos)
   const [variantes, setVariantes] = useState<any[]>([])
@@ -146,19 +140,19 @@ export default function ProductoDetailPage() {
   // Estados para calculadora de precios por variante
   const [calculadoraVarianteOpen, setCalculadoraVarianteOpen] = useState(false)
   const [varianteCalculadora, setVarianteCalculadora] = useState<any>(null)
-  const [priceRowsVariante, setPriceRowsVariante] = useState([
-    { id: 1, campo: "Coste", porcentaje: 0, valor: 0 },
-    { id: 2, campo: "Utilidad (U)", porcentaje: 28, valor: 0 },
-    { id: 3, campo: "Comisión (C)", porcentaje: 8, valor: 0 },
-    { id: 4, campo: "Factura (F)", porcentaje: 16, valor: 0 }
-  ])
-  const [priceRowIdCounterVariante, setPriceRowIdCounterVariante] = useState(5)
-  const [editablePriceVariante, setEditablePriceVariante] = useState<string>("")
-  const isPriceManuallyEditedVarianteRef = useRef(false)
+  const defaultPriceRowsVariante = [
+    { id: 1, campo: "Coste", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
+    { id: 2, campo: "Precio", porcentaje: null, valor: 0, editable: true, porcentajeConfig: null },
+    { id: 3, campo: "Factura", porcentaje: 16, valor: 0, editable: true, porcentajeConfig: 16 },
+    { id: 4, campo: "IUE", porcentaje: 2, valor: 0, editable: true, porcentajeConfig: 2 },
+    { id: 5, campo: "Costos totales", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
+    { id: 6, campo: "Utilidad bruta", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
+    { id: 7, campo: "Comision", porcentaje: 12, valor: 0, editable: true, porcentajeConfig: 12 },
+    { id: 8, campo: "Utilidad neta", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null }
+  ]
+  const [priceRowsVariante, setPriceRowsVariante] = useState(defaultPriceRowsVariante)
   const [isApplyingPriceVariante, setIsApplyingPriceVariante] = useState(false)
   const [priceAppliedVariante, setPriceAppliedVariante] = useState(false)
-  const [utilidadRealVariante, setUtilidadRealVariante] = useState<number>(0)
-  const [objetivoUtilidadRealVariante, setObjetivoUtilidadRealVariante] = useState<string>("")
   
   // Estados para tabla de proveedores
   const [proveedorIdCounter, setProveedorIdCounter] = useState(1)
@@ -183,7 +177,6 @@ export default function ProductoDetailPage() {
     unidad_medida: "unidad",
     coste: "0",
     precio_venta: "0",
-    cantidad: "0",
     mostrar_en_web: false
   })
   const previewUrlRef = useRef<string | null>(null)
@@ -233,51 +226,12 @@ export default function ProductoDetailPage() {
           unidad_medida: data.unidad_medida || "unidad",
           coste: data.coste?.toString() || "0",
           precio_venta: data.precio_venta?.toString() || "0",
-          cantidad: data.cantidad?.toString() || "0",
           mostrar_en_web: data.mostrar_en_web ?? false
         })
-        // Cargar variantes desde el producto
-        if (data.variantes && Array.isArray(data.variantes)) {
-          setVariantes(data.variantes)
-          // Regenerar variantes en la BD si hay definiciones y tenemos un ID
-          if (data.variantes.length > 0 && id) {
-            setTimeout(async () => {
-              try {
-                // Convertir variantes al formato correcto que espera el backend
-                const variantesLimpias = data.variantes.map((v: any) => ({
-                  nombre: v.nombre,
-                  valores: v.posibilidades ?? v.valores ?? []
-                }))
-                
-                console.log(">>> Variantes limpias al cargar:", variantesLimpias)
-                
-                const regenerarResponse = await fetch(`/api/productos/variantes`, {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    producto_id: id,
-                    action: 'regenerar',
-                    variantes_definicion: variantesLimpias
-                  })
-                })
-                
-                if (regenerarResponse.ok) {
-                  console.log('✅ Variantes regeneradas al cargar producto')
-                  // Recargar variantes después de regenerar
-                  setTimeout(() => {
-                    getVariantes()
-                  }, 500)
-                }
-              } catch (error) {
-                console.error('Error regenerando variantes al cargar:', error)
-              }
-            }, 500)
-          }
-        } else {
-          setVariantes([])
-        }
+        // NOTA: Las variantes ahora se construyen desde los recursos activos en la receta (costRows)
+        // después de que se carguen los costRows. Esto asegura que solo se usen variantes de recursos activos.
+        // Inicializar variantes vacías por ahora, se actualizarán cuando se carguen los costRows
+        setVariantes([])
         
         // Cargar variantes del producto desde la BD
         setTimeout(() => {
@@ -285,30 +239,175 @@ export default function ProductoDetailPage() {
         }, 1000)
         
         // Cargar calculadora de precios desde el producto
-        if (data.calculadora_de_precios) {
+        // Priorizar calculadora_precios (nuevo formato), luego calculadora_de_precios (formato antiguo)
+        const calculadoraData = data.calculadora_precios || data.calculadora_de_precios
+        if (calculadoraData) {
           try {
-            const calcData = typeof data.calculadora_de_precios === 'string' 
-              ? JSON.parse(data.calculadora_de_precios) 
-              : data.calculadora_de_precios
+            const calcData = typeof calculadoraData === 'string' 
+              ? JSON.parse(calculadoraData) 
+              : calculadoraData
+            
+            // FIX 4: Cargar calculadora de costes SIEMPRE, incluso si está vacía
+            if (calcData.calculadoraCostes) {
+              console.log('📋 Cargando calculadora de costes desde calculadora_precios')
+              const costRowsFromCalc = calcData.calculadoraCostes.costRows || []
+              const totalCostFromCalc = calcData.calculadoraCostes.totalCost || 0
+              
+              // Restaurar totalCost si existe
+              if (totalCostFromCalc > 0) {
+                setTotalCost(totalCostFromCalc)
+                console.log('✅ TotalCost restaurado:', totalCostFromCalc)
+              }
+              
+              // Si hay costRows, restaurarlos
+              if (Array.isArray(costRowsFromCalc) && costRowsFromCalc.length > 0) {
+                // Buscar recursos completos para restaurar costRows
+                const recursosResponse = await fetch('/api/recursos')
+                if (recursosResponse.ok) {
+                  const recursosResult = await recursosResponse.json()
+                  const todosLosRecursos = recursosResult.data || []
+                  
+                  const restoredCostRows = costRowsFromCalc.map((row: any, index: number) => {
+                    const recursoCompleto = row.selectedRecurso?.id 
+                      ? todosLosRecursos.find((r: any) => r.id === row.selectedRecurso.id)
+                      : null
+                    
+                    return {
+                      id: row.id || (index + 1),
+                      selectedRecurso: recursoCompleto || null,
+                      cantidad: row.cantidad || 1,
+                      unidad: row.unidad || "",
+                      searchTerm: row.searchTerm || recursoCompleto?.nombre || "",
+                      costeUnitarioGuardado: row.costeUnitarioGuardado || null
+                    }
+                  })
+                  
+                  if (restoredCostRows.length > 0) {
+                    const maxId = Math.max(...restoredCostRows.map((r: any) => r.id || 0))
+                    costRowIdCounterRef.current = maxId + 1
+                    setCostRows(restoredCostRows)
+                    console.log('✅ Calculadora de costes restaurada:', restoredCostRows.length, 'filas')
+                  
+                  // Construir variantes desde los recursos activos en la receta
+                  const variantesDeRecursosActivos: any[] = []
+                  restoredCostRows.forEach((row: any) => {
+                    if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
+                      let variantesArray: any[] = []
+                      
+                      if (Array.isArray(row.selectedRecurso.variantes)) {
+                        variantesArray = row.selectedRecurso.variantes
+                      } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
+                        if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
+                          variantesArray = row.selectedRecurso.variantes.variantes
+                        }
+                      } else if (typeof row.selectedRecurso.variantes === 'string') {
+                        try {
+                          const parsed = JSON.parse(row.selectedRecurso.variantes)
+                          if (Array.isArray(parsed)) {
+                            variantesArray = parsed
+                          } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
+                            variantesArray = parsed.variantes
+                          }
+                        } catch (e) {
+                          console.error('Error parseando variantes del recurso:', e)
+                        }
+                      }
+                      
+                      // Agregar variantes con el recurso_id para tracking
+                      variantesArray.forEach((v: any) => {
+                        variantesDeRecursosActivos.push({
+                          ...v,
+                          recurso_id: row.selectedRecurso.id,
+                          recurso_nombre: row.selectedRecurso.nombre
+                        })
+                      })
+                    }
+                  })
+                  
+                  // Actualizar el estado de variantes con las variantes de los recursos activos
+                  setVariantes(variantesDeRecursosActivos)
+                  console.log('✅ Variantes construidas desde recursos activos:', variantesDeRecursosActivos.length)
+                  
+                  // Regenerar variantes en la BD si hay variantes y tenemos un ID
+                  if (variantesDeRecursosActivos.length > 0 && id) {
+                    setTimeout(async () => {
+                      try {
+                        // Convertir variantes al formato correcto que espera el backend
+                        const variantesLimpias = variantesDeRecursosActivos.map((v: any) => ({
+                          nombre: v.nombre,
+                          valores: v.posibilidades ?? v.valores ?? []
+                        }))
+                        
+                        console.log(">>> Regenerando variantes desde recursos activos al cargar:", variantesLimpias)
+                        
+                        const regenerarResponse = await fetch(`/api/productos/variantes`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({
+                            producto_id: id,
+                            action: 'regenerar',
+                            variantes_definicion: variantesLimpias
+                          })
+                        })
+                        
+                        if (regenerarResponse.ok) {
+                          console.log('✅ Variantes regeneradas al cargar producto desde recursos activos')
+                          // Recargar variantes después de regenerar
+                          setTimeout(() => {
+                            getVariantes()
+                          }, 500)
+                        }
+                      } catch (error) {
+                        console.error('Error regenerando variantes al cargar:', error)
+                      }
+                    }, 500)
+                  }
+                }
+              }
+            }
+            }
             
             if (calcData.priceRows && Array.isArray(calcData.priceRows)) {
-              setPriceRows(calcData.priceRows)
-              setPriceRowIdCounter(Math.max(...calcData.priceRows.map((r: any) => r.id || 0), 5) + 1)
+              // Mapear filas cargadas a la estructura estática
+              const loadedRows = defaultPriceRows.map(defaultRow => {
+                // Manejar compatibilidad: "Fact" antiguo -> "Factura"
+                let loadedRow = calcData.priceRows.find((r: any) => r.campo === defaultRow.campo)
+                if (!loadedRow && defaultRow.campo === "Factura") {
+                  loadedRow = calcData.priceRows.find((r: any) => r.campo === "Fact")
+                }
+                
+                if (loadedRow) {
+                  const result = {
+                    ...defaultRow,
+                    porcentaje: loadedRow.porcentaje ?? defaultRow.porcentaje,
+                    valor: parseNum(loadedRow.valor ?? 0)
+                  }
+                  // Si tiene porcentajeConfig, mantenerlo
+                  if (loadedRow.porcentajeConfig !== undefined) {
+                    (result as any).porcentajeConfig = loadedRow.porcentajeConfig
+                  } else if (["Factura", "IUE", "Comision"].includes(defaultRow.campo)) {
+                    // Si no tiene porcentajeConfig pero es un campo editable, usar el porcentaje como config
+                    (result as any).porcentajeConfig = loadedRow.porcentaje ?? defaultRow.porcentaje
+                  }
+                  return result
+                }
+                return defaultRow
+              })
+              
+              setPriceRows(loadedRows)
+              
+              // Si hay un precio, recalcular todo
+              const precioRow = loadedRows.find((r: any) => r.campo === "Precio")
+              if (precioRow && precioRow.valor > 0) {
+                setTimeout(() => {
+                  setPriceRows(prev => recalcFromTargetPrice(precioRow.valor, prev))
+                }, 100)
+              }
             }
-            if (calcData.totalPrice !== undefined) {
-              setTotalPrice(calcData.totalPrice)
-              setEditablePrice(calcData.totalPrice.toFixed(2))
-              isPriceManuallyEditedRef.current = false // Resetear cuando se carga desde guardado
-            }
-            if (calcData.utilidadReal !== undefined) {
-              setUtilidadReal(calcData.utilidadReal)
-            }
-            if (calcData.objetivoUtilidadReal !== undefined && calcData.objetivoUtilidadReal !== null) {
-              setObjetivoUtilidadReal(calcData.objetivoUtilidadReal.toString())
-            }
-            console.log('✅ Calculadora de precios cargada desde Airtable')
           } catch (e) {
-            console.error('❌ Error cargando calculadora de precios:', e)
+            console.error('Error cargando calculadora de precios:', e)
           }
         }
         
@@ -337,8 +436,21 @@ export default function ProductoDetailPage() {
 
         // Cargar receta y restaurar recursos en la calculadora de costes
         // IMPORTANTE: Solo cargar recursos, NO proveedores
-        if (data.receta && Array.isArray(data.receta) && data.receta.length > 0) {
-          console.log('📋 Cargando receta con', data.receta.length, 'items')
+        // La receta puede venir como array o como objeto con items (compatibilidad)
+        let recetaArray: any[] = []
+        if (data.receta) {
+          if (Array.isArray(data.receta)) {
+            // Formato correcto: array directo
+            recetaArray = data.receta
+          } else if (typeof data.receta === 'object' && data.receta.items && Array.isArray(data.receta.items)) {
+            // Formato antiguo: objeto con items (compatibilidad)
+            console.warn('⚠️ Receta en formato antiguo (objeto), convirtiendo a array')
+            recetaArray = data.receta.items
+          }
+        }
+        
+        if (recetaArray.length > 0) {
+          console.log('📋 Cargando receta con', recetaArray.length, 'items')
           // Primero obtener los recursos completos desde la API
           const recursosResponse = await fetch('/api/recursos')
           if (recursosResponse.ok) {
@@ -346,7 +458,7 @@ export default function ProductoDetailPage() {
             const todosLosRecursos = recursosResult.data || []
             
             // Filtrar solo items que sean recursos (tienen recurso_id, no son proveedores)
-            const itemsReceta = data.receta.filter((item: any) => 
+            const itemsReceta = recetaArray.filter((item: any) => 
               item.recurso_id && !item.empresa // Excluir proveedores (que tienen empresa)
             )
             
@@ -370,7 +482,11 @@ export default function ProductoDetailPage() {
                 selectedRecurso: recursoCompleto || null,
                 cantidad: item.cantidad || 1,
                 unidad: item.unidad || (recursoCompleto?.unidad_medida || ""),
-                searchTerm: item.recurso_nombre || recursoCompleto?.nombre || ""
+                searchTerm: item.recurso_nombre || recursoCompleto?.nombre || "",
+                // Guardar el coste_unitario de la receta para usarlo directamente
+                costeUnitarioGuardado: item.coste_unitario !== undefined && item.coste_unitario !== null 
+                  ? Number(item.coste_unitario) 
+                  : null
               }
             })
             
@@ -515,22 +631,97 @@ export default function ProductoDetailPage() {
     }
   }
 
+  // Función de cálculo para calculadora de variantes (idéntica a la del producto)
+  const recalcFromTargetPriceVariante = (precioObjetivo: number, rowsIn: typeof priceRowsVariante) => {
+    const rows = JSON.parse(JSON.stringify(rowsIn))
+    const coste = parseNum(rows.find(r => r.campo === "Coste")?.valor ?? 0)
+
+    // Obtener porcentajes configurables
+    const facturaRow = rows.find(r => r.campo === "Factura")
+    const iueRow = rows.find(r => r.campo === "IUE")
+    const comisionRow = rows.find(r => r.campo === "Comision")
+    
+    const facturaPctConfig = parseNum(facturaRow?.porcentajeConfig ?? facturaRow?.porcentaje ?? 16)
+    const iuePctConfig = parseNum(iueRow?.porcentajeConfig ?? iueRow?.porcentaje ?? 2)
+    const comPctConfig = parseNum(comisionRow?.porcentajeConfig ?? comisionRow?.porcentaje ?? 12)
+
+    const facturaPct = facturaPctConfig / 100
+    const iuePct = iuePctConfig / 100
+
+    const facturaVal = round2(precioObjetivo * facturaPct)
+    const iueVal = round2(precioObjetivo * iuePct)
+
+    const costosTotales = round2(coste + facturaVal + iueVal)
+    const utilidadBruta = round2(precioObjetivo - costosTotales)
+    const comPct = comPctConfig / 100
+    const comisionVal = round2(utilidadBruta * comPct)
+    const utilidadNeta = round2(utilidadBruta - comisionVal)
+
+    // Calcular porcentajes sobre el precio para mostrar en la columna %
+    const costePct = precioObjetivo > 0 ? round2((coste / precioObjetivo) * 100) : 0
+    const facturaPctSobrePrecio = precioObjetivo > 0 ? round2((facturaVal / precioObjetivo) * 100) : 0
+    const iuePctSobrePrecio = precioObjetivo > 0 ? round2((iueVal / precioObjetivo) * 100) : 0
+    const costosTotalesPct = precioObjetivo > 0 ? round2((costosTotales / precioObjetivo) * 100) : 0
+    const utilidadBrutaPct = precioObjetivo > 0 ? round2((utilidadBruta / precioObjetivo) * 100) : 0
+    const comisionPctSobrePrecio = precioObjetivo > 0 ? round2((comisionVal / precioObjetivo) * 100) : 0
+    const utilidadNetaPct = precioObjetivo > 0 ? round2((utilidadNeta / precioObjetivo) * 100) : 0
+
+    rows.forEach(r => {
+      if (r.campo === "Coste") {
+        r.porcentaje = costePct
+      }
+      if (r.campo === "Precio") {
+        r.valor = precioObjetivo
+      }
+      if (r.campo === "Factura") {
+        r.valor = facturaVal
+        r.porcentaje = facturaPctSobrePrecio
+        r.porcentajeConfig = facturaPctConfig
+      }
+      if (r.campo === "IUE") {
+        r.valor = iueVal
+        r.porcentaje = iuePctSobrePrecio
+        r.porcentajeConfig = iuePctConfig
+      }
+      if (r.campo === "Costos totales") {
+        r.valor = costosTotales
+        r.porcentaje = costosTotalesPct
+      }
+      if (r.campo === "Utilidad bruta") {
+        r.valor = utilidadBruta
+        r.porcentaje = utilidadBrutaPct
+      }
+      if (r.campo === "Comision") {
+        r.valor = comisionVal
+        r.porcentaje = comisionPctSobrePrecio
+        r.porcentajeConfig = comPctConfig
+      }
+      if (r.campo === "Utilidad neta") {
+        r.valor = utilidadNeta
+        r.porcentaje = utilidadNetaPct
+      }
+    })
+
+    return rows
+  }
+
   // Funciones para calculadora de precios por variante
   const openCalculadoraVariante = (variante: any) => {
     setVarianteCalculadora(variante)
-    isPriceManuallyEditedVarianteRef.current = false // Resetear cuando se abre la calculadora
     
     // Inicializar calculadora con coste de la variante
     const costeVariante = getCosteFinal(variante)
     
-    // Si hay precio_variante guardada, usarla
-    let rowsIniciales = [
-      { id: 1, campo: "Coste", porcentaje: 0, valor: costeVariante },
-      { id: 2, campo: "Utilidad (U)", porcentaje: 28, valor: 0 },
-      { id: 3, campo: "Comisión (C)", porcentaje: 8, valor: 0 },
-      { id: 4, campo: "Factura (F)", porcentaje: 16, valor: 0 }
-    ]
+    // Inicializar con estructura estática
+    let rowsIniciales = JSON.parse(JSON.stringify(defaultPriceRowsVariante))
     
+    // Establecer el coste
+    const costeRow = rowsIniciales.find((r: any) => r.campo === "Coste")
+    if (costeRow) {
+      costeRow.valor = costeVariante
+    }
+    
+    // Si hay precio_variante guardada, cargarla
     if (variante.precio_variante) {
       try {
         const calc = typeof variante.precio_variante === 'string' 
@@ -538,107 +729,41 @@ export default function ProductoDetailPage() {
           : variante.precio_variante
         
         if (calc.priceRows && Array.isArray(calc.priceRows)) {
-          rowsIniciales = calc.priceRows.map((row: any, index: number) => ({
-            id: index + 1,
-            campo: row.campo || "",
-            porcentaje: row.porcentaje || 0,
-            valor: row.valor || 0
-          }))
+          // Mapear las filas guardadas a la estructura estática
+          rowsIniciales = rowsIniciales.map((defaultRow: any) => {
+            const savedRow = calc.priceRows.find((sr: any) => sr.campo === defaultRow.campo)
+            if (savedRow) {
+              return {
+                ...defaultRow,
+                valor: savedRow.valor ?? defaultRow.valor,
+                porcentaje: savedRow.porcentaje ?? defaultRow.porcentaje,
+                porcentajeConfig: savedRow.porcentajeConfig ?? defaultRow.porcentajeConfig
+              }
+            }
+            return defaultRow
+          })
+          
           // Asegurar que el coste sea el actual
           const costeRow = rowsIniciales.find((r: any) => r.campo === "Coste")
           if (costeRow) {
             costeRow.valor = costeVariante
           }
-        }
-        
-        if (calc.objetivoUtilidadReal) {
-          setObjetivoUtilidadRealVariante(calc.objetivoUtilidadReal.toString())
+          
+          // Si hay precio guardado, recalcular todo
+          const precioRow = rowsIniciales.find((r: any) => r.campo === "Precio")
+          if (precioRow && precioRow.valor > 0) {
+            rowsIniciales = recalcFromTargetPriceVariante(precioRow.valor, rowsIniciales)
+          }
         }
       } catch (e) {
         console.error('Error parseando precio_variante:', e)
       }
     }
     
-    setPriceRowsVariante(recalcAllPricesVariante(rowsIniciales))
+    setPriceRowsVariante(rowsIniciales)
     setCalculadoraVarianteOpen(true)
   }
 
-  const recalcAllPricesVariante = (rowsIn: typeof priceRowsVariante) => {
-    const rows = JSON.parse(JSON.stringify(rowsIn))
-    const coste = parseNum(rows.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-    
-    const adicionales = rows
-      .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-      .reduce((sum: number, r: any) => sum + parseNum(r.valor), 0)
-
-    const utilRow = rows.find((r: any) => r.campo === "Utilidad (U)")
-    if (utilRow) {
-      const p = parseNum(utilRow.porcentaje) || 28
-      utilRow.porcentaje = p
-      utilRow.valor = round2(coste * (p / 100))
-    }
-    const utilidad = utilRow ? parseNum(utilRow.valor) : 0
-
-    const base = coste + utilidad + adicionales
-    
-    const comRow = rows.find((r: any) => r.campo === "Comisión (C)")
-    let comision = 0
-    if (comRow) {
-      const p = parseNum(comRow.porcentaje) || 8
-      comision = round2(base * (p / 100))
-      comRow.valor = comision
-    }
-
-    const baseConComision = base + comision
-    
-    const facRow = rows.find((r: any) => r.campo === "Factura (F)")
-    if (facRow) {
-      const p = parseNum(facRow.porcentaje) || 16
-      facRow.valor = round2(baseConComision * (p / 100))
-    }
-
-    rows.forEach((r: any) => {
-      if (!["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo)) {
-        const p = parseNum(r.porcentaje)
-        if (p !== 0 && r.porcentaje !== "") {
-          r.valor = round2(coste * (p / 100))
-        } else {
-          const v = parseNum(r.valor)
-          const pct = coste > 0 ? (v / coste) * 100 : 0
-          r.porcentaje = round2(pct)
-        }
-      }
-    })
-
-    return rows
-  }
-
-  const recalcDependientesPricesVariante = (rowsIn: typeof priceRowsVariante) => {
-    const rows = JSON.parse(JSON.stringify(rowsIn))
-    const coste = parseNum(rows.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-    const utilidad = parseNum(rows.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
-    const adicionales = rows
-      .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-      .reduce((sum: number, r: any) => sum + parseNum(r.valor), 0)
-    const base = coste + utilidad + adicionales
-
-    const com = rows.find((r: any) => r.campo === "Comisión (C)")
-    let comision = 0
-    if (com) {
-      const p = parseNum(com.porcentaje) || 8
-      comision = round2(base * (p / 100))
-      com.valor = comision
-    }
-
-    const fac = rows.find((r: any) => r.campo === "Factura (F)")
-    if (fac) {
-      const p = parseNum(fac.porcentaje) || 16
-      const baseConComision = base + comision
-      fac.valor = round2(baseConComision * (p / 100))
-    }
-
-    return rows
-  }
 
   // Actualizar coste de la variante cuando cambia el coste final
   useEffect(() => {
@@ -648,73 +773,46 @@ export default function ProductoDetailPage() {
         const updated = prev.map(row => 
           row.campo === "Coste" ? { ...row, valor: costeVariante } : row
         )
-        return recalcAllPricesVariante(updated)
+        const precio = parseNum(updated.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+        if (precio > 0) {
+          return recalcFromTargetPriceVariante(precio, updated)
+        }
+        return updated
       })
     }
   }, [calculadoraVarianteOpen, varianteCalculadora, costRows, recursos])
 
-  // Calcular total y utilidad real para variante
-  useEffect(() => {
-    if (calculadoraVarianteOpen) {
-      const total = priceRowsVariante.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
-      
-      // Solo actualizar editablePriceVariante si el usuario NO lo está editando manualmente
-      if (!isPriceManuallyEditedVarianteRef.current) {
-        setEditablePriceVariante(total.toFixed(2))
-      } else {
-        // Si está en modo manual, verificar si el valor escrito coincide con el calculado
-        const userValue = parseFloat(editablePriceVariante) || 0
-        if (Math.abs(userValue - total) < 0.01) {
-          isPriceManuallyEditedVarianteRef.current = false
-        }
-      }
-      
-      const coste = parseNum(priceRowsVariante.find(r => r.campo === "Coste")?.valor ?? 0)
-      const utilidadPorcentaje = parseNum(priceRowsVariante.find(r => r.campo === "Utilidad (U)")?.porcentaje ?? 0) / 100
-      const comisionPorcentaje = parseNum(priceRowsVariante.find(r => r.campo === "Comisión (C)")?.porcentaje ?? 0) / 100
-      const facturaPorcentaje = parseNum(priceRowsVariante.find(r => r.campo === "Factura (F)")?.porcentaje ?? 0) / 100
-      
-      if (coste > 0 && total > 0) {
-        const A = (1 + comisionPorcentaje) * (1 + facturaPorcentaje)
-        const utilidadRealCalc = ((total - coste * A) / (total * A)) * 100
-        setUtilidadRealVariante(utilidadRealCalc)
-      } else {
-        setUtilidadRealVariante(0)
-      }
-    }
-  }, [priceRowsVariante, calculadoraVarianteOpen])
-
   // Handlers para calculadora de variante
-  const handlePriceCampoChangeVariante = (rowId: number, campo: string) => {
-    setPriceRowsVariante(prev => prev.map(r => (r.id === rowId ? { ...r, campo } : r)))
-  }
-
   const handlePricePorcentajeChangeVariante = (rowId: number, pctStr: string) => {
     setPriceRowsVariante(prev => {
       const rowsCopy = JSON.parse(JSON.stringify(prev))
       const row = rowsCopy.find((r: any) => r.id === rowId)
-      if (!row) return prev
+      if (!row || !row.editable) return prev
 
       if (pctStr === "") {
-        row.porcentaje = ""
+        row.porcentaje = null
+        row.porcentajeConfig = null
+        // Si porcentaje se borra, recalcular desde precio actual
+        const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+        if (precioActual > 0) {
+          return recalcFromTargetPriceVariante(precioActual, rowsCopy)
+        }
         return rowsCopy
       }
 
       const pct = parseNum(pctStr)
-      row.porcentaje = pct
-      const coste = parseNum(rowsCopy.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-
-      if (row.campo === "Utilidad (U)") {
-        row.valor = round2(coste * (pct / 100))
-        return recalcDependientesPricesVariante(rowsCopy)
+      
+      if (["Factura", "IUE", "Comision"].includes(row.campo)) {
+        row.porcentajeConfig = pct
+        const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+        if (precioActual > 0) {
+          return recalcFromTargetPriceVariante(precioActual, rowsCopy)
+        }
+      } else {
+        row.porcentaje = pct
       }
 
-      if (row.campo === "Factura (F)" || row.campo === "Comisión (C)") {
-        return recalcDependientesPricesVariante(rowsCopy.map((r: any) => (r.id === rowId ? { ...row } : r)))
-      }
-
-      row.valor = round2(coste * (pct / 100))
-      return recalcDependientesPricesVariante(rowsCopy)
+      return rowsCopy
     })
   }
 
@@ -722,179 +820,26 @@ export default function ProductoDetailPage() {
     setPriceRowsVariante(prev => {
       const rowsCopy = JSON.parse(JSON.stringify(prev))
       const row = rowsCopy.find((r: any) => r.id === rowId)
-      if (!row) return prev
+      if (!row || !row.editable) return prev
 
       if (valStr === "") {
-        row.valor = ""
+        row.valor = 0
+        // Si valor se borra, recalcular desde precio actual
+        const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+        if (precioActual > 0) {
+          return recalcFromTargetPriceVariante(precioActual, rowsCopy)
+        }
         return rowsCopy
       }
 
       const val = parseNum(valStr)
-      row.valor = val
-      const coste = parseNum(rowsCopy.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-
-      if (row.campo === "Utilidad (U)") {
-        const pct = coste > 0 ? (val / coste) * 100 : 0
-        row.porcentaje = round2(pct)
-        return recalcDependientesPricesVariante(rowsCopy)
-      }
-
-      if (row.campo === "Comisión (C)") {
-        const utilidad = parseNum(rowsCopy.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
-        const adicionales = rowsCopy
-          .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-          .reduce((s: number, r: any) => s + parseNum(r.valor), 0)
-        const base = coste + utilidad + adicionales
-        const pct = base > 0 ? (val / base) * 100 : 0
-        row.porcentaje = round2(pct)
-        return recalcDependientesPricesVariante(rowsCopy)
-      }
       
-      if (row.campo === "Factura (F)") {
-        const utilidad = parseNum(rowsCopy.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
-        const adicionales = rowsCopy
-          .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-          .reduce((s: number, r: any) => s + parseNum(r.valor), 0)
-        const base = coste + utilidad + adicionales
-        const comision = parseNum(rowsCopy.find((r: any) => r.campo === "Comisión (C)")?.valor ?? 0)
-        const baseConComision = base + comision
-        const pct = baseConComision > 0 ? (val / baseConComision) * 100 : 0
-        row.porcentaje = round2(pct)
-        return recalcDependientesPricesVariante(rowsCopy)
+      if (row.campo === "Precio") {
+        return recalcFromTargetPriceVariante(val, rowsCopy)
       }
 
-      const pct = coste > 0 ? (val / coste) * 100 : 0
-      row.porcentaje = round2(pct)
-      return recalcDependientesPricesVariante(rowsCopy)
+      return rowsCopy
     })
-  }
-
-  const handleAddPriceRowVariante = () => {
-    setPriceRowsVariante(prev => {
-      const newId = priceRowIdCounterVariante
-      setPriceRowIdCounterVariante(prevCounter => prevCounter + 1)
-      const newRow = { id: newId, campo: "", porcentaje: 0, valor: 0 }
-      const copy = JSON.parse(JSON.stringify(prev))
-      const utilIdx = copy.findIndex((r: any) => r.campo === "Utilidad (U)")
-      const insertAt = utilIdx > -1 ? utilIdx : copy.length
-      copy.splice(insertAt, 0, newRow)
-      return copy
-    })
-  }
-
-  const handleRemovePriceRowVariante = (rowId: number) => {
-    setPriceRowsVariante(prev => {
-      const row = prev.find(r => r.id === rowId)
-      if (!row || row.campo === "Coste") return prev
-      const filtered = prev.filter(r => r.id !== rowId)
-      return recalcDependientesPricesVariante(filtered)
-    })
-  }
-
-  const handleAplicarObjetivoUtilidadVariante = () => {
-    const objetivo = parseFloat(objetivoUtilidadRealVariante)
-    if (isNaN(objetivo) || objetivo <= 0) {
-      toast.error("El objetivo debe ser un número mayor a 0")
-      return
-    }
-    
-    const objetivoDecimal = objetivo / 100
-    
-    const comisionPorcentaje = parseNum(priceRowsVariante.find(r => r.campo === "Comisión (C)")?.porcentaje ?? 0) / 100
-    const facturaPorcentaje = parseNum(priceRowsVariante.find(r => r.campo === "Factura (F)")?.porcentaje ?? 0) / 100
-    
-    const A = (1 + comisionPorcentaje) * (1 + facturaPorcentaje)
-    const maximoPosible = (1 / A) * 100
-    if (objetivo > maximoPosible) {
-      toast.error(`El objetivo no puede ser mayor a ${maximoPosible.toFixed(2)}%`)
-      return
-    }
-    
-    const denominador = 1 - (objetivoDecimal * A)
-    if (denominador <= 0) {
-      toast.error("No es posible alcanzar ese objetivo con los valores actuales")
-      return
-    }
-    
-    const uNecesario = (objetivoDecimal * A) / denominador
-    const uPorcentaje = uNecesario * 100
-    
-    setPriceRowsVariante(prev => {
-      const rowsCopy = JSON.parse(JSON.stringify(prev))
-      const utilidadRow = rowsCopy.find((r: any) => r.campo === "Utilidad (U)")
-      if (utilidadRow) {
-        utilidadRow.porcentaje = round2(uPorcentaje)
-        return recalcAllPricesVariante(rowsCopy)
-      }
-      return prev
-    })
-    
-    toast.success(`Utilidad (U) ajustada a ${uPorcentaje.toFixed(2)}% para alcanzar ${objetivo.toFixed(2)}% de utilidad real`)
-  }
-
-  // Recalcular todos los valores cuando se cambia el precio total manualmente (variante)
-  const handlePriceTotalChangeVariante = (newTotalStr: string) => {
-    const newTotal = parseFloat(newTotalStr) || 0
-    if (newTotal <= 0) {
-      return
-    }
-
-    // Calcular el total actual
-    const currentTotal = priceRowsVariante.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
-    
-    if (currentTotal === 0) {
-      return
-    }
-
-    // Calcular factor de escala
-    const scaleFactor = newTotal / currentTotal
-    const coste = parseNum(priceRowsVariante.find(r => r.campo === "Coste")?.valor ?? 0)
-
-    // Aplicar el factor a todos los valores excepto el coste
-    setPriceRowsVariante(prev => {
-      const updated = prev.map(row => {
-        if (row.campo === "Coste") {
-          return row // El coste no cambia
-        }
-
-        const newValor = round2(parseNum(row.valor) * scaleFactor)
-        
-        // Recalcular porcentaje basándose en el coste
-        let newPorcentaje = 0
-        if (row.campo === "Utilidad (U)") {
-          newPorcentaje = coste > 0 ? round2((newValor / coste) * 100) : 0
-        } else if (row.campo === "Comisión (C)") {
-          const utilidad = parseNum(prev.find(r => r.campo === "Utilidad (U)")?.valor ?? 0) * scaleFactor
-          const adicionales = prev
-            .filter(r => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-            .reduce((sum, r) => sum + (parseNum(r.valor) * scaleFactor), 0)
-          const base = coste + utilidad + adicionales
-          newPorcentaje = base > 0 ? round2((newValor / base) * 100) : 0
-        } else if (row.campo === "Factura (F)") {
-          const utilidad = parseNum(prev.find(r => r.campo === "Utilidad (U)")?.valor ?? 0) * scaleFactor
-          const adicionales = prev
-            .filter(r => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-            .reduce((sum, r) => sum + (parseNum(r.valor) * scaleFactor), 0)
-          const comision = parseNum(prev.find(r => r.campo === "Comisión (C)")?.valor ?? 0) * scaleFactor
-          const baseConComision = coste + utilidad + adicionales + comision
-          newPorcentaje = baseConComision > 0 ? round2((newValor / baseConComision) * 100) : 0
-        } else {
-          // Campos adicionales
-          newPorcentaje = coste > 0 ? round2((newValor / coste) * 100) : 0
-        }
-
-        return {
-          ...row,
-          valor: newValor,
-          porcentaje: newPorcentaje
-        }
-      })
-
-      // Recalcular dependientes después de aplicar el factor
-      return recalcDependientesPricesVariante(updated)
-    })
-
-    // NO modificar editablePriceVariante aquí - mantener exactamente lo que el usuario escribió
   }
 
   const handleApplyPriceVariante = async () => {
@@ -914,7 +859,9 @@ export default function ProductoDetailPage() {
         return
       }
       
-      const priceValue = parseFloat(editablePriceVariante) || 0
+      const precioRow = priceRowsVariante.find(r => r.campo === "Precio")
+      const priceValue = parseNum(precioRow?.valor ?? 0)
+      
       if (priceValue <= 0) {
         toast.error("El precio debe ser mayor a 0")
         setIsApplyingPriceVariante(false)
@@ -924,12 +871,10 @@ export default function ProductoDetailPage() {
       // Preparar calculadora de precios para guardar
       const calculadoraDePrecios = {
         priceRows: priceRowsVariante,
-        totalPrice: priceValue,
-        utilidadReal: utilidadRealVariante,
-        objetivoUtilidadReal: objetivoUtilidadRealVariante ? parseFloat(objetivoUtilidadRealVariante) : null
+        totalPrice: priceValue
       }
 
-      console.log('💾 Guardando calculadora de precios:', {
+      console.log('💾 Guardando calculadora de precios variante:', {
         variante_id: varianteCalculadora.id,
         producto_id: id,
         calculadora: calculadoraDePrecios
@@ -957,10 +902,8 @@ export default function ProductoDetailPage() {
       console.log('📥 Respuesta de la API:', result)
 
       if (result.success) {
-        // Resetear flag de edición manual
-        isPriceManuallyEditedVarianteRef.current = false
         setPriceAppliedVariante(true)
-        toast.success(`Calculadora de precios guardada: Bs ${priceValue.toFixed(2)}`)
+        toast.success(`Precio variante guardado: Bs ${priceValue.toFixed(2)}`)
         await getVariantes()
         
         // Resetear animación después de 1.8 segundos
@@ -1132,6 +1075,14 @@ export default function ProductoDetailPage() {
       : variante.precio_base || variante.precio_calculado || 0
   }
 
+  // Funciones helper para calculadora de precios (definidas antes de handleSave)
+  const parseNum = (v: number | string) => {
+    if (typeof v === "number") return v
+    const s = (v ?? "").toString().replace(",", ".").replace(/^0+(?=\d)/, "")
+    const n = parseFloat(s)
+    return isFinite(n) ? n : 0
+  }
+
   const handleSave = async () => {
     if (!formData.codigo || !formData.nombre) {
       toast.error("Código y nombre son requeridos")
@@ -1145,16 +1096,42 @@ export default function ProductoDetailPage() {
       // IMPORTANTE: Solo incluir recursos, NO proveedores
       const receta = costRows
         .filter(row => row.selectedRecurso && row.selectedRecurso.id) // Solo recursos válidos
-        .map(row => ({
-          recurso_id: row.selectedRecurso.id,
-          recurso_codigo: row.selectedRecurso.codigo || row.selectedRecurso.id,
-          recurso_nombre: row.selectedRecurso.nombre,
-          cantidad: row.cantidad,
-          unidad: row.unidad,
-          coste_unitario: row.selectedRecurso.coste,
-          coste_total: row.selectedRecurso.coste * row.cantidad
-        }))
+        .map(row => {
+          // PRIORIDAD: Usar costeUnitarioGuardado si existe (precio de la receta guardada)
+          // Si no, usar el precio desde control_stock o coste base
+          const costeUnitario = (row as any).costeUnitarioGuardado !== null && (row as any).costeUnitarioGuardado !== undefined
+            ? (row as any).costeUnitarioGuardado
+            : obtenerPrecioRecurso(row.selectedRecurso)
+          
+          const cantidad = row.cantidad || 1
+          const costeTotal = costeUnitario * cantidad
+          
+          return {
+            recurso_id: row.selectedRecurso.id,
+            recurso_codigo: row.selectedRecurso.codigo || row.selectedRecurso.id,
+            recurso_nombre: row.selectedRecurso.nombre,
+            cantidad: cantidad,
+            unidad: row.unidad || row.selectedRecurso.unidad_medida || "",
+            coste_unitario: Math.round(costeUnitario * 100) / 100,
+            coste_total: Math.round(costeTotal * 100) / 100
+          }
+        })
         .filter(item => item.recurso_id) // Asegurar que solo hay recursos, no proveedores
+
+      // Detectar si existe receta válida (rows con recurso asignado)
+      const tieneReceta = receta && receta.length > 0
+
+      // Calcular el coste real que se debe guardar
+      // Si hay receta, usar totalCost (coste calculado desde la receta)
+      // Si no hay receta, usar el coste manual del formulario
+      // IMPORTANTE: Asegurar que nunca sea NaN, null o undefined
+      let costeCalculado = tieneReceta ? totalCost : (parseFloat(formData.coste) || 0)
+      // Validar que costeCalculado sea un número válido
+      if (isNaN(costeCalculado) || !isFinite(costeCalculado) || costeCalculado < 0) {
+        costeCalculado = 0
+      }
+      // Redondear a 2 decimales
+      costeCalculado = Math.round(costeCalculado * 100) / 100
 
       let imagenMeta: { attachmentId?: string; publicUrl?: string } | undefined
 
@@ -1230,82 +1207,161 @@ export default function ProductoDetailPage() {
         }
       }
 
-      // Preparar datos de la calculadora de precios (similar a cómo se hace con receta)
-      const calculadoraDePrecios = {
-        priceRows: priceRows,
-        totalPrice: totalPrice,
-        utilidadReal: utilidadReal,
-        objetivoUtilidadReal: objetivoUtilidadReal ? parseFloat(objetivoUtilidadReal) : null
-      }
-      
-      console.log('📊 Calculadora de precios a guardar:', JSON.stringify(calculadoraDePrecios, null, 2))
-      
-      const dataToSend: Record<string, any> = {
-        codigo: formData.codigo.trim(),
-        nombre: formData.nombre.trim(),
-        descripcion: formData.descripcion?.trim() || "",
-        categoria: formData.categoria,
-        responsable: formData.responsable.trim(),
-        unidad_medida: formData.unidad_medida,
-        coste: parseFloat(formData.coste) || 0,
-        precio_venta: parseFloat(formData.precio_venta) || 0,
-        // cantidad no se guarda en Supabase, se calcula desde receta
-        mostrar_en_web: formData.mostrar_en_web,
-        // Limpiar las variantes antes de guardar (remover recurso_id y recurso_nombre que son solo para tracking)
-        variantes: variantes.map(v => {
-          const { recurso_id, recurso_nombre, ...varianteLimpia } = v
-          return varianteLimpia
-        }), // Siempre enviar variantes, incluso si está vacío
-        receta: receta.length > 0 ? receta : [],
-        calculadora_de_precios: calculadoraDePrecios, // Guardar igual que receta
-        proveedores: proveedores.length > 0 ? proveedores.map(prov => ({
-          empresa: prov.empresa,
-          precio: parseFloat(prov.precio) || 0,
-          unidad: prov.unidad,
-          plazos: prov.plazos,
-          comentarios: prov.comentarios
-        })) : []
+      // Función auxiliar para sanitizar números
+      const sanitizeNumber = (value: any): number | null => {
+        if (value === null || value === undefined || value === '') return null
+        const num = typeof value === 'string' ? parseFloat(value) : Number(value)
+        if (isNaN(num) || !isFinite(num) || num < 0) return 0
+        return Math.round(num * 100) / 100
       }
 
-      console.log('📤 dataToSend completo:', JSON.stringify(dataToSend, null, 2))
-      console.log('📤 calculadora_de_precios en dataToSend:', dataToSend.calculadora_de_precios)
+      // Función auxiliar para sanitizar strings
+      // FIX 1: Filtrar valores "-", "–", "—" y strings vacíos
+      const sanitizeString = (value: any): string | null => {
+        if (value === null || value === undefined) return null
+        const str = String(value).trim()
+        // Filtrar strings vacíos, guiones y em-dash
+        if (str === '' || str === '-' || str === '–' || str === '—') return null
+        return str
+      }
 
-      // Priorizar publicUrl de Supabase Storage sobre attachmentId de Airtable
-      if (imagenMeta?.publicUrl) {
-        dataToSend.imagen_portada = imagenMeta.publicUrl as string
-        dataToSend.imagen_attachment_id = null
-      } else if (imagenMeta?.attachmentId) {
-        // Fallback para Airtable (si aún se usa)
-        dataToSend.imagen_attachment_id = imagenMeta.attachmentId
-        dataToSend.imagen_portada = null
-      } else {
-        if (isNewProduct) {
-          if (cleanedImagenUrl) {
-            dataToSend.imagen_portada = cleanedImagenUrl
+      // Preparar receta como ARRAY (formato que espera la API)
+      // La receta debe ser un array de items, NO un objeto
+      const recetaArray = receta.map(item => ({
+        recurso_id: item.recurso_id || null,
+        recurso_codigo: sanitizeString(item.recurso_codigo),
+        recurso_nombre: sanitizeString(item.recurso_nombre),
+        cantidad: sanitizeNumber(item.cantidad) || 0,
+        unidad: sanitizeString(item.unidad),
+        coste_unitario: sanitizeNumber(item.coste_unitario),
+        coste_total: sanitizeNumber(item.coste_total)
+      })).filter(item => item.recurso_id !== null) // Solo items con recurso válido
+
+      // Preparar calculadora de costes (se guarda en calculadora_precios, NO en receta)
+      const calculadoraCostes = {
+        costRows: costRows.map(row => ({
+          id: row.id,
+          selectedRecurso: row.selectedRecurso ? {
+            id: row.selectedRecurso.id,
+            codigo: row.selectedRecurso.codigo || null,
+            nombre: row.selectedRecurso.nombre || null,
+            coste: sanitizeNumber(row.selectedRecurso.coste),
+            unidad_medida: sanitizeString(row.selectedRecurso.unidad_medida)
+          } : null,
+          cantidad: sanitizeNumber(row.cantidad) || 0,
+          unidad: sanitizeString(row.unidad),
+          searchTerm: sanitizeString(row.searchTerm),
+          costeUnitarioGuardado: (row as any).costeUnitarioGuardado || null
+        })).filter(row => row.selectedRecurso !== null), // Solo filas con recurso válido
+        totalCost: sanitizeNumber(totalCost) || 0
+      }
+
+      // Preparar calculadora de precios UFC
+      const precioFinal = parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0)
+      const precioFinalValidado = sanitizeNumber(precioFinal) || 0
+      
+      // Sanitizar priceRows: eliminar valores "–" o strings no numéricos
+      const priceRowsSanitizados = priceRows.map((row: any) => {
+        const rowCopy: any = { ...row }
+        // Sanitizar valor
+        if (rowCopy.valor !== undefined && rowCopy.valor !== null) {
+          if (typeof rowCopy.valor === 'string' && (rowCopy.valor === '–' || rowCopy.valor === '-' || rowCopy.valor.trim() === '')) {
+            rowCopy.valor = 0
           } else {
-            dataToSend.imagen_portada = null
-            dataToSend.imagen_attachment_id = null
-          }
-        } else {
-          if (!cleanedImagenUrl && existingImagenUrl) {
-            dataToSend.imagen_portada = null
-            dataToSend.imagen_attachment_id = null
-          } else if (cleanedImagenUrl && cleanedImagenUrl !== existingImagenUrl) {
-            dataToSend.imagen_portada = cleanedImagenUrl
-            dataToSend.imagen_attachment_id = null
+            const valNum = sanitizeNumber(rowCopy.valor)
+            rowCopy.valor = valNum !== null ? valNum : 0
           }
         }
+        // Sanitizar porcentaje
+        if (rowCopy.porcentaje !== undefined && rowCopy.porcentaje !== null) {
+          if (typeof rowCopy.porcentaje === 'string' && (rowCopy.porcentaje === '–' || rowCopy.porcentaje === '-' || rowCopy.porcentaje.trim() === '')) {
+            rowCopy.porcentaje = null
+          } else {
+            const pctNum = sanitizeNumber(rowCopy.porcentaje)
+            rowCopy.porcentaje = pctNum !== null ? pctNum : null
+          }
+        }
+        // Sanitizar porcentajeConfig
+        if (rowCopy.porcentajeConfig !== undefined && rowCopy.porcentajeConfig !== null) {
+          if (typeof rowCopy.porcentajeConfig === 'string' && (rowCopy.porcentajeConfig === '–' || rowCopy.porcentajeConfig === '-' || rowCopy.porcentajeConfig.trim() === '')) {
+            rowCopy.porcentajeConfig = null
+          } else {
+            const pctConfigNum = sanitizeNumber(rowCopy.porcentajeConfig)
+            rowCopy.porcentajeConfig = pctConfigNum !== null ? pctConfigNum : null
+          }
+        }
+        return rowCopy
+      })
+      
+      const calculadoraPrecios = {
+        priceRows: priceRowsSanitizados,
+        totalPrice: precioFinalValidado,
+        objetivoUtilidadReal: null
       }
+      
+      // Preparar variantes (singular "variante" según el esquema)
+      const varianteLimpia = variantes.length > 0 ? variantes.map(v => {
+        const { recurso_id, recurso_nombre, ...varianteSinTracking } = v
+        return varianteSinTracking
+      }) : []
+      
+      // Preparar proveedores sanitizados
+      const proveedoresSanitizados = proveedores.length > 0 ? proveedores.map(prov => ({
+        empresa: sanitizeString(prov.empresa) || "",
+        precio: sanitizeNumber(prov.precio) || 0,
+        unidad: sanitizeString(prov.unidad) || "",
+        plazos: sanitizeString(prov.plazos) || "",
+        comentarios: sanitizeString(prov.comentarios) || ""
+      })) : []
+      
+      // Preparar imagen_principal (según el esquema real)
+      let imagenPrincipal: string | null = null
+      if (imagenMeta?.publicUrl) {
+        imagenPrincipal = imagenMeta.publicUrl
+      } else if (cleanedImagenUrl) {
+        imagenPrincipal = cleanedImagenUrl
+      } else if (existingImagenUrl && !isNewProduct) {
+        imagenPrincipal = existingImagenUrl
+      }
+      
+      // Construir dataToSend según el esquema REAL de Supabase
+      const dataToSend: Record<string, any> = {
+        codigo: sanitizeString(formData.codigo) || "",
+        nombre: sanitizeString(formData.nombre) || "",
+        imagen_principal: imagenPrincipal,
+        categoria: sanitizeString(formData.categoria),
+        unidad_medida: sanitizeString(formData.unidad_medida),
+        coste: sanitizeNumber(costeCalculado),
+        precio_venta: sanitizeNumber(formData.precio_venta) || 0,
+        responsable: sanitizeString(formData.responsable),
+        descripcion: sanitizeString(formData.descripcion),
+        mostrar_en_web: Boolean(formData.mostrar_en_web),
+        variante: varianteLimpia.length > 0 ? varianteLimpia : null,
+        receta: Array.isArray(recetaArray) ? recetaArray : [], // FIX 2: Receta SIEMPRE es array, nunca null
+        calculadora_precios: {
+          ...calculadoraPrecios,
+          // Incluir también la calculadora de costes en calculadora_precios
+          calculadoraCostes: calculadoraCostes
+        },
+        proveedores: proveedoresSanitizados.length > 0 ? proveedoresSanitizados : null
+      }
+      
+      // Limpiar campos null/undefined que no deben enviarse
+      Object.keys(dataToSend).forEach(key => {
+        if (dataToSend[key] === undefined) {
+          delete dataToSend[key]
+        }
+      })
 
       console.log("💾 Guardando producto:", {
         id,
         isNewProduct,
         variantesCount: variantes.length,
         recetaCount: receta.length,
-        imagen_attachment_id: dataToSend.imagen_attachment_id,
-        imagen_portada: dataToSend.imagen_portada,
-        variantes,
-        receta,
+        imagen_principal: dataToSend.imagen_principal,
+        variante: dataToSend.variante,
+        receta: dataToSend.receta,
+        calculadora_precios: dataToSend.calculadora_precios,
         dataToSend
       })
 
@@ -1352,16 +1408,78 @@ export default function ProductoDetailPage() {
           // No mostrar warning al usuario, el producto se guardó correctamente
         }
         
-        // Regenerar variantes después de guardar si hay variantes definidas
-        if (variantes.length > 0 && updated.id) {
-          try {
+        // FIX 6: Validar receta antes de regenerar variantes
+        // Regenerar variantes después de guardar
+        // IMPORTANTE: Construir variantes SOLO desde los recursos activos en costRows (receta)
+        // NO usar el estado 'variantes' que puede contener variantes de recursos eliminados
+        if (updated.id) {
+          // Validar que hay receta válida antes de regenerar
+          const tieneRecetaValida = recetaArray.length > 0 && recetaArray.some(item => item.recurso_id)
+          
+          if (!tieneRecetaValida) {
+            console.warn('⚠️ Receta vacía: no se regeneran variantes')
+            // Si no hay receta válida, eliminar todas las variantes
+            try {
+              await fetch(`/api/productos/variantes`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  producto_id: updated.id,
+                  action: 'regenerar',
+                  variantes_definicion: []
+                })
+              })
+              console.log('✅ Variantes eliminadas (no hay receta válida)')
+            } catch (error) {
+              console.error('Error eliminando variantes:', error)
+            }
+            // No continuar con la regeneración
+          } else {
+            try {
+              // Construir variantes desde los recursos activos en la receta (costRows)
+              const variantesDeRecursosActivos: any[] = []
+              costRows.forEach(row => {
+              if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
+                let variantesArray: any[] = []
+                
+                if (Array.isArray(row.selectedRecurso.variantes)) {
+                  variantesArray = row.selectedRecurso.variantes
+                } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
+                  if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
+                    variantesArray = row.selectedRecurso.variantes.variantes
+                  }
+                } else if (typeof row.selectedRecurso.variantes === 'string') {
+                  try {
+                    const parsed = JSON.parse(row.selectedRecurso.variantes)
+                    if (Array.isArray(parsed)) {
+                      variantesArray = parsed
+                    } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
+                      variantesArray = parsed.variantes
+                    }
+                  } catch (e) {
+                    console.error('Error parseando variantes del recurso:', e)
+                  }
+                }
+                
+                // Agregar variantes con el recurso_id para tracking
+                variantesArray.forEach((v: any) => {
+                  variantesDeRecursosActivos.push({
+                    ...v,
+                    recurso_id: row.selectedRecurso.id,
+                    recurso_nombre: row.selectedRecurso.nombre
+                  })
+                })
+              }
+            })
+            
             // Convertir variantes al formato correcto que espera el backend
-            const variantesLimpias = variantes.map(v => ({
+            const variantesLimpias = variantesDeRecursosActivos.map(v => ({
               nombre: v.nombre,
               valores: v.posibilidades ?? v.valores ?? []
             }))
             
-            console.log(">>> Variantes limpias antes de enviar:", variantesLimpias)
+            console.log(">>> Variantes construidas desde recursos activos:", variantesLimpias)
+            console.log(">>> Recursos activos en receta:", costRows.filter(r => r.selectedRecurso?.id).map(r => r.selectedRecurso?.nombre))
             
             // Llamar directamente a la API con el ID actualizado
             const regenerarResponse = await fetch(`/api/productos/variantes`, {
@@ -1383,7 +1501,18 @@ export default function ProductoDetailPage() {
               try {
                 const regenerarData = JSON.parse(responseText)
                 console.log('✅ Variantes regeneradas correctamente:', regenerarData)
-                toast.success(`Variantes generadas correctamente (${regenerarData.variantes?.length || 0} variantes)`)
+                
+                // Actualizar el estado de variantes con las variantes de los recursos activos
+                setVariantes(variantesDeRecursosActivos)
+                
+                const variantesCreadas = regenerarData.variantes?.length || 0
+                const variantesEliminadas = regenerarData.variantes_eliminadas || 0
+                
+                if (variantesEliminadas > 0) {
+                  toast.success(`Variantes regeneradas: ${variantesCreadas} creadas, ${variantesEliminadas} eliminadas`)
+                } else {
+                  toast.success(`Variantes generadas correctamente (${variantesCreadas} variantes)`)
+                }
                 
                 // Recargar variantes después de regenerar
                 setTimeout(() => {
@@ -1420,6 +1549,7 @@ export default function ProductoDetailPage() {
             })
             toast.error(`Error de conexión al generar variantes: ${error?.message || 'Error desconocido'}`)
             // No bloquear el guardado si falla la regeneración
+            }
           }
         }
         
@@ -1466,12 +1596,8 @@ export default function ProductoDetailPage() {
     }
   }
 
-  // Cargar recursos para calculadora de costes
-  useEffect(() => {
-    if (editing) {
-      fetchRecursos()
-    }
-  }, [editing])
+  // Los recursos se cargan bajo demanda cuando el usuario busca (handleCostSearchChange)
+  // Ya no se necesita cargar todos los recursos al inicio
 
   // Cerrar dropdown cuando se hace click fuera
   useEffect(() => {
@@ -1497,77 +1623,185 @@ export default function ProductoDetailPage() {
           const updated = prev.map(row => 
             row.campo === "Coste" ? { ...row, valor: totalCost } : row
           )
-          return recalcAllPrices(updated)
+          // Si hay un precio, recalcular desde precio
+          const precio = parseNum(updated.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+          if (precio > 0) {
+            return recalcFromTargetPrice(precio, updated)
+          }
         }
         return prev
       })
     }
   }, [totalCost, editing])
 
-  // Calcular total de precios y utilidad real
-  useEffect(() => {
-    const total = priceRows.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
-    setTotalPrice(total)
-    
-    // Si hay un precio guardado manualmente, verificar si la calculadora cambió significativamente
-    if (hasManualPriceRef.current && savedPriceRef.current !== null) {
-      // Solo verificar cambio si el último valor calculado no es 0 (ya se inicializó)
-      if (lastCalculatedPriceRef.current > 0) {
-        const difference = Math.abs(total - lastCalculatedPriceRef.current)
-        // Si la calculadora cambió significativamente (> 0.01), resetear el flag de guardado manual
-        if (difference > 0.01) {
-          hasManualPriceRef.current = false
-          savedPriceRef.current = null
-          // Actualizar el campo con el nuevo total calculado
-          if (!isPriceManuallyEditedRef.current) {
-            setEditablePrice(total.toFixed(2))
-          }
+  // Función única fuente de verdad para obtener precio de recurso
+  // NUNCA retorna null/undefined, siempre retorna un número (incluso si es 0)
+  // Esta función debe usarse en TODOS los lugares donde se necesita el precio de un recurso
+  const getPrecioRecurso = (recurso: any, sucursal: string = "La Paz"): number => {
+    // Si no hay recurso, retornar 0 (no null)
+    if (!recurso) return 0
+
+    // Si no hay control_stock, usar coste base (siempre un número)
+    if (!recurso.control_stock) {
+      return recurso.coste || 0
+    }
+
+    // Parsear control_stock si es string
+    let controlStock: any = null
+    try {
+      if (typeof recurso.control_stock === 'string') {
+        controlStock = JSON.parse(recurso.control_stock)
+      } else if (typeof recurso.control_stock === 'object' && recurso.control_stock !== null) {
+        controlStock = recurso.control_stock
+      }
+    } catch (e) {
+      console.error('Error parseando control_stock:', e)
+      // Si falla el parseo, usar coste base
+      return recurso.coste || 0
+    }
+
+    // Si control_stock está vacío o no es objeto válido, usar coste base
+    if (!controlStock || typeof controlStock !== 'object' || Object.keys(controlStock).length === 0) {
+      return recurso.coste || 0
+    }
+
+    const claves = Object.keys(controlStock)
+
+    // 1. Intentar con la sucursal actual (clave directa)
+    if (controlStock[sucursal] && typeof controlStock[sucursal] === 'object') {
+      const stockData = controlStock[sucursal]
+      // Priorizar precio_unitario (formato nuevo), luego precio (formato antiguo), luego otros
+      if (typeof stockData.precio_unitario === "number") {
+        return stockData.precio_unitario // Incluso si es 0, es válido
+      }
+      if (typeof stockData.precio === "number") {
+        return stockData.precio // Formato antiguo, compatibilidad
+      }
+      if (typeof stockData.precioVariante === "number") {
+        return stockData.precioVariante // Incluso si es 0
+      }
+      if (typeof stockData.diferenciaPrecio === "number") {
+        const precioCalculado = (recurso.coste || 0) + stockData.diferenciaPrecio
+        return precioCalculado // Incluso si es 0
+      }
+    }
+
+    // 2. Buscar por coincidencia de nombre de sucursal en claves (formato "Sucursal:La Paz")
+    const claveConSucursal = claves.find(key => {
+      const keyLower = key.toLowerCase()
+      const sucursalLower = sucursal.toLowerCase()
+      return keyLower.includes(`sucursal:${sucursalLower}`) || 
+             keyLower === sucursalLower ||
+             keyLower.includes(sucursalLower)
+    })
+
+    if (claveConSucursal) {
+      const datosVariante = controlStock[claveConSucursal]
+      if (datosVariante && typeof datosVariante === 'object') {
+        // Priorizar precio_unitario (formato nuevo), luego precioVariante, luego precio, luego diferenciaPrecio
+        if (typeof datosVariante.precio_unitario === "number") {
+          return datosVariante.precio_unitario // Incluso si es 0
+        }
+        if (typeof datosVariante.precioVariante === "number") {
+          return datosVariante.precioVariante // Incluso si es 0
+        }
+        if (typeof datosVariante.precio === "number") {
+          return datosVariante.precio // Incluso si es 0
+        }
+        if (typeof datosVariante.diferenciaPrecio === "number") {
+          const precioCalculado = (recurso.coste || 0) + datosVariante.diferenciaPrecio
+          return precioCalculado // Incluso si es 0
         }
       }
-      // Si lastCalculatedPriceRef.current es 0, es la primera carga, mantener el valor guardado
-    } else {
-      // No hay precio guardado manualmente, actualizar normalmente
-      if (!isPriceManuallyEditedRef.current) {
-        setEditablePrice(total.toFixed(2))
-      } else {
-        // Si está en modo manual, verificar si el valor escrito coincide con el calculado
-        const userValue = parseFloat(editablePrice) || 0
-        if (Math.abs(userValue - total) < 0.01) {
-          isPriceManuallyEditedRef.current = false
+    }
+
+    // 3. Fallback: primera clave válida disponible (cualquier sucursal)
+    if (claves.length > 0) {
+      const primeraClave = claves[0]
+      const datosVariante = controlStock[primeraClave]
+      if (datosVariante && typeof datosVariante === 'object') {
+        // Priorizar precio_unitario (formato nuevo), luego precioVariante, luego precio
+        if (typeof datosVariante.precio_unitario === "number") {
+          return datosVariante.precio_unitario // Incluso si es 0
+        }
+        if (typeof datosVariante.precioVariante === "number") {
+          return datosVariante.precioVariante // Incluso si es 0
+        }
+        if (typeof datosVariante.precio === "number") {
+          return datosVariante.precio // Incluso si es 0
+        }
+        if (typeof datosVariante.diferenciaPrecio === "number") {
+          const precioCalculado = (recurso.coste || 0) + datosVariante.diferenciaPrecio
+          return precioCalculado // Incluso si es 0
         }
       }
     }
+
+    // 4. Último fallback: coste base del recurso (nunca null/undefined)
+    return recurso.coste || 0
+  }
+
+  // Alias para compatibilidad (mantiene el nombre anterior pero usa la nueva función)
+  const obtenerPrecioRecurso = (recurso: any): number => {
+    if (!recurso) return 0
     
-    // Actualizar el último valor calculado solo si no es la primera vez (ya hay un valor previo)
-    if (lastCalculatedPriceRef.current > 0 || !hasManualPriceRef.current) {
-      lastCalculatedPriceRef.current = total
+    // Obtener sucursal del producto desde variantes o formData
+    let sucursal = "La Paz" // Fallback seguro
+    
+    // Intentar obtener sucursal de las variantes del producto
+    if (variantes && variantes.length > 0) {
+      // Buscar variante de tipo "Sucursal"
+      const sucursalVariante = variantes.find((v: any) => 
+        v.nombre && (v.nombre.toLowerCase().includes('sucursal') || v.nombre === 'Sucursal')
+      )
+      if (sucursalVariante && sucursalVariante.posibilidades && sucursalVariante.posibilidades.length > 0) {
+        // Tomar la primera posibilidad como sucursal por defecto
+        sucursal = sucursalVariante.posibilidades[0]
+      }
     }
     
-    // Calcular utilidad real
-    const coste = parseNum(priceRows.find(r => r.campo === "Coste")?.valor ?? 0)
-    const utilidadPorcentaje = parseNum(priceRows.find(r => r.campo === "Utilidad (U)")?.porcentaje ?? 0) / 100
-    const comisionPorcentaje = parseNum(priceRows.find(r => r.campo === "Comisión (C)")?.porcentaje ?? 0) / 100
-    const facturaPorcentaje = parseNum(priceRows.find(r => r.campo === "Factura (F)")?.porcentaje ?? 0) / 100
-    
-    if (coste > 0 && total > 0) {
-      // Fórmula: m_real = u / [(1 + u) × (1 + c) × (1 + f)]
-      const denominador = (1 + utilidadPorcentaje) * (1 + comisionPorcentaje) * (1 + facturaPorcentaje)
-      const utilidadRealCalculada = utilidadPorcentaje / denominador
-      setUtilidadReal(utilidadRealCalculada * 100) // Convertir a porcentaje
-    } else {
-      setUtilidadReal(0)
+    // Si no se encontró en variantes, usar fallback seguro
+    // Nota: sucursal no está en formData ni producto, se obtiene de variantes
+    if (sucursal === "La Paz") {
+      // Mantener "La Paz" como fallback seguro
+      sucursal = "La Paz"
     }
-  }, [priceRows])
+    
+    return getPrecioRecurso(recurso, sucursal)
+  }
 
   // Calcular total de costes
   useEffect(() => {
     const total = costRows.reduce((sum, row) => {
       if (row.selectedRecurso && row.cantidad > 0) {
-        return sum + (row.selectedRecurso.coste * row.cantidad)
+        // PRIORIDAD 1: Usar coste_unitario guardado de la receta (si existe)
+        // Esto es para productos cargados que ya tienen precios guardados
+        const costeUnitario = (row as any).costeUnitarioGuardado
+        
+        let precioReal: number
+        if (costeUnitario !== null && costeUnitario !== undefined && !isNaN(costeUnitario) && costeUnitario >= 0) {
+          // Usar el precio guardado de la receta
+          precioReal = costeUnitario
+        } else {
+          // PRIORIDAD 2: Buscar en control_stock del recurso
+          precioReal = obtenerPrecioRecurso(row.selectedRecurso)
+        }
+        
+        // precioReal siempre es un número (nunca null), así que siempre sumar
+        const cantidad = row.cantidad || 0
+        const subtotal = precioReal * cantidad
+        // Validar que subtotal sea un número válido
+        if (isNaN(subtotal) || !isFinite(subtotal)) {
+          return sum
+        }
+        return sum + subtotal
       }
       return sum
     }, 0)
-    const formattedTotal = parseFloat(total.toFixed(2))
+    // Validar que total sea un número válido antes de guardar
+    const formattedTotal = (isNaN(total) || !isFinite(total) || total < 0) 
+      ? 0 
+      : parseFloat(total.toFixed(2))
     setTotalCost(formattedTotal)
     
     // Si hay un coste guardado manualmente, verificar si la calculadora cambió significativamente
@@ -1595,138 +1829,109 @@ export default function ProductoDetailPage() {
     }
   }, [costRows])
 
-  const fetchRecursos = async () => {
+  // Función para cargar recursos de forma asíncrona según búsqueda
+  const loadRecursos = async (input: string): Promise<any[]> => {
     try {
-      console.log('🔄 Cargando recursos...')
-      const response = await fetch('/api/recursos?limit=1000') // Aumentar límite para obtener todos los recursos
+      if (!input || input.trim().length === 0) {
+        return []
+      }
+
+      const response = await fetch(`/api/recursos/search?query=${encodeURIComponent(input)}`)
       if (response.ok) {
         const result = await response.json()
-        const recursosData = result.data || []
-        
-        console.log(`✅ Recursos cargados: ${recursosData.length}`)
-        
-        // Verificar cuántos tienen variantes y control_stock
-        const conVariantes = recursosData.filter((r: any) => r.variantes && r.variantes.length > 0)
-        const conControlStock = recursosData.filter((r: any) => r.control_stock && Object.keys(r.control_stock).length > 0)
-        
-        console.log(`📊 Recursos con variantes: ${conVariantes.length}`)
-        console.log(`📊 Recursos con control_stock: ${conControlStock.length}`)
-        
-        // Mostrar detalle de los primeros 3 recursos con variantes
-        if (conVariantes.length > 0) {
-          console.log('📦 Detalle de recursos con variantes:', 
-            conVariantes.slice(0, 3).map((r: any) => ({
-              nombre: r.nombre,
-              variantes: r.variantes,
-              tieneControlStock: !!r.control_stock,
-              clavesControlStock: r.control_stock ? Object.keys(r.control_stock) : []
-            }))
-          )
-        }
-        
-        setRecursos(recursosData)
-      } else {
-        console.error('❌ Error al cargar recursos:', response.status, response.statusText)
+        return result.data || []
       }
+      return []
     } catch (error) {
-      console.error('❌ Error al cargar recursos:', error)
+      console.error('❌ Error cargando recursos:', error)
+      return []
     }
   }
 
-  // Funciones helper para calculadora de precios
-  const parseNum = (v: number | string) => {
-    if (typeof v === "number") return v
-    const s = (v ?? "").toString().replace(",", ".").replace(/^0+(?=\d)/, "")
-    const n = parseFloat(s)
-    return isFinite(n) ? n : 0
-  }
+  // Ya no se necesita fetch masivo de recursos
+  // Los recursos se cargan bajo demanda cuando el usuario busca
 
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-  const recalcAllPrices = (rowsIn: typeof priceRows) => {
+
+  // Función para cálculo inverso desde precio objetivo
+  const recalcFromTargetPrice = (precioObjetivo: number, rowsIn: typeof priceRows) => {
     const rows = JSON.parse(JSON.stringify(rowsIn))
-    const coste = parseNum(rows.find((r: any) => r.campo === "Coste")?.valor ?? 0)
+    const coste = parseNum(rows.find(r => r.campo === "Coste")?.valor ?? 0)
+
+    // Obtener porcentajes configurables
+    const facturaRow = rows.find(r => r.campo === "Factura")
+    const iueRow = rows.find(r => r.campo === "IUE")
+    const comisionRow = rows.find(r => r.campo === "Comision")
     
-    const adicionales = rows
-      .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-      .reduce((sum: number, r: any) => sum + parseNum(r.valor), 0)
+    const facturaPctConfig = parseNum(facturaRow?.porcentajeConfig ?? facturaRow?.porcentaje ?? 16)
+    const iuePctConfig = parseNum(iueRow?.porcentajeConfig ?? iueRow?.porcentaje ?? 2)
+    const comPctConfig = parseNum(comisionRow?.porcentajeConfig ?? comisionRow?.porcentaje ?? 12)
 
-    const utilRow = rows.find((r: any) => r.campo === "Utilidad (U)")
-    if (utilRow) {
-      const p = parseNum(utilRow.porcentaje) || 28
-      utilRow.porcentaje = p
-      utilRow.valor = round2(coste * (p / 100))
-    }
-    const utilidad = utilRow ? parseNum(utilRow.valor) : 0
+    const facturaPct = facturaPctConfig / 100
+    const iuePct = iuePctConfig / 100
 
-    const base = coste + utilidad + adicionales
-    
-    // Primero calcular la comisión sobre coste + utilidad + adicionales
-    const comRow = rows.find((r: any) => r.campo === "Comisión (C)")
-    let comision = 0
-    if (comRow) {
-      const p = parseNum(comRow.porcentaje) || 8
-      comRow.porcentaje = p
-      comision = round2(base * (p / 100))
-      comRow.valor = comision
-    }
+    const facturaVal = round2(precioObjetivo * facturaPct)
+    const iueVal = round2(precioObjetivo * iuePct)
 
-    // Luego calcular la factura sobre coste + utilidad + adicionales + comisión
-    const facRow = rows.find((r: any) => r.campo === "Factura (F)")
-    if (facRow) {
-      const p = parseNum(facRow.porcentaje) || 16
-      facRow.porcentaje = p
-      const baseConComision = base + comision
-      facRow.valor = round2(baseConComision * (p / 100))
-    }
+    const costosTotales = round2(coste + facturaVal + iueVal)
+    const utilidadBruta = round2(precioObjetivo - costosTotales)
+    const comPct = comPctConfig / 100
+    const comisionVal = round2(utilidadBruta * comPct)
+    const utilidadNeta = round2(utilidadBruta - comisionVal)
 
-    rows.forEach((r: any) => {
-      if (!["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo)) {
-        const p = parseNum(r.porcentaje)
-        if (p !== 0 && r.porcentaje !== "") {
-          r.valor = round2(coste * (p / 100))
-        } else {
-          const v = parseNum(r.valor)
-          const pct = coste > 0 ? (v / coste) * 100 : 0
-          r.porcentaje = round2(pct)
-        }
+    // Calcular porcentajes sobre el precio para mostrar en la columna %
+    const costePct = precioObjetivo > 0 ? round2((coste / precioObjetivo) * 100) : 0
+    const facturaPctSobrePrecio = precioObjetivo > 0 ? round2((facturaVal / precioObjetivo) * 100) : 0
+    const iuePctSobrePrecio = precioObjetivo > 0 ? round2((iueVal / precioObjetivo) * 100) : 0
+    const costosTotalesPct = precioObjetivo > 0 ? round2((costosTotales / precioObjetivo) * 100) : 0
+    const utilidadBrutaPct = precioObjetivo > 0 ? round2((utilidadBruta / precioObjetivo) * 100) : 0
+    const comisionPctSobrePrecio = precioObjetivo > 0 ? round2((comisionVal / precioObjetivo) * 100) : 0
+    const utilidadNetaPct = precioObjetivo > 0 ? round2((utilidadNeta / precioObjetivo) * 100) : 0
+
+    rows.forEach(r => {
+      if (r.campo === "Coste") {
+        r.porcentaje = costePct
+      }
+      if (r.campo === "Factura") {
+        r.valor = facturaVal
+        r.porcentaje = facturaPctSobrePrecio
+        r.porcentajeConfig = facturaPctConfig
+      }
+      if (r.campo === "IUE") {
+        r.valor = iueVal
+        r.porcentaje = iuePctSobrePrecio
+        r.porcentajeConfig = iuePctConfig
+      }
+      if (r.campo === "Costos totales") {
+        r.valor = costosTotales
+        r.porcentaje = costosTotalesPct
+      }
+      if (r.campo === "Utilidad bruta") {
+        r.valor = utilidadBruta
+        r.porcentaje = utilidadBrutaPct
+      }
+      if (r.campo === "Comision") {
+        r.valor = comisionVal
+        r.porcentaje = comisionPctSobrePrecio
+        r.porcentajeConfig = comPctConfig
+      }
+      if (r.campo === "Utilidad neta") {
+        r.valor = utilidadNeta
+        r.porcentaje = utilidadNetaPct
+      }
+      if (r.campo === "Precio") {
+        r.valor = precioObjetivo
+        // El porcentaje de Precio siempre es 100% (es el precio objetivo)
+        r.porcentaje = 100
       }
     })
 
     return rows
   }
 
-  const recalcDependientesPrices = (rowsIn: typeof priceRows) => {
-    const rows = JSON.parse(JSON.stringify(rowsIn))
-    const coste = parseNum(rows.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-    const utilidad = parseNum(rows.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
-    const adicionales = rows
-      .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-      .reduce((sum: number, r: any) => sum + parseNum(r.valor), 0)
-    const base = coste + utilidad + adicionales
-
-    // Primero calcular la comisión sobre coste + utilidad + adicionales
-    const com = rows.find((r: any) => r.campo === "Comisión (C)")
-    let comision = 0
-    if (com) {
-      const p = parseNum(com.porcentaje) || 8
-      comision = round2(base * (p / 100))
-      com.valor = comision
-    }
-
-    // Luego calcular la factura sobre coste + utilidad + adicionales + comisión
-    const fac = rows.find((r: any) => r.campo === "Factura (F)")
-    if (fac) {
-      const p = parseNum(fac.porcentaje) || 16
-      const baseConComision = base + comision
-      fac.valor = round2(baseConComision * (p / 100))
-    }
-
-    return rows
-  }
-
   // Handlers para calculadora de costes
-  const handleCostSearchChange = (rowId: number, searchTerm: string) => {
+  const handleCostSearchChange = async (rowId: number, searchTerm: string) => {
     setCostRows(prev => prev.map(row => 
       row.id === rowId 
         ? { ...row, searchTerm, selectedRecurso: null }
@@ -1734,13 +1939,12 @@ export default function ProductoDetailPage() {
     ))
     
     if (searchTerm.trim().length > 0) {
-      const filtered = recursos.filter((recurso: any) => 
-        recurso.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (recurso.codigo || recurso.id || "").toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      setFilteredRecursos(filtered)
+      // Cargar recursos de forma asíncrona
+      const recursosEncontrados = await loadRecursos(searchTerm)
+      setFilteredRecursos(recursosEncontrados)
       setShowCostDropdown(rowId)
     } else {
+      setFilteredRecursos([])
       setShowCostDropdown(null)
     }
   }
@@ -1752,12 +1956,16 @@ export default function ProductoDetailPage() {
             ...row, 
             selectedRecurso: recurso, 
             unidad: recurso.unidad_medida,
-            searchTerm: recurso.nombre
+            searchTerm: recurso.nombre,
+            // Limpiar costeUnitarioGuardado cuando se selecciona un nuevo recurso
+            // para que use el precio de control_stock
+            costeUnitarioGuardado: null
           }
         : row
     ))
     setShowCostDropdown(null)
     
+    // FIX 5: Mejorar parseo de variantes al seleccionar recurso
     // Si el recurso tiene variantes, importarlas automáticamente al producto
     // Manejar diferentes formatos de variantes:
     // 1. Array directo: recurso.variantes = [...]
@@ -1765,27 +1973,46 @@ export default function ProductoDetailPage() {
     let variantesArray: any[] = []
     
     if (recurso.variantes) {
-      if (Array.isArray(recurso.variantes)) {
-        // Formato 1: Array directo
-        variantesArray = recurso.variantes
-      } else if (typeof recurso.variantes === 'object' && recurso.variantes.variantes) {
-        // Formato 2: Objeto con propiedad variantes
-        if (Array.isArray(recurso.variantes.variantes)) {
-          variantesArray = recurso.variantes.variantes
-        }
-      } else if (typeof recurso.variantes === 'string') {
-        // Formato 3: String JSON que necesita parsearse
-        try {
-          const parsed = JSON.parse(recurso.variantes)
-          if (Array.isArray(parsed)) {
-            variantesArray = parsed
-          } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
-            variantesArray = parsed.variantes
+      try {
+        if (Array.isArray(recurso.variantes)) {
+          // Formato 1: Array directo
+          variantesArray = recurso.variantes
+        } else if (typeof recurso.variantes === 'object' && recurso.variantes.variantes) {
+          // Formato 2: Objeto con propiedad variantes
+          if (Array.isArray(recurso.variantes.variantes)) {
+            variantesArray = recurso.variantes.variantes
+          } else {
+            console.warn(`⚠️ Recurso "${recurso.nombre}" tiene variantes.variantes pero no es array:`, typeof recurso.variantes.variantes)
           }
-        } catch (e) {
-          console.error('Error parseando variantes del recurso:', e)
+        } else if (typeof recurso.variantes === 'string') {
+          // Formato 3: String JSON que necesita parsearse
+          try {
+            const parsed = JSON.parse(recurso.variantes)
+            if (Array.isArray(parsed)) {
+              variantesArray = parsed
+            } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
+              variantesArray = parsed.variantes
+            } else {
+              console.warn(`⚠️ Recurso "${recurso.nombre}" tiene variantes en string pero formato no reconocido:`, parsed)
+            }
+          } catch (e) {
+            console.error(`❌ Error parseando variantes del recurso "${recurso.nombre}":`, e)
+          }
+        } else {
+          console.warn(`⚠️ Recurso "${recurso.nombre}" tiene variantes en formato no reconocido:`, typeof recurso.variantes, recurso.variantes)
         }
+      } catch (error) {
+        console.error(`❌ Error procesando variantes del recurso "${recurso.nombre}":`, error)
+        variantesArray = []
       }
+    } else {
+      console.log(`ℹ️ Recurso "${recurso.nombre}" no tiene variantes definidas`)
+    }
+    
+    // Asegurar que variantesArray nunca sea undefined
+    if (!Array.isArray(variantesArray)) {
+      console.warn(`⚠️ variantesArray no es array, normalizando a []`)
+      variantesArray = []
     }
     
     if (variantesArray.length > 0) {
@@ -1955,6 +2182,13 @@ export default function ProductoDetailPage() {
     setCostApplied(false)
     
     try {
+      // Si es un producto nuevo, no se puede aplicar el coste hasta que esté guardado
+      if (isNewProduct) {
+        toast.error("Debes guardar el producto primero antes de aplicar el coste")
+        setIsApplyingCost(false)
+        return
+      }
+
       const costValue = parseFloat(parseFloat(editableCost || "0").toFixed(2))
       if (costValue <= 0) {
         toast.error("El coste debe ser mayor a 0")
@@ -2015,37 +2249,33 @@ export default function ProductoDetailPage() {
     }
   }
 
-  // Handlers para calculadora de precios
-  const handlePriceCampoChange = (rowId: number, campo: string) => {
-    setPriceRows(prev => prev.map(r => (r.id === rowId ? { ...r, campo } : r)))
-  }
-
+  // Handlers para calculadora de precios (nueva versión simplificada)
   const handlePricePorcentajeChange = (rowId: number, pctStr: string) => {
     setPriceRows(prev => {
       const rowsCopy = JSON.parse(JSON.stringify(prev))
       const row = rowsCopy.find((r: any) => r.id === rowId)
-      if (!row) return prev
+      if (!row || !row.editable) return prev
 
       if (pctStr === "") {
-        row.porcentaje = ""
+        row.porcentaje = null
+        row.porcentajeConfig = null
         return rowsCopy
       }
 
       const pct = parseNum(pctStr)
-      row.porcentaje = pct
-      const coste = parseNum(rowsCopy.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-
-      if (row.campo === "Utilidad (U)") {
-        row.valor = round2(coste * (pct / 100))
-        return recalcDependientesPrices(rowsCopy)
+      
+      // Si cambian porcentajes de Factura, IUE o Comision, guardar en porcentajeConfig
+      if (["Factura", "IUE", "Comision"].includes(row.campo)) {
+        row.porcentajeConfig = pct
+        const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+        if (precioActual > 0) {
+          return recalcFromTargetPrice(precioActual, rowsCopy)
+        }
+      } else {
+        row.porcentaje = pct
       }
 
-      if (row.campo === "Factura (F)" || row.campo === "Comisión (C)") {
-        return recalcDependientesPrices(rowsCopy.map((r: any) => (r.id === rowId ? { ...row } : r)))
-      }
-
-      row.valor = round2(coste * (pct / 100))
-      return recalcDependientesPrices(rowsCopy)
+      return rowsCopy
     })
   }
 
@@ -2053,188 +2283,43 @@ export default function ProductoDetailPage() {
     setPriceRows(prev => {
       const rowsCopy = JSON.parse(JSON.stringify(prev))
       const row = rowsCopy.find((r: any) => r.id === rowId)
-      if (!row) return prev
+      if (!row || !row.editable) return prev
 
-      if (valStr === "") {
-        row.valor = ""
+      // Si el campo está vacío, mantener el valor actual sin recalcular
+      if (valStr === "" || valStr.trim() === "") {
+        // Para "Precio", no recalcular si está vacío (dejar que el usuario termine de escribir)
+        if (row.campo === "Precio") {
+          row.valor = ""
+          return rowsCopy
+        }
+        row.valor = 0
         return rowsCopy
       }
 
+      // Parsear el valor (maneja tanto "." como "," como separador decimal)
       const val = parseNum(valStr)
-      row.valor = val
-      const coste = parseNum(rowsCopy.find((r: any) => r.campo === "Coste")?.valor ?? 0)
-
-      if (row.campo === "Utilidad (U)") {
-        const pct = coste > 0 ? (val / coste) * 100 : 0
-        row.porcentaje = round2(pct)
-        return recalcDependientesPrices(rowsCopy)
-      }
-
-      if (row.campo === "Comisión (C)") {
-        const utilidad = parseNum(rowsCopy.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
-        const adicionales = rowsCopy
-          .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-          .reduce((s: number, r: any) => s + parseNum(r.valor), 0)
-        const base = coste + utilidad + adicionales
-        const pct = base > 0 ? (val / base) * 100 : 0
-        row.porcentaje = round2(pct)
-        return recalcDependientesPrices(rowsCopy)
-      }
       
-      if (row.campo === "Factura (F)") {
-        const utilidad = parseNum(rowsCopy.find((r: any) => r.campo === "Utilidad (U)")?.valor ?? 0)
-        const adicionales = rowsCopy
-          .filter((r: any) => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-          .reduce((s: number, r: any) => s + parseNum(r.valor), 0)
-        const base = coste + utilidad + adicionales
-        // Para Factura, la base debe incluir la comisión
-        const comision = parseNum(rowsCopy.find((r: any) => r.campo === "Comisión (C)")?.valor ?? 0)
-        const baseConComision = base + comision
-        const pct = baseConComision > 0 ? (val / baseConComision) * 100 : 0
-        row.porcentaje = round2(pct)
-        return recalcDependientesPrices(rowsCopy)
+      // Proteger de NaN
+      if (isNaN(val) || !isFinite(val)) {
+        // Si no es un número válido, mantener el valor actual
+        return prev
       }
 
-      const pct = coste > 0 ? (val / coste) * 100 : 0
-      row.porcentaje = round2(pct)
-      return recalcDependientesPrices(rowsCopy)
-    })
-  }
-
-  const handleAddPriceRow = () => {
-    setPriceRows(prev => {
-      const newId = priceRowIdCounter
-      setPriceRowIdCounter(prevCounter => prevCounter + 1)
-      const newRow = { id: newId, campo: "", porcentaje: 0, valor: 0 }
-      const copy = JSON.parse(JSON.stringify(prev))
-      const utilIdx = copy.findIndex((r: any) => r.campo === "Utilidad (U)")
-      const insertAt = utilIdx > -1 ? utilIdx : copy.length
-      copy.splice(insertAt, 0, newRow)
-      return copy
-    })
-  }
-
-  const handleRemovePriceRow = (rowId: number) => {
-    setPriceRows(prev => {
-      const row = prev.find(r => r.id === rowId)
-      if (!row || row.campo === "Coste") return prev
-      const filtered = prev.filter(r => r.id !== rowId)
-      return recalcDependientesPrices(filtered)
-    })
-  }
-
-  // Aplicar objetivo de utilidad real
-  const handleAplicarObjetivoUtilidad = () => {
-    const objetivo = parseFloat(objetivoUtilidadReal)
-    if (isNaN(objetivo) || objetivo <= 0) {
-      toast.error("El objetivo debe ser un número mayor a 0")
-      return
-    }
-    
-    const objetivoDecimal = objetivo / 100 // Convertir a decimal
-    
-    // Obtener valores actuales
-    const comisionPorcentaje = parseNum(priceRows.find(r => r.campo === "Comisión (C)")?.porcentaje ?? 0) / 100
-    const facturaPorcentaje = parseNum(priceRows.find(r => r.campo === "Factura (F)")?.porcentaje ?? 0) / 100
-    
-    // Calcular A = (1 + c) × (1 + f)
-    const A = (1 + comisionPorcentaje) * (1 + facturaPorcentaje)
-    
-    // Validar máximo posible: m_max = 1 / A
-    const maximoPosible = (1 / A) * 100
-    if (objetivo > maximoPosible) {
-      toast.error(`El objetivo no puede ser mayor a ${maximoPosible.toFixed(2)}%`)
-      return
-    }
-    
-    // Calcular u necesario: u = (m_target × A) / (1 - m_target × A)
-    const denominador = 1 - (objetivoDecimal * A)
-    if (denominador <= 0) {
-      toast.error("No es posible alcanzar ese objetivo con los valores actuales")
-      return
-    }
-    
-    const uNecesario = (objetivoDecimal * A) / denominador
-    const uPorcentaje = uNecesario * 100
-    
-    // Actualizar el porcentaje de Utilidad (U)
-    setPriceRows(prev => {
-      const rowsCopy = JSON.parse(JSON.stringify(prev))
-      const utilidadRow = rowsCopy.find((r: any) => r.campo === "Utilidad (U)")
-      if (utilidadRow) {
-        utilidadRow.porcentaje = round2(uPorcentaje)
-        // Recalcular todos los valores
-        return recalcAllPrices(rowsCopy)
-      }
-      return prev
-    })
-    
-    toast.success(`Utilidad (U) ajustada a ${uPorcentaje.toFixed(2)}% para alcanzar ${objetivo.toFixed(2)}% de utilidad real`)
-  }
-
-  // Recalcular todos los valores cuando se cambia el precio total manualmente
-  const handlePriceTotalChange = (newTotalStr: string) => {
-    const newTotal = parseFloat(newTotalStr) || 0
-    if (newTotal <= 0) {
-      return
-    }
-
-    // Calcular el total actual
-    const currentTotal = priceRows.reduce((sum, row) => sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0)
-    
-    if (currentTotal === 0) {
-      return
-    }
-
-    // Calcular factor de escala
-    const scaleFactor = newTotal / currentTotal
-    const coste = parseNum(priceRows.find(r => r.campo === "Coste")?.valor ?? 0)
-
-    // Aplicar el factor a todos los valores excepto el coste
-    setPriceRows(prev => {
-      const updated = prev.map(row => {
-        if (row.campo === "Coste") {
-          return row // El coste no cambia
-        }
-
-        const newValor = round2(parseNum(row.valor) * scaleFactor)
-        
-        // Recalcular porcentaje basándose en el coste
-        let newPorcentaje = 0
-        if (row.campo === "Utilidad (U)") {
-          newPorcentaje = coste > 0 ? round2((newValor / coste) * 100) : 0
-        } else if (row.campo === "Comisión (C)") {
-          const utilidad = parseNum(prev.find(r => r.campo === "Utilidad (U)")?.valor ?? 0) * scaleFactor
-          const adicionales = prev
-            .filter(r => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-            .reduce((sum, r) => sum + (parseNum(r.valor) * scaleFactor), 0)
-          const base = coste + utilidad + adicionales
-          newPorcentaje = base > 0 ? round2((newValor / base) * 100) : 0
-        } else if (row.campo === "Factura (F)") {
-          const utilidad = parseNum(prev.find(r => r.campo === "Utilidad (U)")?.valor ?? 0) * scaleFactor
-          const adicionales = prev
-            .filter(r => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-            .reduce((sum, r) => sum + (parseNum(r.valor) * scaleFactor), 0)
-          const comision = parseNum(prev.find(r => r.campo === "Comisión (C)")?.valor ?? 0) * scaleFactor
-          const baseConComision = coste + utilidad + adicionales + comision
-          newPorcentaje = baseConComision > 0 ? round2((newValor / baseConComision) * 100) : 0
+      // Si se edita "Precio", usar cálculo inverso (precio objetivo → recalcular todo)
+      if (row.campo === "Precio") {
+        if (val > 0) {
+          return recalcFromTargetPrice(val, rowsCopy)
         } else {
-          // Campos adicionales
-          newPorcentaje = coste > 0 ? round2((newValor / coste) * 100) : 0
+          // Si el precio es 0 o negativo, solo actualizar el valor sin recalcular
+          row.valor = val
+          return rowsCopy
         }
+      }
 
-        return {
-          ...row,
-          valor: newValor,
-          porcentaje: newPorcentaje
-        }
-      })
-
-      // Recalcular dependientes después de aplicar el factor
-      return recalcDependientesPrices(updated)
+      // Para otros campos, solo actualizar el valor
+      row.valor = val
+      return rowsCopy
     })
-
-    // NO modificar editablePrice aquí - mantener exactamente lo que el usuario escribió
   }
 
   const handleApplyPrice = async () => {
@@ -2242,7 +2327,16 @@ export default function ProductoDetailPage() {
     setPriceApplied(false)
     
     try {
-      const priceValue = parseFloat(editablePrice) || 0
+      // Si es un producto nuevo, no se puede aplicar el precio hasta que esté guardado
+      if (isNewProduct) {
+        toast.error("Debes guardar el producto primero antes de aplicar el precio")
+        setIsApplyingPrice(false)
+        return
+      }
+
+      const precioRow = priceRows.find(r => r.campo === "Precio")
+      const priceValue = parseNum(precioRow?.valor ?? 0)
+      
       if (priceValue <= 0) {
         toast.error("El precio debe ser mayor a 0")
         setIsApplyingPrice(false)
@@ -2263,7 +2357,6 @@ export default function ProductoDetailPage() {
         unidad_medida: formData.unidad_medida,
         coste: parseFloat(formData.coste) || 0,
         precio_venta: priceValue,
-        // cantidad no se guarda en Supabase, se calcula desde receta
         mostrar_en_web: formData.mostrar_en_web
       }
 
@@ -2283,21 +2376,12 @@ export default function ProductoDetailPage() {
       const updated = result.data || result
       setProducto(updated)
       
-      // Marcar que hay un precio guardado manualmente
-      hasManualPriceRef.current = true
-      savedPriceRef.current = priceValue
-      lastCalculatedPriceRef.current = totalPrice
-      
-      // Resetear flag de edición manual
-      isPriceManuallyEditedRef.current = false
       setPriceApplied(true)
       toast.success(`Precio aplicado y guardado: Bs ${priceValue.toFixed(2)}`)
       
-      // Resetear animación después de 1.8 segundos
       setTimeout(() => setPriceApplied(false), 1800)
       
     } catch (error) {
-      console.error("Error saving price:", error)
       toast.error(error instanceof Error ? error.message : "Error de conexión al guardar el precio")
     } finally {
       setIsApplyingPrice(false)
@@ -2309,50 +2393,25 @@ export default function ProductoDetailPage() {
   useEffect(() => {
     if (editing && !saving) {
       const coste = parseFloat(formData.coste) || (producto?.coste || 0)
-      setPriceRows(prev => {
-        const costeRow = prev.find(r => r.campo === "Coste")
-        if (costeRow && parseNum(costeRow.valor) !== coste) {
-          const updated = prev.map(row => 
-            row.campo === "Coste" ? { ...row, valor: coste } : row
-          )
-          return recalcAllPrices(updated)
-        }
-        return prev
-      })
-      // Inicializar campos editables con los valores guardados en la base de datos
-      // Estos valores tienen prioridad sobre los calculados
       const precio = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
       
-      // Calcular los totales actuales de la calculadora para comparar después
-      const totalCalculadoCoste = costRows.reduce((sum, row) => {
-        if (row.selectedRecurso && row.cantidad > 0) {
-          return sum + (row.selectedRecurso.coste * row.cantidad)
+      setPriceRows(prev => {
+        let updated = prev.map(row => {
+          if (row.campo === "Coste" && parseNum(row.valor) !== coste) {
+            return { ...row, valor: coste }
+          }
+          if (row.campo === "Precio" && parseNum(row.valor) !== precio && precio > 0) {
+            return { ...row, valor: precio }
+          }
+          return row
+        })
+        
+        // Si hay un precio, recalcular desde precio
+        if (precio > 0) {
+          return recalcFromTargetPrice(precio, updated)
         }
-        return sum
-      }, 0)
-      
-      const totalCalculadoPrecio = priceRows.reduce((sum, row) => 
-        sum + (typeof row.valor === 'number' ? row.valor : parseFloat(String(row.valor)) || 0), 0
-      )
-      
-      // Siempre inicializar con los valores de la base de datos
-      setEditableCost(coste.toFixed(2))
-      setEditablePrice(precio.toFixed(2))
-      
-      // Marcar que estos valores vienen de la base de datos (guardados manualmente)
-      // Esto previene que se sobrescriban cuando se recalcula la calculadora
-      hasManualCostRef.current = true
-      savedCostRef.current = coste
-      // Inicializar con el total calculado actual para que la primera comparación sea correcta
-      lastCalculatedCostRef.current = totalCalculadoCoste
-      
-      hasManualPriceRef.current = true
-      savedPriceRef.current = precio
-      // Inicializar con el total calculado actual para que la primera comparación sea correcta
-      lastCalculatedPriceRef.current = totalCalculadoPrecio
-      
-      // Resetear flag de edición manual (no está siendo editado ahora)
-      isPriceManuallyEditedRef.current = false
+        return updated
+      })
     }
   }, [editing, producto?.id, isNewProduct])
 
@@ -2536,16 +2595,6 @@ export default function ProductoDetailPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cantidad">Stock</Label>
-                      <Input
-                        id="cantidad"
-                        type="number"
-                        min="0"
-                        value={formData.cantidad}
-                        onChange={(e) => handleChange("cantidad", e.target.value)}
-                      />
-                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -2602,13 +2651,6 @@ export default function ProductoDetailPage() {
                         <div>
                           <Label className="text-sm font-medium text-gray-700">Categoría</Label>
                           <Badge variant="secondary">{producto.categoria || 'Sin categoría'}</Badge>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium text-gray-700">Stock</Label>
-                          <p className="font-semibold">{producto.cantidad}</p>
                         </div>
                       </div>
                       
@@ -2897,7 +2939,24 @@ export default function ProductoDetailPage() {
                         <div className="col-span-3">
                           {index === 0 && <Label className="text-xs">Total</Label>}
                           <div className="flex h-9 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm items-center">
-                            {row.selectedRecurso ? `Bs ${(row.selectedRecurso.coste * row.cantidad).toFixed(2)}` : '-'}
+                            {row.selectedRecurso ? (() => {
+                              // PRIORIDAD 1: Usar coste_unitario guardado de la receta (si existe)
+                              const costeUnitario = (row as any).costeUnitarioGuardado
+                              let precioReal: number
+                              
+                              if (costeUnitario !== null && costeUnitario !== undefined && !isNaN(costeUnitario) && costeUnitario >= 0) {
+                                // Usar el precio guardado de la receta
+                                precioReal = costeUnitario
+                              } else {
+                                // PRIORIDAD 2: Buscar en control_stock del recurso
+                                precioReal = obtenerPrecioRecurso(row.selectedRecurso)
+                              }
+                              
+                              // precioReal siempre es un número, nunca null (incluso si es 0)
+                              const total = precioReal * row.cantidad
+                              // Siempre mostrar "Bs 0.00" en lugar de "–" cuando hay recurso seleccionado
+                              return `Bs ${total.toFixed(2)}`
+                            })() : '-'}
                           </div>
                         </div>
                         <div className="col-span-1">
@@ -2932,36 +2991,45 @@ export default function ProductoDetailPage() {
                   <DollarSign className="h-5 w-5" />
                   Calculadora de Precios (UFC)
                 </CardTitle>
-                <CardDescription>Añade campos y calcula el precio total</CardDescription>
+                <CardDescription>Calcula el precio desde el precio objetivo del mercado</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                <div className="space-y-3">
                   <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-700 mb-2">
                     <div className="col-span-4">Campo</div>
                     <div className="col-span-3">%</div>
-                    <div className="col-span-3">Valor (Bs)</div>
-                    <div className="col-span-2"></div>
+                    <div className="col-span-5">Valor (Bs)</div>
                   </div>
                   
-                  {priceRows.map((row, priceIndex) => (
-                    <div key={`price-row-${row.id}-${priceIndex}`}>
-                      {row.campo === "Coste" && (
-                        <div className="mb-3">
-                          <Button onClick={handleAddPriceRow} variant="outline" size="sm">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Añadir Línea
-                          </Button>
-                        </div>
-                      )}
-                      
-                      <div className="grid grid-cols-12 gap-2">
+                  {priceRows.map((row) => {
+                    const isEditable = row.editable
+                    const isPrecioRow = row.campo === "Precio"
+                    // Para campos editables (Factura, IUE, Comision), siempre mostrar el campo
+                    // Para campos no editables, solo mostrar si tienen porcentaje calculado
+                    let showPorcentaje =
+                      row.porcentaje != null ||
+                      ((row.campo === "Factura" || row.campo === "IUE" || row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") &&
+                       (row as any).porcentajeConfig != null)
+                    // Para Comisión, SIEMPRE mostrar porcentajeConfig (valor original del usuario)
+                    // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje
+                    // Para otros campos, mostrar porcentaje (calculado sobre precio)
+                    let porcentajeToShow: number | string | null = row.porcentaje
+                    if (row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") {
+                      porcentajeToShow = (row as any).porcentajeConfig != null ? (row as any).porcentajeConfig : ""
+                      showPorcentaje = true
+                    } else if (row.campo === "Factura" || row.campo === "IUE") {
+                      porcentajeToShow = (row as any).porcentajeConfig != null
+                        ? (row as any).porcentajeConfig
+                        : row.porcentaje
+                    }
+                    
+                    return (
+                      <div key={`price-row-${row.id}`} className="grid grid-cols-12 gap-2">
                         <div className="col-span-4">
                           <Input
-                            placeholder="Campo..."
                             value={row.campo}
-                            onChange={(e) => handlePriceCampoChange(row.id, e.target.value)}
-                            disabled={row.campo === "Coste"}
-                            className={`h-9 text-sm ${row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                            disabled
+                            className={`h-9 text-sm ${isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed"}`}
                           />
                         </div>
                         <div className="col-span-3">
@@ -2969,40 +3037,61 @@ export default function ProductoDetailPage() {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={row.campo === "Coste" ? "" : row.porcentaje}
+                            value={isPrecioRow ? "" : (showPorcentaje ? (porcentajeToShow ?? "") : "")}
                             onChange={(e) => handlePricePorcentajeChange(row.id, e.target.value)}
-                            disabled={row.campo === "Coste"}
-                            placeholder={row.campo === "Coste" ? "" : "0.00"}
-                            className={`h-9 text-sm ${row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                            disabled={!isEditable || !showPorcentaje || isPrecioRow}
+                            placeholder={isPrecioRow ? "" : (showPorcentaje ? "0.00" : "")}
+                            className={`h-9 text-sm ${!isEditable || !showPorcentaje || isPrecioRow ? (isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed") : ""}`}
                           />
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-5">
                           <Input
                             type="number"
                             min="0"
                             step="0.01"
-                            value={row.valor}
+                            value={row.valor || ""}
                             onChange={(e) => handlePriceValorChange(row.id, e.target.value)}
-                            disabled={row.campo === "Coste"}
+                            disabled={!isEditable}
                             placeholder="0.00"
-                            className={`h-9 text-sm ${row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                            className={`h-9 text-sm ${!isEditable ? (isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed") : (isPrecioRow ? "bg-green-50" : "")}`}
                           />
-                        </div>
-                        <div className="col-span-2">
-                          {priceRows.length > 1 && row.campo !== "Coste" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemovePriceRow(row.id)}
-                              className="h-9 w-9 p-0 text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
+                </div>
+                
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Precio Final:</span>
+                    <span className="text-lg font-bold text-green-600">
+                      Bs {parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                            <Button
+                    onClick={handleApplyPrice}
+                    disabled={isApplyingPrice || parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0) <= 0}
+                    className={`w-full mt-4 transition-all duration-300 transform ${
+                      priceApplied
+                        ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
+                        : 'bg-green-600 hover:bg-green-700'
+                    } ${isApplyingPrice ? 'opacity-75 cursor-wait' : ''} text-white`}
+                              size="sm"
+                  >
+                    {isApplyingPrice ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : priceApplied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2 animate-pulse" />
+                        ¡Aplicado!
+                      </>
+                    ) : (
+                      'Aplicar Precio'
+                    )}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -3065,98 +3154,6 @@ export default function ProductoDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Total Calculadora de Precios */}
-            <Card className="lg:col-span-1">
-              <CardContent className="pt-6">
-                <div className="border-t pt-4">
-                  <div className="flex items-center gap-3">
-                    <div className="text-lg font-bold flex items-center gap-2">
-                      Total: <span className="text-green-600">Bs {totalPrice.toFixed(2)}</span>
-                    </div>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editablePrice}
-                      onChange={(e) => {
-                        // Si el usuario escribe manualmente, resetear el flag de guardado manual
-                        hasManualPriceRef.current = false
-                        savedPriceRef.current = null
-                        isPriceManuallyEditedRef.current = true
-                        setEditablePrice(e.target.value)
-                      }}
-                      onBlur={(e) => {
-                        handlePriceTotalChange(e.target.value)
-                      }}
-                      onFocus={() => {
-                        isPriceManuallyEditedRef.current = true
-                      }}
-                      className="w-24 h-9 text-sm font-semibold"
-                      placeholder="0.00"
-                    />
-                    <Button
-                      onClick={handleApplyPrice}
-                      disabled={isApplyingPrice || !editablePrice || parseFloat(editablePrice) <= 0}
-                      className={`ml-auto transition-all duration-300 transform ${
-                        priceApplied
-                          ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
-                          : 'bg-green-600 hover:bg-green-700'
-                      } ${isApplyingPrice ? 'opacity-75 cursor-wait' : ''} text-white`}
-                      size="sm"
-                    >
-                      {isApplyingPrice ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : priceApplied ? (
-                        <>
-                          <Check className="w-4 h-4 mr-2 animate-pulse" />
-                          ¡Aplicado!
-                        </>
-                      ) : (
-                        'Aplicar Precio'
-                      )}
-                    </Button>
-                  </div>
-                  
-                  {/* Utilidad Real y Objetivo */}
-                  <div className="mt-4 space-y-3 pt-4 border-t">
-                    {/* Utilidad real (efectiva) */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Utilidad real (efectiva):</span>
-                      <span className="text-sm font-bold text-red-600">{utilidadReal.toFixed(2)}%</span>
-                    </div>
-                    
-                    {/* Objetivo utilidad real */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-gray-700">Objetivo utilidad real:</span>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={objetivoUtilidadReal}
-                          onChange={(e) => setObjetivoUtilidadReal(e.target.value)}
-                          placeholder="Ej: 25"
-                          className="w-20 h-8 text-sm"
-                        />
-                        <span className="text-sm text-gray-600">%</span>
-                        <Button
-                          onClick={handleAplicarObjetivoUtilidad}
-                          disabled={!objetivoUtilidadReal || parseFloat(objetivoUtilidadReal) <= 0}
-                          className="bg-red-600 hover:bg-red-700 text-white"
-                          size="sm"
-                        >
-                          Aplicar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Tabla de Variantes del Producto */}
             {variantes.length > 0 && (
@@ -3422,29 +3419,38 @@ export default function ProductoDetailPage() {
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-700 mb-2">
                 <div className="col-span-4">Campo</div>
                 <div className="col-span-3">%</div>
-                <div className="col-span-3">Valor (Bs)</div>
-                <div className="col-span-2"></div>
+                <div className="col-span-5">Valor (Bs)</div>
               </div>
               
-              {priceRowsVariante.map((row, priceIndex) => (
-                <div key={`price-row-variante-${row.id}-${priceIndex}`}>
-                  {row.campo === "Coste" && (
-                    <div className="mb-3">
-                      <Button onClick={handleAddPriceRowVariante} variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Añadir Línea
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <div className="grid grid-cols-12 gap-2">
+              {priceRowsVariante.map((row) => {
+                const isEditable = row.editable
+                const isPrecioRow = row.campo === "Precio"
+                // Para campos editables (Factura, IUE, Comision), siempre mostrar el campo
+                // Para campos no editables, solo mostrar si tienen porcentaje calculado
+                let showPorcentaje =
+                  row.porcentaje != null ||
+                  ((row.campo === "Factura" || row.campo === "IUE" || row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") &&
+                   (row as any).porcentajeConfig != null)
+                // Para Comisión, SIEMPRE mostrar porcentajeConfig (valor original del usuario)
+                // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje
+                // Para otros campos, mostrar porcentaje (calculado sobre precio)
+                let porcentajeToShow: number | string | null = row.porcentaje
+                if (row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") {
+                  porcentajeToShow = (row as any).porcentajeConfig != null ? (row as any).porcentajeConfig : ""
+                  showPorcentaje = true
+                } else if (row.campo === "Factura" || row.campo === "IUE") {
+                  porcentajeToShow = (row as any).porcentajeConfig != null
+                    ? (row as any).porcentajeConfig
+                    : row.porcentaje
+                }
+                
+                return (
+                  <div key={`price-row-variante-${row.id}`} className="grid grid-cols-12 gap-2">
                     <div className="col-span-4">
                       <Input
-                        placeholder="Campo..."
                         value={row.campo}
-                        onChange={(e) => handlePriceCampoChangeVariante(row.id, e.target.value)}
-                        disabled={row.campo === "Coste"}
-                        className={`h-9 text-sm ${row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                        disabled
+                        className={`h-9 text-sm ${isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed"}`}
                       />
                     </div>
                     <div className="col-span-3">
@@ -3452,70 +3458,43 @@ export default function ProductoDetailPage() {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={row.campo === "Coste" ? "" : row.porcentaje}
+                        value={isPrecioRow ? "" : (showPorcentaje ? (porcentajeToShow ?? "") : "")}
                         onChange={(e) => handlePricePorcentajeChangeVariante(row.id, e.target.value)}
-                        disabled={row.campo === "Coste"}
-                        placeholder={row.campo === "Coste" ? "" : "0.00"}
-                        className={`h-9 text-sm ${row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                        disabled={!isEditable || !showPorcentaje || isPrecioRow}
+                        placeholder={isPrecioRow ? "" : (showPorcentaje ? "0.00" : "")}
+                        className={`h-9 text-sm ${!isEditable || !showPorcentaje || isPrecioRow ? (isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed") : ""}`}
                       />
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-5">
                       <Input
                         type="number"
                         min="0"
                         step="0.01"
-                        value={row.valor}
+                        value={row.valor || ""}
                         onChange={(e) => handlePriceValorChangeVariante(row.id, e.target.value)}
-                        disabled={row.campo === "Coste"}
+                        disabled={!isEditable || isPrecioRow}
                         placeholder="0.00"
-                        className={`h-9 text-sm ${row.campo === "Coste" ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                        className={`h-9 text-sm ${!isEditable || isPrecioRow ? (isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed") : ""}`}
                       />
                     </div>
-                    <div className="col-span-2">
-                      {priceRowsVariante.length > 1 && row.campo !== "Coste" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemovePriceRowVariante(row.id)}
-                          className="h-9 w-9 p-0 text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
-            {/* Total Calculadora de Precios */}
-            <div className="border-t pt-4">
+            {/* Precio Final y Botón Aplicar */}
+            <div className="pt-4 border-t">
+              <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="text-lg font-bold flex items-center gap-2">
-                  Total: <span className="text-green-600">Bs {editablePriceVariante || "0.00"}</span>
+                  <span className="text-sm font-medium">Precio Final:</span>
+                  <span className="text-lg font-bold text-green-600">
+                    Bs {priceRowsVariante.find(r => r.campo === "Precio")?.valor?.toFixed(2) || "0.00"}
+                  </span>
                 </div>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editablePriceVariante}
-                  onChange={(e) => {
-                    isPriceManuallyEditedVarianteRef.current = true
-                    setEditablePriceVariante(e.target.value)
-                  }}
-                  onBlur={(e) => {
-                    handlePriceTotalChangeVariante(e.target.value)
-                  }}
-                  onFocus={() => {
-                    isPriceManuallyEditedVarianteRef.current = true
-                  }}
-                  className="w-24 h-9 text-sm font-semibold"
-                  placeholder="0.00"
-                />
                 <Button
                   onClick={handleApplyPriceVariante}
-                  disabled={isApplyingPriceVariante || !editablePriceVariante || parseFloat(editablePriceVariante) <= 0}
-                  className={`ml-auto transition-all duration-300 transform ${
+                  disabled={isApplyingPriceVariante || !priceRowsVariante.find(r => r.campo === "Precio")?.valor || parseNum(priceRowsVariante.find(r => r.campo === "Precio")?.valor ?? 0) <= 0}
+                  className={`transition-all duration-300 transform ${
                     priceAppliedVariante
                       ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
                       : 'bg-green-600 hover:bg-green-700'
@@ -3537,41 +3516,6 @@ export default function ProductoDetailPage() {
                   )}
                 </Button>
               </div>
-              
-              {/* Utilidad Real y Objetivo */}
-              <div className="mt-4 space-y-3 pt-4 border-t">
-                {/* Utilidad real (efectiva) */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Utilidad real (efectiva):</span>
-                  <span className="text-sm font-bold text-red-600">{utilidadRealVariante.toFixed(2)}%</span>
-                </div>
-                
-                {/* Objetivo utilidad real */}
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-gray-700">Objetivo utilidad real:</span>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={objetivoUtilidadRealVariante}
-                      onChange={(e) => setObjetivoUtilidadRealVariante(e.target.value)}
-                      placeholder="Ej: 25"
-                      className="w-20 h-8 text-sm"
-                    />
-                    <span className="text-sm text-gray-600">%</span>
-                    <Button
-                      onClick={handleAplicarObjetivoUtilidadVariante}
-                      disabled={!objetivoUtilidadRealVariante || parseFloat(objetivoUtilidadRealVariante) <= 0}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                      size="sm"
-                    >
-                      Aplicar
-                    </Button>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -3585,3 +3529,4 @@ export default function ProductoDetailPage() {
     </div>
   )
 }
+

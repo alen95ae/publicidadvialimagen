@@ -8,3 +8,4 @@ ON CONFLICT DO NOTHING;
 -- Comentario
 COMMENT ON TABLE permisos IS 'Tabla de permisos del sistema. Los permisos técnicos (modulo=tecnico) son funciones especiales que no requieren permisos de módulo estándar';
 
+

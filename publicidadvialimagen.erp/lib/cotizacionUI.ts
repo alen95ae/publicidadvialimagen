@@ -211,3 +211,4 @@ export function filtrarComerciales(
   setFilteredComerciales(filtered)
 }
 
+

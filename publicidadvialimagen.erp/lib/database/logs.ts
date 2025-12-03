@@ -125,3 +125,4 @@ export async function logInfo(
   await logTransactionError('info', modulo, referencia, descripcion, detalles, usuarioId)
 }
 
+

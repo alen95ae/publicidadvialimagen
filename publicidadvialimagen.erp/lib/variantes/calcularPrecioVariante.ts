@@ -1,21 +1,15 @@
 /**
  * Función para calcular el precio de venta de un producto según una combinación de variantes
  * Aplica el mismo markup que la calculadora base del producto
+ * 
+ * NOTA: Ahora usa el motor de cálculo unificado (pricingEngine)
  */
 
-export interface PriceRow {
-  id: number
-  campo: string
-  porcentaje: number
-  valor: number
-}
+import { calcularPrecioVarianteBase } from '@/lib/engines/pricingEngine'
+import { CalculadoraPrecios, PriceRow } from '@/lib/types/inventario'
 
-export interface CalculadoraPrecios {
-  priceRows: PriceRow[]
-  totalPrice: number
-  utilidadReal?: number
-  objetivoUtilidadReal?: number
-}
+// Re-exportar tipos para compatibilidad
+export type { PriceRow, CalculadoraPrecios }
 
 /**
  * Calcula el precio de venta aplicando el markup de la calculadora base
@@ -32,43 +26,11 @@ export function calcularPrecioVariante(
     return Math.round((coste * 1.5) * 100) / 100
   }
 
-  const rows = [...calculadora.priceRows]
-  const costeRow = rows.find(r => r.campo === "Coste")
-  
-  if (costeRow) {
-    costeRow.valor = coste
-  } else {
-    // Si no existe fila de coste, agregarla
-    rows.unshift({ id: 0, campo: "Coste", porcentaje: 0, valor: coste })
-  }
-
-  // Recalcular filas dependientes
-  const utilidad = rows.find(r => r.campo === "Utilidad (U)")
-  const adicionales = rows
-    .filter(r => !["Coste", "Utilidad (U)", "Factura (F)", "Comisión (C)"].includes(r.campo))
-    .reduce((sum, r) => sum + (Number(r.valor) || 0), 0)
-  
-  const base = coste + (utilidad ? Number(utilidad.valor) || 0 : 0) + adicionales
-
-  // Calcular comisión sobre base
-  const comision = rows.find(r => r.campo === "Comisión (C)")
-  if (comision) {
-    const pct = Number(comision.porcentaje) || 8
-    comision.valor = Math.round(base * (pct / 100) * 100) / 100
-  }
-
-  // Calcular factura sobre base + comisión
-  const factura = rows.find(r => r.campo === "Factura (F)")
-  if (factura) {
-    const pct = Number(factura.porcentaje) || 16
-    const baseConComision = base + (comision ? Number(comision.valor) || 0 : 0)
-    factura.valor = Math.round(baseConComision * (pct / 100) * 100) / 100
-  }
-
-  // Calcular total
-  const total = rows.reduce((sum, r) => sum + (Number(r.valor) || 0), 0)
-
-  return Math.round(total * 100) / 100
+  // Usar el motor de cálculo unificado
+  return calcularPrecioVarianteBase({
+    coste,
+    priceRows: calculadora.priceRows as PriceRow[]
+  })
 }
 
 /**

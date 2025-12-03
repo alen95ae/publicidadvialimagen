@@ -68,7 +68,6 @@ interface InventoryItem {
   coste: number
   precio_venta: number
   categoria: string
-  cantidad: number
   disponibilidad: string
   imagen_portada?: string
   mostrar_en_web?: boolean
@@ -183,13 +182,6 @@ const inventarioItems = [
   }
 ]
 
-function getStockBadge(cantidad: number) {
-  if (cantidad >= 1) {
-    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Disponible</Badge>
-  } else {
-    return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Agotado</Badge>
-  }
-}
 
 
 export default function InventarioPage() {
@@ -1123,10 +1115,6 @@ export default function InventarioPage() {
                         </div>
                         <div className="space-y-0.5 pt-1 border-t">
                           <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-gray-600">Stock:</span>
-                            <span className="font-medium">{item.cantidad}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-[10px]">
                             <span className="text-gray-600">Precio:</span>
                             <span className="font-medium text-green-600">Bs {item.precio_venta.toFixed(2)}</span>
                           </div>
@@ -1177,7 +1165,6 @@ export default function InventarioPage() {
                     <TableHead>Coste</TableHead>
                     <TableHead>Precio Venta</TableHead>
                     <TableHead>% Utilidad</TableHead>
-                    <TableHead>Stock</TableHead>
                     <TableHead>Mostrar en Web</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
@@ -1320,26 +1307,6 @@ export default function InventarioPage() {
                         }`}>
                           {calcularPorcentajeUtilidad(item.coste, item.precio_venta).toFixed(1)}%
                         </span>
-                      </TableCell>
-                      <TableCell>
-                        {selected[item.id] ? (
-                          <Input
-                            type="number"
-                            min="0"
-                            value={editedItems[item.id]?.cantidad ?? item.cantidad}
-                            onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
-                            className="h-8 w-20"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                handleSaveChanges(item.id)
-                              } else if (e.key === 'Escape') {
-                                handleCancelEdit(item.id)
-                              }
-                            }}
-                          />
-                        ) : (
-                          getStockBadge(item.cantidad)
-                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center">

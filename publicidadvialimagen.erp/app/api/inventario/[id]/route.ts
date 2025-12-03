@@ -3,11 +3,20 @@ import { getProductoById, updateProducto, deleteProducto } from '@/lib/supabaseP
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    // FIX: Next.js 15 requiere await params
+    const { id } = await context.params
     console.log('🔍 Obteniendo producto por ID:', id)
+
+    if (!id) {
+      console.error('❌ ID no proporcionado o undefined')
+      return NextResponse.json(
+        { success: false, error: 'ID de producto requerido' },
+        { status: 400 }
+      )
+    }
 
     const producto = await getProductoById(id)
 
@@ -27,13 +36,23 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    // FIX: Next.js 15 requiere await params
+    const { id } = await context.params
     const body = await request.json()
     
     console.log('📝 Actualizando producto:', id)
+    
+    if (!id) {
+      console.error('❌ ID no proporcionado o undefined')
+      return NextResponse.json(
+        { success: false, error: 'ID de producto requerido' },
+        { status: 400 }
+      )
+    }
+    
     console.log('📝 Body recibido:', JSON.stringify(body, null, 2))
     console.log('📝 calculadora_de_precios (tipo):', typeof body.calculadora_de_precios)
     try {
@@ -61,11 +80,20 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    // FIX: Next.js 15 requiere await params
+    const { id } = await context.params
     console.log('🗑️ Eliminando producto:', id)
+
+    if (!id) {
+      console.error('❌ ID no proporcionado o undefined')
+      return NextResponse.json(
+        { success: false, error: 'ID de producto requerido' },
+        { status: 400 }
+      )
+    }
 
     await deleteProducto(id)
 

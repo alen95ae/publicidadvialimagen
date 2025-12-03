@@ -3,6 +3,7 @@ import { getSupabaseServer } from '@/lib/supabaseServer'
 import { generarCombinacionesVariantes, convertirVariantesAFormato } from '@/lib/variantes/generarCombinaciones'
 import { calcularCosteVariante } from '@/lib/variantes/calcularCosteVariante'
 import { calcularPrecioVariante } from '@/lib/variantes/calcularPrecioVariante'
+import { parseCalculadora } from '@/lib/models/productoModel'
 
 const supabase = getSupabaseServer()
 
@@ -242,7 +243,13 @@ async function recalcularVariantes(productoId: string) {
       .select('*')
 
     const receta = producto.receta || []
-    const calculadora = producto.calculadora_de_precios || null
+    // Debe leer ambos nombres para compatibilidad
+    const rawCalc =
+      producto.calculadora_precios ??
+      producto.calculadora_de_precios ??
+      null
+    const calculadora =
+      typeof rawCalc === "string" ? JSON.parse(rawCalc) : rawCalc
 
     // Recalcular cada variante
     const variantesActualizadas = await Promise.all(
@@ -250,7 +257,7 @@ async function recalcularVariantes(productoId: string) {
         // Parsear combinación
         const combinacionObj: Record<string, string> = {}
         const partes = variante.combinacion.split('|')
-        partes.forEach(parte => {
+        partes.forEach((parte: string) => {
           const [nombre, valor] = parte.split(':')
           if (nombre && valor) {
             combinacionObj[nombre.trim()] = valor.trim()
@@ -303,18 +310,40 @@ async function recalcularVariantes(productoId: string) {
 
 /**
  * Regenerar variantes desde las definiciones del producto
+ * 
+ * IMPORTANTE: Esta función SIEMPRE borra todas las variantes existentes antes de generar nuevas.
+ * Esto asegura que no se mezclen variantes de recursos eliminados con las nuevas.
  */
 async function regenerarVariantes(productoId: string, variantesDefinicion: any[]) {
   try {
-    // Validar que hay variantes definidas
+    console.log("🔄 [REGENERAR VARIANTES] Iniciando regeneración para producto:", productoId)
+    console.log("🔎 [REGENERAR VARIANTES] VariantesDefinicion recibidas:", JSON.stringify(variantesDefinicion, null, 2))
+
+    // PASO 1: Validar que hay variantes definidas
     if (!variantesDefinicion || variantesDefinicion.length === 0) {
-      console.log("⚠️ No hay variantes definidas, saltando generación")
+      console.log("⚠️ [REGENERAR VARIANTES] No hay variantes definidas, eliminando todas las variantes existentes")
+      // Borrar todas las variantes si no hay definiciones
+      const { error: deleteError } = await supabase
+        .from('producto_variantes')
+        .delete()
+        .eq('producto_id', productoId)
+      
+      if (deleteError) {
+        console.error("❌ [REGENERAR VARIANTES] Error eliminando variantes:", deleteError)
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'Error al eliminar variantes existentes',
+            detalles: deleteError.message
+          },
+          { status: 500 }
+        )
+      }
+      
       return NextResponse.json({ success: true, variantes: [] })
     }
 
-    console.log("🔎 VariantesDefinicion recibidas:", JSON.stringify(variantesDefinicion, null, 2))
-
-    // Obtener producto completo
+    // PASO 2: Obtener producto completo
     const { data: producto, error: productoError } = await supabase
       .from('productos')
       .select('*')
@@ -322,76 +351,72 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
       .single()
 
     if (productoError || !producto) {
-      console.error("❌ Error obteniendo producto:", productoError)
+      console.error("❌ [REGENERAR VARIANTES] Error obteniendo producto:", productoError)
       return NextResponse.json(
         { error: 'Producto no encontrado' },
         { status: 404 }
       )
     }
 
-    // Convertir definiciones a formato
-    const variantesFormato = convertirVariantesAFormato(variantesDefinicion)
-    console.log("🔎 Variantes convertidas a formato:", JSON.stringify(variantesFormato, null, 2))
+    // PASO 3: Validar y normalizar receta (debe ser array)
+    // FIX 3: Mejorar validación para aceptar múltiples formatos y normalizar silenciosamente
+    let receta = producto.receta || []
     
-    // Agregar sucursales como variante adicional
-    const SUCURSALES_DEFAULT = ["La Paz", "Santa Cruz"]
-    const variantesConSucursales = [
-      ...variantesFormato,
-      {
-        nombre: "Sucursal",
-        valores: SUCURSALES_DEFAULT
+    // Manejar todos los casos edge: null, undefined, objetos vacíos, formatos antiguos
+    if (!receta || (typeof receta === 'object' && !Array.isArray(receta))) {
+      if (typeof receta === 'object' && receta !== null && receta.items && Array.isArray(receta.items)) {
+        console.warn('⚠️ [REGENERAR VARIANTES] Receta en formato antiguo (objeto con items), convirtiendo a array')
+        receta = receta.items
+      } else {
+        console.warn('⚠️ [REGENERAR VARIANTES] Receta inválida, normalizando a []:', typeof receta, receta)
+        receta = []
       }
-    ]
-    console.log("🔎 Variantes con sucursales:", JSON.stringify(variantesConSucursales, null, 2))
+    }
     
-    // Generar combinaciones (ahora incluyen sucursales)
-    const combinaciones = generarCombinacionesVariantes(variantesConSucursales)
-    console.log("🔎 Combinaciones generadas (con sucursales):", combinaciones.length)
-    if (combinaciones.length > 0) {
-      console.log("🔎 Primera combinación ejemplo:", JSON.stringify(combinaciones[0], null, 2))
+    // Asegurar que receta es siempre un array
+    if (!Array.isArray(receta)) {
+      console.warn('⚠️ [REGENERAR VARIANTES] Receta no es array después de normalización, forzando a []')
+      receta = []
     }
 
-    if (combinaciones.length === 0) {
-      // Si no hay combinaciones, eliminar todas las variantes existentes
-      await supabase
+    // PASO 4: Validar que hay receta (si no hay receta, no se pueden generar variantes)
+    if (!Array.isArray(receta) || receta.length === 0) {
+      console.warn("⚠️ [REGENERAR VARIANTES] No hay receta, eliminando todas las variantes existentes")
+      const { error: deleteError } = await supabase
         .from('producto_variantes')
         .delete()
         .eq('producto_id', productoId)
-
-      return NextResponse.json({
-        success: true,
-        variantes: []
+      
+      if (deleteError) {
+        console.error("❌ [REGENERAR VARIANTES] Error eliminando variantes:", deleteError)
+      }
+      
+      return NextResponse.json({ 
+        success: true, 
+        variantes: [],
+        mensaje: 'No hay receta definida, se eliminaron todas las variantes'
       })
     }
 
-    // Obtener recursos para calcular costes
+    // PASO 5: Obtener recursos para calcular costes
     const { data: recursos, error: recursosError } = await supabase
       .from('recursos')
       .select('*')
 
     if (recursosError) {
-      console.error("❌ Error obteniendo recursos:", recursosError)
-    }
-
-    // Validar receta, recursos y calculadora
-    const receta = producto.receta || []
-    const calculadora = producto.calculadora_de_precios || null
-
-    // Validaciones antes de procesar
-    if (!Array.isArray(receta)) {
-      console.error("❌ Receta inválida:", receta)
+      console.error("❌ [REGENERAR VARIANTES] Error obteniendo recursos:", recursosError)
       return NextResponse.json(
         { 
           success: false,
-          error: 'Receta inválida',
-          detalles: 'La receta del producto no es un array válido'
+          error: 'Error al cargar recursos',
+          detalles: recursosError.message
         },
-        { status: 400 }
+        { status: 500 }
       )
     }
 
-    if (!recursos) {
-      console.error("❌ Recursos no cargados")
+    if (!recursos || recursos.length === 0) {
+      console.error("❌ [REGENERAR VARIANTES] Recursos no cargados")
       return NextResponse.json(
         { 
           success: false,
@@ -402,43 +427,94 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
       )
     }
 
-    if (!calculadora) {
-      console.warn("⚠️ Calculadora de precios faltante, se usará precio base")
-    }
-
-    console.log("🔎 Receta del producto:", JSON.stringify(receta, null, 2))
-    console.log("🔎 Recursos cargados:", recursos?.length || 0)
-    console.log("🔎 Calculadora de precios:", calculadora ? "existe" : "null")
-
-    // Obtener variantes existentes
-    const { data: variantesExistentes } = await supabase
-      .from('producto_variantes')
-      .select('*')
-      .eq('producto_id', productoId)
-
-    const combinacionesExistentes = new Set(
-      (variantesExistentes || []).map(v => v.combinacion)
+    // PASO 6: Usar modelo unificado para parsear calculadora
+    const calculadora = parseCalculadora(
+      producto.calculadora_precios ?? producto.calculadora_de_precios
     )
 
-    // Crear/actualizar variantes
+    if (!calculadora) {
+      console.warn("⚠️ [REGENERAR VARIANTES] Calculadora de precios faltante, se usará precio base")
+    }
+
+    console.log("🔎 [REGENERAR VARIANTES] Receta del producto:", JSON.stringify(receta, null, 2))
+    console.log("🔎 [REGENERAR VARIANTES] Recursos cargados:", recursos.length)
+    console.log("🔎 [REGENERAR VARIANTES] Calculadora de precios:", calculadora ? "existe" : "null")
+
+    // PASO 7: Convertir definiciones a formato
+    const variantesFormato = convertirVariantesAFormato(variantesDefinicion)
+    console.log("🔎 [REGENERAR VARIANTES] Variantes convertidas a formato:", JSON.stringify(variantesFormato, null, 2))
+    
+    // PASO 8: Agregar sucursales como variante adicional
+    const SUCURSALES_DEFAULT = ["La Paz", "Santa Cruz"]
+    const variantesConSucursales = [
+      ...variantesFormato,
+      {
+        nombre: "Sucursal",
+        valores: SUCURSALES_DEFAULT
+      }
+    ]
+    console.log("🔎 [REGENERAR VARIANTES] Variantes con sucursales:", JSON.stringify(variantesConSucursales, null, 2))
+    
+    // PASO 9: Generar combinaciones (ahora incluyen sucursales)
+    const combinaciones = generarCombinacionesVariantes(variantesConSucursales)
+    console.log("🔎 [REGENERAR VARIANTES] Combinaciones generadas (con sucursales):", combinaciones.length)
+    if (combinaciones.length > 0) {
+      console.log("🔎 [REGENERAR VARIANTES] Primera combinación ejemplo:", JSON.stringify(combinaciones[0], null, 2))
+    }
+
+    // PASO 10: 🔥 CRÍTICO - BORRAR TODAS LAS VARIANTES EXISTENTES ANTES DE GENERAR NUEVAS
+    console.log("🗑️ [REGENERAR VARIANTES] BORRANDO TODAS LAS VARIANTES EXISTENTES DEL PRODUCTO")
+    
+    // Primero obtener el count de variantes existentes
+    const { count: deletedCount } = await supabase
+      .from('producto_variantes')
+      .select('*', { count: 'exact', head: true })
+      .eq('producto_id', productoId)
+    
+    // Luego borrar todas las variantes
+    const { error: deleteError } = await supabase
+      .from('producto_variantes')
+      .delete()
+      .eq('producto_id', productoId)
+
+    if (deleteError) {
+      console.error("❌ [REGENERAR VARIANTES] Error eliminando variantes existentes:", deleteError)
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Error al eliminar variantes existentes',
+          detalles: deleteError.message
+        },
+        { status: 500 }
+      )
+    }
+
+    console.log(`✅ [REGENERAR VARIANTES] Variantes antiguas eliminadas (${deletedCount || 0} variantes)`)
+
+    // PASO 11: Si no hay combinaciones, terminar aquí
+    if (combinaciones.length === 0) {
+      console.log("⚠️ [REGENERAR VARIANTES] No hay combinaciones para generar")
+      return NextResponse.json({
+        success: true,
+        variantes: [],
+        mensaje: 'No hay combinaciones para generar'
+      })
+    }
+
+    // PASO 12: Crear SOLO las nuevas variantes (sin merge, sin upsert)
     const variantesCreadas: any[] = []
     const errores: any[] = []
 
     for (const combinacion of combinaciones) {
       try {
-        console.log("🧩 Combinación generada:", combinacion.combinacion)
-        console.log("🧩 Valores de la combinación:", JSON.stringify(combinacion.valores, null, 2))
-        
         if (!combinacion.combinacion || combinacion.combinacion.trim() === '') {
-          console.error("❌ ERROR: Combinación vacía detectada!")
+          console.error("❌ [REGENERAR VARIANTES] ERROR: Combinación vacía detectada!")
           errores.push({
             message: 'Combinación vacía',
             combinacion: combinacion
           })
           continue
         }
-
-        const existe = combinacionesExistentes.has(combinacion.combinacion)
 
         // Extraer sucursal de la combinación si existe
         const sucursal = combinacion.valores?.Sucursal || combinacion.valores?.sucursal
@@ -459,9 +535,8 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
             combinacion.valores,
             sucursal
           )
-          console.log("💰 Coste calculado (sucursal:", sucursal, "):", costeCalculado)
         } catch (costeError: any) {
-          console.error("❌ Error calculando coste:", costeError)
+          console.error("❌ [REGENERAR VARIANTES] Error calculando coste:", costeError)
           errores.push({
             message: `Error calculando coste: ${costeError?.message || 'Error desconocido'}`,
             combinacion: combinacion.combinacion,
@@ -477,140 +552,58 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
             costeCalculado,
             calculadora
           )
-          console.log("💰 Precio calculado:", precioCalculado)
         } catch (precioError: any) {
-          console.error("❌ Error calculando precio:", precioError)
+          console.error("❌ [REGENERAR VARIANTES] Error calculando precio:", precioError)
           // Si falla el cálculo de precio, usar el coste como precio base
           precioCalculado = costeCalculado
-          console.warn("⚠️ Usando coste como precio base debido a error en calculadora")
+          console.warn("⚠️ [REGENERAR VARIANTES] Usando coste como precio base debido a error en calculadora")
         }
 
-        if (existe) {
-          // Actualizar existente
-          const varianteExistente = variantesExistentes?.find(
-            v => v.combinacion === combinacion.combinacion
-          )
+        // Crear nueva variante (INSERT directo, no UPSERT)
+        const payload = {
+          producto_id: productoId,
+          combinacion: combinacion.combinacion,
+          coste_override: null,
+          precio_override: null,
+          margen_override: null,
+          coste_calculado: costeCalculado,
+          precio_calculado: precioCalculado
+        }
+        
+        const { data: created, error: insertError } = await supabase
+          .from('producto_variantes')
+          .insert(payload)
+          .select()
+          .single()
 
-          if (!varianteExistente) {
-            console.warn("⚠️ Variante existente no encontrada:", combinacion.combinacion)
-            continue
-          }
-
-          const { data: updated, error: updateError } = await supabase
-            .from('producto_variantes')
-            .update({
-              coste_calculado: costeCalculado,
-              precio_calculado: precioCalculado,
-              fecha_actualizacion: new Date().toISOString()
-            })
-            .eq('id', varianteExistente.id)
-            .select()
-            .single()
-
-          if (updateError) {
-            const errorMsg = {
-              message: updateError.message || 'Error actualizando variante',
-              code: updateError.code,
-              details: updateError.details,
-              hint: updateError.hint,
-              combinacion: combinacion.combinacion
-            }
-            console.error("❌ Error actualizando variante:", errorMsg)
-            errores.push(errorMsg)
-            continue
-          }
-
-          if (updated) {
-            variantesCreadas.push(updated)
-          }
-        } else {
-          // Crear nueva usando UPSERT para evitar conflictos con UNIQUE constraint
-          const payload = {
-            producto_id: productoId,
+        if (insertError) {
+          console.error("❌ [REGENERAR VARIANTES] Error al crear variante:", {
+            message: insertError.message,
+            code: insertError.code,
+            details: insertError.details,
+            hint: insertError.hint,
+            combinacion: combinacion.combinacion
+          })
+          
+          errores.push({
             combinacion: combinacion.combinacion,
-            coste_override: null,
-            precio_override: null,
-            margen_override: null,
-            coste_calculado: costeCalculado,
-            precio_calculado: precioCalculado
-          }
-          
-          console.log("💾 Intentando UPSERT con payload:", JSON.stringify(payload, null, 2))
-          
-          const { data: created, error: insertError } = await supabase
-            .from('producto_variantes')
-            .upsert(payload, {
-              onConflict: 'producto_id,combinacion',
-              ignoreDuplicates: false
-            })
-            .select()
-            .maybeSingle()
-
-          if (insertError) {
-            console.error("❌ SUPABASE ERROR al crear variante:", {
+            error: {
               message: insertError.message,
               code: insertError.code,
               details: insertError.details,
-              hint: insertError.hint,
-              combinacion: combinacion.combinacion
-            })
-            
-            // Si es error de duplicado, intentar obtener la existente
-            if (insertError.code === '23505') {
-              console.log("⚠️ Error de duplicado detectado, intentando obtener existente...")
-              const { data: existing, error: selectError } = await supabase
-                .from('producto_variantes')
-                .select('*')
-                .eq('producto_id', productoId)
-                .eq('combinacion', combinacion.combinacion)
-                .maybeSingle()
-              
-              if (selectError) {
-                console.error("❌ Error obteniendo variante existente:", selectError)
-              }
-              
-              if (existing) {
-                console.log("✅ Variante existente encontrada, usando esa")
-                variantesCreadas.push(existing)
-                continue
-              }
+              hint: insertError.hint
             }
-            
-            errores.push({
-              combinacion: combinacion.combinacion,
-              error: {
-                message: insertError.message,
-                code: insertError.code,
-                details: insertError.details,
-                hint: insertError.hint
-              }
-            })
-            continue
-          }
+          })
+          continue
+        }
 
-          if (created) {
-            console.log("✅ Variante creada exitosamente:", created.id)
-            variantesCreadas.push(created)
-          } else {
-            console.warn("⚠️ UPSERT no devolvió data pero tampoco error, intentando obtener...")
-            // Intentar obtener la variante que debería existir
-            const { data: existing } = await supabase
-              .from('producto_variantes')
-              .select('*')
-              .eq('producto_id', productoId)
-              .eq('combinacion', combinacion.combinacion)
-              .maybeSingle()
-            
-            if (existing) {
-              console.log("✅ Variante encontrada después de UPSERT")
-              variantesCreadas.push(existing)
-            } else {
-              errores.push({
-                message: 'UPSERT no devolvió data y no se encontró la variante',
-                combinacion: combinacion.combinacion
-              })
-            }
-          }
+        if (created) {
+          variantesCreadas.push(created)
+        } else {
+          errores.push({
+            message: 'INSERT no devolvió data pero tampoco error',
+            combinacion: combinacion.combinacion
+          })
         }
       } catch (error: any) {
         const errorMsg = {
@@ -618,20 +611,19 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
           stack: error?.stack,
           combinacion: combinacion.combinacion
         }
-        console.error("❌ Error en catch procesando variante:", errorMsg)
+        console.error("❌ [REGENERAR VARIANTES] Error en catch procesando variante:", errorMsg)
         errores.push(errorMsg)
       }
     }
 
-    // Si hay errores pero también hay variantes creadas, devolver parcial
+    // PASO 13: Validar resultado
     if (errores.length > 0 && variantesCreadas.length > 0) {
-      console.warn(`⚠️ Se crearon ${variantesCreadas.length} variantes pero hubo ${errores.length} errores`)
+      console.warn(`⚠️ [REGENERAR VARIANTES] Se crearon ${variantesCreadas.length} variantes pero hubo ${errores.length} errores`)
     }
 
-    // Si no se creó ninguna variante y había combinaciones, es un error
     if (variantesCreadas.length === 0 && combinaciones.length > 0) {
-      console.error("❌ CRÍTICO: No se creó ninguna variante de", combinaciones.length, "combinaciones")
-      console.error("❌ Errores capturados:", JSON.stringify(errores, null, 2))
+      console.error("❌ [REGENERAR VARIANTES] CRÍTICO: No se creó ninguna variante de", combinaciones.length, "combinaciones")
+      console.error("❌ [REGENERAR VARIANTES] Errores capturados:", JSON.stringify(errores, null, 2))
       return NextResponse.json(
         { 
           success: false,
@@ -645,22 +637,9 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
       )
     }
 
-    // Eliminar variantes que ya no existen
-    const combinacionesNuevas = new Set(combinaciones.map(c => c.combinacion))
-    const variantesAEliminar = (variantesExistentes || []).filter(
-      v => !combinacionesNuevas.has(v.combinacion)
-    )
-
-    if (variantesAEliminar.length > 0) {
-      await supabase
-        .from('producto_variantes')
-        .delete()
-        .in('id', variantesAEliminar.map(v => v.id))
-    }
-
-    console.log("✅ Variantes regeneradas exitosamente:", variantesCreadas.length)
+    console.log(`✅ [REGENERAR VARIANTES] Variantes regeneradas exitosamente: ${variantesCreadas.length} de ${combinaciones.length} combinaciones`)
     if (errores.length > 0) {
-      console.warn(`⚠️ Hubo ${errores.length} errores al procesar variantes`)
+      console.warn(`⚠️ [REGENERAR VARIANTES] Hubo ${errores.length} errores al procesar variantes`)
     }
     
     // Respuesta detallada
@@ -669,16 +648,17 @@ async function regenerarVariantes(productoId: string, variantesDefinicion: any[]
       variantes: variantesCreadas,
       combinaciones_intentadas: combinaciones.length,
       variantes_creadas: variantesCreadas.length,
+      variantes_eliminadas: deletedCount || 0,
       errores: errores.length > 0 ? errores : undefined
     }
     
-    console.log("📊 Respuesta final:", JSON.stringify(respuesta, null, 2))
+    console.log("📊 [REGENERAR VARIANTES] Respuesta final:", JSON.stringify(respuesta, null, 2))
     
     return NextResponse.json(respuesta, {
       status: variantesCreadas.length > 0 ? 200 : 500
     })
   } catch (error: any) {
-    console.error('❌ Error regenerando variantes:', {
+    console.error('❌ [REGENERAR VARIANTES] Error regenerando variantes:', {
       message: error?.message,
       stack: error?.stack,
       error: error

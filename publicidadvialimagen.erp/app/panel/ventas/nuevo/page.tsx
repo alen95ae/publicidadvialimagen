@@ -799,6 +799,96 @@ export default function NuevaCotizacionPage() {
     }
   }, [modalFechasSoporte.fechaInicio, modalFechasSoporte.meses])
 
+  // Función para recalcular precio de un item según la sucursal actual
+  const recalcularPrecioConSucursal = async (item: ProductoItem): Promise<ProductoItem> => {
+    // Si no es producto, no tiene variantes, o no tiene producto_id, retornar sin cambios
+    if (
+      item.tipo !== 'producto' ||
+      !item.variantes ||
+      !item.producto_id
+    ) {
+      return item
+    }
+
+    // Buscar el item completo en todosLosItems para obtener la receta
+    const itemCompleto = todosLosItems.find((i: any) => i.id === item.producto_id)
+    if (!itemCompleto || !itemCompleto.receta) {
+      return item
+    }
+
+    try {
+      // Obtener precio base del item completo
+      const precioBase = itemCompleto.precio || item.precio || 0
+
+      // Recalcular precio según variantes y sucursal
+      const precioRecalculado = await calcularPrecioConVariantes(
+        precioBase,
+        itemCompleto,
+        item.variantes,
+        sucursal || undefined,
+        (message) => console.warn(message) // Solo loguear warnings, no mostrar toast
+      )
+
+      // Recalcular total con el nuevo precio
+      const udmLower = item.udm?.toLowerCase().trim() || ''
+      const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+      const totalRecalculado = calcularTotal(
+        item.cantidad,
+        item.totalM2,
+        precioRecalculado,
+        item.comision,
+        item.conIVA,
+        item.conIT,
+        item.esSoporte || esUnidades,
+        item.udm
+      )
+
+      // Retornar item actualizado solo con precio y total
+      return {
+        ...item,
+        precio: precioRecalculado,
+        total: totalRecalculado,
+        totalManual: null // Resetear total manual al recalcular
+      }
+    } catch (error) {
+      console.error('Error recalculando precio con sucursal:', error)
+      return item // Retornar sin cambios si hay error
+    }
+  }
+
+  // Efecto para recalcular precios cuando cambia la sucursal
+  useEffect(() => {
+    if (!sucursal) return
+
+    // Recalcular precios de todos los productos con variantes
+    const recalcularTodos = async () => {
+      // Obtener la lista actual
+      const listaActual = productosList
+
+      // Crear promesas para todos los items
+      const promesas = listaActual.map(async (item) => {
+        if (
+          item.tipo !== 'producto' ||
+          !item.variantes ||
+          !item.producto_id
+        ) {
+          return item
+        }
+
+        // Recalcular precio según sucursal actual
+        const actualizado = await recalcularPrecioConSucursal(item as ProductoItem)
+        return actualizado
+      })
+
+      // Esperar todas las promesas y actualizar
+      const itemsActualizados = await Promise.all(promesas)
+      setProductosList(itemsActualizados)
+    }
+
+    recalcularTodos()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursal])
+
   // Calcular total de cada producto para validación
   const productosConTotal = productosList
     .filter((item): item is ProductoItem => item.tipo === 'producto')

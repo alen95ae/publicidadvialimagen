@@ -163,9 +163,11 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
   if (producto.descripcion !== undefined && producto.descripcion !== null) {
     fields.descripcion = String(producto.descripcion).trim() || ''
   }
-  // Guardar imagen_portada en imagen_principal de Supabase (el campo correcto en la BD)
-  // NO guardar en imagen_portada ya que esa columna no existe en Supabase
-  if (producto.imagen_portada !== undefined) {
+  // Guardar imagen_principal (esquema real de Supabase)
+  if (producto.imagen_principal !== undefined) {
+    fields.imagen_principal = producto.imagen_principal || null
+  } else if (producto.imagen_portada !== undefined) {
+    // Compatibilidad con formato antiguo
     fields.imagen_principal = producto.imagen_portada || null
   }
   
@@ -221,10 +223,22 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
   // La columna cantidad no existe en Supabase, se calcula desde receta
   // No se guarda cantidad directamente
   if (producto.coste !== undefined && producto.coste !== null) {
-    fields.coste = Number(producto.coste) || 0
+    const costeNum = Number(producto.coste)
+    // Validar que sea un número válido (no NaN, no Infinity)
+    if (isNaN(costeNum) || !isFinite(costeNum) || costeNum < 0) {
+      fields.coste = 0
+    } else {
+      fields.coste = Math.round(costeNum * 100) / 100 // Redondear a 2 decimales
+    }
   }
   if (producto.precio_venta !== undefined && producto.precio_venta !== null) {
-    fields.precio_venta = Number(producto.precio_venta) || 0
+    const precioNum = Number(producto.precio_venta)
+    // Validar que sea un número válido (no NaN, no Infinity)
+    if (isNaN(precioNum) || !isFinite(precioNum) || precioNum < 0) {
+      fields.precio_venta = 0
+    } else {
+      fields.precio_venta = Math.round(precioNum * 100) / 100 // Redondear a 2 decimales
+    }
   }
   // La columna disponibilidad no existe en Supabase
   // No se guarda disponibilidad directamente
@@ -233,8 +247,21 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
     fields.mostrar_en_web = Boolean(producto.mostrar_en_web)
   }
   
-  // Guardar variantes como JSONB
-  if (producto.variantes !== undefined) {
+  // Guardar variante (singular, según esquema real)
+  if (producto.variante !== undefined) {
+    try {
+      if (producto.variante === null) {
+        fields.variante = []
+      } else if (Array.isArray(producto.variante)) {
+        fields.variante = producto.variante.length > 0 ? producto.variante : []
+      } else {
+        fields.variante = []
+      }
+    } catch (e) {
+      fields.variante = []
+    }
+  } else if (producto.variantes !== undefined) {
+    // Compatibilidad con formato antiguo (plural)
     try {
       fields.variante = Array.isArray(producto.variantes) && producto.variantes.length > 0
         ? producto.variantes
@@ -244,11 +271,23 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
     }
   }
   
-  // Guardar receta como JSONB
+  // Guardar receta como JSONB (debe ser ARRAY, no objeto)
   if (producto.receta !== undefined && producto.receta !== null) {
     try {
-      fields.receta = Array.isArray(producto.receta) ? producto.receta : []
+      if (Array.isArray(producto.receta)) {
+        // Formato correcto: array
+        fields.receta = producto.receta.length > 0 ? producto.receta : []
+      } else if (typeof producto.receta === 'object' && producto.receta.items && Array.isArray(producto.receta.items)) {
+        // Formato antiguo: objeto con items (convertir a array)
+        console.warn('⚠️ Receta en formato antiguo (objeto), convirtiendo a array')
+        fields.receta = producto.receta.items.length > 0 ? producto.receta.items : []
+      } else {
+        // Formato inválido, usar array vacío
+        console.warn('⚠️ Receta en formato inválido, usando array vacío')
+        fields.receta = []
+      }
     } catch (e) {
+      console.error('Error serializando receta:', e)
       fields.receta = []
     }
   }
@@ -256,20 +295,69 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
   // Guardar proveedores como JSONB
   if (producto.proveedores !== undefined && producto.proveedores !== null) {
     try {
-      fields.proveedores = Array.isArray(producto.proveedores) ? producto.proveedores : []
+      if (producto.proveedores === null) {
+        fields.proveedores = []
+      } else if (Array.isArray(producto.proveedores)) {
+        fields.proveedores = producto.proveedores.length > 0 ? producto.proveedores : []
+      } else {
+        fields.proveedores = []
+      }
     } catch (e) {
       console.error('Error serializando proveedores:', e)
       fields.proveedores = []
     }
   }
   
-  // Guardar calculadora de precios como JSONB
-  if (producto.calculadora_de_precios !== undefined) {
+  // NO guardar calculadora_costes (no existe en el esquema)
+  // La calculadora de costes se guarda en "receta" según el esquema real
+
+  // FIX 7: Guardar calculadora de precios como JSONB
+  // Asegurar que calculadoraCostes se preserve correctamente
+  if (producto.calculadora_precios !== undefined) {
+    try {
+      if (producto.calculadora_precios === null || producto.calculadora_precios === '') {
+        fields.calculadora_precios = {}
+      } else if (typeof producto.calculadora_precios === 'string') {
+        // Si viene como string, intentar parsearlo
+        try {
+          fields.calculadora_precios = JSON.parse(producto.calculadora_precios)
+        } catch {
+          fields.calculadora_precios = {}
+        }
+      } else if (typeof producto.calculadora_precios === 'object') {
+        // Limpiar undefined del objeto antes de guardar, pero preservar calculadoraCostes
+        const calculadoraLimpia = JSON.parse(JSON.stringify(producto.calculadora_precios, (key, value) => {
+          // Remover undefined (Supabase no acepta undefined en JSONB)
+          // Convertir undefined → null, pero NO borrar claves
+          if (value === undefined) return null
+          // Preservar calculadoraCostes incluso si está vacío
+          if (key === 'calculadoraCostes' && value === null) return { costRows: [], totalCost: 0 }
+          return value
+        }))
+        
+        // Asegurar que calculadoraCostes existe si estaba en el objeto original
+        if (producto.calculadora_precios.calculadoraCostes !== undefined) {
+          if (!calculadoraLimpia.calculadoraCostes) {
+            calculadoraLimpia.calculadoraCostes = producto.calculadora_precios.calculadoraCostes || { costRows: [], totalCost: 0 }
+          }
+        }
+        
+        fields.calculadora_precios = calculadoraLimpia
+      } else {
+        fields.calculadora_precios = {}
+      }
+    } catch (e) {
+      console.error('Error serializando calculadora_precios:', e)
+      fields.calculadora_precios = {}
+    }
+  }
+
+  // Mantener compatibilidad con calculadora_de_precios (formato antiguo)
+  if (producto.calculadora_de_precios !== undefined && producto.calculadora_precios === undefined) {
     try {
       if (producto.calculadora_de_precios === null || producto.calculadora_de_precios === '') {
         fields.calculadora_precios = {}
       } else if (typeof producto.calculadora_de_precios === 'string') {
-        // Si viene como string, intentar parsearlo
         try {
           fields.calculadora_precios = JSON.parse(producto.calculadora_de_precios)
         } catch {
@@ -281,7 +369,7 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
         fields.calculadora_precios = {}
       }
     } catch (e) {
-      console.error('Error serializando calculadora_precios:', e)
+      console.error('Error serializando calculadora_de_precios:', e)
       fields.calculadora_precios = {}
     }
   }
@@ -394,17 +482,32 @@ export async function createProducto(producto: Partial<ProductoSupabase>) {
   try {
     const fields = productoToSupabase(producto)
     
+    // Log de campos que se van a insertar (para debugging)
+    console.log('📤 Campos a insertar en Supabase:', Object.keys(fields))
+    console.log('📤 Campos completos:', JSON.stringify(fields, null, 2))
+    
     const { data, error } = await supabase
       .from('productos')
       .insert([fields])
       .select()
       .single()
     
-    if (error) throw error
+    if (error) {
+      console.error('❌ Error de Supabase al insertar:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      throw error
+    }
     
     return supabaseToProducto(data)
   } catch (error) {
-    console.error('Error creando producto en Supabase:', error)
+    console.error('❌ Error creando producto en Supabase:', error)
+    if (error && typeof error === 'object' && 'message' in error) {
+      console.error('❌ Detalles completos del error:', JSON.stringify(error, null, 2))
+    }
     throw error
   }
 }

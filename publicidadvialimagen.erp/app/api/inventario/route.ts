@@ -51,9 +51,30 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Error creando producto:', error)
+    
+    // Log completo del error de Supabase si está disponible
+    if (error && typeof error === 'object' && 'message' in error) {
+      console.error('❌ Error Supabase message:', (error as any).message)
+      console.error('❌ Error Supabase details:', (error as any).details)
+      console.error('❌ Error Supabase hint:', (error as any).hint)
+      console.error('❌ Error Supabase code:', (error as any).code)
+    }
+    
     const errorMessage = error instanceof Error ? error.message : 'Error al crear producto'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { 
+        success: false, 
+        error: errorMessage,
+        details: errorDetails,
+        supabaseError: error && typeof error === 'object' ? {
+          message: (error as any).message,
+          details: (error as any).details,
+          hint: (error as any).hint,
+          code: (error as any).code
+        } : null
+      },
       { status: 500 }
     )
   }

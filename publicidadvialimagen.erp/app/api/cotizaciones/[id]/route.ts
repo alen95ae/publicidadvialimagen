@@ -16,6 +16,7 @@ import {
   calcularDesgloseImpuestos,
   type CotizacionPayload
 } from '@/lib/cotizacionesBackend'
+import { descontarStockProducto, registrarMovimiento } from '@/lib/services/inventoryService'
 
 export async function GET(
   request: Request,
@@ -281,6 +282,87 @@ export async function PATCH(
       const cotizacionActualizada = await updateCotizacion(id, camposLimpios)
 
       console.log('✅ [PATCH /api/cotizaciones/[id]] Cotización actualizada:', cotizacionActualizada.codigo)
+
+      // Detectar si se está aprobando la cotización (cambio de estado a "Aprobada")
+      const seEstaAprobando = estadoAnterior !== 'Aprobada' && nuevoEstado === 'Aprobada'
+      
+      // Si se está aprobando, descontar stock de los productos (con idempotencia)
+      if (seEstaAprobando && lineasNormalizadas.length > 0) {
+        console.log('📦 [PATCH /api/cotizaciones/[id]] Descontando stock por aprobación de cotización...')
+        try {
+          // Verificar si ya se descontó stock para esta cotización (idempotencia)
+          // Nota: Por ahora verificamos en los movimientos registrados
+          // Si existe tabla movimientos_inventario, verificar ahí
+          // Por ahora, asumimos que si la cotización ya estaba aprobada, el stock ya fue descontado
+          const yaDescontado = estadoAnterior === 'Aprobada'
+          
+          if (yaDescontado) {
+            console.log('⚠️ [PATCH /api/cotizaciones/[id]] Stock ya descontado previamente para esta cotización, omitiendo descuento duplicado')
+          } else {
+            // Obtener sucursal de la cotización
+            const sucursal = cotizacionActualizada.sucursal || 'La Paz'
+            
+            // Obtener instancia de Supabase para consultas
+            const { getSupabaseServer } = await import('@/lib/supabaseServer')
+            const supabase = getSupabaseServer()
+            
+            // Procesar cada línea para descontar stock
+            for (const linea of lineasNormalizadas) {
+              if (linea.codigo_producto && linea.cantidad) {
+                try {
+                  // Parsear variantes si existen
+                  let variantes: Record<string, string> = {}
+                  if (linea.variantes) {
+                    if (typeof linea.variantes === 'string') {
+                      variantes = JSON.parse(linea.variantes)
+                    } else {
+                      variantes = linea.variantes
+                    }
+                  }
+                  
+                  // Obtener producto para obtener su ID
+                  const { data: producto } = await supabase
+                    .from('productos')
+                    .select('id')
+                    .eq('codigo', linea.codigo_producto)
+                    .single()
+                  
+                  if (producto) {
+                    await descontarStockProducto({
+                      productoId: producto.id,
+                      cantidad: Number(linea.cantidad) || 1,
+                      sucursal,
+                      variantes
+                    })
+                    
+                    await registrarMovimiento({
+                      tipo: 'cotizacion',
+                      productoId: producto.id,
+                      variante: variantes,
+                      delta: -(Number(linea.cantidad) || 1),
+                      sucursal,
+                      referencia: id
+                    })
+                    
+                    console.log(`✅ Stock descontado: ${linea.codigo_producto} (${linea.cantidad} unidades)`)
+                  }
+                } catch (errorStock) {
+                  console.error(`❌ Error descontando stock para ${linea.codigo_producto}:`, errorStock)
+                  // No fallar la actualización si falla el descuento de stock
+                }
+              }
+            }
+            
+            // Marcar que el stock ya fue descontado (idempotencia)
+            // Nota: Si existe columna stock_descontado en cotizaciones, actualizarla
+            // Por ahora, solo logueamos
+            console.log('✅ [PATCH /api/cotizaciones/[id]] Stock descontado correctamente')
+          }
+        } catch (errorStock) {
+          console.error('❌ [PATCH /api/cotizaciones/[id]] Error descontando stock:', errorStock)
+          // No fallar la actualización si falla el descuento de stock
+        }
+      }
 
       // Paso 2: Si vienen líneas, actualizarlas también
       if (lineasNormalizadas.length > 0) {

@@ -17,10 +17,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ArrowLeft, Save, Trash2, Edit, Image as ImageIcon, Calculator, DollarSign, Plus, X, Palette, RotateCcw, Eye, Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useProductoVariantes } from "@/hooks/useProductoVariantes"
 import { generarCombinacionesVariantes, convertirVariantesAFormato, parsearClaveVariante } from "@/lib/variantes/generarCombinaciones"
 import { calcularDiferenciaCoste, calcularDiferenciaPrecio } from "@/lib/variantes/calcularPrecioVariante"
 import { calcularCosteVariante } from "@/lib/variantes/calcularCosteVariante"
+import { findResourceVariantPrice } from "@/lib/variantes/variantEngine"
 
 // Categorías disponibles
 const categoriasProductos = [
@@ -73,17 +75,17 @@ export default function ProductoDetailPage() {
   const searchParams = useSearchParams()
   const id = (params?.id || '') as string
   const shouldEdit = searchParams?.get('edit') === 'true'
-  
+
   const [producto, setProducto] = useState<Producto | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [imageError, setImageError] = useState("")
   const [editing, setEditing] = useState(false)
-  
+
   // Detectar si es un nuevo producto
   const isNewProduct = id === 'nuevo' || id === 'new'
-  
+
   // Estados para calculadora de costes
   const [recursos, setRecursos] = useState<any[]>([])
   const costRowIdCounterRef = useRef(2) // Usar ref para mantener el contador entre renders
@@ -103,7 +105,7 @@ export default function ProductoDetailPage() {
   const hasManualCostRef = useRef(false)
   const savedCostRef = useRef<number | null>(null)
   const lastCalculatedCostRef = useRef(0)
-  
+
   // Estados para calculadora de precios (estructura estática)
   const defaultPriceRows = [
     { id: 1, campo: "Coste", porcentaje: null, valor: 0, editable: false, porcentajeConfig: null },
@@ -118,10 +120,10 @@ export default function ProductoDetailPage() {
   const [priceRows, setPriceRows] = useState(defaultPriceRows)
   const [isApplyingPrice, setIsApplyingPrice] = useState(false)
   const [priceApplied, setPriceApplied] = useState(false)
-  
+
   // Estados para variantes del producto (solo visualización, importadas de recursos)
   const [variantes, setVariantes] = useState<any[]>([])
-  
+
   // Hook para gestionar variantes de productos
   const {
     variantes: variantesProducto,
@@ -133,10 +135,17 @@ export default function ProductoDetailPage() {
     recalcularTodas,
     regenerarVariantes
   } = useProductoVariantes(isNewProduct ? null : id)
-  
+
   // Estados para edición inline de variantes
   const [editingVariante, setEditingVariante] = useState<Record<string, any>>({})
-  
+
+  // Estados para selección múltiple y edición masiva
+  const [selectedVariantes, setSelectedVariantes] = useState<Record<string, boolean>>({})
+  const [pendingChangesVariantes, setPendingChangesVariantes] = useState<Record<string, { precio_override?: number, dif_precio?: number }>>({})
+  const [savingBulkVariantes, setSavingBulkVariantes] = useState(false)
+  // FIX variantes: flag para asegurar que la regeneración automática solo se ejecute una vez por producto
+  const [autoRegeneracionVariantesRealizada, setAutoRegeneracionVariantesRealizada] = useState(false)
+
   // Estados para calculadora de precios por variante
   const [calculadoraVarianteOpen, setCalculadoraVarianteOpen] = useState(false)
   const [varianteCalculadora, setVarianteCalculadora] = useState<any>(null)
@@ -153,7 +162,7 @@ export default function ProductoDetailPage() {
   const [priceRowsVariante, setPriceRowsVariante] = useState(defaultPriceRowsVariante)
   const [isApplyingPriceVariante, setIsApplyingPriceVariante] = useState(false)
   const [priceAppliedVariante, setPriceAppliedVariante] = useState(false)
-  
+
   // Estados para tabla de proveedores
   const [proveedorIdCounter, setProveedorIdCounter] = useState(1)
   const [proveedores, setProveedores] = useState<Array<{
@@ -164,7 +173,7 @@ export default function ProductoDetailPage() {
     plazos: string
     comentarios: string
   }>>([])
-  
+
   const [formData, setFormData] = useState<ProductoFormState>({
     codigo: "",
     nombre: "",
@@ -180,6 +189,11 @@ export default function ProductoDetailPage() {
     mostrar_en_web: false
   })
   const previewUrlRef = useRef<string | null>(null)
+
+  // FIX variantes: resetear bandera de auto-regeneración cuando cambia el producto
+  useEffect(() => {
+    setAutoRegeneracionVariantesRealizada(false)
+  }, [id])
 
   useEffect(() => {
     if (isNewProduct) {
@@ -206,6 +220,114 @@ export default function ProductoDetailPage() {
     }
   }, [])
 
+  // FIX variantes: regeneración automática fiable de variantes del producto al cargar
+  // IMPORTANTE: Solo regenerar si el producto NO tiene variantes guardadas
+  useEffect(() => {
+    // Solo para productos existentes
+    if (isNewProduct || !id || id === 'nuevo' || id === 'new') return
+    if (autoRegeneracionVariantesRealizada) return
+
+    // CRÍTICO: Verificar si el producto ya tiene variantes guardadas
+    // Si ya tiene variantes, NO regenerar automáticamente para no sobrescribir las migradas
+    if (variantes.length > 0) {
+      console.log('✅ [VARIANTES] Producto ya tiene variantes guardadas, saltando regeneración automática')
+      setAutoRegeneracionVariantesRealizada(true)
+      return
+    }
+
+    // Necesitamos tener al menos un recurso seleccionado en la receta
+    const recursosConVariantes = costRows.filter(row => {
+      const recurso = row.selectedRecurso
+      if (!recurso || !recurso.id) return false
+
+      if (Array.isArray(recurso.variantes) && recurso.variantes.length > 0) return true
+      if (
+        recurso.variantes &&
+        typeof recurso.variantes === 'object' &&
+        Array.isArray(recurso.variantes.variantes) &&
+        recurso.variantes.variantes.length > 0
+      ) {
+        return true
+      }
+      return false
+    })
+
+    if (recursosConVariantes.length === 0) {
+      console.log('⚠️ [VARIANTES] No hay recursos con variantes en costRows, saltando regeneración automática')
+      setAutoRegeneracionVariantesRealizada(true)
+      return
+    }
+
+    const run = async () => {
+      try {
+        const variantesDefinicion: { nombre: string; valores: any[] }[] = []
+
+        recursosConVariantes.forEach(row => {
+          const recurso = row.selectedRecurso
+          if (!recurso?.variantes) return
+
+          let variantesArray: any[] = []
+          if (Array.isArray(recurso.variantes)) {
+            variantesArray = recurso.variantes
+          } else if (
+            typeof recurso.variantes === 'object' &&
+            Array.isArray(recurso.variantes.variantes)
+          ) {
+            variantesArray = recurso.variantes.variantes
+          } else if (typeof recurso.variantes === 'string') {
+            try {
+              const parsed = JSON.parse(recurso.variantes)
+              if (Array.isArray(parsed)) {
+                variantesArray = parsed
+              } else if (parsed && Array.isArray(parsed.variantes)) {
+                variantesArray = parsed.variantes
+              }
+            } catch {
+              // ignorar errores de parseo
+            }
+          }
+
+          variantesArray.forEach((v: any) => {
+            if (!v || !v.nombre) return
+            const nombre = String(v.nombre)
+            const valores = v.posibilidades ?? v.valores ?? []
+            if (!Array.isArray(valores) || valores.length === 0) return
+
+            const claveNombre = nombre.toLowerCase().trim()
+            let existente = variantesDefinicion.find(
+              d => d.nombre.toLowerCase().trim() === claveNombre
+            )
+            if (!existente) {
+              variantesDefinicion.push({ nombre, valores: [...valores] })
+            } else {
+              valores.forEach((val: any) => {
+                if (!existente!.valores.includes(val)) {
+                  existente!.valores.push(val)
+                }
+              })
+            }
+          })
+        })
+
+        if (variantesDefinicion.length === 0) {
+          console.log('⚠️ [VARIANTES] No se pudieron extraer variantes de los recursos, saltando regeneración')
+          setAutoRegeneracionVariantesRealizada(true)
+          return
+        }
+
+        console.log('🔄 [VARIANTES] Regeneración automática con definición:', variantesDefinicion)
+        await regenerarVariantes(variantesDefinicion)
+        await getVariantes()
+      } catch (error) {
+        console.error('❌ [VARIANTES] Error en regeneración automática:', error)
+      } finally {
+        setAutoRegeneracionVariantesRealizada(true)
+      }
+    }
+
+    run()
+  }, [isNewProduct, id, costRows, autoRegeneracionVariantesRealizada, regenerarVariantes, getVariantes, variantes])
+
   const fetchProducto = async () => {
     try {
       setLoading(true)
@@ -228,25 +350,51 @@ export default function ProductoDetailPage() {
           precio_venta: data.precio_venta?.toString() || "0",
           mostrar_en_web: data.mostrar_en_web ?? false
         })
-        // NOTA: Las variantes ahora se construyen desde los recursos activos en la receta (costRows)
-        // después de que se carguen los costRows. Esto asegura que solo se usen variantes de recursos activos.
-        // Inicializar variantes vacías por ahora, se actualizarán cuando se carguen los costRows
-        setVariantes([])
-        
+
+        // Cargar variantes desde el producto guardado en Supabase
+        if (data.variantes && Array.isArray(data.variantes) && data.variantes.length > 0) {
+          console.log('📦 Cargando variantes desde el producto:', data.variantes.length, 'variante(s)')
+          // Convertir variantes del formato migrado (valores) al formato esperado (posibilidades)
+          const variantesConvertidas = data.variantes.map((v: any) => {
+            const valores = v.valores ?? []
+            const posibilidades = v.posibilidades ?? []
+            const valoresArray = Array.isArray(valores) ? valores : []
+            const posibilidadesArray = Array.isArray(posibilidades) ? posibilidades : []
+
+            // Usar el array que tenga datos
+            const valoresFinales = valoresArray.length > 0 ? valoresArray : posibilidadesArray
+
+            // Detectar si es modo color: si algún valor contiene un código hexadecimal
+            const esColorMode = valoresFinales.some((val: string) =>
+              typeof val === 'string' && val.includes(':') && /^#[0-9A-Fa-f]{6}$/i.test(val.split(':')[1]?.trim())
+            )
+
+            return {
+              ...v,
+              nombre: v.nombre,
+              valores: valoresFinales,
+              posibilidades: valoresFinales,
+              modo: v.modo || (esColorMode ? 'color' : 'lista')
+            }
+          })
+          setVariantes(variantesConvertidas)
+        } else {
+          setVariantes([])
+        }
+
         // Cargar variantes del producto desde la BD
-        setTimeout(() => {
-          getVariantes()
-        }, 1000)
-        
+        // FIX variantes: carga directa sin setTimeout; la regeneración automática se gestiona en un useEffect dedicado
+        await getVariantes()
+
         // Cargar calculadora de precios desde el producto
         // Priorizar calculadora_precios (nuevo formato), luego calculadora_de_precios (formato antiguo)
         const calculadoraData = data.calculadora_precios || data.calculadora_de_precios
         if (calculadoraData) {
           try {
-            const calcData = typeof calculadoraData === 'string' 
-              ? JSON.parse(calculadoraData) 
+            const calcData = typeof calculadoraData === 'string'
+              ? JSON.parse(calculadoraData)
               : calculadoraData
-            
+
             if (calcData.priceRows && Array.isArray(calcData.priceRows)) {
               // Mapear filas cargadas a la estructura estática
               const loadedRows = defaultPriceRows.map(defaultRow => {
@@ -255,7 +403,7 @@ export default function ProductoDetailPage() {
                 if (!loadedRow && defaultRow.campo === "Factura") {
                   loadedRow = calcData.priceRows.find((r: any) => r.campo === "Fact")
                 }
-                
+
                 if (loadedRow) {
                   const result = {
                     ...defaultRow,
@@ -273,9 +421,9 @@ export default function ProductoDetailPage() {
                 }
                 return defaultRow
               })
-              
+
               setPriceRows(loadedRows)
-              
+
               // Si hay un precio, recalcular todo
               const precioRow = loadedRows.find((r: any) => r.campo === "Precio")
               if (precioRow && precioRow.valor > 0) {
@@ -288,7 +436,7 @@ export default function ProductoDetailPage() {
             console.error('Error cargando calculadora de precios:', e)
           }
         }
-        
+
         // Cargar proveedores desde el producto
         if (data.proveedores && Array.isArray(data.proveedores)) {
           let maxProveedorId = 0
@@ -326,7 +474,7 @@ export default function ProductoDetailPage() {
             recetaArray = data.receta.items
           }
         }
-        
+
         if (recetaArray.length > 0) {
           console.log('📋 Cargando receta con', recetaArray.length, 'items')
           // Primero obtener los recursos completos desde la API
@@ -334,26 +482,26 @@ export default function ProductoDetailPage() {
           if (recursosResponse.ok) {
             const recursosResult = await recursosResponse.json()
             const todosLosRecursos = recursosResult.data || []
-            
+
             // Filtrar solo items que sean recursos (tienen recurso_id, no son proveedores)
-            const itemsReceta = recetaArray.filter((item: any) => 
+            const itemsReceta = recetaArray.filter((item: any) =>
               item.recurso_id && !item.empresa // Excluir proveedores (que tienen empresa)
             )
-            
+
             // Mapear la receta a costRows con los recursos completos
             let maxId = 0
             const recetaRows = itemsReceta.map((item: any, index: number) => {
               // Buscar el recurso completo por ID o código
-              let recursoFromApi = todosLosRecursos.find((r: any) => 
+              let recursoFromApi = todosLosRecursos.find((r: any) =>
                 r.id === item.recurso_id || (r.codigo || r.id) === item.recurso_codigo
               )
-              
+
               // MERGE REAL COMPLETO:
               // - Si no existe en API: crear recurso mínimo con datos de la receta
               // - Si existe pero coste es null/undefined: usar coste_unitario de la receta
               // - SIEMPRE garantizar que coste sea un número válido
               let recursoCompleto: any
-              
+
               if (!recursoFromApi) {
                 // Recurso no existe en API - usar datos guardados en receta
                 console.warn(`⚠️ El recurso ${item.recurso_id} no existe en /api/recursos. Usando copia local.`)
@@ -370,19 +518,19 @@ export default function ProductoDetailPage() {
                 const costeApi = recursoFromApi.coste
                 const costeReceta = item.coste_unitario
                 // Usar coste de API si es válido, sino usar coste guardado en receta
-                const costeFinal = (typeof costeApi === 'number' && !isNaN(costeApi)) 
-                  ? costeApi 
+                const costeFinal = (typeof costeApi === 'number' && !isNaN(costeApi))
+                  ? costeApi
                   : (Number(costeReceta) || 0)
-                
+
                 recursoCompleto = {
                   ...recursoFromApi,
                   coste: costeFinal // Garantizar que coste siempre sea número válido
                 }
               }
-              
+
               const newId = index + 1
               maxId = Math.max(maxId, newId)
-              
+
               return {
                 id: newId,
                 selectedRecurso: recursoCompleto,
@@ -391,7 +539,7 @@ export default function ProductoDetailPage() {
                 searchTerm: item.recurso_nombre || recursoCompleto.nombre || ""
               }
             })
-            
+
             // Actualizar el contador de IDs para evitar duplicados
             if (recetaRows.length > 0) {
               costRowIdCounterRef.current = maxId + 1
@@ -542,7 +690,7 @@ export default function ProductoDetailPage() {
     const facturaRow = rows.find(r => r.campo === "Factura")
     const iueRow = rows.find(r => r.campo === "IUE")
     const comisionRow = rows.find(r => r.campo === "Comision")
-    
+
     const facturaPctConfig = parseNum(facturaRow?.porcentajeConfig ?? facturaRow?.porcentaje ?? 16)
     const iuePctConfig = parseNum(iueRow?.porcentajeConfig ?? iueRow?.porcentaje ?? 2)
     const comPctConfig = parseNum(comisionRow?.porcentajeConfig ?? comisionRow?.porcentaje ?? 12)
@@ -607,29 +755,217 @@ export default function ProductoDetailPage() {
     return rows
   }
 
+  // Funciones para selección múltiple de variantes
+  const variantesVisibles = variantesProducto.filter(v => v && v.id)
+  const variantesIds = variantesVisibles.map(v => String(v.id))
+  const allVariantesSelected = variantesIds.length > 0 && variantesIds.every(id => selectedVariantes[id])
+  const someVariantesSelected = variantesIds.some(id => selectedVariantes[id])
+  const selectedVariantesIds = Object.keys(selectedVariantes).filter(id => selectedVariantes[id])
+  const selectedVariantesCount = selectedVariantesIds.length
+
+  const toggleAllVariantes = (checked: boolean) => {
+    const next: Record<string, boolean> = {}
+    variantesIds.forEach(id => { next[String(id)] = checked })
+    setSelectedVariantes(next)
+  }
+
+  const toggleVariante = (varianteId: string, checked: boolean) => {
+    setSelectedVariantes(prev => ({ ...prev, [String(varianteId)]: checked }))
+  }
+
+  // Función auxiliar para redondear a 2 decimales
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+
+  // Función para calcular utilidad neta usando los mismos parámetros de la calculadora principal
+  // Devuelve { valor, porcentaje }
+  const calcularUtilidadNeta = (costeVariante: number, precioVariante: number): { valor: number, porcentaje: number } => {
+    // Obtener porcentajes de la calculadora principal
+    const facturaRow = priceRows.find(r => r.campo === "Factura")
+    const iueRow = priceRows.find(r => r.campo === "IUE")
+    const comisionRow = priceRows.find(r => r.campo === "Comision")
+
+    const facturaPctConfig = parseNum(facturaRow?.porcentajeConfig ?? facturaRow?.porcentaje ?? 16)
+    const iuePctConfig = parseNum(iueRow?.porcentajeConfig ?? iueRow?.porcentaje ?? 2)
+    const comPctConfig = parseNum(comisionRow?.porcentajeConfig ?? comisionRow?.porcentaje ?? 12)
+
+    const facturaPct = facturaPctConfig / 100
+    const iuePct = iuePctConfig / 100
+
+    const facturaVal = round2(precioVariante * facturaPct)
+    const iueVal = round2(precioVariante * iuePct)
+
+    const costosTotales = round2(costeVariante + facturaVal + iueVal)
+    const utilidadBruta = round2(precioVariante - costosTotales)
+    const comPct = comPctConfig / 100
+    const comisionVal = round2(utilidadBruta * comPct)
+    const utilidadNeta = round2(utilidadBruta - comisionVal)
+
+    // Calcular porcentaje sobre el precio
+    const utilidadNetaPct = precioVariante > 0 ? round2((utilidadNeta / precioVariante) * 100) : 0
+
+    return { valor: utilidadNeta, porcentaje: utilidadNetaPct }
+  }
+
+  // Función para manejar cambios en una SOLA variante (edición individual en la tabla)
+  const handleSingleVarianteFieldChange = (varianteId: string, field: 'precio_override' | 'dif_precio', value: number) => {
+    const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
+
+    let update: { precio_override?: number, dif_precio?: number } = {}
+
+    if (field === 'precio_override') {
+      // Si cambia precio_override, calcular dif_precio
+      const nuevoPrecio = value
+      const nuevaDif = nuevoPrecio - precioBaseProducto
+      update = {
+        ...(pendingChangesVariantes[varianteId] || {}),
+        precio_override: nuevoPrecio,
+        dif_precio: nuevaDif
+      }
+    } else if (field === 'dif_precio') {
+      // Si cambia dif_precio, calcular precio_override
+      const nuevaDif = value
+      const nuevoPrecio = precioBaseProducto + nuevaDif
+      update = {
+        ...(pendingChangesVariantes[varianteId] || {}),
+        dif_precio: nuevaDif,
+        precio_override: nuevoPrecio
+      }
+    }
+
+    setPendingChangesVariantes(prev => ({ ...prev, [varianteId]: update }))
+  }
+
+  // Función para manejar cambios MASIVOS en Precio Variante y Dif. Precio (desde la barra azul)
+  const handleBulkVarianteFieldChange = (field: 'precio_override' | 'dif_precio', value: number) => {
+    const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
+    const updates: Record<string, { precio_override?: number, dif_precio?: number }> = {}
+
+    selectedVariantesIds.forEach(varianteId => {
+      // Buscar variante comparando como string
+      const variante = variantesVisibles.find(v => String(v.id) === varianteId)
+      if (!variante) return
+
+      if (field === 'precio_override') {
+        // Si cambia precio_override, calcular dif_precio
+        const nuevoPrecio = value
+        const nuevaDif = nuevoPrecio - precioBaseProducto
+        updates[varianteId] = {
+          ...(pendingChangesVariantes[varianteId] || {}),
+          precio_override: nuevoPrecio,
+          dif_precio: nuevaDif
+        }
+      } else if (field === 'dif_precio') {
+        // Si cambia dif_precio, calcular precio_override
+        const nuevaDif = value
+        const nuevoPrecio = precioBaseProducto + nuevaDif
+        updates[varianteId] = {
+          ...(pendingChangesVariantes[varianteId] || {}),
+          dif_precio: nuevaDif,
+          precio_override: nuevoPrecio
+        }
+      }
+    })
+
+    setPendingChangesVariantes(prev => ({ ...prev, ...updates }))
+    toast.info(`Campo ${field === 'precio_override' ? 'Precio Variante' : 'Dif. Precio'} actualizado para ${selectedVariantesCount} variante(s)`)
+  }
+
+  // Función para guardar cambios masivos
+  const handleSaveBulkVariantes = async () => {
+    if (Object.keys(pendingChangesVariantes).length === 0) {
+      toast.warning('No hay cambios pendientes para guardar')
+      return
+    }
+
+    setSavingBulkVariantes(true)
+    console.log('💾 [GUARDAR VARIANTES] Iniciando guardado...')
+    console.log('💾 [GUARDAR VARIANTES] Cambios pendientes:', pendingChangesVariantes)
+
+    try {
+      const results = await Promise.all(
+        Object.entries(pendingChangesVariantes).map(async ([varianteId, changes]) => {
+          if (!id || id === 'nuevo' || id === 'new') {
+            throw new Error('El producto debe estar guardado primero')
+          }
+
+          const payload: {
+            variante_id: string
+            producto_id: string
+            precio_override: number | null
+            dif_precio?: number | null
+          } = {
+            variante_id: varianteId,
+            producto_id: id,
+            precio_override: changes.precio_override !== undefined ? changes.precio_override : null,
+            // FIX variantes: guardar también dif_precio en producto_variantes
+            dif_precio: changes.dif_precio !== undefined ? changes.dif_precio : null
+          }
+
+          console.log('💾 [GUARDAR VARIANTES] Enviando:', payload)
+
+          const response = await fetch('/api/productos/variantes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+
+          const result = await response.json()
+          console.log('💾 [GUARDAR VARIANTES] Respuesta:', result)
+
+          if (!response.ok) {
+            if (result.code === 'VARIANTE_NOT_FOUND') {
+              throw new Error('Las variantes no existen en la base de datos. Guarda el producto primero para generarlas.')
+            }
+            throw new Error(result.error || 'Error al guardar variante')
+          }
+
+          return result
+        })
+      )
+
+      console.log('💾 [GUARDAR VARIANTES] Todos los resultados:', results)
+
+      toast.success(`${Object.keys(pendingChangesVariantes).length} variante(s) actualizada(s) correctamente`)
+      setPendingChangesVariantes({})
+      setSelectedVariantes({})
+      await getVariantes()
+    } catch (error) {
+      console.error('❌ Error guardando cambios masivos:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al guardar cambios')
+    } finally {
+      setSavingBulkVariantes(false)
+    }
+  }
+
+  // Función para descartar cambios pendientes
+  const handleDiscardBulkVariantes = () => {
+    setPendingChangesVariantes({})
+    toast.info('Cambios descartados')
+  }
+
   // Funciones para calculadora de precios por variante
   const openCalculadoraVariante = (variante: any) => {
     setVarianteCalculadora(variante)
-    
+
     // Inicializar calculadora con coste de la variante
     const costeVariante = getCosteFinal(variante)
-    
+
     // Inicializar con estructura estática
     let rowsIniciales = JSON.parse(JSON.stringify(defaultPriceRowsVariante))
-    
+
     // Establecer el coste
     const costeRow = rowsIniciales.find((r: any) => r.campo === "Coste")
     if (costeRow) {
       costeRow.valor = costeVariante
     }
-    
+
     // Si hay precio_variante guardada, cargarla
     if (variante.precio_variante) {
       try {
-        const calc = typeof variante.precio_variante === 'string' 
+        const calc = typeof variante.precio_variante === 'string'
           ? JSON.parse(variante.precio_variante)
           : variante.precio_variante
-        
+
         if (calc.priceRows && Array.isArray(calc.priceRows)) {
           // Mapear las filas guardadas a la estructura estática
           rowsIniciales = rowsIniciales.map((defaultRow: any) => {
@@ -644,13 +980,13 @@ export default function ProductoDetailPage() {
             }
             return defaultRow
           })
-          
+
           // Asegurar que el coste sea el actual
           const costeRow = rowsIniciales.find((r: any) => r.campo === "Coste")
           if (costeRow) {
             costeRow.valor = costeVariante
           }
-          
+
           // Si hay precio guardado, recalcular todo
           const precioRow = rowsIniciales.find((r: any) => r.campo === "Precio")
           if (precioRow && precioRow.valor > 0) {
@@ -661,7 +997,7 @@ export default function ProductoDetailPage() {
         console.error('Error parseando precio_variante:', e)
       }
     }
-    
+
     setPriceRowsVariante(rowsIniciales)
     setCalculadoraVarianteOpen(true)
   }
@@ -672,7 +1008,7 @@ export default function ProductoDetailPage() {
     if (calculadoraVarianteOpen && varianteCalculadora) {
       const costeVariante = getCosteFinal(varianteCalculadora)
       setPriceRowsVariante(prev => {
-        const updated = prev.map(row => 
+        const updated = prev.map(row =>
           row.campo === "Coste" ? { ...row, valor: costeVariante } : row
         )
         const precio = parseNum(updated.find((r: any) => r.campo === "Precio")?.valor ?? 0)
@@ -703,7 +1039,7 @@ export default function ProductoDetailPage() {
       }
 
       const pct = parseNum(pctStr)
-      
+
       if (["Factura", "IUE", "Comision"].includes(row.campo)) {
         row.porcentajeConfig = pct
         const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
@@ -735,7 +1071,7 @@ export default function ProductoDetailPage() {
       }
 
       const val = parseNum(valStr)
-      
+
       if (row.campo === "Precio") {
         return recalcFromTargetPriceVariante(val, rowsCopy)
       }
@@ -747,23 +1083,23 @@ export default function ProductoDetailPage() {
   const handleApplyPriceVariante = async () => {
     setIsApplyingPriceVariante(true)
     setPriceAppliedVariante(false)
-    
+
     try {
       if (!varianteCalculadora) {
         toast.error("No hay variante seleccionada")
         setIsApplyingPriceVariante(false)
         return
       }
-      
+
       if (!id || id === 'nuevo' || id === 'new') {
         toast.error("El producto debe estar guardado primero")
         setIsApplyingPriceVariante(false)
         return
       }
-      
+
       const precioRow = priceRowsVariante.find(r => r.campo === "Precio")
       const priceValue = parseNum(precioRow?.valor ?? 0)
-      
+
       if (priceValue <= 0) {
         toast.error("El precio debe ser mayor a 0")
         setIsApplyingPriceVariante(false)
@@ -807,7 +1143,7 @@ export default function ProductoDetailPage() {
         setPriceAppliedVariante(true)
         toast.success(`Precio variante guardado: Bs ${priceValue.toFixed(2)}`)
         await getVariantes()
-        
+
         // Resetear animación después de 1.8 segundos
         setTimeout(() => setPriceAppliedVariante(false), 1800)
       } else {
@@ -825,9 +1161,9 @@ export default function ProductoDetailPage() {
   // Limpiar nombre de variante eliminando duplicaciones
   const limpiarNombreVariante = (nombre: string): string => {
     if (!nombre) return nombre
-    
+
     const nombreTrim = nombre.trim()
-    
+
     // Caso 1: Detectar duplicación completa
     // Ejemplo: "Instalación en valla Instalación en valla" -> "Instalación en valla"
     const palabras = nombreTrim.split(/\s+/)
@@ -841,32 +1177,32 @@ export default function ProductoDetailPage() {
         }
       }
     }
-    
+
     // Caso 2: Detectar patrones como "Grosor Lona frontligth" -> "Grosor"
     // Buscar tipos de variantes comunes al inicio
     const tiposVariantes = [
-      'Grosor', 'Color', 'Tamaño', 'Material', 'Acabado', 
+      'Grosor', 'Color', 'Tamaño', 'Material', 'Acabado',
       'Instalación', 'Desinstalación', 'Montaje', 'Desmontaje',
       'Ancho', 'Alto', 'Espesor', 'Peso', 'Formato'
     ]
-    
+
     for (const tipo of tiposVariantes) {
       // Verificar si el nombre empieza exactamente con el tipo
       if (nombreTrim === tipo) {
         return tipo
       }
-      
+
       // Verificar si empieza con el tipo seguido de espacio
       if (nombreTrim.startsWith(tipo + ' ')) {
         const resto = nombreTrim.substring(tipo.length).trim()
-        
+
         // Si el resto tiene 2 o más palabras, probablemente es información del recurso
         // Ejemplo: "Lona frontligth" -> devolver solo "Grosor"
         const palabrasResto = resto.split(/\s+/)
         if (palabrasResto.length >= 2) {
           return tipo
         }
-        
+
         // Si el resto es una sola palabra, podría ser parte del nombre de la variante
         // Ejemplo: "Color Blanco" -> mantener "Color Blanco"
         // Pero si es algo como "Color Lona", probablemente es "Color"
@@ -874,7 +1210,7 @@ export default function ProductoDetailPage() {
         return tipo
       }
     }
-    
+
     // Si no se encontró patrón, devolver el nombre original
     return nombreTrim
   }
@@ -890,83 +1226,358 @@ export default function ProductoDetailPage() {
       .join(' | ')
   }
 
-  // Obtener coste final (override o calculado desde control de stock)
+  /**
+   * Normaliza la combinación del producto para que coincida con las claves de control_stock del recurso.
+   * 
+   * FIX variantes:
+   * - Toma SOLO las variantes que pertenecen a este recurso (según recurso.variantes)
+   * - Para cada variante del recurso, usa SOLO el VALOR (A, B, 1, 2...), ignorando el nombre ("tamaño", "grosor", etc.)
+   * - Elimina duplicados como "Grosor: 1" y "Grosor: 10 Oz" quedándose solo con la posibilidad válida
+   *   (la que existe en las posibilidades/valores del recurso)
+   * - Mantiene siempre la sucursal (SOLO el valor, sin "Sucursal:")
+   * - Devuelve una clave en el mismo formato que control_stock:
+   *     "<valor variante> | <nombre sucursal>"
+   * 
+   * Ejemplo de entrada:
+   *   "tamaño: A | Grosor: 1 | Sucursal: La Paz"
+   * Ejemplo de salida:
+   *   "A | La Paz"
+   */
+  const normalizarCombinacionParaRecurso = (combinacionProducto: string, recurso: any): string => {
+    if (!combinacionProducto || !recurso) {
+      return combinacionProducto
+    }
+
+    try {
+      // 1. Separar la combinación en partes "Nombre: Valor"
+      const partes = combinacionProducto
+        .split('|')
+        .map(p => p.trim())
+        .filter(p => p.length > 0 && p.includes(':'))
+
+      // 2. Obtener la definición de variantes del recurso en TODOS los formatos soportados
+      let variantesArray: any[] = []
+      if (Array.isArray(recurso.variantes)) {
+        variantesArray = recurso.variantes
+      } else if (
+        recurso.variantes &&
+        typeof recurso.variantes === 'object' &&
+        Array.isArray(recurso.variantes.variantes)
+      ) {
+        variantesArray = recurso.variantes.variantes
+      } else if (typeof recurso.variantes === 'string') {
+        try {
+          const parsed = JSON.parse(recurso.variantes)
+          if (Array.isArray(parsed)) {
+            variantesArray = parsed
+          } else if (parsed && Array.isArray(parsed.variantes)) {
+            variantesArray = parsed.variantes
+          }
+        } catch {
+          // Ignorar errores de parseo: en ese caso no tendremos variantes definidas
+        }
+      }
+
+      // Mapa: nombreVariante -> lista de posibilidades válidas (como strings limpias)
+      const mapaVariantes = new Map<string, string[]>()
+      variantesArray.forEach((v: any) => {
+        if (!v || !v.nombre) return
+        const nombre = String(v.nombre).trim()
+        const posibilidades = Array.isArray(v.posibilidades)
+          ? v.posibilidades
+          : Array.isArray(v.valores)
+            ? v.valores
+            : []
+        const valoresLimpios = posibilidades
+          .map((val: any) => String(val).trim())
+          .filter(val => val.length > 0)
+        if (valoresLimpios.length > 0) {
+          mapaVariantes.set(nombre, valoresLimpios)
+        }
+      })
+
+      const nombresVariantes = Array.from(mapaVariantes.keys())
+
+      // 3. Recoger SOLO los VALORES seleccionados para cada variante del recurso
+      const valoresSeleccionados: string[] = []
+
+      // Helper para obtener nombre y valor de una parte "Nombre: Valor"
+      const parseParte = (parte: string): { nombre: string; valor: string } | null => {
+        const [nombreRaw, ...resto] = parte.split(':')
+        if (!nombreRaw || resto.length === 0) return null
+        const nombre = nombreRaw.trim()
+        const valor = resto.join(':').trim()
+        if (!nombre || !valor) return null
+        return { nombre, valor }
+      }
+
+      // Primero, localizar los valores que corresponden a variantes del recurso
+      nombresVariantes.forEach(nombreVariante => {
+        const posibilidadesValidas = mapaVariantes.get(nombreVariante) || []
+        const nombreVarianteLower = nombreVariante.toLowerCase().trim()
+
+        // Buscar todas las partes cuya clave coincide con este nombre de variante
+        const partesCandidatas = partes
+          .map(p => ({ raw: p, parsed: parseParte(p) }))
+          .filter(item => {
+            if (!item.parsed) return false
+            const nombreParteLower = item.parsed.nombre.toLowerCase()
+            return nombreParteLower === nombreVarianteLower
+          })
+
+        if (partesCandidatas.length === 0) {
+          return
+        }
+
+        // Entre las candidatas, quedarnos SOLO con las cuyo valor está en las posibilidades del recurso
+        const candidatasValidas = partesCandidatas.filter(item => {
+          if (!item.parsed) return false
+          const valorParte = item.parsed.valor.trim()
+          // Comparación case-insensitive
+          return posibilidadesValidas.some(
+            pos => pos.toLowerCase() === valorParte.toLowerCase()
+          )
+        })
+
+        let seleccion: string | null = null
+
+        if (candidatasValidas.length > 0) {
+          // Si hay varias válidas, elegir la más larga (más específica)
+          seleccion = candidatasValidas
+            .map(c => c.raw)
+            .reduce((prev, curr) => (curr.length > prev.length ? curr : prev))
+        } else {
+          // Si ninguna coincide con posibilidades, como fallback usar la más larga de las candidatas originales
+          seleccion = partesCandidatas
+            .map(c => c.raw)
+            .reduce((prev, curr) => (curr.length > prev.length ? curr : prev))
+        }
+
+        if (seleccion) {
+          const parsedSel = parseParte(seleccion)
+          if (parsedSel && parsedSel.valor.trim().length > 0) {
+            // Guardar SOLO el valor (ej: "A", "B", "12 Oz")
+            valoresSeleccionados.push(parsedSel.valor.trim())
+          }
+        }
+      })
+
+      // 4. Siempre incluir Sucursal si existe en la combinación original
+      // IMPORTANTE: Solo el VALOR de la sucursal, SIN el texto "Sucursal:"
+      let sucursalValor: string | null = null
+      const parteSucursal = partes.find(p => {
+        const parsed = parseParte(p)
+        if (!parsed) return false
+        return parsed.nombre.toLowerCase() === 'sucursal'
+      })
+      if (parteSucursal) {
+        const parsedSucursal = parseParte(parteSucursal)
+        if (parsedSucursal && parsedSucursal.valor.trim().length > 0) {
+          // Solo el valor: "La Paz", "Santa Cruz", NO "Sucursal: La Paz"
+          sucursalValor = parsedSucursal.valor.trim()
+        }
+      }
+
+      // 5. Reconstruir clave limpia en el formato EXACTO que usa control_stock:
+      //    "<valor variante> | <nombre sucursal>"
+      //    Ejemplo: "A | La Paz", "B | Santa Cruz"
+      const partesClave: string[] = []
+      partesClave.push(...valoresSeleccionados)
+      if (sucursalValor) {
+        // Añadir solo el valor de la sucursal, sin prefijo
+        partesClave.push(sucursalValor)
+      }
+
+      if (partesClave.length === 0) {
+        // Si no se pudo normalizar, devolver la combinación original para no romper nada
+        return combinacionProducto
+      }
+
+      const claveFinal = partesClave.join(' | ')
+      console.log('🔍 [NORMALIZAR] Combinación original:', combinacionProducto)
+      console.log('🔍 [NORMALIZAR] Recurso:', recurso?.nombre)
+      console.log('🔍 [NORMALIZAR] Clave normalizada generada:', claveFinal)
+      return claveFinal
+    } catch (error) {
+      console.error('❌ Error normalizando combinación:', error)
+      return combinacionProducto
+    }
+  }
+
+  /**
+   * Obtiene el precioVariante de un recurso específico desde su control_stock
+   * para una combinación de variantes dada.
+   * 
+   * REGLAS:
+   * - Si el recurso NO tiene variantes → usar recurso.coste como precioVariante
+   * - Si el recurso SÍ tiene variantes:
+   *    - Normalizar combinación y buscar coincidencia EXACTA en control_stock
+   *    - Si hay coincidencia → usar precioVariante
+   *    - Si NO hay coincidencia o no hay control_stock válido → usar coste base como fallback seguro
+   * 
+   * // FIX variantes: distinguir recursos con/sin variantes y usar control_stock cuando exista
+   */
+  /**
+   * Obtiene el precioVariante de un recurso específico usando el VariantEngine
+   */
+  const getDatosRecursoVariante = (
+    recurso: any,
+    combinacionProducto: string
+  ): { precioVariante: number, diferenciaPrecio: number } => {
+    // Parsear combinación string a objeto
+    const valores = parsearClaveVariante(combinacionProducto)
+
+    // Usar engine para encontrar el precio correcto
+    const precio = findResourceVariantPrice(recurso, valores)
+    const costeBase = Number(recurso.coste) || 0
+
+    return {
+      precioVariante: precio,
+      diferenciaPrecio: precio - costeBase
+    }
+  }
+
+  /**
+   * Calcula el coste de la variante y la diferencia con el coste base.
+   * 
+   * FÓRMULA solicitada:
+   * coste_variante = Σ( costes_recursos_SIN_variantes ) + Σ( precioVariante_recursos_CON_variantes )
+   * dif_coste = coste_variante - coste_base_producto
+   * 
+   * @param variante - Variante del producto con su combinación
+   * @returns { costeVariante, difCoste }
+   */
+  const calcularCosteVariante = (variante: any): { costeVariante: number, difCoste: number } => {
+    const costeBaseProducto = totalCost || 0
+    const defaultResult = { costeVariante: Math.round(costeBaseProducto * 100) / 100, difCoste: 0 }
+
+    if (!variante || !variante.combinacion || costRows.length === 0) {
+      return defaultResult
+    }
+
+    try {
+      const combinacionProducto = variante.combinacion
+      let costeRecursosSinVariantes = 0
+      let costeRecursosConVariantes = 0
+
+      costRows.forEach(row => {
+        if (!row.selectedRecurso || !row.selectedRecurso.id) {
+          return
+        }
+
+        const recurso = row.selectedRecurso
+        const cantidad = Number(row.cantidad) || 1
+        const costeBaseRecurso = Number(recurso.coste) || 0
+
+        let controlStock: any = null
+        if (typeof recurso.control_stock === 'string') {
+          try {
+            controlStock = JSON.parse(recurso.control_stock)
+          } catch {
+            controlStock = null
+          }
+        } else if (typeof recurso.control_stock === 'object' && recurso.control_stock !== null) {
+          controlStock = recurso.control_stock
+        }
+
+        // Detectar recursos con variantes por variantes[] O control_stock
+        // Intentar parsear si es string JSON
+        let variantesParsed: any = null
+        if (typeof recurso.variantes === 'string') {
+          try {
+            variantesParsed = JSON.parse(recurso.variantes)
+          } catch {
+            variantesParsed = null
+          }
+        } else {
+          variantesParsed = recurso.variantes
+        }
+
+        const tieneVariantesPorDefinicion =
+          (Array.isArray(recurso.variantes) && recurso.variantes.length > 0) ||
+          (Array.isArray(variantesParsed) && variantesParsed.length > 0) ||
+          (recurso.variantes &&
+            typeof recurso.variantes === 'object' &&
+            Array.isArray(recurso.variantes.variantes) &&
+            recurso.variantes.variantes.length > 0) ||
+          (variantesParsed &&
+            typeof variantesParsed === 'object' &&
+            Array.isArray(variantesParsed.variantes) &&
+            variantesParsed.variantes.length > 0)
+
+        const tieneVariantesPorControlStock =
+          controlStock && typeof controlStock === 'object' && Object.keys(controlStock).length > 0
+
+        const tieneVariantes = tieneVariantesPorDefinicion || tieneVariantesPorControlStock
+
+        // DEBUG: Log para ver qué está pasando
+        console.log(`🔍 [DETECTAR] Recurso: ${recurso?.nombre}`)
+        console.log(`🔍 [DETECTAR]   - recurso.variantes (raw):`, recurso.variantes)
+        console.log(`🔍 [DETECTAR]   - variantesParsed:`, variantesParsed)
+        console.log(`🔍 [DETECTAR]   - tieneVariantesPorDefinicion:`, tieneVariantesPorDefinicion)
+        console.log(`🔍 [DETECTAR]   - controlStock keys:`, controlStock ? Object.keys(controlStock) : 'null')
+        console.log(`🔍 [DETECTAR]   - tieneVariantesPorControlStock:`, tieneVariantesPorControlStock)
+        console.log(`🔍 [DETECTAR]   - tieneVariantes (FINAL):`, tieneVariantes)
+
+        if (tieneVariantes) {
+          // Recurso CON variantes: obtener precioVariante del control_stock (con fallback a coste base)
+          const datos = getDatosRecursoVariante(recurso, combinacionProducto)
+          const precioVarianteRecurso = Number.isFinite(datos.precioVariante)
+            ? datos.precioVariante
+            : costeBaseRecurso
+          console.log(`💰 [CALCULAR] Recurso CON variantes: ${recurso?.nombre}`)
+          console.log(`💰 [CALCULAR]   - costeBase: ${costeBaseRecurso}, precioVariante: ${precioVarianteRecurso}, cantidad: ${cantidad}`)
+          costeRecursosConVariantes += precioVarianteRecurso * cantidad
+        } else {
+          // Recurso SIN variantes: usar siempre su coste base
+          console.log(`💰 [CALCULAR] Recurso SIN variantes: ${recurso?.nombre}`)
+          console.log(`💰 [CALCULAR]   - costeBase: ${costeBaseRecurso}, cantidad: ${cantidad}`)
+          costeRecursosSinVariantes += costeBaseRecurso * cantidad
+        }
+      })
+
+      const costeVariante = Math.round((costeRecursosSinVariantes + costeRecursosConVariantes) * 100) / 100
+      const difCoste = Math.round((costeVariante - costeBaseProducto) * 100) / 100
+
+      console.log("💰 [CALCULAR] RESULTADO FINAL:")
+      console.log("💰 [CALCULAR]   - costeRecursosSinVariantes:", costeRecursosSinVariantes)
+      console.log("💰 [CALCULAR]   - costeRecursosConVariantes:", costeRecursosConVariantes)
+      console.log("💰 [CALCULAR]   - costeBaseProducto (totalCost):", costeBaseProducto)
+      console.log("[VARIANTE] Coste calculado:", costeVariante, "para combinación:", combinacionProducto)
+      return { costeVariante, difCoste }
+    } catch (error) {
+      console.error('❌ Error calculando coste de variante:', error)
+      return defaultResult
+    }
+  }
+
+  /**
+   * Función legacy para compatibilidad - usa calcularCosteVariante internamente
+   */
+  const getDiferenciaControlStock = (variante: any): number => {
+    return calcularCosteVariante(variante).difCoste
+  }
+
+  /**
+   * Calcula el coste final de una variante del producto.
+   * 
+   * FÓRMULA: coste_variante = Σ(costes_sin_variantes) + Σ(precioVariante_con_variantes)
+   * 
+   * @param variante - Variante del producto
+   * @returns Coste final de la variante
+   */
   const getCosteFinal = (variante: any): number => {
     if (!variante) {
-      console.log('⚠️ getCosteFinal: variante es null/undefined')
-      return 0
+      return totalCost || 0
     }
-    
+
     // Si hay override, usar ese (tiene máxima prioridad)
     if (variante.coste_override !== null && variante.coste_override !== undefined) {
-      console.log(`💵 Coste override: ${variante.coste_override}`)
       return variante.coste_override
     }
-    
-    // PRIORIDAD: Calcular coste desde control de stock usando la receta completa
-    // Esto asegura que siempre se use el coste real:
-    // - Para recursos SIN variantes → coste base
-    // - Para recursos CON variantes → precio desde control_stock
-    if (variante.combinacion && recursos.length > 0 && costRows.length > 0) {
-      try {
-        const valoresCombinacion = parsearClaveVariante(variante.combinacion)
-        const sucursal = valoresCombinacion.Sucursal || valoresCombinacion.sucursal
-        
-        console.log(`🔍 Calculando coste para variante:`, {
-          combinacion: variante.combinacion,
-          valoresCombinacion,
-          sucursal
-        })
-        
-        // Construir receta desde costRows (la receta actual del producto)
-        const receta = costRows
-          .filter(row => row.selectedRecurso && row.selectedRecurso.id)
-          .map(row => ({
-            recurso_id: row.selectedRecurso.id,
-            recurso_codigo: row.selectedRecurso.codigo || row.selectedRecurso.id,
-            recurso_nombre: row.selectedRecurso.nombre,
-            cantidad: row.cantidad,
-            unidad: row.unidad
-          }))
-        
-        if (receta.length > 0) {
-          console.log(`📋 Receta construida:`, receta)
-          console.log(`📦 Recursos disponibles: ${recursos.length}`)
-          
-          // Calcular coste desde control de stock
-          // Esta función itera sobre cada recurso de la receta y:
-          // - Si el recurso tiene variantes → busca el precio en control_stock
-          // - Si no tiene variantes → usa su coste base
-          const costeDesdeControlStock = calcularCosteVariante(
-            receta,
-            recursos,
-            valoresCombinacion,
-            sucursal || undefined
-          )
-          
-          console.log(`💰 Coste calculado desde control_stock: ${costeDesdeControlStock}`)
-          
-          // Usar el coste calculado (incluso si es 0, es válido)
-          return costeDesdeControlStock
-        } else {
-          console.log('⚠️ No hay receta válida para calcular coste')
-        }
-      } catch (error) {
-        console.error('❌ Error calculando coste desde control de stock:', error)
-        // Continuar con fallback si hay error
-      }
-    } else {
-      console.log('⚠️ No se puede calcular coste:', {
-        tieneCombinacion: !!variante.combinacion,
-        recursosLength: recursos.length,
-        costRowsLength: costRows.length
-      })
-    }
-    
-    // Fallback a coste calculado o base (solo si no se pudo calcular desde receta)
-    const fallback = variante.coste_base || variante.coste_calculado || 0
-    console.log(`📊 Usando fallback: ${fallback}`)
-    return fallback
+
+    // Usar la nueva función que calcula correctamente
+    return calcularCosteVariante(variante).costeVariante
   }
 
   // Obtener precio final (override o calculado)
@@ -992,7 +1603,7 @@ export default function ProductoDetailPage() {
     }
 
     setSaving(true)
-    
+
     try {
       // Construir receta (lista de recursos seleccionados en la calculadora de costes)
       // IMPORTANTE: Solo incluir recursos, NO proveedores
@@ -1047,27 +1658,27 @@ export default function ProductoDetailPage() {
             body: imageFormData
           })
           const uploadData = await uploadResponse.json().catch(() => ({}))
-          
+
           console.log("📤 [FRONTEND] Upload response:", {
             ok: uploadResponse.ok,
             status: uploadResponse.status,
             data: uploadData
           })
-          
+
           if (!uploadResponse.ok || uploadData.success === false) {
             const errorMessage = uploadData.error || `Error subiendo imagen (status ${uploadResponse.status})`
             console.error("❌ [FRONTEND] Error en respuesta de upload:", errorMessage)
             throw new Error(errorMessage)
           }
-          
+
           if (!uploadData.data) {
             console.error("❌ [FRONTEND] No se recibió data en la respuesta")
             throw new Error("No se recibieron datos de la subida de imagen")
           }
-          
+
           imagenMeta = uploadData.data
           console.log("✅ [FRONTEND] Imagen subida correctamente:", imagenMeta)
-          
+
           // Si hay warning, mostrarlo
           if (uploadData.warning) {
             toast.warning(uploadData.warning, { id: 'upload-image' })
@@ -1135,7 +1746,7 @@ export default function ProductoDetailPage() {
       // Preparar calculadora de precios UFC
       const precioFinal = parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0)
       const precioFinalValidado = sanitizeNumber(precioFinal) || 0
-      
+
       // Sanitizar priceRows: eliminar valores "–" o strings no numéricos
       const priceRowsSanitizados = priceRows.map((row: any) => {
         const rowCopy: any = { ...row }
@@ -1168,19 +1779,85 @@ export default function ProductoDetailPage() {
         }
         return rowCopy
       })
-      
+
       const calculadoraPrecios = {
         priceRows: priceRowsSanitizados,
         totalPrice: precioFinalValidado,
         objetivoUtilidadReal: null
       }
-      
+
       // Preparar variantes (singular "variante" según el esquema)
-      const varianteLimpia = variantes.length > 0 ? variantes.map(v => {
-        const { recurso_id, recurso_nombre, ...varianteSinTracking } = v
-        return varianteSinTracking
-      }) : []
-      
+      // FIX variantes: usar las variantes que ya están guardadas en el producto (estado "variantes")
+      //                y solo reconstruirlas desde costRows si no hay variantes guardadas
+      let variantesDefinicionProducto: { nombre: string; valores: any[] }[] = []
+
+      // PRIORIDAD 1: Usar las variantes que ya están en el estado (cargadas desde el producto)
+      if (variantes.length > 0) {
+        console.log('💾 [GUARDAR] Usando variantes del estado:', variantes.length, 'variante(s)')
+        variantesDefinicionProducto = variantes.map((v: any) => {
+          const valores = v.valores ?? v.posibilidades ?? []
+          return {
+            nombre: v.nombre,
+            valores: Array.isArray(valores) ? valores : []
+          }
+        }).filter((v: any) => v.nombre && v.valores.length > 0)
+      }
+
+      // PRIORIDAD 2: Si no hay variantes en el estado, construir desde costRows
+      if (variantesDefinicionProducto.length === 0) {
+        console.log('💾 [GUARDAR] No hay variantes en estado, construyendo desde costRows...')
+        costRows.forEach(row => {
+          const recurso = row.selectedRecurso
+          if (!recurso?.variantes) return
+
+          let variantesArray: any[] = []
+          if (Array.isArray(recurso.variantes)) {
+            variantesArray = recurso.variantes
+          } else if (
+            typeof recurso.variantes === 'object' &&
+            Array.isArray(recurso.variantes.variantes)
+          ) {
+            variantesArray = recurso.variantes.variantes
+          } else if (typeof recurso.variantes === 'string') {
+            try {
+              const parsed = JSON.parse(recurso.variantes)
+              if (Array.isArray(parsed)) {
+                variantesArray = parsed
+              } else if (parsed && Array.isArray(parsed.variantes)) {
+                variantesArray = parsed.variantes
+              }
+            } catch {
+              // ignorar errores de parseo
+            }
+          }
+
+          variantesArray.forEach((v: any) => {
+            if (!v || !v.nombre) return
+            const nombre = String(v.nombre)
+            const valores = v.posibilidades ?? v.valores ?? []
+            if (!Array.isArray(valores) || valores.length === 0) return
+
+            const claveNombre = nombre.toLowerCase().trim()
+            let existente = variantesDefinicionProducto.find(
+              d => d.nombre.toLowerCase().trim() === claveNombre
+            )
+            if (!existente) {
+              variantesDefinicionProducto.push({ nombre, valores: [...valores] })
+            } else {
+              valores.forEach((val: any) => {
+                if (!existente!.valores.includes(val)) {
+                  existente!.valores.push(val)
+                }
+              })
+            }
+          })
+        })
+      }
+
+      const varianteLimpia = variantesDefinicionProducto
+
+      console.log('💾 [GUARDAR] Variantes finales a guardar:', varianteLimpia.length, 'variante(s)', JSON.stringify(varianteLimpia, null, 2))
+
       // Preparar proveedores sanitizados
       const proveedoresSanitizados = proveedores.length > 0 ? proveedores.map(prov => ({
         empresa: sanitizeString(prov.empresa) || "",
@@ -1189,7 +1866,7 @@ export default function ProductoDetailPage() {
         plazos: sanitizeString(prov.plazos) || "",
         comentarios: sanitizeString(prov.comentarios) || ""
       })) : []
-      
+
       // Preparar imagen_principal (según el esquema real)
       let imagenPrincipal: string | null = null
       if (imagenMeta?.publicUrl) {
@@ -1199,7 +1876,7 @@ export default function ProductoDetailPage() {
       } else if (existingImagenUrl && !isNewProduct) {
         imagenPrincipal = existingImagenUrl
       }
-      
+
       // Construir dataToSend según el esquema REAL de Supabase
       const dataToSend: Record<string, any> = {
         codigo: sanitizeString(formData.codigo) || "",
@@ -1212,12 +1889,25 @@ export default function ProductoDetailPage() {
         responsable: sanitizeString(formData.responsable),
         descripcion: sanitizeString(formData.descripcion),
         mostrar_en_web: Boolean(formData.mostrar_en_web),
-        variante: varianteLimpia.length > 0 ? varianteLimpia : null,
         receta: Array.isArray(recetaArray) ? recetaArray : [], // FIX 2: Receta SIEMPRE es array, nunca null
         calculadora_precios: calculadoraPrecios,
         proveedores: proveedoresSanitizados.length > 0 ? proveedoresSanitizados : null
       }
-      
+
+      // FIX variantes: Solo enviar variante si hay variantes para guardar
+      // Si está vacío pero es un producto existente, no enviar el campo para no sobrescribir las existentes
+      if (varianteLimpia.length > 0) {
+        dataToSend.variante = varianteLimpia
+        console.log('💾 [GUARDAR] Enviando variantes:', varianteLimpia.length, 'variante(s)')
+      } else if (isNewProduct) {
+        // Si es un producto nuevo y no hay variantes, enviar null
+        dataToSend.variante = null
+        console.log('💾 [GUARDAR] Producto nuevo sin variantes, enviando null')
+      } else {
+        // Si es un producto existente y no hay variantes, NO enviar el campo para no sobrescribir
+        console.log('💾 [GUARDAR] Producto existente sin variantes nuevas, NO enviando campo variante para preservar las existentes')
+      }
+
       // Limpiar campos null/undefined que no deben enviarse
       Object.keys(dataToSend).forEach(key => {
         if (dataToSend[key] === undefined) {
@@ -1253,13 +1943,13 @@ export default function ProductoDetailPage() {
         const updated = responseData.data || responseData
         setProducto(updated)
         console.log("✅ Producto guardado correctamente:", updated)
-        
+
         // Si es un producto nuevo, actualizar el ID para que el hook funcione correctamente
         if (isNewProduct && updated.id) {
           // Actualizar el router para que el hook tenga el ID correcto
           router.replace(`/panel/inventario/${updated.id}`)
         }
-        
+
         console.log("✅ Variantes guardadas:", updated.variantes)
         console.log("✅ Receta guardada:", updated.receta)
 
@@ -1273,21 +1963,27 @@ export default function ProductoDetailPage() {
           imagen_attachment_id: null,
           imagenFile: null
         }))
-        
+
         // Verificar si se guardaron las variantes y receta (pero no es crítico si no existen en Airtable)
         if ((variantes.length > 0 && !updated.variantes) || (receta.length > 0 && !updated.receta)) {
           console.warn("⚠️ ADVERTENCIA: Las variantes o receta no se guardaron (puede que los campos no existan en Airtable)")
           // No mostrar warning al usuario, el producto se guardó correctamente
         }
-        
+
         // FIX 6: Validar receta antes de regenerar variantes
         // Regenerar variantes después de guardar
         // IMPORTANTE: Construir variantes SOLO desde los recursos activos en costRows (receta)
         // NO usar el estado 'variantes' que puede contener variantes de recursos eliminados
+        console.log("🔄 [REGENERAR] Iniciando regeneración de variantes...")
+        console.log("🔄 [REGENERAR] updated.id:", updated.id)
+        console.log("🔄 [REGENERAR] recetaArray.length:", recetaArray.length)
+        console.log("🔄 [REGENERAR] costRows.length:", costRows.length)
+
         if (updated.id) {
           // Validar que hay receta válida antes de regenerar
           const tieneRecetaValida = recetaArray.length > 0 && recetaArray.some(item => item.recurso_id)
-          
+          console.log("🔄 [REGENERAR] tieneRecetaValida:", tieneRecetaValida)
+
           if (!tieneRecetaValida) {
             console.warn('⚠️ Receta vacía: no se regeneran variantes')
             // Si no hay receta válida, eliminar todas las variantes
@@ -1310,134 +2006,150 @@ export default function ProductoDetailPage() {
             try {
               // Construir variantes desde los recursos activos en la receta (costRows)
               const variantesDeRecursosActivos: any[] = []
-              costRows.forEach(row => {
-              if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
-                let variantesArray: any[] = []
-                
-                if (Array.isArray(row.selectedRecurso.variantes)) {
-                  variantesArray = row.selectedRecurso.variantes
-                } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
-                  if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
-                    variantesArray = row.selectedRecurso.variantes.variantes
-                  }
-                } else if (typeof row.selectedRecurso.variantes === 'string') {
-                  try {
-                    const parsed = JSON.parse(row.selectedRecurso.variantes)
-                    if (Array.isArray(parsed)) {
-                      variantesArray = parsed
-                    } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
-                      variantesArray = parsed.variantes
+              console.log("🔄 [REGENERAR] Iterando costRows para buscar variantes...")
+
+              costRows.forEach((row, index) => {
+                console.log(`🔄 [REGENERAR] costRow[${index}]:`, {
+                  id: row.selectedRecurso?.id,
+                  nombre: row.selectedRecurso?.nombre,
+                  tieneVariantes: !!row.selectedRecurso?.variantes,
+                  tipoVariantes: typeof row.selectedRecurso?.variantes,
+                  variantes: row.selectedRecurso?.variantes
+                })
+
+                if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
+                  let variantesArray: any[] = []
+
+                  if (Array.isArray(row.selectedRecurso.variantes)) {
+                    variantesArray = row.selectedRecurso.variantes
+                    console.log(`🔄 [REGENERAR] costRow[${index}]: variantes es array directo con ${variantesArray.length} items`)
+                  } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
+                    if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
+                      variantesArray = row.selectedRecurso.variantes.variantes
+                      console.log(`🔄 [REGENERAR] costRow[${index}]: variantes es objeto con .variantes array con ${variantesArray.length} items`)
                     }
-                  } catch (e) {
-                    console.error('Error parseando variantes del recurso:', e)
+                  } else if (typeof row.selectedRecurso.variantes === 'string') {
+                    try {
+                      const parsed = JSON.parse(row.selectedRecurso.variantes)
+                      if (Array.isArray(parsed)) {
+                        variantesArray = parsed
+                        console.log(`🔄 [REGENERAR] costRow[${index}]: variantes parseado como array con ${variantesArray.length} items`)
+                      } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
+                        variantesArray = parsed.variantes
+                        console.log(`🔄 [REGENERAR] costRow[${index}]: variantes parseado como objeto.variantes con ${variantesArray.length} items`)
+                      }
+                    } catch (e) {
+                      console.error('Error parseando variantes del recurso:', e)
+                    }
+                  } else {
+                    console.log(`🔄 [REGENERAR] costRow[${index}]: formato de variantes no reconocido`)
                   }
-                }
-                
-                // Agregar variantes con el recurso_id para tracking
-                variantesArray.forEach((v: any) => {
-                  variantesDeRecursosActivos.push({
-                    ...v,
-                    recurso_id: row.selectedRecurso.id,
-                    recurso_nombre: row.selectedRecurso.nombre
+
+                  // Agregar variantes con el recurso_id para tracking
+                  variantesArray.forEach((v: any) => {
+                    variantesDeRecursosActivos.push({
+                      ...v,
+                      recurso_id: row.selectedRecurso.id,
+                      recurso_nombre: row.selectedRecurso.nombre
+                    })
                   })
-                })
-              }
-            })
-            
-            // Convertir variantes al formato correcto que espera el backend
-            const variantesLimpias = variantesDeRecursosActivos.map(v => ({
-              nombre: v.nombre,
-              valores: v.posibilidades ?? v.valores ?? []
-            }))
-            
-            console.log(">>> Variantes construidas desde recursos activos:", variantesLimpias)
-            console.log(">>> Recursos activos en receta:", costRows.filter(r => r.selectedRecurso?.id).map(r => r.selectedRecurso?.nombre))
-            
-            // Llamar directamente a la API con el ID actualizado
-            const regenerarResponse = await fetch(`/api/productos/variantes`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                producto_id: updated.id,
-                action: 'regenerar',
-                variantes_definicion: variantesLimpias
-              })
-            })
-            
-            const responseText = await regenerarResponse.text()
-            console.log('>>> Respuesta del API (raw):', responseText)
-            
-            if (regenerarResponse.ok) {
-              try {
-                const regenerarData = JSON.parse(responseText)
-                console.log('✅ Variantes regeneradas correctamente:', regenerarData)
-                
-                // Actualizar el estado de variantes con las variantes de los recursos activos
-                setVariantes(variantesDeRecursosActivos)
-                
-                const variantesCreadas = regenerarData.variantes?.length || 0
-                const variantesEliminadas = regenerarData.variantes_eliminadas || 0
-                
-                if (variantesEliminadas > 0) {
-                  toast.success(`Variantes regeneradas: ${variantesCreadas} creadas, ${variantesEliminadas} eliminadas`)
-                } else {
-                  toast.success(`Variantes generadas correctamente (${variantesCreadas} variantes)`)
                 }
-                
-                // Recargar variantes después de regenerar
-                setTimeout(() => {
-                  getVariantes()
-                }, 500)
-              } catch (parseError) {
-                console.error('Error parseando respuesta:', parseError)
-                toast.warning('Producto guardado, pero no se pudo parsear la respuesta de variantes')
-              }
-            } else {
-              try {
-                const errorData = JSON.parse(responseText)
-                console.error('❌ Error regenerando variantes:', {
-                  status: regenerarResponse.status,
-                  statusText: regenerarResponse.statusText,
-                  error: errorData.error,
-                  details: errorData.details
+              })
+
+              // Convertir variantes al formato correcto que espera el backend
+              const variantesLimpias = variantesDeRecursosActivos.map(v => ({
+                nombre: v.nombre,
+                valores: v.posibilidades ?? v.valores ?? []
+              }))
+
+              console.log(">>> Variantes construidas desde recursos activos:", variantesLimpias)
+              console.log(">>> Recursos activos en receta:", costRows.filter(r => r.selectedRecurso?.id).map(r => r.selectedRecurso?.nombre))
+
+              // Llamar directamente a la API con el ID actualizado
+              const regenerarResponse = await fetch(`/api/productos/variantes`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  producto_id: updated.id,
+                  action: 'regenerar',
+                  variantes_definicion: variantesLimpias
                 })
-                toast.error(`Error al generar variantes: ${errorData.error || 'Error desconocido'}`)
-              } catch (parseError) {
-                console.error('❌ Error regenerando variantes (sin parsear):', {
-                  status: regenerarResponse.status,
-                  statusText: regenerarResponse.statusText,
-                  responseText: responseText.substring(0, 200)
-                })
-                toast.error(`Error al generar variantes (${regenerarResponse.status})`)
+              })
+
+              const responseText = await regenerarResponse.text()
+              console.log('>>> Respuesta del API (raw):', responseText)
+
+              if (regenerarResponse.ok) {
+                try {
+                  const regenerarData = JSON.parse(responseText)
+                  console.log('✅ Variantes regeneradas correctamente:', regenerarData)
+
+                  // Actualizar el estado de variantes con las variantes de los recursos activos
+                  setVariantes(variantesDeRecursosActivos)
+
+                  const variantesCreadas = regenerarData.variantes?.length || 0
+                  const variantesEliminadas = regenerarData.variantes_eliminadas || 0
+
+                  if (variantesEliminadas > 0) {
+                    toast.success(`Variantes regeneradas: ${variantesCreadas} creadas, ${variantesEliminadas} eliminadas`)
+                  } else {
+                    toast.success(`Variantes generadas correctamente (${variantesCreadas} variantes)`)
+                  }
+
+                  // Recargar variantes después de regenerar
+                  setTimeout(() => {
+                    getVariantes()
+                  }, 500)
+                } catch (parseError) {
+                  console.error('Error parseando respuesta:', parseError)
+                  toast.warning('Producto guardado, pero no se pudo parsear la respuesta de variantes')
+                }
+              } else {
+                try {
+                  const errorData = JSON.parse(responseText)
+                  console.error('❌ Error regenerando variantes:', {
+                    status: regenerarResponse.status,
+                    statusText: regenerarResponse.statusText,
+                    error: errorData.error,
+                    details: errorData.details
+                  })
+                  toast.error(`Error al generar variantes: ${errorData.error || 'Error desconocido'}`)
+                } catch (parseError) {
+                  console.error('❌ Error regenerando variantes (sin parsear):', {
+                    status: regenerarResponse.status,
+                    statusText: regenerarResponse.statusText,
+                    responseText: responseText.substring(0, 200)
+                  })
+                  toast.error(`Error al generar variantes (${regenerarResponse.status})`)
+                }
               }
-            }
-          } catch (error: any) {
-            console.error('❌ Error en catch regenerando variantes:', {
-              message: error?.message,
-              stack: error?.stack,
-              error: error
-            })
-            toast.error(`Error de conexión al generar variantes: ${error?.message || 'Error desconocido'}`)
-            // No bloquear el guardado si falla la regeneración
+            } catch (error: any) {
+              console.error('❌ Error en catch regenerando variantes:', {
+                message: error?.message,
+                stack: error?.stack,
+                error: error
+              })
+              toast.error(`Error de conexión al generar variantes: ${error?.message || 'Error desconocido'}`)
+              // No bloquear el guardado si falla la regeneración
             }
           }
         }
-        
+
         if (isNewProduct) {
           toast.success("Producto creado correctamente")
         } else {
           toast.success("Producto actualizado correctamente")
         }
-        
+
         // Esperar un momento antes de redirigir para asegurar que el toast se muestre
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push("/panel/inventario")
       } else {
         const errorMessage = responseData.error || responseData.message || `Error ${response.status}: ${response.statusText}`
         console.error("❌ Error guardando producto:", errorMessage, responseData)
-        
+
         // Verificar si es error de campos faltantes
         if (errorMessage.includes('Variante') || errorMessage.includes('Receta') || errorMessage.includes('no existe')) {
           toast.warning("Producto guardado, pero los campos Variante/Receta no existen en Airtable. Crea estos campos para guardarlos.")
@@ -1492,7 +2204,7 @@ export default function ProductoDetailPage() {
       setPriceRows(prev => {
         const costeRow = prev.find(r => r.campo === "Coste")
         if (costeRow && parseNum(costeRow.valor) !== totalCost) {
-          const updated = prev.map(row => 
+          const updated = prev.map(row =>
             row.campo === "Coste" ? { ...row, valor: totalCost } : row
           )
           // Si hay un precio, recalcular desde precio
@@ -1562,9 +2274,9 @@ export default function ProductoDetailPage() {
     const claveConSucursal = claves.find(key => {
       const keyLower = key.toLowerCase()
       const sucursalLower = sucursal.toLowerCase()
-      return keyLower.includes(`sucursal:${sucursalLower}`) || 
-             keyLower === sucursalLower ||
-             keyLower.includes(sucursalLower)
+      return keyLower.includes(`sucursal:${sucursalLower}`) ||
+        keyLower === sucursalLower ||
+        keyLower.includes(sucursalLower)
     })
 
     if (claveConSucursal) {
@@ -1616,14 +2328,14 @@ export default function ProductoDetailPage() {
   // Alias para compatibilidad (mantiene el nombre anterior pero usa la nueva función)
   const obtenerPrecioRecurso = (recurso: any): number => {
     if (!recurso) return 0
-    
+
     // Obtener sucursal del producto desde variantes o formData
     let sucursal = "La Paz" // Fallback seguro
-    
+
     // Intentar obtener sucursal de las variantes del producto
     if (variantes && variantes.length > 0) {
       // Buscar variante de tipo "Sucursal"
-      const sucursalVariante = variantes.find((v: any) => 
+      const sucursalVariante = variantes.find((v: any) =>
         v.nombre && (v.nombre.toLowerCase().includes('sucursal') || v.nombre === 'Sucursal')
       )
       if (sucursalVariante && sucursalVariante.posibilidades && sucursalVariante.posibilidades.length > 0) {
@@ -1631,14 +2343,14 @@ export default function ProductoDetailPage() {
         sucursal = sucursalVariante.posibilidades[0]
       }
     }
-    
+
     // Si no se encontró en variantes, usar fallback seguro
     // Nota: sucursal no está en formData ni producto, se obtiene de variantes
     if (sucursal === "La Paz") {
       // Mantener "La Paz" como fallback seguro
       sucursal = "La Paz"
     }
-    
+
     return getPrecioRecurso(recurso, sucursal)
   }
 
@@ -1654,7 +2366,7 @@ export default function ProductoDetailPage() {
     }, 0)
     const formattedTotal = parseFloat(total.toFixed(2))
     setTotalCost(formattedTotal)
-    
+
     // Si hay un coste guardado manualmente, verificar si la calculadora cambió significativamente
     if (hasManualCostRef.current && savedCostRef.current !== null) {
       // Solo verificar cambio si el último valor calculado no es 0 (ya se inicializó)
@@ -1673,12 +2385,13 @@ export default function ProductoDetailPage() {
       // No hay coste guardado manualmente, actualizar normalmente
       setEditableCost(formattedTotal.toFixed(2))
     }
-    
+
     // Actualizar el último valor calculado solo si no es la primera vez (ya hay un valor previo)
     if (lastCalculatedCostRef.current > 0 || !hasManualCostRef.current) {
       lastCalculatedCostRef.current = formattedTotal
     }
   }, [costRows])
+
 
   // Función para cargar recursos de forma asíncrona según búsqueda
   const loadRecursos = async (input: string): Promise<any[]> => {
@@ -1702,8 +2415,6 @@ export default function ProductoDetailPage() {
   // Ya no se necesita fetch masivo de recursos
   // Los recursos se cargan bajo demanda cuando el usuario busca
 
-  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
-
 
   // Función para cálculo inverso desde precio objetivo
   const recalcFromTargetPrice = (precioObjetivo: number, rowsIn: typeof priceRows) => {
@@ -1714,7 +2425,7 @@ export default function ProductoDetailPage() {
     const facturaRow = rows.find(r => r.campo === "Factura")
     const iueRow = rows.find(r => r.campo === "IUE")
     const comisionRow = rows.find(r => r.campo === "Comision")
-    
+
     const facturaPctConfig = parseNum(facturaRow?.porcentajeConfig ?? facturaRow?.porcentaje ?? 16)
     const iuePctConfig = parseNum(iueRow?.porcentajeConfig ?? iueRow?.porcentaje ?? 2)
     const comPctConfig = parseNum(comisionRow?.porcentajeConfig ?? comisionRow?.porcentaje ?? 12)
@@ -1783,12 +2494,12 @@ export default function ProductoDetailPage() {
 
   // Handlers para calculadora de costes
   const handleCostSearchChange = async (rowId: number, searchTerm: string) => {
-    setCostRows(prev => prev.map(row => 
-      row.id === rowId 
+    setCostRows(prev => prev.map(row =>
+      row.id === rowId
         ? { ...row, searchTerm, selectedRecurso: null }
         : row
     ))
-    
+
     if (searchTerm.trim().length > 0) {
       // Cargar recursos de forma asíncrona
       const recursosEncontrados = await loadRecursos(searchTerm)
@@ -1801,25 +2512,25 @@ export default function ProductoDetailPage() {
   }
 
   const handleRecursoSelect = (rowId: number, recurso: any) => {
-    setCostRows(prev => prev.map(row => 
-      row.id === rowId 
-        ? { 
-            ...row, 
-            selectedRecurso: recurso, 
-            unidad: recurso.unidad_medida,
-            searchTerm: recurso.nombre
-          }
+    setCostRows(prev => prev.map(row =>
+      row.id === rowId
+        ? {
+          ...row,
+          selectedRecurso: recurso,
+          unidad: recurso.unidad_medida,
+          searchTerm: recurso.nombre
+        }
         : row
     ))
     setShowCostDropdown(null)
-    
+
     // FIX 5: Mejorar parseo de variantes al seleccionar recurso
     // Si el recurso tiene variantes, importarlas automáticamente al producto
     // Manejar diferentes formatos de variantes:
     // 1. Array directo: recurso.variantes = [...]
     // 2. Objeto con variantes: recurso.variantes = { variantes: [...], datosVariantes: {...} }
     let variantesArray: any[] = []
-    
+
     if (recurso.variantes) {
       try {
         if (Array.isArray(recurso.variantes)) {
@@ -1856,21 +2567,21 @@ export default function ProductoDetailPage() {
     } else {
       console.log(`ℹ️ Recurso "${recurso.nombre}" no tiene variantes definidas`)
     }
-    
+
     // Asegurar que variantesArray nunca sea undefined
     if (!Array.isArray(variantesArray)) {
       console.warn(`⚠️ variantesArray no es array, normalizando a []`)
       variantesArray = []
     }
-    
+
     if (variantesArray.length > 0) {
       setVariantes(prev => {
         // Agregar todas las variantes, incluso si tienen el mismo nombre (pueden venir de diferentes recursos)
         // Marcar las nuevas variantes con el recurso_id para poder eliminarlas después
-        const nuevasVariantes = variantesArray.map((v: any) => ({ 
-          ...v, 
-          recurso_id: recurso.id, 
-          recurso_nombre: recurso.nombre 
+        const nuevasVariantes = variantesArray.map((v: any) => ({
+          ...v,
+          recurso_id: recurso.id,
+          recurso_nombre: recurso.nombre
         }))
         // Agregar todas las nuevas variantes (no filtrar duplicados por nombre)
         return [...prev, ...nuevasVariantes]
@@ -1880,8 +2591,8 @@ export default function ProductoDetailPage() {
   }
 
   const handleCostRowChange = (rowId: number, field: string, value: any) => {
-    setCostRows(prev => prev.map(row => 
-      row.id === rowId 
+    setCostRows(prev => prev.map(row =>
+      row.id === rowId
         ? { ...row, [field]: value }
         : row
     ))
@@ -1891,13 +2602,13 @@ export default function ProductoDetailPage() {
     // Usar el ref para obtener un ID único de forma síncrona
     const newRowId = costRowIdCounterRef.current
     costRowIdCounterRef.current += 1 // Incrementar para el próximo uso
-    
+
     console.log('🔵 handleAddCostRow - Usando ID del ref:', newRowId)
     console.log('🔵 handleAddCostRow - Próximo ID será:', costRowIdCounterRef.current)
-    
+
     setCostRows(prev => {
       console.log('🔵 handleAddCostRow - IDs existentes:', prev.map(r => r.id))
-      
+
       const newRows = [...prev, {
         id: newRowId,
         selectedRecurso: null,
@@ -1905,9 +2616,9 @@ export default function ProductoDetailPage() {
         unidad: "",
         searchTerm: ""
       }]
-      
+
       console.log('🔵 handleAddCostRow - IDs después de agregar:', newRows.map(r => r.id))
-      
+
       return newRows
     })
   }
@@ -1918,11 +2629,11 @@ export default function ProductoDetailPage() {
       const rowToRemove = costRows.find(row => row.id === rowId)
       const recursoIdToRemove = rowToRemove?.selectedRecurso?.id
       const recursoNombreToRemove = rowToRemove?.selectedRecurso?.nombre
-      
+
       // Eliminar la fila de costRows
       const nuevasCostRows = costRows.filter(row => row.id !== rowId)
       setCostRows(nuevasCostRows)
-      
+
       // Si el recurso tenía variantes importadas, eliminarlas también del estado local
       if (recursoIdToRemove) {
         setVariantes(prev => {
@@ -1934,14 +2645,14 @@ export default function ProductoDetailPage() {
           return variantesRestantes
         })
       }
-      
+
       // Regenerar variantes basándose en los recursos que quedan en la receta
       // Obtener todas las variantes de los recursos restantes
       const variantesDeRecursosRestantes: any[] = []
       nuevasCostRows.forEach(row => {
         if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
           let variantesArray: any[] = []
-          
+
           if (Array.isArray(row.selectedRecurso.variantes)) {
             variantesArray = row.selectedRecurso.variantes
           } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
@@ -1960,7 +2671,7 @@ export default function ProductoDetailPage() {
               console.error('Error parseando variantes del recurso:', e)
             }
           }
-          
+
           // Agregar variantes con el recurso_id para tracking
           variantesArray.forEach((v: any) => {
             variantesDeRecursosRestantes.push({
@@ -1971,10 +2682,10 @@ export default function ProductoDetailPage() {
           })
         }
       })
-      
+
       // Actualizar el estado de variantes con las variantes de los recursos restantes
       setVariantes(variantesDeRecursosRestantes)
-      
+
       // Si hay un producto guardado, regenerar variantes en la BD
       if (!isNewProduct && id) {
         try {
@@ -1983,7 +2694,7 @@ export default function ProductoDetailPage() {
             nombre: v.nombre,
             valores: v.posibilidades ?? v.valores ?? []
           }))
-          
+
           // Regenerar variantes en la BD
           const regenerarResponse = await fetch(`/api/productos/variantes`, {
             method: 'PUT',
@@ -1996,7 +2707,7 @@ export default function ProductoDetailPage() {
               variantes_definicion: variantesLimpias
             })
           })
-          
+
           if (regenerarResponse.ok) {
             // Recargar variantes de la BD para actualizar la tabla
             setTimeout(() => {
@@ -2014,7 +2725,7 @@ export default function ProductoDetailPage() {
       }
     }
   }
-  
+
   // Eliminar una variante individual
   const handleRemoveVariante = (varianteIndex: number) => {
     setVariantes(prev => {
@@ -2028,7 +2739,7 @@ export default function ProductoDetailPage() {
   const handleApplyCost = async () => {
     setIsApplyingCost(true)
     setCostApplied(false)
-    
+
     try {
       // Si es un producto nuevo, no se puede aplicar el coste hasta que esté guardado
       if (isNewProduct) {
@@ -2046,7 +2757,7 @@ export default function ProductoDetailPage() {
 
       // Actualizar el formData local
       handleChange("coste", costValue.toString())
-      
+
       // Guardar directamente en la base de datos
       const dataToSend = {
         codigo: formData.codigo.trim(),
@@ -2077,18 +2788,18 @@ export default function ProductoDetailPage() {
       const result = await response.json()
       const updated = result.data || result
       setProducto(updated)
-      
+
       // Marcar que hay un coste guardado manualmente
       hasManualCostRef.current = true
       savedCostRef.current = costValue
       lastCalculatedCostRef.current = totalCost
-      
+
       setCostApplied(true)
       toast.success(`Coste aplicado y guardado: Bs ${costValue.toFixed(2)}`)
-      
+
       // Resetear animación después de 1.8 segundos
       setTimeout(() => setCostApplied(false), 1800)
-      
+
     } catch (error) {
       console.error("Error saving cost:", error)
       toast.error(error instanceof Error ? error.message : "Error de conexión al guardar el coste")
@@ -2111,7 +2822,7 @@ export default function ProductoDetailPage() {
       }
 
       const pct = parseNum(pctStr)
-      
+
       // Si cambian porcentajes de Factura, IUE o Comision, guardar en porcentajeConfig
       if (["Factura", "IUE", "Comision"].includes(row.campo)) {
         row.porcentajeConfig = pct
@@ -2146,7 +2857,7 @@ export default function ProductoDetailPage() {
 
       // Parsear el valor (maneja tanto "." como "," como separador decimal)
       const val = parseNum(valStr)
-      
+
       // Proteger de NaN
       if (isNaN(val) || !isFinite(val)) {
         // Si no es un número válido, mantener el valor actual
@@ -2173,7 +2884,7 @@ export default function ProductoDetailPage() {
   const handleApplyPrice = async () => {
     setIsApplyingPrice(true)
     setPriceApplied(false)
-    
+
     try {
       // Si es un producto nuevo, no se puede aplicar el precio hasta que esté guardado
       if (isNewProduct) {
@@ -2184,7 +2895,7 @@ export default function ProductoDetailPage() {
 
       const precioRow = priceRows.find(r => r.campo === "Precio")
       const priceValue = parseNum(precioRow?.valor ?? 0)
-      
+
       if (priceValue <= 0) {
         toast.error("El precio debe ser mayor a 0")
         setIsApplyingPrice(false)
@@ -2193,7 +2904,7 @@ export default function ProductoDetailPage() {
 
       // Actualizar el formData local
       handleChange("precio_venta", priceValue.toString())
-      
+
       // Guardar directamente en la base de datos
       const dataToSend = {
         codigo: formData.codigo.trim(),
@@ -2223,12 +2934,12 @@ export default function ProductoDetailPage() {
       const result = await response.json()
       const updated = result.data || result
       setProducto(updated)
-      
+
       setPriceApplied(true)
       toast.success(`Precio aplicado y guardado: Bs ${priceValue.toFixed(2)}`)
-      
+
       setTimeout(() => setPriceApplied(false), 1800)
-      
+
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error de conexión al guardar el precio")
     } finally {
@@ -2242,7 +2953,7 @@ export default function ProductoDetailPage() {
     if (editing && !saving) {
       const coste = parseFloat(formData.coste) || (producto?.coste || 0)
       const precio = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
-      
+
       setPriceRows(prev => {
         let updated = prev.map(row => {
           if (row.campo === "Coste" && parseNum(row.valor) !== coste) {
@@ -2253,7 +2964,7 @@ export default function ProductoDetailPage() {
           }
           return row
         })
-        
+
         // Si hay un precio, recalcular desde precio
         if (precio > 0) {
           return recalcFromTargetPrice(precio, updated)
@@ -2288,7 +2999,7 @@ export default function ProductoDetailPage() {
   }
 
   const handleProveedorChange = (id: number, field: string, value: string) => {
-    setProveedores(prev => prev.map(prov => 
+    setProveedores(prev => prev.map(prov =>
       prov.id === id ? { ...prov, [field]: value } : prov
     ))
   }
@@ -2314,7 +3025,7 @@ export default function ProductoDetailPage() {
       </div>
     )
   }
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -2369,7 +3080,7 @@ export default function ProductoDetailPage() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            <Button 
+            <Button
               onClick={handleSave}
               className="bg-[#D54644] hover:bg-[#B03A38]"
               disabled={saving}
@@ -2385,339 +3096,341 @@ export default function ProductoDetailPage() {
           <div className="space-y-8">
             {/* Información Básica */}
             <Card>
-            <CardHeader>
-              <CardTitle>Información Básica</CardTitle>
-              <CardDescription>Datos principales del producto</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {editing ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="codigo">Código *</Label>
-                    <Input
-                      id="codigo"
-                      value={formData.codigo}
-                      onChange={(e) => handleChange("codigo", e.target.value)}
-                      className="bg-neutral-100 border-neutral-200 text-gray-900 font-mono"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="nombre">Nombre *</Label>
-                    <Input
-                      id="nombre"
-                      value={formData.nombre}
-                      onChange={(e) => handleChange("nombre", e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="descripcion">Descripción</Label>
-                    <Textarea
-                      id="descripcion"
-                      value={formData.descripcion}
-                      onChange={(e) => handleChange("descripcion", e.target.value)}
-                      rows={4}
-                      placeholder="Descripción detallada del producto"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+              <CardHeader>
+                <CardTitle>Información Básica</CardTitle>
+                <CardDescription>Datos principales del producto</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {editing ? (
+                  <>
                     <div className="space-y-2">
-                      <Label htmlFor="categoria">Categoría</Label>
-                      <Select 
-                        value={formData.categoria} 
-                        onValueChange={(value) => handleChange("categoria", value)}
-                      >
-                        <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white border border-gray-200 shadow-md">
-                          {categoriasProductos.map((categoria) => (
-                            <SelectItem key={categoria} value={categoria}>
-                              {categoria}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="codigo">Código *</Label>
+                      <Input
+                        id="codigo"
+                        value={formData.codigo}
+                        onChange={(e) => handleChange("codigo", e.target.value)}
+                        className="bg-neutral-100 border-neutral-200 text-gray-900 font-mono"
+                        required
+                      />
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="responsable">Responsable</Label>
-                    <Input
-                      id="responsable"
-                      value={formData.responsable}
-                      onChange={(e) => handleChange("responsable", e.target.value)}
-                      placeholder="Nombre del responsable"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="unidad_medida">Unidad de Medida</Label>
-                      <Select 
-                        value={formData.unidad_medida} 
-                        onValueChange={(value) => handleChange("unidad_medida", value)}
-                      >
-                        <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white border border-gray-200 shadow-md">
-                          {unidadesProductos.map((unidad) => (
-                            <SelectItem key={unidad} value={unidad}>
-                              {unidad}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="nombre">Nombre *</Label>
+                      <Input
+                        id="nombre"
+                        value={formData.nombre}
+                        onChange={(e) => handleChange("nombre", e.target.value)}
+                        required
+                      />
                     </div>
+
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between pt-6">
-                        <Label htmlFor="mostrar_en_web">Mostrar en Web</Label>
-                        <Switch
-                          id="mostrar_en_web"
-                          checked={formData.mostrar_en_web}
-                          onCheckedChange={(checked) => handleChange("mostrar_en_web", checked)}
-                          className="data-[state=checked]:bg-red-500"
-                        />
+                      <Label htmlFor="descripcion">Descripción</Label>
+                      <Textarea
+                        id="descripcion"
+                        value={formData.descripcion}
+                        onChange={(e) => handleChange("descripcion", e.target.value)}
+                        rows={4}
+                        placeholder="Descripción detallada del producto"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="categoria">Categoría</Label>
+                        <Select
+                          value={formData.categoria}
+                          onValueChange={(value) => handleChange("categoria", value)}
+                        >
+                          <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border border-gray-200 shadow-md">
+                            {categoriasProductos.map((categoria) => (
+                              <SelectItem key={categoria} value={categoria}>
+                                {categoria}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {producto && (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium text-gray-700">Código</Label>
-                          <p className="font-mono font-medium">{producto.codigo}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-gray-700">Categoría</Label>
-                          <Badge variant="secondary">{producto.categoria || 'Sin categoría'}</Badge>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Responsable</Label>
-                        <p>{producto.responsable || "No asignado"}</p>
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-sm font-medium text-gray-700">Unidad de Medida</Label>
-                          <Badge variant="outline">{producto.unidad_medida || 'Sin unidad'}</Badge>
+                    <div className="space-y-2">
+                      <Label htmlFor="responsable">Responsable</Label>
+                      <Input
+                        id="responsable"
+                        value={formData.responsable}
+                        onChange={(e) => handleChange("responsable", e.target.value)}
+                        placeholder="Nombre del responsable"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="unidad_medida">Unidad de Medida</Label>
+                        <Select
+                          value={formData.unidad_medida}
+                          onValueChange={(value) => handleChange("unidad_medida", value)}
+                        >
+                          <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border border-gray-200 shadow-md">
+                            {unidadesProductos.map((unidad) => (
+                              <SelectItem key={unidad} value={unidad}>
+                                {unidad}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between pt-6">
+                          <Label htmlFor="mostrar_en_web">Mostrar en Web</Label>
+                          <Switch
+                            id="mostrar_en_web"
+                            checked={formData.mostrar_en_web}
+                            onCheckedChange={(checked) => handleChange("mostrar_en_web", checked)}
+                            className="data-[state=checked]:bg-red-500"
+                          />
                         </div>
-                        <div>
-                          <Label className="text-sm font-medium text-gray-700">Mostrar en Web</Label>
-                          <div className="mt-1">
-                            {producto.mostrar_en_web ? (
-                              <Badge className="bg-green-100 text-green-800">Sí</Badge>
-                            ) : (
-                              <Badge variant="secondary">No</Badge>
-                            )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {producto && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Código</Label>
+                            <p className="font-mono font-medium">{producto.codigo}</p>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Categoría</Label>
+                            <Badge variant="secondary">{producto.categoria || 'Sin categoría'}</Badge>
                           </div>
                         </div>
-                      </div>
 
-                      {producto.descripcion && (
                         <div>
-                          <Label className="text-sm font-medium text-gray-700">Descripción</Label>
-                          <p className="text-sm text-gray-600 whitespace-pre-wrap">{producto.descripcion}</p>
+                          <Label className="text-sm font-medium text-gray-700">Responsable</Label>
+                          <p>{producto.responsable || "No asignado"}</p>
                         </div>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Unidad de Medida</Label>
+                            <Badge variant="outline">{producto.unidad_medida || 'Sin unidad'}</Badge>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Mostrar en Web</Label>
+                            <div className="mt-1">
+                              {producto.mostrar_en_web ? (
+                                <Badge className="bg-green-100 text-green-800">Sí</Badge>
+                              ) : (
+                                <Badge variant="secondary">No</Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {producto.descripcion && (
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Descripción</Label>
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap">{producto.descripcion}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Columna Derecha */}
           <div className="space-y-8">
             {/* Imagen Principal */}
             <Card>
-            <CardHeader>
-              <CardTitle>Imagen Principal</CardTitle>
-              <CardDescription>Agrega una imagen de portada</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pb-4">
-              {editing ? (
-                <>
-                  <div className="space-y-2">
-                    <div className="flex justify-center">
-                      {formData.imagen_portada ? (
-                        <div className="relative group">
-                          <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
-                            <Image 
-                              src={formData.imagen_portada} 
-                              alt="Imagen de portada" 
-                              fill
-                              className="object-cover"
-                              sizes="128px"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.currentTarget
-                                target.style.display = 'none'
-                                const parent = target.parentElement
-                                if (parent) {
-                                  parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
-                                }
-                              }}
-                            />
-                          </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="absolute top-1 right-1 opacity-90 hover:opacity-100 h-6 px-2"
-                            onClick={handleRemoveImage}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="aspect-square w-32 flex flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 hover:border-gray-400 transition-colors">
-                          <ImageIcon className="w-8 h-8 text-gray-400 mb-1" />
-                          <p className="text-xs text-gray-500">Sin imagen</p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <input
-                        id="imagen_portada"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        className="hidden"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        disabled={uploadingImage}
-                        onClick={() => {
-                          const input = document.getElementById('imagen_portada') as HTMLInputElement
-                          input?.click()
-                        }}
-                      >
-                        <ImageIcon className="w-4 h-4 mr-2" />
-                        {uploadingImage 
-                          ? 'Subiendo...' 
-                          : formData.imagen_portada 
-                            ? 'Cambiar imagen' 
-                            : 'Seleccionar imagen'
-                        }
-                      </Button>
-                      {imageError && (
-                        <p className="text-sm text-red-600 mt-1">{imageError}</p>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 text-center">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {producto && (
-                    <div>
+              <CardHeader>
+                <CardTitle>Imagen Principal</CardTitle>
+                <CardDescription>Agrega una imagen de portada</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pb-4">
+                {editing ? (
+                  <>
+                    <div className="space-y-2">
                       <div className="flex justify-center">
-                        {producto.imagen_portada ? (
-                          <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
-                            <Image 
-                              src={producto.imagen_portada} 
-                              alt={producto.nombre} 
-                              fill
-                              className="object-cover"
-                              sizes="128px"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.currentTarget
-                                target.style.display = 'none'
-                                const parent = target.parentElement
-                                if (parent) {
-                                  parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
-                                }
-                              }}
-                            />
-                        </div>
-                      ) : (
-                        <div className="aspect-square w-32 flex items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">
-                          <div className="text-center">
-                            <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-1" />
+                        {formData.imagen_portada ? (
+                          <div className="relative group">
+                            <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
+                              <Image
+                                src={formData.imagen_portada}
+                                alt="Imagen de portada"
+                                fill
+                                className="object-cover"
+                                sizes="128px"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.currentTarget
+                                  target.style.display = 'none'
+                                  const parent = target.parentElement
+                                  if (parent) {
+                                    parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
+                                  }
+                                }}
+                              />
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1 opacity-90 hover:opacity-100 h-6 px-2"
+                              onClick={handleRemoveImage}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="aspect-square w-32 flex flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 hover:border-gray-400 transition-colors">
+                            <ImageIcon className="w-8 h-8 text-gray-400 mb-1" />
                             <p className="text-xs text-gray-500">Sin imagen</p>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          id="imagen_portada"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          disabled={uploadingImage}
+                          onClick={() => {
+                            const input = document.getElementById('imagen_portada') as HTMLInputElement
+                            input?.click()
+                          }}
+                        >
+                          <ImageIcon className="w-4 h-4 mr-2" />
+                          {uploadingImage
+                            ? 'Subiendo...'
+                            : formData.imagen_portada
+                              ? 'Cambiar imagen'
+                              : 'Seleccionar imagen'
+                          }
+                        </Button>
+                        {imageError && (
+                          <p className="text-sm text-red-600 mt-1">{imageError}</p>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 text-center">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
                     </div>
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    {producto && (
+                      <div>
+                        <div className="flex justify-center">
+                          {producto.imagen_portada ? (
+                            <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
+                              <Image
+                                src={producto.imagen_portada}
+                                alt={producto.nombre}
+                                fill
+                                className="object-cover"
+                                sizes="128px"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.currentTarget
+                                  target.style.display = 'none'
+                                  const parent = target.parentElement
+                                  if (parent) {
+                                    parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
+                                  }
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-square w-32 flex items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50">
+                              <div className="text-center">
+                                <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-1" />
+                                <p className="text-xs text-gray-500">Sin imagen</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* Variantes del Recurso (Solo visualización - importadas de recursos) */}
-          {editing && variantes.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Variantes del Recurso</CardTitle>
-                <CardDescription>Variantes importadas desde los recursos de la receta</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {variantes.map((variante, varianteIndex) => {
-                    const isColorMode = variante.modo === "color"
-                    const posibilidadesTexto = variante.posibilidades && variante.posibilidades.length > 0
-                      ? variante.posibilidades.map((pos: string) => {
+            {/* Variantes del Recurso (Solo visualización - importadas de recursos) */}
+            {editing && variantes.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Variantes del Recurso</CardTitle>
+                  <CardDescription>Variantes importadas desde los recursos de la receta</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {variantes.map((variante, varianteIndex) => {
+                      const isColorMode = variante.modo === "color"
+                      // Buscar valores en ambos campos para compatibilidad (valores es el formato migrado, posibilidades es el formato antiguo)
+                      const valoresArray = variante.valores ?? variante.posibilidades ?? []
+                      const posibilidadesTexto = Array.isArray(valoresArray) && valoresArray.length > 0
+                        ? valoresArray.map((pos: string) => {
                           if (isColorMode && pos.includes(":")) {
                             const [nombre] = pos.split(":")
                             return nombre
                           }
                           return pos
                         }).join(", ")
-                      : ""
-                    
-                    return (
-                      <div key={`variante-${variante.id || varianteIndex}-${variante.recurso_id || 'no-recurso'}-${varianteIndex}`} className={`flex items-center justify-between p-3 rounded-lg ${varianteIndex % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <h4 className="font-medium text-sm text-gray-900">{variante.nombre}</h4>
-                            {isColorMode && (
-                              <Badge variant="outline" className="text-xs">
-                                <Palette className="w-3 h-3 mr-1" />
-                                Color
-                              </Badge>
-                            )}
-                            {variante.recurso_nombre && (
-                              <Badge variant="secondary" className="text-xs">
-                                De: {variante.recurso_nombre}
-                              </Badge>
+                        : ""
+
+                      return (
+                        <div key={`variante-${variante.id || varianteIndex}-${variante.recurso_id || 'no-recurso'}-${varianteIndex}`} className={`flex items-center justify-between p-3 rounded-lg ${varianteIndex % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <h4 className="font-medium text-sm text-gray-900">{variante.nombre}</h4>
+                              {isColorMode && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Palette className="w-3 h-3 mr-1" />
+                                  Color
+                                </Badge>
+                              )}
+                              {variante.recurso_nombre && (
+                                <Badge variant="secondary" className="text-xs">
+                                  De: {variante.recurso_nombre}
+                                </Badge>
+                              )}
+                            </div>
+                            {posibilidadesTexto && (
+                              <p className="text-xs text-gray-600">{posibilidadesTexto}</p>
                             )}
                           </div>
-                          {posibilidadesTexto && (
-                            <p className="text-xs text-gray-600">{posibilidadesTexto}</p>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveVariante(varianteIndex)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
+                            title="Eliminar variante"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveVariante(varianteIndex)}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
-                          title="Eliminar variante"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 
@@ -2737,80 +3450,133 @@ export default function ProductoDetailPage() {
                 <div className="text-sm text-gray-600 mb-2">
                   Producto: {producto?.nombre || formData.nombre || 'Nuevo producto'}
                 </div>
-                
+
                 <div className="space-y-3">
                   {costRows.map((row, index) => {
                     console.log(`🟢 Renderizando costRow con ID: ${row.id}`)
                     return (
-                    <div key={`cost-row-${row.id}-${index}`} className="space-y-2">
-                      <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-4 relative dropdown-container">
-                          {index === 0 && <Label className="text-xs">Recurso</Label>}
-                          <Input
-                            placeholder="Buscar recurso..."
-                            value={row.searchTerm}
-                            onChange={(e) => handleCostSearchChange(row.id, e.target.value)}
-                            onFocus={() => setShowCostDropdown(row.id)}
-                            className="h-9 text-sm"
-                          />
-                          {showCostDropdown === row.id && filteredRecursos.length > 0 && (
-                            <div className="absolute z-[999] w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                              {filteredRecursos.map((recurso: any) => (
-                                <div
-                                  key={recurso.id}
-                                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm"
-                                  onClick={() => handleRecursoSelect(row.id, recurso)}
-                                >
-                                  <div className="font-medium">{recurso.nombre}</div>
-                                </div>
-                              ))}
+                      <div key={`cost-row-${row.id}-${index}`} className="space-y-2">
+                        <div className="grid grid-cols-12 gap-2">
+                          <div className="col-span-4 relative dropdown-container">
+                            {index === 0 && <Label className="text-xs">Recurso</Label>}
+                            <Input
+                              placeholder="Buscar recurso..."
+                              value={row.searchTerm}
+                              onChange={(e) => handleCostSearchChange(row.id, e.target.value)}
+                              onFocus={() => setShowCostDropdown(row.id)}
+                              className="h-9 text-sm"
+                            />
+                            {showCostDropdown === row.id && filteredRecursos.length > 0 && (
+                              <div className="absolute z-[999] w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                {filteredRecursos.map((recurso: any) => (
+                                  <div
+                                    key={recurso.id}
+                                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm"
+                                    onClick={() => handleRecursoSelect(row.id, recurso)}
+                                  >
+                                    <div className="font-medium">{recurso.nombre}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-span-2">
+                            {index === 0 && <Label className="text-xs">Cantidad</Label>}
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.cantidad}
+                              onChange={(e) => handleCostRowChange(row.id, 'cantidad', parseFloat(e.target.value) || 0)}
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            {index === 0 && <Label className="text-xs">Unidad</Label>}
+                            <div className="flex h-9 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm items-center">
+                              {row.unidad || '-'}
                             </div>
-                          )}
-                        </div>
-                        <div className="col-span-2">
-                          {index === 0 && <Label className="text-xs">Cantidad</Label>}
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={row.cantidad}
-                            onChange={(e) => handleCostRowChange(row.id, 'cantidad', parseFloat(e.target.value) || 0)}
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          {index === 0 && <Label className="text-xs">Unidad</Label>}
-                          <div className="flex h-9 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm items-center">
-                            {row.unidad || '-'}
                           </div>
-                        </div>
-                        <div className="col-span-3">
-                          {index === 0 && <Label className="text-xs">Total</Label>}
-                          <div className="flex h-9 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm items-center">
-                            {row.selectedRecurso ? `Bs ${((row.selectedRecurso.coste || 0) * (row.cantidad || 0)).toFixed(2)}` : '-'}
+                          <div className="col-span-3">
+                            {index === 0 && <Label className="text-xs">Total</Label>}
+                            <div className="flex h-9 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm items-center">
+                              {row.selectedRecurso ? `Bs ${((row.selectedRecurso.coste || 0) * (row.cantidad || 0)).toFixed(2)}` : '-'}
+                            </div>
                           </div>
-                        </div>
-                        <div className="col-span-1">
-                          {index === 0 && <div className="h-5"></div>}
-                          {costRows.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveCostRow(row.id)}
-                              className="h-9 w-9 p-0 text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <div className="col-span-1">
+                            {index === 0 && <div className="h-5"></div>}
+                            {costRows.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveCostRow(row.id)}
+                                className="h-9 w-9 p-0 text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )})}
-                  
+                    )
+                  })}
+
                   <Button onClick={handleAddCostRow} variant="outline" size="sm" className="w-full">
                     <Plus className="h-4 w-4 mr-2" />
                     Añadir Línea
                   </Button>
+                </div>
+
+                {/* Total y Aplicar Coste */}
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex items-center gap-3">
+                    <div className="text-lg font-bold flex items-center gap-2">
+                      Total: <span className="text-red-600">Bs {totalCost.toFixed(2)}</span>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editableCost}
+                      onChange={(e) => {
+                        // Si el usuario escribe manualmente, resetear el flag de guardado manual
+                        hasManualCostRef.current = false
+                        savedCostRef.current = null
+                        setEditableCost(e.target.value)
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value
+                        if (value && !isNaN(parseFloat(value))) {
+                          setEditableCost(parseFloat(value).toFixed(2))
+                        }
+                      }}
+                      className="w-24 h-9 text-sm font-semibold"
+                      placeholder="0.00"
+                    />
+                    <Button
+                      onClick={handleApplyCost}
+                      disabled={isApplyingCost || !editableCost || parseFloat(editableCost) <= 0}
+                      className={`ml-auto transition-all duration-300 transform ${costApplied
+                          ? 'bg-red-500 hover:bg-red-600 scale-105 shadow-lg'
+                          : 'bg-red-600 hover:bg-red-700'
+                        } ${isApplyingCost ? 'opacity-75 cursor-wait' : ''} text-white`}
+                      size="sm"
+                    >
+                      {isApplyingCost ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : costApplied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2 animate-pulse" />
+                          ¡Aplicado!
+                        </>
+                      ) : (
+                        'Aplicar Coste'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -2831,7 +3597,7 @@ export default function ProductoDetailPage() {
                     <div className="col-span-3">%</div>
                     <div className="col-span-5">Valor (Bs)</div>
                   </div>
-                  
+
                   {priceRows.map((row) => {
                     const isEditable = row.editable
                     const isPrecioRow = row.campo === "Precio"
@@ -2840,7 +3606,7 @@ export default function ProductoDetailPage() {
                     let showPorcentaje =
                       row.porcentaje != null ||
                       ((row.campo === "Factura" || row.campo === "IUE" || row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") &&
-                       (row as any).porcentajeConfig != null)
+                        (row as any).porcentajeConfig != null)
                     // Para Comisión, SIEMPRE mostrar porcentajeConfig (valor original del usuario)
                     // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje
                     // Para otros campos, mostrar porcentaje (calculado sobre precio)
@@ -2853,7 +3619,7 @@ export default function ProductoDetailPage() {
                         ? (row as any).porcentajeConfig
                         : row.porcentaje
                     }
-                    
+
                     return (
                       <div key={`price-row-${row.id}`} className="grid grid-cols-12 gap-2">
                         <div className="col-span-4">
@@ -2891,7 +3657,7 @@ export default function ProductoDetailPage() {
                     )
                   })}
                 </div>
-                
+
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Precio Final:</span>
@@ -2899,15 +3665,14 @@ export default function ProductoDetailPage() {
                       Bs {parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0).toFixed(2)}
                     </span>
                   </div>
-                            <Button
+                  <Button
                     onClick={handleApplyPrice}
                     disabled={isApplyingPrice || parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0) <= 0}
-                    className={`w-full mt-4 transition-all duration-300 transform ${
-                      priceApplied
+                    className={`w-full mt-4 transition-all duration-300 transform ${priceApplied
                         ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
                         : 'bg-green-600 hover:bg-green-700'
-                    } ${isApplyingPrice ? 'opacity-75 cursor-wait' : ''} text-white`}
-                              size="sm"
+                      } ${isApplyingPrice ? 'opacity-75 cursor-wait' : ''} text-white`}
+                    size="sm"
                   >
                     {isApplyingPrice ? (
                       <>
@@ -2927,67 +3692,10 @@ export default function ProductoDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Totales de las calculadoras - Fuera de las Cards, a la misma altura */}
-            {/* Total Calculadora de Costes */}
-            <Card className="lg:col-span-1">
-              <CardContent className="pt-6">
-                <div className="border-t pt-4">
-                  <div className="flex items-center gap-3">
-                    <div className="text-lg font-bold flex items-center gap-2">
-                      Total: <span className="text-red-600">Bs {totalCost.toFixed(2)}</span>
-                    </div>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editableCost}
-                      onChange={(e) => {
-                        // Si el usuario escribe manualmente, resetear el flag de guardado manual
-                        hasManualCostRef.current = false
-                        savedCostRef.current = null
-                        setEditableCost(e.target.value)
-                      }}
-                      onBlur={(e) => {
-                        const value = e.target.value
-                        if (value && !isNaN(parseFloat(value))) {
-                          setEditableCost(parseFloat(value).toFixed(2))
-                        }
-                      }}
-                      className="w-24 h-9 text-sm font-semibold"
-                      placeholder="0.00"
-                    />
-                    <Button
-                      onClick={handleApplyCost}
-                      disabled={isApplyingCost || !editableCost || parseFloat(editableCost) <= 0}
-                      className={`ml-auto transition-all duration-300 transform ${
-                        costApplied
-                          ? 'bg-red-500 hover:bg-red-600 scale-105 shadow-lg'
-                          : 'bg-red-600 hover:bg-red-700'
-                      } ${isApplyingCost ? 'opacity-75 cursor-wait' : ''} text-white`}
-                      size="sm"
-                    >
-                      {isApplyingCost ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : costApplied ? (
-                        <>
-                          <Check className="w-4 h-4 mr-2 animate-pulse" />
-                          ¡Aplicado!
-                        </>
-                      ) : (
-                        'Aplicar Coste'
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
 
             {/* Tabla de Variantes del Producto */}
-            {variantes.length > 0 && (
+            {(variantes.length > 0 || variantesProducto.length > 0) && (
               <Card className="lg:col-span-2 mt-8">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -2997,6 +3705,87 @@ export default function ProductoDetailPage() {
                         Gestiona costes y precios por variante. Los valores vacíos heredan del producto base.
                       </CardDescription>
                     </div>
+                    {variantesProducto.length === 0 && variantes.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!id || id === 'nuevo' || id === 'new') {
+                            toast.error('Primero guarda el producto')
+                            return
+                          }
+
+                          toast.info('Regenerando variantes...')
+
+                          // Construir variantes desde costRows
+                          const variantesDeRecursosActivos: any[] = []
+                          costRows.forEach(row => {
+                            if (row.selectedRecurso?.variantes) {
+                              let variantesArray: any[] = []
+                              if (Array.isArray(row.selectedRecurso.variantes)) {
+                                variantesArray = row.selectedRecurso.variantes
+                              } else if (row.selectedRecurso.variantes.variantes) {
+                                variantesArray = row.selectedRecurso.variantes.variantes
+                              }
+                              variantesArray.forEach((v: any) => {
+                                variantesDeRecursosActivos.push({
+                                  nombre: v.nombre,
+                                  valores: v.posibilidades ?? v.valores ?? []
+                                })
+                              })
+                            }
+                          })
+
+                          // Si no encontramos variantes en los recursos, usar las ya guardadas para evitar enviarlo vacío
+                          let variantesDefinicion = variantesDeRecursosActivos
+                          if (variantesDefinicion.length === 0 && Array.isArray(variantes) && variantes.length > 0) {
+                            variantesDefinicion = variantes
+                              .filter((v: any) => v?.nombre)
+                              .map((v: any) => ({
+                                nombre: v.nombre,
+                                valores: v.valores ?? v.posibilidades ?? []
+                              }))
+                            console.warn('⚠️ No se encontraron variantes en costRows; usando variantes guardadas.')
+                          }
+
+                          if (variantesDefinicion.length === 0) {
+                            toast.error('No se encontraron variantes en la receta. Asigna recursos con variantes antes de regenerar.')
+                            console.error('❌ Regeneración manual cancelada: variantes vacías')
+                            return
+                          }
+
+                          console.log('🔄 Regeneración manual - variantes:', variantesDeRecursosActivos)
+
+                          try {
+                            const response = await fetch('/api/productos/variantes', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                producto_id: id,
+                                action: 'regenerar',
+                                variantes_definicion: variantesDefinicion
+                              })
+                            })
+
+                            const result = await response.json()
+                            console.log('🔄 Resultado regeneración:', result)
+
+                            if (result.success && result.variantes?.length > 0) {
+                              toast.success(`${result.variantes.length} variante(s) generada(s)`)
+                              await getVariantes()
+                            } else {
+                              toast.error('No se generaron variantes. Verifica que los recursos tengan variantes.')
+                            }
+                          } catch (error) {
+                            console.error('Error regenerando:', error)
+                            toast.error('Error al regenerar variantes')
+                          }
+                        }}
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Regenerar Variantes
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -3006,128 +3795,237 @@ export default function ProductoDetailPage() {
                     </div>
                   ) : variantesProducto.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                      No hay variantes generadas. Las variantes se generan automáticamente al guardar el producto.
+                      No hay variantes generadas. Guarda el producto para generar las combinaciones de variantes.
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="min-w-[250px]">Variante</TableHead>
-                            <TableHead className="w-[120px] text-right">Coste Variante</TableHead>
-                            <TableHead className="w-[120px] text-right">Precio Variante</TableHead>
-                            <TableHead className="w-[120px] text-right">Dif. Coste</TableHead>
-                            <TableHead className="w-[120px] text-right">Dif. Precio</TableHead>
-                            <TableHead className="w-[150px] text-center">Acciones</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {variantesProducto.filter(v => v && v.id).map((variante, index) => {
-                            const costeFinal = getCosteFinal(variante)
-                            const precioFinal = getPrecioFinal(variante)
-                            
-                            // Calcular diferencia con respecto a la cifra base (primera variante)
-                            const variantesVisibles = variantesProducto.filter(v => v && v.id)
-                            let difCoste = 0
-                            let difPrecio = 0
-                            
-                            if (index === 0) {
-                              // Primera variante: siempre muestra 0.00 (es la base)
-                              difCoste = 0
-                              difPrecio = 0
-                            } else {
-                              // Resto de variantes: comparar con la primera variante (la base)
-                              const varianteBase = variantesVisibles[0]
-                              const costeBase = getCosteFinal(varianteBase)
-                              const precioBase = getPrecioFinal(varianteBase)
-                              difCoste = calcularDiferenciaCoste(costeFinal, costeBase)
-                              difPrecio = calcularDiferenciaPrecio(precioFinal, precioBase)
-                            }
-                            
-                            const isEditing = editingVariante[variante.id] !== undefined
-                            const editData = editingVariante[variante.id] || {}
+                    <>
+                      {/* Barra azul de edición masiva */}
+                      {someVariantesSelected && selectedVariantesCount >= 1 && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-blue-800">
+                                {selectedVariantesCount} variante{selectedVariantesCount > 1 ? 's' : ''} seleccionada{selectedVariantesCount > 1 ? 's' : ''}
+                              </span>
 
-                            return (
-                              <TableRow 
-                                key={variante.id}
-                                className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                              {/* Campos de edición masiva solo cuando hay 2+ items */}
+                              {selectedVariantesCount >= 2 && (
+                                <>
+                                  {/* Campo Precio Variante */}
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-sm text-gray-700">Precio Variante:</label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      placeholder="Aplicar a todos"
+                                      className="h-8 w-32 text-right"
+                                      onBlur={(e) => {
+                                        const value = parseFloat(e.target.value)
+                                        if (!isNaN(value) && value > 0) {
+                                          handleBulkVarianteFieldChange('precio_override', value)
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const value = parseFloat((e.target as HTMLInputElement).value)
+                                          if (!isNaN(value) && value > 0) {
+                                            handleBulkVarianteFieldChange('precio_override', value)
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  </div>
+
+                                  {/* Campo Dif. Precio */}
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-sm text-gray-700">Dif. Precio:</label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="Aplicar a todos"
+                                      className="h-8 w-32 text-right"
+                                      onBlur={(e) => {
+                                        const value = parseFloat(e.target.value)
+                                        if (!isNaN(value)) {
+                                          handleBulkVarianteFieldChange('dif_precio', value)
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const value = parseFloat((e.target as HTMLInputElement).value)
+                                          if (!isNaN(value)) {
+                                            handleBulkVarianteFieldChange('dif_precio', value)
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2 items-center">
+                              {Object.keys(pendingChangesVariantes).length > 0 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleDiscardBulkVariantes}
+                                >
+                                  Descartar
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                onClick={handleSaveBulkVariantes}
+                                disabled={savingBulkVariantes || Object.keys(pendingChangesVariantes).length === 0}
+                                className="bg-red-600 hover:bg-red-700 text-white"
                               >
-                                <TableCell className="font-medium">
-                                  {formatearCombinacion(variante.combinacion)}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {isEditing ? (
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={editData.coste_override !== undefined && editData.coste_override !== null 
-                                        ? editData.coste_override 
-                                        : ''}
-                                      onChange={(e) => handleVarianteFieldChange(variante.id, 'coste_override', e.target.value)}
-                                      placeholder={costeFinal.toFixed(2)}
-                                      className="h-8 w-full text-sm"
+                                {savingBulkVariantes ? "Guardando..." : "Guardar"}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-10">
+                                <Checkbox
+                                  checked={allVariantesSelected ? true : (someVariantesSelected ? 'indeterminate' : false)}
+                                  onCheckedChange={(v) => toggleAllVariantes(Boolean(v))}
+                                  aria-label="Seleccionar todo"
+                                />
+                              </TableHead>
+                              <TableHead className="min-w-[250px]">Variante</TableHead>
+                              <TableHead className="w-[120px] text-right">Coste Variante</TableHead>
+                              <TableHead className="w-[120px] text-right">Precio Variante</TableHead>
+                              <TableHead className="w-[120px] text-right">Dif. Coste</TableHead>
+                              <TableHead className="w-[120px] text-right">Dif. Precio</TableHead>
+                              <TableHead className="w-[120px] text-right">Utilidad Neta</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {variantesProducto.filter(v => v && v.id).map((variante, index) => {
+                              // ID como string para consistencia
+                              const varianteIdStr = String(variante.id)
+
+                              const { costeVariante, difCoste } = calcularCosteVariante(variante)
+                              const costeFinal = costeVariante
+
+                              // Obtener precio base del producto
+                              const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
+
+                              // La primera variante siempre usa el precio base del producto
+                              let precioFinal: number
+                              let difPrecio: number
+
+                              // Verificar si hay cambios pendientes para ESTA variante específica
+                              const pendingChanges = pendingChangesVariantes[varianteIdStr]
+
+                              // Determinar precio final: pendingChanges > precio_override guardado > precio base
+                              if (pendingChanges?.precio_override !== undefined) {
+                                // Si hay cambios pendientes, usar esos
+                                precioFinal = pendingChanges.precio_override
+                                difPrecio = pendingChanges.dif_precio ?? (precioFinal - precioBaseProducto)
+                              } else if (variante.precio_override !== null && variante.precio_override !== undefined) {
+                                // Si hay precio_override guardado, usarlo
+                                precioFinal = variante.precio_override
+                                difPrecio = calcularDiferenciaPrecio(precioFinal, precioBaseProducto)
+                              } else if (index === 0) {
+                                // Primera variante sin override: usar precio base
+                                precioFinal = precioBaseProducto
+                                difPrecio = 0
+                              } else {
+                                // Otras variantes sin override: usar precio calculado
+                                precioFinal = variante.precio_base || variante.precio_calculado || precioBaseProducto
+                                difPrecio = calcularDiferenciaPrecio(precioFinal, precioBaseProducto)
+                              }
+
+                              // Calcular utilidad neta (valor y porcentaje)
+                              const { valor: utilidadNetaValor, porcentaje: utilidadNetaPct } = calcularUtilidadNeta(costeFinal, precioFinal)
+
+                              // Estado de selección y edición
+                              const isSelected = selectedVariantes[varianteIdStr] || false
+                              const isEditing = editingVariante[varianteIdStr] !== undefined
+                              const editData = editingVariante[varianteIdStr] || {}
+
+                              return (
+                                <TableRow
+                                  key={variante.id}
+                                  className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                                >
+                                  <TableCell>
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={(checked) => toggleVariante(varianteIdStr, Boolean(checked))}
+                                      aria-label={`Seleccionar variante ${variante.combinacion}`}
                                     />
-                                  ) : (
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    {formatearCombinacion(variante.combinacion)}
+                                  </TableCell>
+                                  <TableCell className="text-right">
                                     <span>
-                                      Bs {costeFinal.toFixed(2)}
+                                      Bs {costeVariante.toFixed(2)}
                                     </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {isEditing ? (
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={editData.precio_override !== undefined && editData.precio_override !== null 
-                                        ? editData.precio_override 
-                                        : ''}
-                                      onChange={(e) => handleVarianteFieldChange(variante.id, 'precio_override', e.target.value)}
-                                      placeholder={precioFinal.toFixed(2)}
-                                      className="h-8 w-full text-sm"
-                                    />
-                                  ) : (
-                                    <span>
-                                      Bs {precioFinal.toFixed(2)}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {index === 0 ? (
-                                    <span className="text-gray-900">0.00</span>
-                                  ) : (
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {isSelected ? (
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={pendingChanges?.precio_override !== undefined ? pendingChanges.precio_override : precioFinal}
+                                        onChange={(e) => {
+                                          const value = parseFloat(e.target.value) || 0
+                                          handleSingleVarianteFieldChange(varianteIdStr, 'precio_override', value)
+                                        }}
+                                        className="h-8 w-full text-sm text-right"
+                                      />
+                                    ) : (
+                                      <span>
+                                        Bs {precioFinal.toFixed(2)}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
                                     <span className={difCoste !== 0 ? (difCoste > 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium') : 'text-gray-500'}>
                                       {difCoste > 0 ? '+' : difCoste < 0 ? '-' : ''}{Math.abs(difCoste).toFixed(2)}
                                     </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {index === 0 ? (
-                                    <span className="text-gray-900">0.00</span>
-                                  ) : (
-                                    <span className={difPrecio !== 0 ? (difPrecio > 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium') : 'text-gray-500'}>
-                                      {difPrecio > 0 ? '+' : difPrecio < 0 ? '-' : ''}{Math.abs(difPrecio).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {isSelected ? (
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={pendingChanges?.dif_precio !== undefined ? pendingChanges.dif_precio : difPrecio}
+                                        onChange={(e) => {
+                                          const value = parseFloat(e.target.value) || 0
+                                          handleSingleVarianteFieldChange(varianteIdStr, 'dif_precio', value)
+                                        }}
+                                        className="h-8 w-full text-sm text-right"
+                                      />
+                                    ) : (
+                                      <span className={difPrecio !== 0 ? (difPrecio > 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium') : 'text-gray-500'}>
+                                        {difPrecio > 0 ? '+' : difPrecio < 0 ? '-' : ''}{Math.abs(difPrecio).toFixed(2)}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <span className={utilidadNetaPct >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                                      {utilidadNetaPct.toFixed(2)}%
                                     </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openCalculadoraVariante(variante)}
-                                    title="Abrir calculadora de precios"
-                                    className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                                  >
-                                    <Calculator className="w-4 h-4" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -3243,7 +4141,7 @@ export default function ProductoDetailPage() {
               {varianteCalculadora && formatearCombinacion(varianteCalculadora.combinacion)}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Calculadora de Precios */}
             <div className="space-y-3">
@@ -3252,7 +4150,7 @@ export default function ProductoDetailPage() {
                 <div className="col-span-3">%</div>
                 <div className="col-span-5">Valor (Bs)</div>
               </div>
-              
+
               {priceRowsVariante.map((row) => {
                 const isEditable = row.editable
                 const isPrecioRow = row.campo === "Precio"
@@ -3261,7 +4159,7 @@ export default function ProductoDetailPage() {
                 let showPorcentaje =
                   row.porcentaje != null ||
                   ((row.campo === "Factura" || row.campo === "IUE" || row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") &&
-                   (row as any).porcentajeConfig != null)
+                    (row as any).porcentajeConfig != null)
                 // Para Comisión, SIEMPRE mostrar porcentajeConfig (valor original del usuario)
                 // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje
                 // Para otros campos, mostrar porcentaje (calculado sobre precio)
@@ -3274,7 +4172,7 @@ export default function ProductoDetailPage() {
                     ? (row as any).porcentajeConfig
                     : row.porcentaje
                 }
-                
+
                 return (
                   <div key={`price-row-variante-${row.id}`} className="grid grid-cols-12 gap-2">
                     <div className="col-span-4">
@@ -3303,12 +4201,12 @@ export default function ProductoDetailPage() {
                         step="0.01"
                         value={row.valor || ""}
                         onChange={(e) => handlePriceValorChangeVariante(row.id, e.target.value)}
-                        disabled={!isEditable || isPrecioRow}
+                        disabled={!isEditable}
                         placeholder="0.00"
-                        className={`h-9 text-sm ${!isEditable || isPrecioRow ? (isPrecioRow ? "bg-green-100 cursor-not-allowed" : "bg-gray-100 cursor-not-allowed") : ""}`}
+                        className={`h-9 text-sm ${!isEditable ? (isPrecioRow ? "bg-green-50" : "bg-gray-100 cursor-not-allowed") : (isPrecioRow ? "bg-green-50 border-green-300" : "")}`}
                       />
                     </div>
-                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -3316,7 +4214,7 @@ export default function ProductoDetailPage() {
             {/* Precio Final y Botón Aplicar */}
             <div className="pt-4 border-t">
               <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3">
                   <span className="text-sm font-medium">Precio Final:</span>
                   <span className="text-lg font-bold text-green-600">
                     Bs {priceRowsVariante.find(r => r.campo === "Precio")?.valor?.toFixed(2) || "0.00"}
@@ -3325,11 +4223,10 @@ export default function ProductoDetailPage() {
                 <Button
                   onClick={handleApplyPriceVariante}
                   disabled={isApplyingPriceVariante || !priceRowsVariante.find(r => r.campo === "Precio")?.valor || parseNum(priceRowsVariante.find(r => r.campo === "Precio")?.valor ?? 0) <= 0}
-                  className={`transition-all duration-300 transform ${
-                    priceAppliedVariante
+                  className={`transition-all duration-300 transform ${priceAppliedVariante
                       ? 'bg-green-500 hover:bg-green-600 scale-105 shadow-lg'
                       : 'bg-green-600 hover:bg-green-700'
-                  } ${isApplyingPriceVariante ? 'opacity-75 cursor-wait' : ''} text-white`}
+                    } ${isApplyingPriceVariante ? 'opacity-75 cursor-wait' : ''} text-white`}
                   size="sm"
                 >
                   {isApplyingPriceVariante ? (

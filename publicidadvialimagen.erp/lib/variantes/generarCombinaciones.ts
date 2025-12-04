@@ -26,10 +26,10 @@ export function generarCombinacionesVariantes(
   }
 
   // Filtrar variantes que tengan valores válidos
-  const variantesValidas = variantes.filter(v => 
-    v && 
-    v.nombre && 
-    Array.isArray(v.valores) && 
+  const variantesValidas = variantes.filter(v =>
+    v &&
+    v.nombre &&
+    Array.isArray(v.valores) &&
     v.valores.length > 0
   )
 
@@ -79,7 +79,7 @@ export function generarClaveVariante(combinacion: Record<string, string>): strin
   if (!combinacion || Object.keys(combinacion).length === 0) {
     return "sin_variantes"
   }
-  
+
   const parts = Object.entries(combinacion)
     .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
     .map(([key, value]) => {
@@ -90,7 +90,7 @@ export function generarClaveVariante(combinacion: Record<string, string>): strin
       }
       return `${key}:${valueStr}`
     })
-  
+
   return parts.join("|")
 }
 
@@ -104,13 +104,13 @@ export function normalizarClaveProducto(combinacion: Record<string, string>): st
   if (!combinacion || Object.keys(combinacion).length === 0) {
     return "sin_variantes"
   }
-  
+
   // Extraer solo valores, ordenarlos alfabéticamente para consistencia
   const valores = Object.entries(combinacion)
     .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
     .map(([_, value]) => String(value))
     .filter(v => v && v.trim().length > 0) // Filtrar valores vacíos
-  
+
   return valores.join("|")
 }
 
@@ -128,7 +128,13 @@ export function parsearClaveVariante(clave: string): Record<string, string> {
   const partes = clave.split('|')
 
   partes.forEach(parte => {
-    const [nombre, valor] = parte.split(':')
+    let nombre, valor
+    if (parte.includes('=')) {
+      [nombre, valor] = parte.split('=')
+    } else {
+      [nombre, valor] = parte.split(':')
+    }
+
     if (nombre && valor) {
       valores[nombre.trim()] = valor.trim()
     }
@@ -157,7 +163,7 @@ export function convertirVariantesAFormato(
       const nombre = variante.nombre
       // Aceptar tanto 'valores' como 'posibilidades' para compatibilidad
       const valores = variante.valores ?? variante.posibilidades ?? []
-      
+
       // Validar que valores sea un array y tenga elementos
       if (!Array.isArray(valores) || valores.length === 0) {
         console.warn(`⚠️ Variante "${nombre}" ignorada: sin valores válidos`)

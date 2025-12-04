@@ -248,16 +248,22 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
   }
   
   // Guardar variante (singular, según esquema real)
+  // IMPORTANTE: Solo actualizar variante si se envía explícitamente
+  // Si es undefined, no incluir en fields para no sobrescribir el valor existente
   if (producto.variante !== undefined) {
     try {
       if (producto.variante === null) {
+        // Si se envía null explícitamente, guardar como array vacío
         fields.variante = []
       } else if (Array.isArray(producto.variante)) {
-        fields.variante = producto.variante.length > 0 ? producto.variante : []
+        // Si es un array, guardarlo (incluso si está vacío, porque se envió explícitamente)
+        fields.variante = producto.variante
       } else {
+        // Formato inválido, usar array vacío
         fields.variante = []
       }
     } catch (e) {
+      console.error('Error procesando variante:', e)
       fields.variante = []
     }
   } else if (producto.variantes !== undefined) {
@@ -267,9 +273,11 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
         ? producto.variantes
         : []
     } catch (e) {
+      console.error('Error procesando variantes (plural):', e)
       fields.variante = []
     }
   }
+  // Si producto.variante es undefined, NO incluir en fields para preservar el valor existente en la BD
   
   // Guardar receta como JSONB (debe ser ARRAY, no objeto)
   if (producto.receta !== undefined && producto.receta !== null) {

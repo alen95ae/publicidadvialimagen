@@ -242,3 +242,4 @@ export async function registrarMovimiento(params: RegistrarMovimientoParams): Pr
   }
 }
 
+

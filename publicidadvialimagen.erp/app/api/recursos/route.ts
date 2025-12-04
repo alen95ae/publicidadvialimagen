@@ -5,9 +5,16 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '50')
+    let limit = parseInt(searchParams.get('limit') || '50')
     const query = searchParams.get('q') || ''
     const categoria = searchParams.get('categoria') || ''
+
+    // FIX: Permitir hasta 1000 recursos por página (suficiente para fetchAllRecursos)
+    // pero evitar requests excesivamente grandes
+    const MAX_LIMIT = 1000
+    if (limit > MAX_LIMIT) {
+      limit = MAX_LIMIT
+    }
 
     console.log('🔍 Recursos search params:', { page, limit, query, categoria })
 

@@ -247,128 +247,6 @@ export default function ProductoDetailPage() {
               ? JSON.parse(calculadoraData) 
               : calculadoraData
             
-            // FIX 4: Cargar calculadora de costes SIEMPRE, incluso si está vacía
-            if (calcData.calculadoraCostes) {
-              console.log('📋 Cargando calculadora de costes desde calculadora_precios')
-              const costRowsFromCalc = calcData.calculadoraCostes.costRows || []
-              const totalCostFromCalc = calcData.calculadoraCostes.totalCost || 0
-              
-              // Restaurar totalCost si existe
-              if (totalCostFromCalc > 0) {
-                setTotalCost(totalCostFromCalc)
-                console.log('✅ TotalCost restaurado:', totalCostFromCalc)
-              }
-              
-              // Si hay costRows, restaurarlos
-              if (Array.isArray(costRowsFromCalc) && costRowsFromCalc.length > 0) {
-                // Buscar recursos completos para restaurar costRows
-                const recursosResponse = await fetch('/api/recursos')
-                if (recursosResponse.ok) {
-                  const recursosResult = await recursosResponse.json()
-                  const todosLosRecursos = recursosResult.data || []
-                  
-                  const restoredCostRows = costRowsFromCalc.map((row: any, index: number) => {
-                    const recursoCompleto = row.selectedRecurso?.id 
-                      ? todosLosRecursos.find((r: any) => r.id === row.selectedRecurso.id)
-                      : null
-                    
-                    return {
-                      id: row.id || (index + 1),
-                      selectedRecurso: recursoCompleto || null,
-                      cantidad: row.cantidad || 1,
-                      unidad: row.unidad || "",
-                      searchTerm: row.searchTerm || recursoCompleto?.nombre || "",
-                      costeUnitarioGuardado: row.costeUnitarioGuardado || null
-                    }
-                  })
-                  
-                  if (restoredCostRows.length > 0) {
-                    const maxId = Math.max(...restoredCostRows.map((r: any) => r.id || 0))
-                    costRowIdCounterRef.current = maxId + 1
-                    setCostRows(restoredCostRows)
-                    console.log('✅ Calculadora de costes restaurada:', restoredCostRows.length, 'filas')
-                  
-                  // Construir variantes desde los recursos activos en la receta
-                  const variantesDeRecursosActivos: any[] = []
-                  restoredCostRows.forEach((row: any) => {
-                    if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
-                      let variantesArray: any[] = []
-                      
-                      if (Array.isArray(row.selectedRecurso.variantes)) {
-                        variantesArray = row.selectedRecurso.variantes
-                      } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
-                        if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
-                          variantesArray = row.selectedRecurso.variantes.variantes
-                        }
-                      } else if (typeof row.selectedRecurso.variantes === 'string') {
-                        try {
-                          const parsed = JSON.parse(row.selectedRecurso.variantes)
-                          if (Array.isArray(parsed)) {
-                            variantesArray = parsed
-                          } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
-                            variantesArray = parsed.variantes
-                          }
-                        } catch (e) {
-                          console.error('Error parseando variantes del recurso:', e)
-                        }
-                      }
-                      
-                      // Agregar variantes con el recurso_id para tracking
-                      variantesArray.forEach((v: any) => {
-                        variantesDeRecursosActivos.push({
-                          ...v,
-                          recurso_id: row.selectedRecurso.id,
-                          recurso_nombre: row.selectedRecurso.nombre
-                        })
-                      })
-                    }
-                  })
-                  
-                  // Actualizar el estado de variantes con las variantes de los recursos activos
-                  setVariantes(variantesDeRecursosActivos)
-                  console.log('✅ Variantes construidas desde recursos activos:', variantesDeRecursosActivos.length)
-                  
-                  // Regenerar variantes en la BD si hay variantes y tenemos un ID
-                  if (variantesDeRecursosActivos.length > 0 && id) {
-                    setTimeout(async () => {
-                      try {
-                        // Convertir variantes al formato correcto que espera el backend
-                        const variantesLimpias = variantesDeRecursosActivos.map((v: any) => ({
-                          nombre: v.nombre,
-                          valores: v.posibilidades ?? v.valores ?? []
-                        }))
-                        
-                        console.log(">>> Regenerando variantes desde recursos activos al cargar:", variantesLimpias)
-                        
-                        const regenerarResponse = await fetch(`/api/productos/variantes`, {
-                          method: 'PUT',
-                          headers: {
-                            'Content-Type': 'application/json'
-                          },
-                          body: JSON.stringify({
-                            producto_id: id,
-                            action: 'regenerar',
-                            variantes_definicion: variantesLimpias
-                          })
-                        })
-                        
-                        if (regenerarResponse.ok) {
-                          console.log('✅ Variantes regeneradas al cargar producto desde recursos activos')
-                          // Recargar variantes después de regenerar
-                          setTimeout(() => {
-                            getVariantes()
-                          }, 500)
-                        }
-                      } catch (error) {
-                        console.error('Error regenerando variantes al cargar:', error)
-                      }
-                    }, 500)
-                  }
-                }
-              }
-            }
-            }
-            
             if (calcData.priceRows && Array.isArray(calcData.priceRows)) {
               // Mapear filas cargadas a la estructura estática
               const loadedRows = defaultPriceRows.map(defaultRow => {
@@ -466,12 +344,40 @@ export default function ProductoDetailPage() {
             let maxId = 0
             const recetaRows = itemsReceta.map((item: any, index: number) => {
               // Buscar el recurso completo por ID o código
-              const recursoCompleto = todosLosRecursos.find((r: any) => 
+              let recursoFromApi = todosLosRecursos.find((r: any) => 
                 r.id === item.recurso_id || (r.codigo || r.id) === item.recurso_codigo
               )
               
-              if (!recursoCompleto) {
-                console.warn('⚠️ Recurso no encontrado en receta:', item.recurso_id || item.recurso_codigo)
+              // MERGE REAL COMPLETO:
+              // - Si no existe en API: crear recurso mínimo con datos de la receta
+              // - Si existe pero coste es null/undefined: usar coste_unitario de la receta
+              // - SIEMPRE garantizar que coste sea un número válido
+              let recursoCompleto: any
+              
+              if (!recursoFromApi) {
+                // Recurso no existe en API - usar datos guardados en receta
+                console.warn(`⚠️ El recurso ${item.recurso_id} no existe en /api/recursos. Usando copia local.`)
+                recursoCompleto = {
+                  id: item.recurso_id,
+                  codigo: item.recurso_codigo || item.recurso_id,
+                  nombre: item.recurso_nombre || "",
+                  unidad_medida: item.unidad || "",
+                  coste: Number(item.coste_unitario) || 0,
+                  variantes: []
+                }
+              } else {
+                // Recurso existe en API - hacer merge con datos de receta como fallback
+                const costeApi = recursoFromApi.coste
+                const costeReceta = item.coste_unitario
+                // Usar coste de API si es válido, sino usar coste guardado en receta
+                const costeFinal = (typeof costeApi === 'number' && !isNaN(costeApi)) 
+                  ? costeApi 
+                  : (Number(costeReceta) || 0)
+                
+                recursoCompleto = {
+                  ...recursoFromApi,
+                  coste: costeFinal // Garantizar que coste siempre sea número válido
+                }
               }
               
               const newId = index + 1
@@ -479,14 +385,10 @@ export default function ProductoDetailPage() {
               
               return {
                 id: newId,
-                selectedRecurso: recursoCompleto || null,
+                selectedRecurso: recursoCompleto,
                 cantidad: item.cantidad || 1,
-                unidad: item.unidad || (recursoCompleto?.unidad_medida || ""),
-                searchTerm: item.recurso_nombre || recursoCompleto?.nombre || "",
-                // Guardar el coste_unitario de la receta para usarlo directamente
-                costeUnitarioGuardado: item.coste_unitario !== undefined && item.coste_unitario !== null 
-                  ? Number(item.coste_unitario) 
-                  : null
+                unidad: item.unidad || recursoCompleto.unidad_medida || "",
+                searchTerm: item.recurso_nombre || recursoCompleto.nombre || ""
               }
             })
             
@@ -1097,23 +999,16 @@ export default function ProductoDetailPage() {
       const receta = costRows
         .filter(row => row.selectedRecurso && row.selectedRecurso.id) // Solo recursos válidos
         .map(row => {
-          // PRIORIDAD: Usar costeUnitarioGuardado si existe (precio de la receta guardada)
-          // Si no, usar el precio desde control_stock o coste base
-          const costeUnitario = (row as any).costeUnitarioGuardado !== null && (row as any).costeUnitarioGuardado !== undefined
-            ? (row as any).costeUnitarioGuardado
-            : obtenerPrecioRecurso(row.selectedRecurso)
-          
-          const cantidad = row.cantidad || 1
-          const costeTotal = costeUnitario * cantidad
-          
+          const coste = row.selectedRecurso.coste || 0
+          const cantidad = row.cantidad || 0
           return {
             recurso_id: row.selectedRecurso.id,
             recurso_codigo: row.selectedRecurso.codigo || row.selectedRecurso.id,
             recurso_nombre: row.selectedRecurso.nombre,
             cantidad: cantidad,
-            unidad: row.unidad || row.selectedRecurso.unidad_medida || "",
-            coste_unitario: Math.round(costeUnitario * 100) / 100,
-            coste_total: Math.round(costeTotal * 100) / 100
+            unidad: row.unidad,
+            coste_unitario: coste,
+            coste_total: coste * cantidad
           }
         })
         .filter(item => item.recurso_id) // Asegurar que solo hay recursos, no proveedores
@@ -1237,25 +1132,6 @@ export default function ProductoDetailPage() {
         coste_total: sanitizeNumber(item.coste_total)
       })).filter(item => item.recurso_id !== null) // Solo items con recurso válido
 
-      // Preparar calculadora de costes (se guarda en calculadora_precios, NO en receta)
-      const calculadoraCostes = {
-        costRows: costRows.map(row => ({
-          id: row.id,
-          selectedRecurso: row.selectedRecurso ? {
-            id: row.selectedRecurso.id,
-            codigo: row.selectedRecurso.codigo || null,
-            nombre: row.selectedRecurso.nombre || null,
-            coste: sanitizeNumber(row.selectedRecurso.coste),
-            unidad_medida: sanitizeString(row.selectedRecurso.unidad_medida)
-          } : null,
-          cantidad: sanitizeNumber(row.cantidad) || 0,
-          unidad: sanitizeString(row.unidad),
-          searchTerm: sanitizeString(row.searchTerm),
-          costeUnitarioGuardado: (row as any).costeUnitarioGuardado || null
-        })).filter(row => row.selectedRecurso !== null), // Solo filas con recurso válido
-        totalCost: sanitizeNumber(totalCost) || 0
-      }
-
       // Preparar calculadora de precios UFC
       const precioFinal = parseNum(priceRows.find(r => r.campo === "Precio")?.valor ?? 0)
       const precioFinalValidado = sanitizeNumber(precioFinal) || 0
@@ -1338,11 +1214,7 @@ export default function ProductoDetailPage() {
         mostrar_en_web: Boolean(formData.mostrar_en_web),
         variante: varianteLimpia.length > 0 ? varianteLimpia : null,
         receta: Array.isArray(recetaArray) ? recetaArray : [], // FIX 2: Receta SIEMPRE es array, nunca null
-        calculadora_precios: {
-          ...calculadoraPrecios,
-          // Incluir también la calculadora de costes en calculadora_precios
-          calculadoraCostes: calculadoraCostes
-        },
+        calculadora_precios: calculadoraPrecios,
         proveedores: proveedoresSanitizados.length > 0 ? proveedoresSanitizados : null
       }
       
@@ -1774,34 +1646,13 @@ export default function ProductoDetailPage() {
   useEffect(() => {
     const total = costRows.reduce((sum, row) => {
       if (row.selectedRecurso && row.cantidad > 0) {
-        // PRIORIDAD 1: Usar coste_unitario guardado de la receta (si existe)
-        // Esto es para productos cargados que ya tienen precios guardados
-        const costeUnitario = (row as any).costeUnitarioGuardado
-        
-        let precioReal: number
-        if (costeUnitario !== null && costeUnitario !== undefined && !isNaN(costeUnitario) && costeUnitario >= 0) {
-          // Usar el precio guardado de la receta
-          precioReal = costeUnitario
-        } else {
-          // PRIORIDAD 2: Buscar en control_stock del recurso
-          precioReal = obtenerPrecioRecurso(row.selectedRecurso)
-        }
-        
-        // precioReal siempre es un número (nunca null), así que siempre sumar
+        const coste = row.selectedRecurso.coste || 0
         const cantidad = row.cantidad || 0
-        const subtotal = precioReal * cantidad
-        // Validar que subtotal sea un número válido
-        if (isNaN(subtotal) || !isFinite(subtotal)) {
-          return sum
-        }
-        return sum + subtotal
+        return sum + (coste * cantidad)
       }
       return sum
     }, 0)
-    // Validar que total sea un número válido antes de guardar
-    const formattedTotal = (isNaN(total) || !isFinite(total) || total < 0) 
-      ? 0 
-      : parseFloat(total.toFixed(2))
+    const formattedTotal = parseFloat(total.toFixed(2))
     setTotalCost(formattedTotal)
     
     // Si hay un coste guardado manualmente, verificar si la calculadora cambió significativamente
@@ -1956,10 +1807,7 @@ export default function ProductoDetailPage() {
             ...row, 
             selectedRecurso: recurso, 
             unidad: recurso.unidad_medida,
-            searchTerm: recurso.nombre,
-            // Limpiar costeUnitarioGuardado cuando se selecciona un nuevo recurso
-            // para que use el precio de control_stock
-            costeUnitarioGuardado: null
+            searchTerm: recurso.nombre
           }
         : row
     ))
@@ -2939,24 +2787,7 @@ export default function ProductoDetailPage() {
                         <div className="col-span-3">
                           {index === 0 && <Label className="text-xs">Total</Label>}
                           <div className="flex h-9 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm items-center">
-                            {row.selectedRecurso ? (() => {
-                              // PRIORIDAD 1: Usar coste_unitario guardado de la receta (si existe)
-                              const costeUnitario = (row as any).costeUnitarioGuardado
-                              let precioReal: number
-                              
-                              if (costeUnitario !== null && costeUnitario !== undefined && !isNaN(costeUnitario) && costeUnitario >= 0) {
-                                // Usar el precio guardado de la receta
-                                precioReal = costeUnitario
-                              } else {
-                                // PRIORIDAD 2: Buscar en control_stock del recurso
-                                precioReal = obtenerPrecioRecurso(row.selectedRecurso)
-                              }
-                              
-                              // precioReal siempre es un número, nunca null (incluso si es 0)
-                              const total = precioReal * row.cantidad
-                              // Siempre mostrar "Bs 0.00" en lugar de "–" cuando hay recurso seleccionado
-                              return `Bs ${total.toFixed(2)}`
-                            })() : '-'}
+                            {row.selectedRecurso ? `Bs ${((row.selectedRecurso.coste || 0) * (row.cantidad || 0)).toFixed(2)}` : '-'}
                           </div>
                         </div>
                         <div className="col-span-1">

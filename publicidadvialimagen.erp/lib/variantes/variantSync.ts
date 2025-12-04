@@ -7,6 +7,9 @@ import {
 
 import { generarCombinacionesVariantes } from "./generarCombinaciones";
 
+// Sucursales disponibles en el sistema (las mismas que en control de stock)
+const SUCURSALES_DISPONIBLES = ["La Paz", "Santa Cruz"];
+
 /**
  * Sincronización estable y moderna de variantes de producto
  * 100% compatible con sistema corregido de variantes.
@@ -100,29 +103,43 @@ export async function syncProductVariants(productId: string) {
   // 4. Obtener definición de variantes basada en RECURSOS reales
   const definiciones = buildVariantDefinitionFromReceta(receta, recursosMap);
 
-  console.log(`📋 [SYNC] Definiciones extraídas:`, JSON.stringify(definiciones, null, 2));
-
-  // Guardar definiciones en producto.variante
+  // Guardar definiciones en producto.variante (SIN incluir Sucursal)
   const definicionesJSON = definiciones.map(d => ({
     nombre: d.nombre,
     valores: d.valores
   }));
-  
-  console.log(`💾 [SYNC] Guardando variantes en producto:`, JSON.stringify(definicionesJSON, null, 2));
 
   await supabaseServer
     .from("productos")
     .update({ variante: definicionesJSON })
     .eq("id", productId);
 
-  // 5. Generar TODAS las combinaciones posibles (producto cartesiano)
-  const combinaciones = generarCombinacionesVariantes(definiciones);
+  // 5. Generar combinaciones de variantes del producto (sin sucursal)
+  const combinacionesBase = generarCombinacionesVariantes(definiciones);
 
-  // Convertir a clave universal
-  const combinacionesFinal = combinaciones.map(c => ({
-    combinacion: buildVariantKey(c.valores),
-    valores: c.valores
-  }));
+  // 6. IMPORTANTE: Multiplicar por sucursales (igual que en control de stock)
+  // Para cada combinación de variantes, crear una por cada sucursal
+  const combinacionesConSucursal: Array<{ combinacion: string; valores: Record<string, string> }> = [];
+
+  SUCURSALES_DISPONIBLES.forEach(sucursal => {
+    combinacionesBase.forEach(combo => {
+      // Agregar sucursal a los valores de la combinación
+      const valoresConSucursal = {
+        ...combo.valores,
+        Sucursal: sucursal
+      };
+      
+      // Construir la clave con sucursal incluida
+      const combinacion = buildVariantKey(valoresConSucursal);
+      
+      combinacionesConSucursal.push({
+        combinacion,
+        valores: valoresConSucursal
+      });
+    });
+  });
+
+  const combinacionesFinal = combinacionesConSucursal;
 
   // 6. Cargar variantes existentes
   const { data: existentes } = await supabaseServer
@@ -138,13 +155,20 @@ export async function syncProductVariants(productId: string) {
   const processedKeys = new Set<string>();
   const ops: any[] = [];
 
+  // Obtener el coste base del producto (de su calculadora de precios)
+  const costeBaseProducto = Number(producto.coste) || 0;
+
   for (const combo of combinacionesFinal) {
     const key = combo.combinacion;
     const valores = combo.valores;
 
     processedKeys.add(key);
 
-    const coste = computeVariantCost(receta, recursos, valores);
+    // Extraer la sucursal de los valores de la combinación
+    const sucursal = valores["Sucursal"] || valores["sucursal"];
+
+    // Calcular coste: BASE + suma de diferencias de precios de recursos
+    const coste = computeVariantCost(receta, recursos, valores, sucursal, costeBaseProducto);
 
     const precio = coste; // Temporal hasta que activemos calculadora final
 
@@ -168,7 +192,6 @@ export async function syncProductVariants(productId: string) {
         supabaseServer.from("producto_variantes").insert({
           producto_id: productId,
           combinacion: key,
-          valores,
           coste_calculado: coste,
           precio_calculado: precio,
           coste_override: null,
@@ -194,7 +217,14 @@ export async function syncProductVariants(productId: string) {
     );
   }
 
-  await Promise.all(ops);
+  const results = await Promise.all(ops);
+  
+  // Verificar errores
+  const errores = results.filter(r => r.error);
+  if (errores.length > 0) {
+    console.error(`❌ [SYNC] ${errores.length} errores encontrados:`, errores.map(e => e.error));
+    throw new Error(`Error sincronizando variantes: ${errores[0].error.message}`);
+  }
 
   console.log(`✅ [SYNC] Sincronización completada (${ops.length} operaciones).`);
 }

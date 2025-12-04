@@ -187,33 +187,57 @@ export function findResourceVariantPrice(
 
   const data = stock[candidate]
 
-  if (data.precioVariante != null) return Number(data.precioVariante)
-  if (data.precio != null) return Number(data.precio)
+  // IMPORTANTE: Solo retornar la DIFERENCIA DE PRECIO
+  // El coste base del producto YA incluye el coste base de los recursos
+  // Aquí solo devolvemos el incremento/decremento por la variante específica
   if (data.diferenciaPrecio != null) return base + Number(data.diferenciaPrecio)
+  
+  // Si no hay diferenciaPrecio pero hay precioVariante, calcular la diferencia
+  if (data.precioVariante != null) return Number(data.precioVariante)
+  
+  // Si no hay precio, calcular desde diferencia
+  if (data.precio != null) return Number(data.precio)
 
   return base
 }
 
 /* ============================================================
-   computeVariantCost — SIN CAMBIAR, PERO AHORA FUNCIONA
+   computeVariantCost — Calcula coste de producto con variantes
+   
+   IMPORTANTE: 
+   - El coste base del producto viene de su calculadora de precios
+   - A ese coste base se le SUMAN las diferencias de precio de las variantes
+   - Las diferencias vienen del control_stock de cada recurso
    ============================================================ */
 export function computeVariantCost(
   receta: any[],
   recursos: any[],
   productVariant: Record<string, string>,
-  sucursal?: string
+  sucursal?: string,
+  costeBase?: number // Coste base del producto (de calculadora)
 ): number {
   
-  let total = 0
+  let total = costeBase || 0 // Partir del coste base si se proporciona
 
   receta.forEach(item => {
     const recurso = recursos.find(r => r.id === item.recurso_id)
     if (!recurso) return
 
     const qty = Number(item.cantidad) || 0
-    const precio = findResourceVariantPrice(recurso, productVariant, sucursal)
-
-    total += precio * qty
+    
+    // Obtener el precio del recurso para esta variante específica
+    const precioRecurso = findResourceVariantPrice(recurso, productVariant, sucursal)
+    
+    // Si el coste base NO fue proporcionado, sumar el coste completo del recurso
+    // Si fue proporcionado, solo sumar la diferencia (precioRecurso ya incluye base + diferencia)
+    if (costeBase === undefined) {
+      total += precioRecurso * qty
+    } else {
+      // Calcular solo la diferencia sobre el coste base del recurso
+      const costeBaseRecurso = Number(recurso.coste) || 0
+      const diferencia = precioRecurso - costeBaseRecurso
+      total += diferencia * qty
+    }
   })
 
   return Math.round(total * 100) / 100

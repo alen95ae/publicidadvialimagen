@@ -3782,8 +3782,12 @@ export default function ProductoDetailPage() {
                               // ID como string para consistencia
                               const varianteIdStr = String(variante.id)
 
-                              const { costeVariante, difCoste } = calcularCosteVariante(variante)
+                              // IMPORTANTE: Usar coste_calculado de la BD (ya incluye base + diferencias)
+                              // NO recalcular en frontend
+                              const costeVariante = variante.coste_calculado || variante.coste_override || (totalCost || 0)
                               const costeFinal = costeVariante
+                              const costeBaseProducto = totalCost || 0
+                              const difCoste = costeVariante - costeBaseProducto
 
                               // Obtener precio base del producto
                               const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)

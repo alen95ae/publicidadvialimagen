@@ -1,6 +1,6 @@
 /**
  * Utilidad para generar todas las combinaciones posibles de variantes
- * Similar a la función en ajustes-inventario pero para productos
+ * Compatible con backend, frontend y control_stock
  */
 
 export interface VarianteDefinicion {
@@ -9,185 +9,141 @@ export interface VarianteDefinicion {
 }
 
 export interface VarianteCombinacion {
-  combinacion: string // Formato: "Color:Blanco|Tamaño:A4"
-  valores: Record<string, string> // { Color: "Blanco", Tamaño: "A4" }
+  combinacion: string // Ej: "Color:Blanco|Tamaño:A4"
+  valores: Record<string, string> // Ej: { Color: "Blanco", Tamaño: "A4" }
 }
 
-/**
- * Genera todas las combinaciones posibles de variantes (producto cartesiano)
- * @param variantes Array de definiciones de variantes
- * @returns Array de combinaciones con su representación en string y objeto
- */
+/* ============================================================
+   🔥 Generación de TODAS las combinaciones (producto cartesiano)
+   ============================================================ */
 export function generarCombinacionesVariantes(
   variantes: VarianteDefinicion[]
 ): VarianteCombinacion[] {
-  if (!variantes || variantes.length === 0) {
-    return []
-  }
 
-  // Filtrar variantes que tengan valores válidos
+  if (!Array.isArray(variantes) || variantes.length === 0) return []
+
+  // 1. Mantener solo variantes válidas y con valores reales
   const variantesValidas = variantes.filter(v =>
     v &&
-    v.nombre &&
+    typeof v.nombre === "string" &&
     Array.isArray(v.valores) &&
     v.valores.length > 0
   )
 
-  if (variantesValidas.length === 0) {
-    console.warn("⚠️ No hay variantes válidas para generar combinaciones")
-    return []
+  if (variantesValidas.length === 0) return []
+
+  // 2. Extraer solo los arrays de valores
+  const variantesArrays = variantesValidas.map(v => v.valores)
+
+  // 3. Producto cartesiano
+  function cartesian(arrays: string[][]): string[][] {
+    return arrays.reduce(
+      (acc, curr) =>
+        acc.flatMap(a => curr.map(c => [...a, c])),
+      [[]] as string[][]
+    )
   }
 
-  // Función auxiliar para generar producto cartesiano
-  function cartesianProduct(arrays: string[][]): string[][] {
-    if (arrays.length === 0) return []
-    return arrays.reduce((acc, curr) => {
-      if (curr.length === 0) return acc
-      return acc.flatMap(accVal => curr.map(currVal => [...accVal, currVal]))
-    }, [[]] as string[][])
-  }
+  const rawCombinations = cartesian(variantesArrays)
 
-  // Obtener todas las posibilidades de cada variante válida
-  const variantesArrays = variantesValidas.map(v => v.valores || [])
-
-  // Generar producto cartesiano
-  const combinations = cartesianProduct(variantesArrays)
-
-  // Convertir a formato de objeto y string
-  return combinations.map(combo => {
+  // 4. Convertir cada combinación a objeto + string normalizado
+  return rawCombinations.map(combo => {
     const valores: Record<string, string> = {}
     const partes: string[] = []
 
-    combo.forEach((valor, index) => {
-      const nombreVariante = variantes[index].nombre
-      valores[nombreVariante] = valor
-      partes.push(`${nombreVariante}:${valor}`)
+    combo.forEach((valor, idx) => {
+      const nombre = variantesValidas[idx].nombre
+      valores[nombre] = valor
+      partes.push(`${nombre}:${valor}`)
     })
 
     return {
-      combinacion: partes.join('|'),
+      combinacion: partes.join("|"),
       valores
     }
   })
 }
 
-/**
- * Genera clave de combinación de variantes (formato: "Color:blanco|Tamaño:A4")
- * Similar a generateVarianteKey en ajustes-inventario
- */
-export function generarClaveVariante(combinacion: Record<string, string>): string {
-  if (!combinacion || Object.keys(combinacion).length === 0) {
-    return "sin_variantes"
-  }
+/* ============================================================
+   🔥 Genera clave universal ordenada Ej: "Color:Rojo|Tamaño:A4"
+   ============================================================ */
+export function generarClaveVariante(obj: Record<string, string>): string {
+  if (!obj || Object.keys(obj).length === 0) return "Base"
 
-  const parts = Object.entries(combinacion)
-    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-    .map(([key, value]) => {
-      const valueStr = String(value)
-      // Si el valor contiene un código hexadecimal, solo usar el nombre del color
-      if (valueStr.includes(':') && /^#[0-9A-Fa-f]{6}$/.test(valueStr.split(':')[1])) {
-        return `${key}:${valueStr.split(':')[0]}`
-      }
-      return `${key}:${valueStr}`
-    })
-
-  return parts.join("|")
+  return Object.entries(obj)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${String(v).trim()}`)
+    .join("|")
 }
 
-/**
- * Normaliza una combinación de variantes a formato de solo valores
- * Esto permite comparar variantes independientemente de los nombres
- * @param combinacion Objeto { Color: "Blanco", Grosor: "11 Oz" }
- * @returns Clave normalizada: "Blanco|11 Oz" (solo valores, ordenados alfabéticamente)
- */
-export function normalizarClaveProducto(combinacion: Record<string, string>): string {
-  if (!combinacion || Object.keys(combinacion).length === 0) {
-    return "sin_variantes"
-  }
-
-  // Extraer solo valores, ordenarlos alfabéticamente para consistencia
-  const valores = Object.entries(combinacion)
-    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-    .map(([_, value]) => String(value))
-    .filter(v => v && v.trim().length > 0) // Filtrar valores vacíos
-
-  return valores.join("|")
+/* ============================================================
+   Clave normalizada SOLO valores → para agrupar variantes
+   Ej:
+      { Color:"Blanco", Grosor:"11 Oz" }
+      → "11 Oz|Blanco"
+   ============================================================ */
+export function normalizarClaveProducto(obj: Record<string, string>): string {
+  return Object.values(obj)
+    .map(v => String(v).trim())
+    .sort()
+    .join("|") || "Base"
 }
 
-/**
- * Parsea una clave de variante en un objeto
- * @param clave Formato: "Color:Blanco|Tamaño:A4"
- * @returns Objeto { Color: "Blanco", Tamaño: "A4" }
- */
+/* ============================================================
+   🔥 Parseo robusto de claves
+   Acepta "=" o ":" indistintamente
+   ============================================================ */
 export function parsearClaveVariante(clave: string): Record<string, string> {
-  if (!clave || clave === "sin_variantes") {
-    return {}
-  }
+  const out: Record<string, string> = {}
+  if (!clave || clave === "Base" || clave === "sin_variantes") return out
 
-  const valores: Record<string, string> = {}
-  const partes = clave.split('|')
+  clave.split("|").forEach(part => {
+    let [k, v] = part.includes("=")
+      ? part.split("=")
+      : part.split(":")
 
-  partes.forEach(parte => {
-    let nombre, valor
-    if (parte.includes('=')) {
-      [nombre, valor] = parte.split('=')
-    } else {
-      [nombre, valor] = parte.split(':')
-    }
-
-    if (nombre && valor) {
-      valores[nombre.trim()] = valor.trim()
-    }
+    if (k && v) out[k.trim()] = v.trim()
   })
 
-  return valores
+  return out
 }
 
-/**
- * Convierte array de variantes del producto a formato VarianteDefinicion
- * @param variantes Array de variantes del producto (formato actual)
- * @returns Array de VarianteDefinicion
- */
+/* ============================================================
+   🔥 convertirVariantesAFormato
+   Entrada:
+     [{ nombre:"Color", valores:["Rojo","#FFF"] }]
+   Salida:
+     [{ nombre:"Color", valores:["Rojo"] }]
+   ============================================================ */
 export function convertirVariantesAFormato(
   variantes: any[]
 ): VarianteDefinicion[] {
-  if (!variantes || !Array.isArray(variantes)) {
-    return []
-  }
 
-  // Agrupar variantes por nombre
-  const variantesMap = new Map<string, Set<string>>()
+  if (!Array.isArray(variantes)) return []
 
-  variantes.forEach(variante => {
-    if (variante && variante.nombre) {
-      const nombre = variante.nombre
-      // Aceptar tanto 'valores' como 'posibilidades' para compatibilidad
-      const valores = variante.valores ?? variante.posibilidades ?? []
+  const agrupadas = new Map<string, Set<string>>()
 
-      // Validar que valores sea un array y tenga elementos
-      if (!Array.isArray(valores) || valores.length === 0) {
-        console.warn(`⚠️ Variante "${nombre}" ignorada: sin valores válidos`)
-        return // Saltar variantes sin valores
-      }
+  variantes.forEach(v => {
+    if (!v || !v.nombre) return
 
-      if (!variantesMap.has(nombre)) {
-        variantesMap.set(nombre, new Set())
-      }
+    const nombre = v.nombre
+    const valores = v.valores ?? v.posibilidades ?? []
 
-      valores.forEach((valor: string) => {
-        // Extraer solo el nombre si viene con código de color
-        const valorLimpio = valor.includes(':') && /^#[0-9A-Fa-f]{6}$/.test(valor.split(':')[1])
-          ? valor.split(':')[0]
-          : valor
-        variantesMap.get(nombre)!.add(valorLimpio)
-      })
-    }
+    if (!Array.isArray(valores)) return
+
+    if (!agrupadas.has(nombre)) agrupadas.set(nombre, new Set())
+
+    valores.forEach(val => {
+      const clean = String(val).includes(":") && /^#[0-9A-Fa-f]{6}$/.test(String(val).split(":")[1])
+        ? String(val).split(":")[0]
+        : String(val)
+
+      agrupadas.get(nombre)!.add(clean)
+    })
   })
 
-  // Convertir a formato VarianteDefinicion
-  return Array.from(variantesMap.entries()).map(([nombre, valores]) => ({
+  return Array.from(agrupadas.entries()).map(([nombre, valores]) => ({
     nombre,
-    valores: Array.from(valores)
+    valores: Array.from(valores).sort()
   }))
 }
-

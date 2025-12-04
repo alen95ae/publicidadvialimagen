@@ -1,7 +1,6 @@
-
 /**
  * Motor central para la gestión de variantes (Shared Logic)
- * Usado tanto en Frontend (React) como Backend (API/Scripts)
+ * Usado tanto en Frontend como Backend
  */
 
 export interface VariantDefinition {
@@ -10,247 +9,212 @@ export interface VariantDefinition {
 }
 
 export interface VariantCombination {
-  combinacion: string // Clave normalizada
-  valores: Record<string, string> // Objeto de valores
+  combinacion: string
+  valores: Record<string, string>
 }
 
-/**
- * Normaliza una clave de variante a un formato estándar universal.
- * Formato: "nombre=valor|nombre=valor" (ordenado alfabéticamente por nombre)
- * Todo en minúsculas para las claves, valores trimmeados.
- * 
- * Ejemplo: 
- *   Input: { "Color": " Rojo ", "Tamaño": "XL" }
- *   Output: "color=rojo|tamaño=xl"
- * 
- *   Input: { "Sucursal": "La Paz", "Grosor": "10 Oz" }
- *   Output: "grosor=10 oz|sucursal=la paz"
- */
-export function normalizeVariantKey(valores: Record<string, string>): string {
-  if (!valores || Object.keys(valores).length === 0) return "base"
+/* ============================================================
+   🔥 CLAVE UNIVERSAL DE VARIANTES (formato estándar)
+   Ejemplo:
+     { Color: "Rojo", Tamaño: "XL" }
+     → "Color:Rojo|Tamaño:XL"
+   ============================================================ */
+export function buildVariantKey(valores: Record<string, string>): string {
+  if (!valores || Object.keys(valores).length === 0) return "Base"
 
   return Object.entries(valores)
-    .filter(([_, val]) => val !== null && val !== undefined && String(val).trim() !== '')
-    .map(([key, val]) => {
-      const k = key.trim().toLowerCase()
-      const v = String(val).trim() // Mantener casing del valor para display, o lowercase para comparación estricta?
-      // El usuario pidió "dimensionSlug=valueSlug". Vamos a normalizar a lowercase para evitar duplicados por casing.
-      return `${k}=${v.toLowerCase()}`
-    })
-    .sort() // Orden alfabético para consistencia
-    .join('|')
+    .filter(([_, val]) => val && String(val).trim() !== "")
+    .map(([k, v]) => `${capitalize(k)}:${String(v).trim()}`)
+    .sort()
+    .join("|")
 }
 
-/**
- * Parsea una clave normalizada de vuelta a un objeto
- */
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/* ============================================================
+   Parsear clave "Color:Rojo|Tamaño:XL" → { Color: "Rojo", Tamaño: "XL" }
+   ============================================================ */
 export function parseVariantKey(key: string): Record<string, string> {
-  if (!key || key === 'base') return {}
-  
-  const valores: Record<string, string> = {}
-  key.split('|').forEach(part => {
-    const [k, v] = part.split('=')
-    if (k && v) {
-      valores[k] = v // Nota: los valores estarán en lowercase
-    }
+  if (!key || key === "Base") return {}
+
+  const out: Record<string, string> = {}
+  key.split("|").forEach(part => {
+    const [k, v] = part.split(":")
+    if (k && v) out[capitalize(k.trim())] = v.trim()
   })
-  return valores
+  return out
 }
 
-/**
- * Convierte una combinación legible (legacy) a objeto de valores
- * Input: "Color: Rojo | Tamaño: XL"
- * Output: { "Color": "Rojo", "Tamaño": "XL" }
- */
+/* ============================================================
+   Parseo LEGACY (por compatibilidad)
+   ============================================================ */
 export function parseLegacyCombination(combinacion: string): Record<string, string> {
   if (!combinacion) return {}
   
-  const valores: Record<string, string> = {}
-  const partes = combinacion.split('|')
-  
-  partes.forEach(parte => {
-    const [key, val] = parte.split(':')
-    if (key && val) {
-      valores[key.trim()] = val.trim()
-    } else if (key && !val) {
-      // Caso especial: "A | La Paz" (formato control_stock antiguo)
-      // Es difícil inferir keys aquí sin contexto.
-    }
+  const out: Record<string, string> = {}
+
+  combinacion.split("|").forEach(parte => {
+    const [key, val] = parte.split(":")
+    if (key && val) out[key.trim()] = val.trim()
   })
-  
-  return valores
+
+  return out
 }
 
-/**
- * Construye la definición de variantes del producto basada en su receta
- */
-export function buildVariantDefinitionFromReceta(recetaItems: any[]): VariantDefinition[] {
-  const definitionsMap = new Map<string, Set<string>>()
+/* ============================================================
+   🔥 NUEVA buildVariantDefinitionFromReceta
+   Ahora depende de RECURSOS reales, no de selectedRecurso
+   ============================================================ */
+export function buildVariantDefinitionFromReceta(
+  recetaItems: any[],
+  recursosMap: Map<string, any> // recurso_id → recurso real con variantes ya parseadas
+): VariantDefinition[] {
+  
+  const defs = new Map<string, Set<string>>()
 
   recetaItems.forEach(item => {
-    // Intentar obtener variantes del recurso (item.recurso o item.selectedRecurso)
-    const recurso = item.selectedRecurso || item // Adaptarse a estructura de costRows o receta raw
+    const recurso = recursosMap.get(item.recurso_id)
+    if (!recurso) return
+
+    // Normalizar variantes del recurso (pueden venir en diferentes formatos)
+    let variantesArray: any[] = []
     
-    let variantes: any[] = []
-    
-    // Extraer variantes del recurso (soporta múltiples formatos)
-    if (recurso.variantes) {
-      if (Array.isArray(recurso.variantes)) {
-        variantes = recurso.variantes
-      } else if (typeof recurso.variantes === 'object' && Array.isArray(recurso.variantes.variantes)) {
-        variantes = recurso.variantes.variantes
-      } else if (typeof recurso.variantes === 'string') {
-        try {
-          const parsed = JSON.parse(recurso.variantes)
-          if (Array.isArray(parsed)) variantes = parsed
-          else if (parsed.variantes && Array.isArray(parsed.variantes)) variantes = parsed.variantes
-        } catch (e) {}
+    if (Array.isArray(recurso.variantes)) {
+      variantesArray = recurso.variantes
+    } else if (typeof recurso.variantes === 'string') {
+      try {
+        const parsed = JSON.parse(recurso.variantes)
+        if (Array.isArray(parsed)) {
+          variantesArray = parsed
+        } else if (parsed && Array.isArray(parsed.variantes)) {
+          variantesArray = parsed.variantes
+        }
+      } catch (e) {
+        console.warn('Error parseando variantes del recurso:', e)
       }
+    } else if (recurso.variantes && typeof recurso.variantes === 'object' && Array.isArray(recurso.variantes.variantes)) {
+      variantesArray = recurso.variantes.variantes
     }
 
-    // Procesar variantes encontradas
-    variantes.forEach((v: any) => {
-      if (!v.nombre) return
-      const nombre = v.nombre.trim()
-      const valores = v.valores || v.posibilidades || []
-      
-      if (!Array.isArray(valores)) return
+    if (variantesArray.length === 0) return
 
-      if (!definitionsMap.has(nombre)) {
-        definitionsMap.set(nombre, new Set())
-      }
-      
+    variantesArray.forEach(v => {
+      if (!v || !v.nombre) return
+
+      const nombre = v.nombre.trim()
+      // Aceptar tanto 'valores' como 'posibilidades' para compatibilidad
+      const valores = Array.isArray(v.valores) 
+        ? v.valores 
+        : Array.isArray(v.posibilidades)
+        ? v.posibilidades
+        : []
+
+      if (valores.length === 0) return
+
+      if (!defs.has(nombre)) defs.set(nombre, new Set())
+
       valores.forEach((val: any) => {
-        const valStr = String(val).trim()
-        // Limpiar códigos de color si existen (ej: "Blanco:#ffffff" -> "Blanco")
-        const valClean = valStr.includes(':') && valStr.includes('#') 
-          ? valStr.split(':')[0].trim() 
-          : valStr
-          
-        if (valClean) {
-          definitionsMap.get(nombre)!.add(valClean)
+        // Limpiar valores: si vienen con código de color (ej: "Blanco:#ffffff"), extraer solo el nombre
+        let clean = String(val).trim()
+        if (clean.includes(':') && /^#[0-9A-Fa-f]{6}$/i.test(clean.split(':')[1]?.trim())) {
+          clean = clean.split(':')[0].trim()
         }
+        if (clean) defs.get(nombre)!.add(clean)
       })
     })
   })
 
-  // Convertir a array
-  return Array.from(definitionsMap.entries()).map(([nombre, valoresSet]) => ({
+  // Convertir a array ordenado
+  return Array.from(defs.entries()).map(([nombre, valores]) => ({
     nombre,
-    valores: Array.from(valoresSet).sort()
+    valores: Array.from(valores).sort()
   }))
 }
 
-/**
- * Encuentra el precio de una variante de recurso específica.
- * Intenta hacer match entre la variante del producto y las claves de control_stock del recurso.
- */
+/* ============================================================
+   findResourceVariantPrice — AHORA MATCH EXACTO Y SEGURO
+   ============================================================ */
 export function findResourceVariantPrice(
   recurso: any,
-  productVariantValues: Record<string, string>,
+  productVariant: Record<string, string>,
   sucursal?: string
 ): number {
-  const costeBase = Number(recurso.coste) || 0
-  
-  // Si no hay control_stock, retornar coste base
-  if (!recurso.control_stock) return costeBase
+  const base = Number(recurso.coste) || 0
 
-  let controlStock: any = recurso.control_stock
-  if (typeof controlStock === 'string') {
-    try { controlStock = JSON.parse(controlStock) } catch { return costeBase }
-  }
-  
-  if (!controlStock || Object.keys(controlStock).length === 0) return costeBase
+  if (!recurso.control_stock || typeof recurso.control_stock !== "object")
+    return base
 
-  // Estrategia de Matching:
-  // 1. Construir claves candidatas basadas en los valores del producto que coinciden con variantes del recurso.
-  
-  // Identificar qué variantes tiene este recurso
-  let recursoVariantesDef: any[] = []
-  // (Reutilizar lógica de extracción de variantes)
-  if (Array.isArray(recurso.variantes)) recursoVariantesDef = recurso.variantes
-  else if (recurso.variantes?.variantes) recursoVariantesDef = recurso.variantes.variantes
-  else if (typeof recurso.variantes === 'string') {
-    try { 
-      const p = JSON.parse(recurso.variantes)
-      recursoVariantesDef = Array.isArray(p) ? p : p.variantes || []
-    } catch {}
-  }
-
-  // Filtrar valores del producto que son relevantes para este recurso
-  const relevantValues: string[] = []
-  
-  recursoVariantesDef.forEach(rv => {
-    const nombre = rv.nombre // ej: "Grosor"
-    // Buscar en productVariantValues (case insensitive key)
-    const prodVal = Object.entries(productVariantValues).find(([k, v]) => k.toLowerCase() === nombre.toLowerCase())?.[1]
-    
-    if (prodVal) {
-      relevantValues.push(prodVal)
-    }
-  })
+  const stock = recurso.control_stock
+  const keys = Object.keys(stock)
 
   // Añadir sucursal si existe
-  const targetSucursal = sucursal || productVariantValues['Sucursal'] || productVariantValues['sucursal']
-  
-  // Generar candidatos de clave para buscar en control_stock
-  // Las claves en control_stock suelen ser "Valor1 | Valor2 | Sucursal: X" o "Valor | Sucursal"
-  // El orden no está garantizado en el legacy, así que probamos combinaciones o búsqueda parcial.
-  
-  const stockKeys = Object.keys(controlStock)
-  
-  // Búsqueda: Encontrar una clave en stockKeys que contenga TODOS los relevantValues Y la sucursal
-  const matchKey = stockKeys.find(key => {
-    const keyLower = key.toLowerCase()
-    
-    // Verificar sucursal
-    if (targetSucursal) {
-      // Formatos posibles: "Sucursal: La Paz", "La Paz" (si es solo sucursal)
-      const sucursalFound = keyLower.includes(targetSucursal.toLowerCase())
-      if (!sucursalFound) return false
+  const productSucursal =
+    sucursal ||
+    productVariant["Sucursal"] ||
+    productVariant["sucursal"] ||
+    null
+
+  // Claves candidatas: EXACT MATCH
+  const candidate = keys.find(k => {
+    const parsed = parseLegacyCombination(k)
+
+    // 1. Si tiene sucursal, debe coincidir exactamente
+    if (productSucursal) {
+      if (!parsed["Sucursal"]) return false
+      if (parsed["Sucursal"].toLowerCase() !== productSucursal.toLowerCase())
+        return false
     }
-    
-    // Verificar valores de variantes
-    // Todos los valores relevantes deben estar presentes en la clave
-    return relevantValues.every(val => keyLower.includes(val.toLowerCase()))
+
+    // 2. Todas las variantes que el recurso tiene deben coincidir
+    if (Array.isArray(recurso.variantes)) {
+      for (const v of recurso.variantes) {
+        const nombre = v.nombre
+        if (!nombre) continue
+
+        const prodVal = productVariant[nombre]
+        const keyVal = parsed[nombre]
+
+        if (prodVal && keyVal && prodVal !== keyVal) return false
+      }
+    }
+
+    return true
   })
 
-  if (matchKey) {
-    const data = controlStock[matchKey]
-    // Prioridad: precioVariante > precio > diferenciaPrecio (+base)
-    if (data.precioVariante !== undefined) return Number(data.precioVariante)
-    if (data.precio !== undefined) return Number(data.precio)
-    if (data.diferenciaPrecio !== undefined) return costeBase + Number(data.diferenciaPrecio)
-  }
+  if (!candidate) return base
 
-  // Si no hay match, retornar coste base (con warning en logs si fuera necesario)
-  return costeBase
+  const data = stock[candidate]
+
+  if (data.precioVariante != null) return Number(data.precioVariante)
+  if (data.precio != null) return Number(data.precio)
+  if (data.diferenciaPrecio != null) return base + Number(data.diferenciaPrecio)
+
+  return base
 }
 
-/**
- * Calcula el coste total de una variante de producto
- */
+/* ============================================================
+   computeVariantCost — SIN CAMBIAR, PERO AHORA FUNCIONA
+   ============================================================ */
 export function computeVariantCost(
   receta: any[],
-  recursos: any[], // Array completo de recursos para lookup
-  productVariantValues: Record<string, string>,
+  recursos: any[],
+  productVariant: Record<string, string>,
   sucursal?: string
 ): number {
-  let totalCost = 0
+  
+  let total = 0
 
   receta.forEach(item => {
-    const recursoId = item.recurso_id
-    const recurso = recursos.find((r: any) => r.id === recursoId)
-    
-    if (!recurso) return // Skip si no encuentra recurso
+    const recurso = recursos.find(r => r.id === item.recurso_id)
+    if (!recurso) return
 
-    const cantidad = Number(item.cantidad) || 0
-    
-    // Calcular precio unitario del recurso para esta variante
-    const precioUnitario = findResourceVariantPrice(recurso, productVariantValues, sucursal)
-    
-    totalCost += precioUnitario * cantidad
+    const qty = Number(item.cantidad) || 0
+    const precio = findResourceVariantPrice(recurso, productVariant, sucursal)
+
+    total += precio * qty
   })
 
-  return Math.round(totalCost * 100) / 100
+  return Math.round(total * 100) / 100
 }

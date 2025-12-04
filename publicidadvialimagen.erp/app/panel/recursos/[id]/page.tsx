@@ -171,8 +171,13 @@ export default function RecursoDetailPage() {
         }
         console.log('📦 [FRONTEND] Variantes finales a setear:', JSON.stringify(variantesData, null, 2))
         console.log('📦 [FRONTEND] Cantidad de variantes:', variantesData.length)
+        // Asegurar que cada variante tenga un id único
+        const variantesConId = variantesData.map((v, idx) => ({
+          ...v,
+          id: v.id || idx + 1 // Asignar id si no existe
+        }))
         // Verificar cada variante
-        variantesData.forEach((v, idx) => {
+        variantesConId.forEach((v, idx) => {
           console.log(`📦 [FRONTEND] Variante ${idx}:`, {
             id: v.id,
             nombre: v.nombre,
@@ -181,7 +186,7 @@ export default function RecursoDetailPage() {
             cantidadPosibilidades: v.posibilidades?.length || 0
           })
         })
-        setVariantes(variantesData)
+        setVariantes(variantesConId)
         
         // Cargar proveedores desde el recurso
         if (data.proveedores && Array.isArray(data.proveedores)) {
@@ -994,7 +999,7 @@ export default function RecursoDetailPage() {
                 <CardContent className="space-y-4">
                   {variantes.length > 0 && (
                     <div className="space-y-3">
-                      {variantes.map((variante) => {
+                      {variantes.map((variante, index) => {
                         const isColorMode = variante.modo === "color"
                         const posibilidadesTexto = variante.posibilidades && variante.posibilidades.length > 0
                           ? variante.posibilidades.map((pos: string) => {
@@ -1006,8 +1011,11 @@ export default function RecursoDetailPage() {
                             }).join(", ")
                           : ""
                         
+                        // Usar id si existe, sino usar índice combinado con nombre para unicidad
+                        const uniqueKey = variante.id || `variante-${variante.nombre}-${index}`
+                        
                         return (
-                          <div key={variante.id} className={`flex items-center justify-between p-3 rounded-lg ${variantes.indexOf(variante) % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
+                          <div key={uniqueKey} className={`flex items-center justify-between p-3 rounded-lg ${index % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-medium text-sm text-gray-900">{variante.nombre}</h4>
@@ -1226,9 +1234,12 @@ export default function RecursoDetailPage() {
                       const isColor = varianteModo === "color" && posibilidad.includes(":")
                       const [nombre, colorHex] = isColor ? posibilidad.split(":") : [posibilidad, null]
                       
+                      // Usar una key única basada en el contenido y el índice
+                      const uniqueKey = `posibilidad-${nombre}-${index}-${posibilidad}`
+                      
                       return (
                         <div
-                          key={index}
+                          key={uniqueKey}
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm ${
                             isColor 
                               ? "bg-white border border-gray-300 cursor-pointer hover:border-[#D54644] hover:shadow-sm transition-all" 

@@ -38,6 +38,28 @@ const unidadesProductos = [
   "unidad"
 ]
 
+// Helper para fusionar variantes sin duplicados
+function mergeVariantes(prev: any[], nuevas: any[]) {
+  const map = new Map<string, Set<string>>();
+
+  // Insertar previas
+  prev.forEach(v => {
+    if (!map.has(v.nombre)) map.set(v.nombre, new Set());
+    v.valores?.forEach((val: string) => map.get(v.nombre)!.add(val));
+  });
+
+  // Insertar nuevas
+  nuevas.forEach(v => {
+    if (!map.has(v.nombre)) map.set(v.nombre, new Set());
+    v.valores?.forEach((val: string) => map.get(v.nombre)!.add(val));
+  });
+
+  return Array.from(map.entries()).map(([nombre, valores]) => ({
+    nombre,
+    valores: Array.from(valores)
+  }));
+}
+
 
 interface Producto {
   id: string
@@ -352,10 +374,14 @@ export default function ProductoDetailPage() {
         })
 
         // Cargar variantes desde el producto guardado en Supabase
-        if (data.variantes && Array.isArray(data.variantes) && data.variantes.length > 0) {
-          console.log('📦 Cargando variantes desde el producto:', data.variantes.length, 'variante(s)')
+        // IMPORTANTE: Verificar también el campo 'variante' (singular) que es el que se guarda en Supabase
+        const variantesDelProducto = data.variante || data.variantes || []
+        const tieneVariantes = Array.isArray(variantesDelProducto) && variantesDelProducto.length > 0
+
+        if (tieneVariantes) {
+          console.log('📦 Cargando variantes desde el producto:', variantesDelProducto.length, 'variante(s)')
           // Convertir variantes del formato migrado (valores) al formato esperado (posibilidades)
-          const variantesConvertidas = data.variantes.map((v: any) => {
+          const variantesConvertidas = variantesDelProducto.map((v: any) => {
             const valores = v.valores ?? []
             const posibilidades = v.posibilidades ?? []
             const valoresArray = Array.isArray(valores) ? valores : []
@@ -379,6 +405,15 @@ export default function ProductoDetailPage() {
           })
           setVariantes(variantesConvertidas)
         } else {
+          // Si no tiene variantes pero tiene receta, intentar regenerarlas automáticamente
+          const tieneReceta = data.receta && (
+            (Array.isArray(data.receta) && data.receta.length > 0) ||
+            (typeof data.receta === 'object' && data.receta.items && Array.isArray(data.receta.items) && data.receta.items.length > 0)
+          )
+
+          if (tieneReceta) {
+            console.log('⚠️ Producto tiene receta pero no variantes. Se regenerarán automáticamente cuando se carguen los recursos.')
+          }
           setVariantes([])
         }
 
@@ -1216,14 +1251,25 @@ export default function ProductoDetailPage() {
   }
 
   // Formatear combinación para mostrar
-  const formatearCombinacion = (combinacion: string): string => {
-    const valores = parsearClaveVariante(combinacion)
-    return Object.entries(valores)
-      .map(([nombre, valor]) => {
-        const nombreLimpio = limpiarNombreVariante(nombre)
-        return `${nombreLimpio}: ${valor}`
+  function capitalizar(str: string = "") {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  const formatearCombinacion = (key: string): string => {
+    if (!key || typeof key !== 'string') return key || '';
+    
+    return key
+      .split("|")
+      .map(parte => {
+        if (!parte || !parte.includes(":")) return parte.trim();
+        const [k, v] = parte.split(":");
+        const keyPart = (k || '').trim();
+        const valuePart = (v || '').trim();
+        if (!keyPart || !valuePart) return parte.trim();
+        return `${capitalizar(keyPart)}: ${capitalizar(valuePart)}`;
       })
-      .join(' | ')
+      .filter(part => part && part.length > 0)
+      .join(" | ");
   }
 
   /**
@@ -1970,170 +2016,35 @@ export default function ProductoDetailPage() {
           // No mostrar warning al usuario, el producto se guardó correctamente
         }
 
-        // FIX 6: Validar receta antes de regenerar variantes
-        // Regenerar variantes después de guardar
-        // IMPORTANTE: Construir variantes SOLO desde los recursos activos en costRows (receta)
-        // NO usar el estado 'variantes' que puede contener variantes de recursos eliminados
-        console.log("🔄 [REGENERAR] Iniciando regeneración de variantes...")
-        console.log("🔄 [REGENERAR] updated.id:", updated.id)
-        console.log("🔄 [REGENERAR] recetaArray.length:", recetaArray.length)
-        console.log("🔄 [REGENERAR] costRows.length:", costRows.length)
-
+        // FIX 6: Sincronizar variantes después de guardar usando syncProductVariants
+        // Esto asegura que las variantes se reconstruyan desde la receta guardada en la BD
         if (updated.id) {
-          // Validar que hay receta válida antes de regenerar
-          const tieneRecetaValida = recetaArray.length > 0 && recetaArray.some(item => item.recurso_id)
-          console.log("🔄 [REGENERAR] tieneRecetaValida:", tieneRecetaValida)
-
-          if (!tieneRecetaValida) {
-            console.warn('⚠️ Receta vacía: no se regeneran variantes')
-            // Si no hay receta válida, eliminar todas las variantes
-            try {
-              await fetch(`/api/productos/variantes`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  producto_id: updated.id,
-                  action: 'regenerar',
-                  variantes_definicion: []
-                })
+          try {
+            console.log("🔄 [SYNC] Sincronizando variantes para producto:", updated.id)
+            const syncResponse = await fetch(`/api/productos/variantes`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                producto_id: updated.id,
+                action: 'sync'
               })
-              console.log('✅ Variantes eliminadas (no hay receta válida)')
-            } catch (error) {
-              console.error('Error eliminando variantes:', error)
+            })
+
+            if (syncResponse.ok) {
+              const syncData = await syncResponse.json()
+              console.log('✅ Variantes sincronizadas correctamente:', syncData)
+              
+              // Recargar variantes después de sincronizar
+              setTimeout(() => {
+                getVariantes()
+              }, 500)
+            } else {
+              const errorData = await syncResponse.json().catch(() => ({}))
+              console.warn('⚠️ No se pudieron sincronizar variantes automáticamente:', errorData.error || 'Error desconocido')
             }
-            // No continuar con la regeneración
-          } else {
-            try {
-              // Construir variantes desde los recursos activos en la receta (costRows)
-              const variantesDeRecursosActivos: any[] = []
-              console.log("🔄 [REGENERAR] Iterando costRows para buscar variantes...")
-
-              costRows.forEach((row, index) => {
-                console.log(`🔄 [REGENERAR] costRow[${index}]:`, {
-                  id: row.selectedRecurso?.id,
-                  nombre: row.selectedRecurso?.nombre,
-                  tieneVariantes: !!row.selectedRecurso?.variantes,
-                  tipoVariantes: typeof row.selectedRecurso?.variantes,
-                  variantes: row.selectedRecurso?.variantes
-                })
-
-                if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
-                  let variantesArray: any[] = []
-
-                  if (Array.isArray(row.selectedRecurso.variantes)) {
-                    variantesArray = row.selectedRecurso.variantes
-                    console.log(`🔄 [REGENERAR] costRow[${index}]: variantes es array directo con ${variantesArray.length} items`)
-                  } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
-                    if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
-                      variantesArray = row.selectedRecurso.variantes.variantes
-                      console.log(`🔄 [REGENERAR] costRow[${index}]: variantes es objeto con .variantes array con ${variantesArray.length} items`)
-                    }
-                  } else if (typeof row.selectedRecurso.variantes === 'string') {
-                    try {
-                      const parsed = JSON.parse(row.selectedRecurso.variantes)
-                      if (Array.isArray(parsed)) {
-                        variantesArray = parsed
-                        console.log(`🔄 [REGENERAR] costRow[${index}]: variantes parseado como array con ${variantesArray.length} items`)
-                      } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
-                        variantesArray = parsed.variantes
-                        console.log(`🔄 [REGENERAR] costRow[${index}]: variantes parseado como objeto.variantes con ${variantesArray.length} items`)
-                      }
-                    } catch (e) {
-                      console.error('Error parseando variantes del recurso:', e)
-                    }
-                  } else {
-                    console.log(`🔄 [REGENERAR] costRow[${index}]: formato de variantes no reconocido`)
-                  }
-
-                  // Agregar variantes con el recurso_id para tracking
-                  variantesArray.forEach((v: any) => {
-                    variantesDeRecursosActivos.push({
-                      ...v,
-                      recurso_id: row.selectedRecurso.id,
-                      recurso_nombre: row.selectedRecurso.nombre
-                    })
-                  })
-                }
-              })
-
-              // Convertir variantes al formato correcto que espera el backend
-              const variantesLimpias = variantesDeRecursosActivos.map(v => ({
-                nombre: v.nombre,
-                valores: v.posibilidades ?? v.valores ?? []
-              }))
-
-              console.log(">>> Variantes construidas desde recursos activos:", variantesLimpias)
-              console.log(">>> Recursos activos en receta:", costRows.filter(r => r.selectedRecurso?.id).map(r => r.selectedRecurso?.nombre))
-
-              // Llamar directamente a la API con el ID actualizado
-              const regenerarResponse = await fetch(`/api/productos/variantes`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  producto_id: updated.id,
-                  action: 'regenerar',
-                  variantes_definicion: variantesLimpias
-                })
-              })
-
-              const responseText = await regenerarResponse.text()
-              console.log('>>> Respuesta del API (raw):', responseText)
-
-              if (regenerarResponse.ok) {
-                try {
-                  const regenerarData = JSON.parse(responseText)
-                  console.log('✅ Variantes regeneradas correctamente:', regenerarData)
-
-                  // Actualizar el estado de variantes con las variantes de los recursos activos
-                  setVariantes(variantesDeRecursosActivos)
-
-                  const variantesCreadas = regenerarData.variantes?.length || 0
-                  const variantesEliminadas = regenerarData.variantes_eliminadas || 0
-
-                  if (variantesEliminadas > 0) {
-                    toast.success(`Variantes regeneradas: ${variantesCreadas} creadas, ${variantesEliminadas} eliminadas`)
-                  } else {
-                    toast.success(`Variantes generadas correctamente (${variantesCreadas} variantes)`)
-                  }
-
-                  // Recargar variantes después de regenerar
-                  setTimeout(() => {
-                    getVariantes()
-                  }, 500)
-                } catch (parseError) {
-                  console.error('Error parseando respuesta:', parseError)
-                  toast.warning('Producto guardado, pero no se pudo parsear la respuesta de variantes')
-                }
-              } else {
-                try {
-                  const errorData = JSON.parse(responseText)
-                  console.error('❌ Error regenerando variantes:', {
-                    status: regenerarResponse.status,
-                    statusText: regenerarResponse.statusText,
-                    error: errorData.error,
-                    details: errorData.details
-                  })
-                  toast.error(`Error al generar variantes: ${errorData.error || 'Error desconocido'}`)
-                } catch (parseError) {
-                  console.error('❌ Error regenerando variantes (sin parsear):', {
-                    status: regenerarResponse.status,
-                    statusText: regenerarResponse.statusText,
-                    responseText: responseText.substring(0, 200)
-                  })
-                  toast.error(`Error al generar variantes (${regenerarResponse.status})`)
-                }
-              }
-            } catch (error: any) {
-              console.error('❌ Error en catch regenerando variantes:', {
-                message: error?.message,
-                stack: error?.stack,
-                error: error
-              })
-              toast.error(`Error de conexión al generar variantes: ${error?.message || 'Error desconocido'}`)
-              // No bloquear el guardado si falla la regeneración
-            }
+          } catch (syncError) {
+            console.error('❌ Error sincronizando variantes:', syncError)
+            // No bloquear el guardado si falla la sincronización
           }
         }
 
@@ -2512,82 +2423,64 @@ export default function ProductoDetailPage() {
   }
 
   const handleRecursoSelect = (rowId: number, recurso: any) => {
-    setCostRows(prev => prev.map(row =>
-      row.id === rowId
-        ? {
-          ...row,
-          selectedRecurso: recurso,
-          unidad: recurso.unidad_medida,
-          searchTerm: recurso.nombre
-        }
-        : row
-    ))
-    setShowCostDropdown(null)
-
-    // FIX 5: Mejorar parseo de variantes al seleccionar recurso
-    // Si el recurso tiene variantes, importarlas automáticamente al producto
-    // Manejar diferentes formatos de variantes:
-    // 1. Array directo: recurso.variantes = [...]
-    // 2. Objeto con variantes: recurso.variantes = { variantes: [...], datosVariantes: {...} }
-    let variantesArray: any[] = []
-
-    if (recurso.variantes) {
-      try {
-        if (Array.isArray(recurso.variantes)) {
-          // Formato 1: Array directo
-          variantesArray = recurso.variantes
-        } else if (typeof recurso.variantes === 'object' && recurso.variantes.variantes) {
-          // Formato 2: Objeto con propiedad variantes
-          if (Array.isArray(recurso.variantes.variantes)) {
-            variantesArray = recurso.variantes.variantes
-          } else {
-            console.warn(`⚠️ Recurso "${recurso.nombre}" tiene variantes.variantes pero no es array:`, typeof recurso.variantes.variantes)
-          }
-        } else if (typeof recurso.variantes === 'string') {
-          // Formato 3: String JSON que necesita parsearse
-          try {
-            const parsed = JSON.parse(recurso.variantes)
-            if (Array.isArray(parsed)) {
-              variantesArray = parsed
-            } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
-              variantesArray = parsed.variantes
-            } else {
-              console.warn(`⚠️ Recurso "${recurso.nombre}" tiene variantes en string pero formato no reconocido:`, parsed)
+    // 1. Actualizar la fila de coste
+    setCostRows(prev =>
+      prev.map(row =>
+        row.id === rowId
+          ? {
+              ...row,
+              selectedRecurso: recurso,
+              unidad: recurso.unidad_medida,
+              searchTerm: recurso.nombre
             }
-          } catch (e) {
-            console.error(`❌ Error parseando variantes del recurso "${recurso.nombre}":`, e)
-          }
-        } else {
-          console.warn(`⚠️ Recurso "${recurso.nombre}" tiene variantes en formato no reconocido:`, typeof recurso.variantes, recurso.variantes)
-        }
-      } catch (error) {
-        console.error(`❌ Error procesando variantes del recurso "${recurso.nombre}":`, error)
-        variantesArray = []
-      }
-    } else {
-      console.log(`ℹ️ Recurso "${recurso.nombre}" no tiene variantes definidas`)
+          : row
+      )
+    );
+    setShowCostDropdown(null);
+
+    // 2. Normalizar variantes del recurso (ya limpiadas en backend)
+    let variantesArray = Array.isArray(recurso.variantes)
+      ? recurso.variantes
+      : [];
+
+    // Asegurar estructura consistente
+    variantesArray = variantesArray
+      .filter(v => v && v.nombre && Array.isArray(v.valores))
+      .map(v => ({
+        nombre: v.nombre.trim(),
+        valores: v.valores.map((valor: any) => String(valor).trim())
+      }));
+
+    if (variantesArray.length === 0) {
+      console.log(`ℹ️ Recurso "${recurso.nombre}" no tiene variantes válidas`);
+      return;
     }
 
-    // Asegurar que variantesArray nunca sea undefined
-    if (!Array.isArray(variantesArray)) {
-      console.warn(`⚠️ variantesArray no es array, normalizando a []`)
-      variantesArray = []
-    }
+    // 3. Agregar variantes sin duplicar dimensiones
+    setVariantes(prev => {
+      const map = new Map<string, Set<string>>();
 
-    if (variantesArray.length > 0) {
-      setVariantes(prev => {
-        // Agregar todas las variantes, incluso si tienen el mismo nombre (pueden venir de diferentes recursos)
-        // Marcar las nuevas variantes con el recurso_id para poder eliminarlas después
-        const nuevasVariantes = variantesArray.map((v: any) => ({
-          ...v,
-          recurso_id: recurso.id,
-          recurso_nombre: recurso.nombre
-        }))
-        // Agregar todas las nuevas variantes (no filtrar duplicados por nombre)
-        return [...prev, ...nuevasVariantes]
-      })
-      toast.success(`${variantesArray.length} variante(s) importada(s) desde el recurso`)
-    }
+      // Insertar las existentes
+      prev.forEach(v => {
+        if (!map.has(v.nombre)) map.set(v.nombre, new Set());
+        v.valores?.forEach((val: string) => map.get(v.nombre)!.add(val));
+      });
+
+      // Insertar las nuevas
+      variantesArray.forEach(v => {
+        if (!map.has(v.nombre)) map.set(v.nombre, new Set());
+        v.valores.forEach((val: string) => map.get(v.nombre)!.add(val));
+      });
+
+      // Convertir a lista normalizada
+      const finalList = Array.from(map.entries()).map(([nombre, valores]) => ({
+        nombre,
+        valores: Array.from(valores)
+      }));
+
+      toast.success(`${variantesArray.length} variante(s) importada(s) desde el recurso`);
+      return finalList;
+    });
   }
 
   const handleCostRowChange = (rowId: number, field: string, value: any) => {
@@ -2684,7 +2577,14 @@ export default function ProductoDetailPage() {
       })
 
       // Actualizar el estado de variantes con las variantes de los recursos restantes
-      setVariantes(variantesDeRecursosRestantes)
+      // Normalizar variantes antes de establecerlas
+      const variantesNormalizadas = variantesDeRecursosRestantes
+        .filter(v => v && v.nombre && (Array.isArray(v.valores) || Array.isArray(v.posibilidades)))
+        .map(v => ({
+          nombre: v.nombre.trim(),
+          valores: (v.valores || v.posibilidades || []).map((val: any) => String(val).trim())
+        }))
+      setVariantes(variantesNormalizadas)
 
       // Si hay un producto guardado, regenerar variantes en la BD
       if (!isNewProduct && id) {
@@ -3710,75 +3610,45 @@ export default function ProductoDetailPage() {
                         variant="outline"
                         size="sm"
                         onClick={async () => {
-                          if (!id || id === 'nuevo' || id === 'new') {
-                            toast.error('Primero guarda el producto')
-                            return
+                          if (!id || id === "nuevo" || id === "new") {
+                            toast.error("Primero guarda el producto");
+                            return;
                           }
 
-                          toast.info('Regenerando variantes...')
-
-                          // Construir variantes desde costRows
-                          const variantesDeRecursosActivos: any[] = []
-                          costRows.forEach(row => {
-                            if (row.selectedRecurso?.variantes) {
-                              let variantesArray: any[] = []
-                              if (Array.isArray(row.selectedRecurso.variantes)) {
-                                variantesArray = row.selectedRecurso.variantes
-                              } else if (row.selectedRecurso.variantes.variantes) {
-                                variantesArray = row.selectedRecurso.variantes.variantes
-                              }
-                              variantesArray.forEach((v: any) => {
-                                variantesDeRecursosActivos.push({
-                                  nombre: v.nombre,
-                                  valores: v.posibilidades ?? v.valores ?? []
-                                })
-                              })
-                            }
-                          })
-
-                          // Si no encontramos variantes en los recursos, usar las ya guardadas para evitar enviarlo vacío
-                          let variantesDefinicion = variantesDeRecursosActivos
-                          if (variantesDefinicion.length === 0 && Array.isArray(variantes) && variantes.length > 0) {
-                            variantesDefinicion = variantes
-                              .filter((v: any) => v?.nombre)
-                              .map((v: any) => ({
-                                nombre: v.nombre,
-                                valores: v.valores ?? v.posibilidades ?? []
-                              }))
-                            console.warn('⚠️ No se encontraron variantes en costRows; usando variantes guardadas.')
-                          }
+                          const variantesDefinicion = variantes.map(v => ({
+                            nombre: v.nombre,
+                            valores: v.valores
+                          }));
 
                           if (variantesDefinicion.length === 0) {
-                            toast.error('No se encontraron variantes en la receta. Asigna recursos con variantes antes de regenerar.')
-                            console.error('❌ Regeneración manual cancelada: variantes vacías')
-                            return
+                            toast.error("No hay variantes para generar combinaciones");
+                            return;
                           }
 
-                          console.log('🔄 Regeneración manual - variantes:', variantesDeRecursosActivos)
+                          toast.info("Regenerando variantes...");
 
                           try {
-                            const response = await fetch('/api/productos/variantes', {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
+                            const response = await fetch("/api/productos/variantes", {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
                                 producto_id: id,
-                                action: 'regenerar',
+                                action: "regenerar",
                                 variantes_definicion: variantesDefinicion
                               })
-                            })
+                            });
 
-                            const result = await response.json()
-                            console.log('🔄 Resultado regeneración:', result)
+                            const result = await response.json();
 
-                            if (result.success && result.variantes?.length > 0) {
-                              toast.success(`${result.variantes.length} variante(s) generada(s)`)
-                              await getVariantes()
+                            if (result.success) {
+                              toast.success("Variantes regeneradas");
+                              await getVariantes();
                             } else {
-                              toast.error('No se generaron variantes. Verifica que los recursos tengan variantes.')
+                              toast.error("No se pudieron generar variantes");
                             }
-                          } catch (error) {
-                            console.error('Error regenerando:', error)
-                            toast.error('Error al regenerar variantes')
+                          } catch (err) {
+                            toast.error("Error al regenerar variantes");
+                            console.error(err);
                           }
                         }}
                       >

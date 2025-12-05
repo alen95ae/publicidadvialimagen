@@ -1062,13 +1062,19 @@ export default function ProductoDetailPage() {
       const row = rowsCopy.find((r: any) => r.id === rowId)
       if (!row || !row.editable) return prev
 
-      if (pctStr === "") {
-        row.porcentaje = null
-        row.porcentajeConfig = null
-        // Si porcentaje se borra, recalcular desde precio actual
-        const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
-        if (precioActual > 0) {
-          return recalcFromTargetPriceVariante(precioActual, rowsCopy)
+      // Si el campo está vacío, para Factura e IUE poner 0 en lugar de null
+      if (pctStr === "" || pctStr.trim() === "") {
+        if (["Factura", "IUE", "Comision"].includes(row.campo)) {
+          // Para campos editables, poner 0 en lugar de null para mantener el campo editable
+          row.porcentajeConfig = 0
+          row.porcentaje = 0
+          // Recalcular si hay un precio
+          const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+          if (precioActual > 0) {
+            return recalcFromTargetPriceVariante(precioActual, rowsCopy)
+          }
+        } else {
+          row.porcentaje = null
         }
         return rowsCopy
       }
@@ -2527,73 +2533,115 @@ export default function ProductoDetailPage() {
       const nuevasCostRows = costRows.filter(row => row.id !== rowId)
       setCostRows(nuevasCostRows)
 
-      // Si el recurso tenía variantes importadas, eliminarlas también del estado local
-      if (recursoIdToRemove) {
-        setVariantes(prev => {
-          const variantesRestantes = prev.filter(v => v.recurso_id !== recursoIdToRemove)
+      // Regenerar variantes basándose en los recursos que quedan en la receta
+      // IMPORTANTE: Preservar las variantes que NO tienen recurso_id (las importadas del producto)
+      let variantesFinalesParaBD: any[] = []
+      
+      setVariantes(prev => {
+        // Si el recurso tenía variantes importadas, eliminarlas también del estado local
+        let variantesActualizadas = prev
+        if (recursoIdToRemove) {
           const eliminadas = prev.filter(v => v.recurso_id === recursoIdToRemove)
           if (eliminadas.length > 0) {
             toast.info(`${eliminadas.length} variante(s) eliminada(s) al quitar el recurso "${recursoNombreToRemove}"`)
           }
-          return variantesRestantes
-        })
-      }
-
-      // Regenerar variantes basándose en los recursos que quedan en la receta
-      // Obtener todas las variantes de los recursos restantes
-      const variantesDeRecursosRestantes: any[] = []
-      nuevasCostRows.forEach(row => {
-        if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
-          let variantesArray: any[] = []
-
-          if (Array.isArray(row.selectedRecurso.variantes)) {
-            variantesArray = row.selectedRecurso.variantes
-          } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
-            if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
-              variantesArray = row.selectedRecurso.variantes.variantes
-            }
-          } else if (typeof row.selectedRecurso.variantes === 'string') {
-            try {
-              const parsed = JSON.parse(row.selectedRecurso.variantes)
-              if (Array.isArray(parsed)) {
-                variantesArray = parsed
-              } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
-                variantesArray = parsed.variantes
-              }
-            } catch (e) {
-              console.error('Error parseando variantes del recurso:', e)
-            }
-          }
-
-          // Agregar variantes con el recurso_id para tracking
-          variantesArray.forEach((v: any) => {
-            variantesDeRecursosRestantes.push({
-              ...v,
-              recurso_id: row.selectedRecurso.id,
-              recurso_nombre: row.selectedRecurso.nombre
-            })
-          })
+          variantesActualizadas = prev.filter(v => v.recurso_id !== recursoIdToRemove)
         }
-      })
+        
+        // Obtener las variantes que NO tienen recurso_id (las importadas del producto)
+        const variantesDelProducto = variantesActualizadas.filter(v => !v.recurso_id)
+        
+        // Obtener todas las variantes de los recursos restantes
+        const variantesDeRecursosRestantes: any[] = []
+        nuevasCostRows.forEach(row => {
+          if (row.selectedRecurso?.id && row.selectedRecurso?.variantes) {
+            let variantesArray: any[] = []
 
-      // Actualizar el estado de variantes con las variantes de los recursos restantes
-      // Normalizar variantes antes de establecerlas
-      const variantesNormalizadas = variantesDeRecursosRestantes
-        .filter(v => v && v.nombre && (Array.isArray(v.valores) || Array.isArray(v.posibilidades)))
-        .map(v => ({
-          nombre: v.nombre.trim(),
-          valores: (v.valores || v.posibilidades || []).map((val: any) => String(val).trim())
+            if (Array.isArray(row.selectedRecurso.variantes)) {
+              variantesArray = row.selectedRecurso.variantes
+            } else if (typeof row.selectedRecurso.variantes === 'object' && row.selectedRecurso.variantes.variantes) {
+              if (Array.isArray(row.selectedRecurso.variantes.variantes)) {
+                variantesArray = row.selectedRecurso.variantes.variantes
+              }
+            } else if (typeof row.selectedRecurso.variantes === 'string') {
+              try {
+                const parsed = JSON.parse(row.selectedRecurso.variantes)
+                if (Array.isArray(parsed)) {
+                  variantesArray = parsed
+                } else if (parsed && parsed.variantes && Array.isArray(parsed.variantes)) {
+                  variantesArray = parsed.variantes
+                }
+              } catch (e) {
+                console.error('Error parseando variantes del recurso:', e)
+              }
+            }
+
+            // Agregar variantes con el recurso_id para tracking
+            variantesArray.forEach((v: any) => {
+              variantesDeRecursosRestantes.push({
+                ...v,
+                recurso_id: row.selectedRecurso.id,
+                recurso_nombre: row.selectedRecurso.nombre
+              })
+            })
+          }
+        })
+
+        // Normalizar variantes de recursos restantes
+        const variantesDeRecursosNormalizadas = variantesDeRecursosRestantes
+          .filter(v => v && v.nombre && (Array.isArray(v.valores) || Array.isArray(v.posibilidades)))
+          .map(v => ({
+            nombre: v.nombre.trim(),
+            valores: (v.valores || v.posibilidades || []).map((val: any) => String(val).trim()),
+            recurso_id: v.recurso_id,
+            recurso_nombre: v.recurso_nombre
+          }))
+
+        // Combinar variantes del producto con variantes de recursos restantes
+        // Usar un Map para evitar duplicados por nombre, priorizando las del producto
+        const map = new Map<string, any>()
+        
+        // Primero agregar las variantes del producto (sin recurso_id)
+        variantesDelProducto.forEach(v => {
+          const nombre = v.nombre?.trim()
+          if (nombre) {
+            map.set(nombre, {
+              nombre,
+              valores: Array.isArray(v.valores) ? v.valores : (Array.isArray(v.posibilidades) ? v.posibilidades : [])
+            })
+          }
+        })
+        
+        // Luego agregar/actualizar con variantes de recursos (solo si no existe ya)
+        variantesDeRecursosNormalizadas.forEach(v => {
+          const nombre = v.nombre?.trim()
+          if (nombre && !map.has(nombre)) {
+            map.set(nombre, {
+              nombre,
+              valores: v.valores,
+              recurso_id: v.recurso_id,
+              recurso_nombre: v.recurso_nombre
+            })
+          }
+        })
+
+        // Convertir a lista final
+        const variantesFinales = Array.from(map.values())
+        
+        // Guardar variantes finales para usar en la regeneración de BD
+        variantesFinalesParaBD = variantesFinales.map(v => ({
+          nombre: v.nombre,
+          valores: Array.isArray(v.valores) ? v.valores : []
         }))
-      setVariantes(variantesNormalizadas)
+        
+        return variantesFinales
+      })
 
       // Si hay un producto guardado, regenerar variantes en la BD
       if (!isNewProduct && id) {
         try {
-          // Convertir variantes al formato correcto
-          const variantesLimpias = variantesDeRecursosRestantes.map(v => ({
-            nombre: v.nombre,
-            valores: v.posibilidades ?? v.valores ?? []
-          }))
+          // Usar las variantes finales (que incluyen las del producto)
+          const variantesLimpias = variantesFinalesParaBD.filter(v => v && v.nombre && v.valores && v.valores.length > 0)
 
           // Regenerar variantes en la BD
           const regenerarResponse = await fetch(`/api/productos/variantes`, {
@@ -2715,9 +2763,20 @@ export default function ProductoDetailPage() {
       const row = rowsCopy.find((r: any) => r.id === rowId)
       if (!row || !row.editable) return prev
 
-      if (pctStr === "") {
-        row.porcentaje = null
-        row.porcentajeConfig = null
+      // Si el campo está vacío, para Factura e IUE poner 0 en lugar de null
+      if (pctStr === "" || pctStr.trim() === "") {
+        if (["Factura", "IUE", "Comision"].includes(row.campo)) {
+          // Para campos editables, poner 0 en lugar de null para mantener el campo editable
+          row.porcentajeConfig = 0
+          row.porcentaje = 0
+          // Recalcular si hay un precio
+          const precioActual = parseNum(rowsCopy.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+          if (precioActual > 0) {
+            return recalcFromTargetPrice(precioActual, rowsCopy)
+          }
+        } else {
+          row.porcentaje = null
+        }
         return rowsCopy
       }
 
@@ -3501,23 +3560,24 @@ export default function ProductoDetailPage() {
                   {priceRows.map((row) => {
                     const isEditable = row.editable
                     const isPrecioRow = row.campo === "Precio"
-                    // Para campos editables (Factura, IUE, Comision), siempre mostrar el campo
-                    // Para campos no editables, solo mostrar si tienen porcentaje calculado
+                    // Para campos editables (Factura, IUE, Comision), SIEMPRE mostrar el campo
+                    const esCampoEditablePorcentaje = ["Factura", "IUE", "Comision", "Comisión", "Comisión (C)"].includes(row.campo)
                     let showPorcentaje =
-                      row.porcentaje != null ||
-                      ((row.campo === "Factura" || row.campo === "IUE" || row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") &&
-                        (row as any).porcentajeConfig != null)
+                      esCampoEditablePorcentaje || // Siempre mostrar para campos editables
+                      row.porcentaje != null      // Para otros campos, mostrar solo si tienen porcentaje
                     // Para Comisión, SIEMPRE mostrar porcentajeConfig (valor original del usuario)
-                    // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje
+                    // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje, sino 0
                     // Para otros campos, mostrar porcentaje (calculado sobre precio)
                     let porcentajeToShow: number | string | null = row.porcentaje
                     if (row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") {
                       porcentajeToShow = (row as any).porcentajeConfig != null ? (row as any).porcentajeConfig : ""
                       showPorcentaje = true
                     } else if (row.campo === "Factura" || row.campo === "IUE") {
+                      // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje, sino 0
                       porcentajeToShow = (row as any).porcentajeConfig != null
                         ? (row as any).porcentajeConfig
-                        : row.porcentaje
+                        : (row.porcentaje != null ? row.porcentaje : 0)
+                      showPorcentaje = true // Siempre mostrar para estos campos editables
                     }
 
                     return (
@@ -4028,23 +4088,24 @@ export default function ProductoDetailPage() {
               {priceRowsVariante.map((row) => {
                 const isEditable = row.editable
                 const isPrecioRow = row.campo === "Precio"
-                // Para campos editables (Factura, IUE, Comision), siempre mostrar el campo
-                // Para campos no editables, solo mostrar si tienen porcentaje calculado
+                // Para campos editables (Factura, IUE, Comision), SIEMPRE mostrar el campo
+                const esCampoEditablePorcentaje = ["Factura", "IUE", "Comision", "Comisión", "Comisión (C)"].includes(row.campo)
                 let showPorcentaje =
-                  row.porcentaje != null ||
-                  ((row.campo === "Factura" || row.campo === "IUE" || row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") &&
-                    (row as any).porcentajeConfig != null)
+                  esCampoEditablePorcentaje || // Siempre mostrar para campos editables
+                  row.porcentaje != null      // Para otros campos, mostrar solo si tienen porcentaje
                 // Para Comisión, SIEMPRE mostrar porcentajeConfig (valor original del usuario)
-                // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje
+                // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje, sino 0
                 // Para otros campos, mostrar porcentaje (calculado sobre precio)
                 let porcentajeToShow: number | string | null = row.porcentaje
                 if (row.campo === "Comision" || row.campo === "Comisión" || row.campo === "Comisión (C)") {
                   porcentajeToShow = (row as any).porcentajeConfig != null ? (row as any).porcentajeConfig : ""
                   showPorcentaje = true
                 } else if (row.campo === "Factura" || row.campo === "IUE") {
+                  // Para Factura e IUE, mostrar porcentajeConfig si existe, sino porcentaje, sino 0
                   porcentajeToShow = (row as any).porcentajeConfig != null
                     ? (row as any).porcentajeConfig
-                    : row.porcentaje
+                    : (row.porcentaje != null ? row.porcentaje : 0)
+                  showPorcentaje = true // Siempre mostrar para estos campos editables
                 }
 
                 return (

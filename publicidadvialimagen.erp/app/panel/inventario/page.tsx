@@ -57,6 +57,9 @@ import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { includesIgnoreAccents, normalizeText } from "@/lib/utils"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { calcularComponentesDesdePrecio } from "@/lib/engines/pricingEngine"
+import { PriceRow } from "@/lib/types/inventario"
+import { parseCalculadora } from "@/lib/models/productoModel"
 
 // Tipo para los items del inventario
 interface InventoryItem {
@@ -71,6 +74,8 @@ interface InventoryItem {
   disponibilidad: string
   imagen_portada?: string
   mostrar_en_web?: boolean
+  calculadora_de_precios?: any
+  calculadora_precios?: any
 }
 
 // Categorías disponibles - Valores exactos en Airtable
@@ -100,10 +105,36 @@ const unidadesMedida = [
   "pliego"
 ]
 
-// Función para calcular el porcentaje de utilidad
+// Función para calcular el porcentaje de utilidad (legacy, mantenida para compatibilidad)
 function calcularPorcentajeUtilidad(coste: number, precioVenta: number): number {
   if (coste === 0) return 0
   return ((precioVenta - coste) / coste) * 100
+}
+
+// Función para calcular la utilidad neta porcentual desde la calculadora de precios
+function calcularUtilidadNetaPorcentual(item: InventoryItem): number | null {
+  try {
+    const coste = item.coste || 0
+    const precioVenta = item.precio_venta || 0
+    
+    if (precioVenta === 0) return null
+    
+    // Obtener la calculadora de precios del producto
+    const calculadoraRaw = item.calculadora_de_precios || item.calculadora_precios
+    const calculadora = parseCalculadora(calculadoraRaw)
+    const priceRows: PriceRow[] = calculadora.priceRows || []
+    
+    // Calcular componentes desde el precio de venta
+    const componentes = calcularComponentesDesdePrecio(precioVenta, coste, priceRows.length > 0 ? priceRows : undefined)
+    
+    // Calcular porcentaje de utilidad neta sobre el precio
+    const utilidadNetaPct = precioVenta > 0 ? (componentes.utilidadNeta / precioVenta) * 100 : 0
+    
+    return utilidadNetaPct
+  } catch (error) {
+    console.error('Error calculando utilidad neta:', error)
+    return null
+  }
 }
 
 // Datos de ejemplo para el inventario
@@ -1298,15 +1329,25 @@ export default function InventarioPage() {
                         Bs {item.precio_venta.toFixed(2)}
                       </TableCell>
                       <TableCell>
-                        <span className={`font-medium ${
-                          calcularPorcentajeUtilidad(item.coste, item.precio_venta) >= 50 
-                            ? 'text-green-600' 
-                            : calcularPorcentajeUtilidad(item.coste, item.precio_venta) >= 20 
-                            ? 'text-yellow-600' 
-                            : 'text-red-600'
-                        }`}>
-                          {calcularPorcentajeUtilidad(item.coste, item.precio_venta).toFixed(1)}%
-                        </span>
+                        {(() => {
+                          const utilidadNeta = calcularUtilidadNetaPorcentual(item)
+                          if (utilidadNeta === null) {
+                            return <span className="text-gray-400">-</span>
+                          }
+                          return (
+                            <span className={`font-medium ${
+                              utilidadNeta > 30 
+                                ? 'text-green-600' 
+                                : utilidadNeta >= 10 
+                                ? 'text-yellow-600' 
+                                : utilidadNeta < 0
+                                ? 'text-black'
+                                : 'text-red-600'
+                            }`}>
+                              {utilidadNeta.toFixed(1)}%
+                            </span>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center">

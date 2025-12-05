@@ -296,6 +296,35 @@ export default function RecursoDetailPage() {
     }
   }
 
+  /**
+   * Normaliza las variantes para guardarlas en Supabase.
+   *
+   * - Asegura que siempre exista `valores` (usado por el parser backend `normalizeVariantes`)
+   * - Mantiene `posibilidades` en sincronía con `valores`
+   * - Conserva `modo` e `id` para compatibilidad con el frontend
+   */
+  const buildVariantesToSave = (list: any[]) => {
+    if (!Array.isArray(list)) return []
+
+    return list.map((v) => {
+      const posibilidadesArray = Array.isArray(v.posibilidades)
+        ? v.posibilidades
+        : Array.isArray(v.valores)
+        ? v.valores
+        : []
+
+      return {
+        ...v,
+        nombre: (v.nombre || "").trim(),
+        modo: v.modo || "lista",
+        // El parser `normalizeVariantes` prioriza `valores`, por eso
+        // aquí lo sincronizamos SIEMPRE con las posibilidades actuales.
+        valores: posibilidadesArray,
+        posibilidades: posibilidadesArray
+      }
+    })
+  }
+
   const handleSave = async () => {
     if (!formData.codigo || !formData.nombre) {
       toast.error("Código y nombre son requeridos")
@@ -313,6 +342,7 @@ export default function RecursoDetailPage() {
     setSaving(true)
     
     try {
+      const variantesToSave = buildVariantesToSave(variantes)
       const dataToSend = {
         codigo: formData.codigo.trim(),
         nombre: formData.nombre.trim(),
@@ -321,7 +351,7 @@ export default function RecursoDetailPage() {
         responsable: formData.responsable.trim(),
         unidad_medida: formData.unidad_medida,
         coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
-        variantes: variantes.length > 0 ? variantes : [],
+        variantes: variantesToSave.length > 0 ? variantesToSave : [],
         proveedores: proveedores.length > 0 ? proveedores.map(prov => ({
           empresa: prov.empresa,
           precio: parseFloat(prov.precio) || 0,
@@ -656,6 +686,7 @@ export default function RecursoDetailPage() {
     // Guardar inmediatamente en Airtable (solo si no es un recurso nuevo)
     if (!isNewRecurso) {
       try {
+        const variantesToSave = buildVariantesToSave(nuevasVariantes)
         const dataToSend = {
           codigo: formData.codigo.trim(),
           nombre: formData.nombre.trim(),
@@ -664,7 +695,7 @@ export default function RecursoDetailPage() {
           responsable: formData.responsable.trim(),
           unidad_medida: formData.unidad_medida,
           coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
-          variantes: nuevasVariantes,
+          variantes: variantesToSave,
           proveedores: proveedores.length > 0 ? proveedores.map(prov => ({
             empresa: prov.empresa,
             precio: parseFloat(prov.precio) || 0,

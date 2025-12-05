@@ -3842,12 +3842,24 @@ export default function ProductoDetailPage() {
                               // ID como string para consistencia
                               const varianteIdStr = String(variante.id)
 
-                              // IMPORTANTE: Usar coste_calculado de la BD (ya incluye base + diferencias)
-                              // NO recalcular en frontend
-                              const costeVariante = variante.coste_calculado || variante.coste_override || (totalCost || 0)
-                              const costeFinal = costeVariante
+                              // IMPORTANTE: Usar siempre como referencia el coste base real del producto (totalCost)
                               const costeBaseProducto = totalCost || 0
-                              const difCoste = costeVariante - costeBaseProducto
+
+                              // Priorizar override si existe; luego coste_calculado; fallback al coste base
+                              const costeVarianteRaw =
+                                (variante.coste_override !== null && variante.coste_override !== undefined
+                                  ? variante.coste_override
+                                  : (variante.coste_calculado !== null && variante.coste_calculado !== undefined
+                                      ? variante.coste_calculado
+                                      : costeBaseProducto))
+
+                              // Calcular diferencia respecto al coste base y NUNCA permitir valores negativos
+                              const difCosteRaw = costeVarianteRaw - costeBaseProducto
+                              const difCoste = difCosteRaw < 0 ? 0 : difCosteRaw
+
+                              // El coste de la variante que se muestra/usa nunca puede ser inferior al coste base
+                              const costeVariante = costeBaseProducto + difCoste
+                              const costeFinal = costeVariante
 
                               // Obtener precio base del producto
                               const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)

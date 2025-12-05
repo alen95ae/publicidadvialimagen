@@ -155,8 +155,23 @@ export async function syncProductVariants(productId: string) {
   const processedKeys = new Set<string>();
   const ops: any[] = [];
 
-  // Obtener el coste base del producto (de su calculadora de precios)
-  const costeBaseProducto = Number(producto.coste) || 0;
+  // Calcular el coste base REAL de la receta (suma de cantidad × coste de recursos, sin variantes)
+  // Esto asegura que dif_coste se calcule correctamente aunque producto.coste esté desactualizado
+  const calcularCosteBaseRecetaReal = (receta: any[], recursosMap: Map<string, any>): number => {
+    let costeBase = 0
+    receta.forEach(item => {
+      const recurso = recursosMap.get(item.recurso_id)
+      if (recurso) {
+        const cantidad = Number(item.cantidad) || 0
+        const costeRecurso = Number(recurso.coste) || 0
+        costeBase += cantidad * costeRecurso
+      }
+    })
+    return Math.round(costeBase * 100) / 100
+  }
+
+  // Usar el coste base REAL calculado desde la receta, no producto.coste de la BD
+  const costeBaseRecetaReal = calcularCosteBaseRecetaReal(receta, recursosMap);
 
   for (const combo of combinacionesFinal) {
     const key = combo.combinacion;
@@ -167,8 +182,8 @@ export async function syncProductVariants(productId: string) {
     // Extraer la sucursal de los valores de la combinación
     const sucursal = valores["Sucursal"] || valores["sucursal"];
 
-    // Calcular coste: BASE + suma de diferencias de precios de recursos
-    const coste = computeVariantCost(receta, recursos, valores, sucursal, costeBaseProducto);
+    // Calcular coste: BASE REAL + suma de diferencias de precios de recursos
+    const coste = computeVariantCost(receta, recursos, valores, sucursal, costeBaseRecetaReal);
 
     const precio = coste; // Temporal hasta que activemos calculadora final
 

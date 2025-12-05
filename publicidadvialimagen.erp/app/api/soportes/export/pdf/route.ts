@@ -91,6 +91,195 @@ async function compressImage(imageBuffer: Buffer, maxWidth: number = 800, qualit
 }
 
 /**
+ * Función para cargar y comprimir una imagen desde URL
+ */
+async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string | null; format: string }> {
+  if (!imageUrl) {
+    return { base64: null, format: 'JPEG' }
+  }
+
+  // Si ya es base64, comprimirla
+  if (imageUrl.startsWith('data:')) {
+    try {
+      const base64Data = imageUrl.split(',')[1] || imageUrl
+      const imageBuffer = Buffer.from(base64Data, 'base64')
+      const compressedBuffer = await compressImage(imageBuffer, 800, 80)
+      return {
+        base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
+        format: 'JPEG'
+      }
+    } catch (error) {
+      console.error('❌ Error comprimiendo imagen base64:', error)
+      return { base64: imageUrl, format: 'JPEG' }
+    }
+  }
+
+  // Si es una URL externa, cargarla y comprimirla
+  try {
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      throw new Error(`URL inválida: ${imageUrl}`)
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // Reducido de 30s a 10s
+
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)',
+        'Accept': 'image/*'
+      },
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const imageBuffer = await response.arrayBuffer()
+    if (imageBuffer.byteLength === 0) {
+      throw new Error('Imagen vacía recibida')
+    }
+
+    const buffer = Buffer.from(imageBuffer)
+    const compressedBuffer = await compressImage(buffer, 800, 80)
+
+    return {
+      base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
+      format: 'JPEG'
+    }
+  } catch (error) {
+    console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
+    console.error('   URL:', imageUrl.substring(0, 150))
+    return { base64: null, format: 'JPEG' }
+  }
+}
+
+/**
+ * Función para generar mapa OSM optimizado (tiles en paralelo)
+ */
+async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapHeightPx: number): Promise<string | null> {
+  try {
+    const zoom = 17
+    const tileSize = 256
+
+    // Calcular el tile central
+    const n = Math.pow(2, zoom)
+    const centerX = (lng + 180) / 360 * n
+    const centerY = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n
+
+    const tileX = Math.floor(centerX)
+    const tileY = Math.floor(centerY)
+
+    // Calcular la posición del marcador dentro del grid completo (3x3 tiles)
+    const pixelX = (centerX - tileX) * tileSize + tileSize
+    const pixelY = (centerY - tileY) * tileSize + tileSize
+
+    // Crear array de promesas para descargar todos los tiles en paralelo
+    const tilePromises: Promise<{ buffer: Buffer; col: number; row: number } | null>[] = []
+
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const tx = tileX + dx
+        const ty = tileY + dy
+        const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`
+        const col = dx + 1
+        const row = dy + 1
+
+        // Descargar todos los tiles en paralelo (sin pausas)
+        const tilePromise = fetch(tileUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)' }
+        })
+          .then(async (tileResponse) => {
+            if (tileResponse.ok) {
+              const tileBuffer = Buffer.from(await tileResponse.arrayBuffer())
+              return { buffer: tileBuffer, col, row }
+            } else {
+              console.warn(`⚠️ Tile ${tx},${ty} falló: ${tileResponse.status}`)
+              return null
+            }
+          })
+          .catch((err) => {
+            console.warn(`⚠️ Error descargando tile ${tx},${ty}:`, err)
+            return null
+          })
+
+        tilePromises.push(tilePromise)
+      }
+    }
+
+    // Esperar todas las descargas en paralelo
+    const tileResults = await Promise.all(tilePromises)
+    const composites = tileResults
+      .filter((result): result is { buffer: Buffer; col: number; row: number } => result !== null)
+      .map((result) => ({
+        input: result.buffer,
+        left: result.col * tileSize,
+        top: result.row * tileSize
+      }))
+
+    if (composites.length === 0) {
+      throw new Error('No se pudo descargar ningún tile')
+    }
+
+    // Crear canvas base y componer tiles
+    const gridSize = 3 * tileSize
+    const baseCanvas = sharp({
+      create: {
+        width: gridSize,
+        height: gridSize,
+        channels: 4,
+        background: { r: 200, g: 200, b: 200, alpha: 1 }
+      }
+    })
+
+    const mapWithTiles = await baseCanvas.composite(composites).png().toBuffer()
+
+    // Agregar icono del billboard
+    const iconPath = path.join(process.cwd(), 'public', 'icons', 'billboard.svg')
+    let finalMapBuffer = mapWithTiles
+
+    if (fs.existsSync(iconPath)) {
+      const iconSize = 40
+      const iconBuffer = await sharp(iconPath)
+        .resize(iconSize, iconSize, { fit: 'contain' })
+        .png()
+        .toBuffer()
+
+      finalMapBuffer = await sharp(mapWithTiles)
+        .composite([{
+          input: iconBuffer,
+          left: Math.floor(pixelX - iconSize / 2),
+          top: Math.floor(pixelY - iconSize)
+        }])
+        .png()
+        .toBuffer()
+    }
+
+    // Recortar al tamaño deseado (centrado en el marcador)
+    const cropLeft = Math.max(0, Math.min(gridSize - mapWidthPx, Math.floor(pixelX - mapWidthPx / 2)))
+    const cropTop = Math.max(0, Math.min(gridSize - mapHeightPx, Math.floor(pixelY - mapHeightPx / 2)))
+
+    const finalBuffer = await sharp(finalMapBuffer)
+      .extract({
+        left: cropLeft,
+        top: cropTop,
+        width: Math.min(mapWidthPx, gridSize - cropLeft),
+        height: Math.min(mapHeightPx, gridSize - cropTop)
+      })
+      .resize(mapWidthPx, mapHeightPx, { fit: 'fill' })
+      .png()
+      .toBuffer()
+
+    return `data:image/png;base64,${finalBuffer.toString('base64')}`
+  } catch (error) {
+    console.error('❌ Error generando mapa OSM:', error)
+    return null
+  }
+}
+
+/**
  * Construye el nombre del archivo PDF según los filtros y selección
  */
 function buildPDFFileName({
@@ -277,6 +466,35 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       // Logo no disponible, continuar sin marca de agua
     }
 
+    // Pre-procesar todas las imágenes y mapas en paralelo ANTES del loop (optimización)
+    console.log('🔄 Pre-procesando imágenes y mapas en paralelo...')
+    const mapWidth = 130 // mm
+    const mapHeight = 90 // mm
+    const mapWidthPx = Math.round(mapWidth * 3.7795)
+    const mapHeightPx = Math.round(mapHeight * 3.7795)
+
+    const preprocessPromises = supports.map(async (support, index) => {
+      const processed: { image: { base64: string | null; format: string } | null; map: string | null } = {
+        image: null,
+        map: null
+      }
+
+      // Pre-cargar imagen en paralelo
+      if (support.images && support.images.length > 0) {
+        processed.image = await loadAndCompressImage(support.images[0])
+      }
+
+      // Pre-generar mapa en paralelo
+      if (support.latitude && support.longitude) {
+        processed.map = await generateOSMMap(support.latitude, support.longitude, mapWidthPx, mapHeightPx)
+      }
+
+      return processed
+    })
+
+    const preprocessedData = await Promise.all(preprocessPromises)
+    console.log('✅ Pre-procesamiento completado')
+
     // Agregar cada soporte (una página por soporte)
     for (let index = 0; index < supports.length; index++) {
       const support = supports[index]
@@ -369,385 +587,124 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       
       yPosition += 20
       
-      // Imagen principal del soporte y mapa de ubicación
-      if (support.images && support.images.length > 0) {
+      // Imagen principal del soporte (usar datos pre-procesados)
+      const preprocessedImage = preprocessedData[index]?.image
+      if (preprocessedImage && preprocessedImage.base64) {
         try {
-          // Imagen principal del soporte (izquierda) - Aumentada de tamaño
-          const imageUrl = support.images[0]
-          if (imageUrl) {
-            // Convertir URL a base64 si es necesario
-            let imageBase64 = imageUrl
-            let imageFormat = 'JPEG' // Por defecto
+          const imageX = 15
+          const imageY = yPosition
+          const imageWidth = 130
+          const imageHeight = 90
+          
+          pdf.addImage(preprocessedImage.base64, preprocessedImage.format, imageX, imageY, imageWidth, imageHeight)
+          
+          // Agregar enlace clickeable a la imagen para abrir en página web
+          const webUrl = getSoporteWebUrl(support.title, support.id, support.code)
+          pdf.link(imageX, imageY, imageWidth, imageHeight, { url: webUrl })
+          
+          // Agregar marca de agua sobre la imagen (más grande y que salga de la imagen)
+          if (logoBase64Watermark) {
+            pdf.saveGraphicsState()
+            pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
             
-            if (!imageUrl.startsWith('data:')) {
-              // Si es una URL externa, intentar cargarla
-              try {
-                // Asegurar que la URL sea válida
-                if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-                  throw new Error(`URL inválida: ${imageUrl}`)
-                }
-                
-                // Crear AbortController para timeout
-                const controller = new AbortController()
-                const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 segundos
-                
-                const response = await fetch(imageUrl, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)',
-                    'Accept': 'image/*'
-                  },
-                  signal: controller.signal
-                })
-                
-                clearTimeout(timeoutId)
-                
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-                }
-                
-                const imageBuffer = await response.arrayBuffer()
-                
-                if (imageBuffer.byteLength === 0) {
-                  throw new Error('Imagen vacía recibida')
-                }
-                
-                // Comprimir la imagen antes de convertirla a base64
-                const buffer = Buffer.from(imageBuffer)
-                const compressedBuffer = await compressImage(buffer, 800, 80)
-                
-                // Después de comprimir, siempre será JPEG
-                imageFormat = 'JPEG'
-                
-                const base64 = compressedBuffer.toString('base64')
-                imageBase64 = `data:image/jpeg;base64,${base64}`
-              } catch (error) {
-                console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
-                console.error('   URL:', imageUrl.substring(0, 150))
-                imageBase64 = null
-              }
-            } else {
-              // Si ya es base64, comprimirla también
-              try {
-                // Extraer el buffer de la imagen base64
-                const base64Data = imageUrl.split(',')[1] || imageUrl
-                const imageBuffer = Buffer.from(base64Data, 'base64')
-                
-                // Comprimir la imagen
-                const compressedBuffer = await compressImage(imageBuffer, 800, 80)
-                
-                // Después de comprimir, siempre será JPEG
-                imageFormat = 'JPEG'
-                imageBase64 = `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`
-              } catch (error) {
-                console.error('❌ Error comprimiendo imagen base64:', error)
-                // Si falla, usar la imagen original
-                if (imageUrl.includes('data:image/png')) {
-                  imageFormat = 'PNG'
-                } else if (imageUrl.includes('data:image/jpeg') || imageUrl.includes('data:image/jpg')) {
-                  imageFormat = 'JPEG'
-                } else if (imageUrl.includes('data:image/webp')) {
-                  imageFormat = 'WEBP'
-                }
-              }
-            }
+            const aspectRatio = 24 / 5.5
+            const watermarkWidth = 120 // El triple de grande (40 * 3)
+            const watermarkHeight = watermarkWidth / aspectRatio
             
-            if (imageBase64) {
-              try {
-                const imageX = 15
-                const imageY = yPosition
-                const imageWidth = 130
-                const imageHeight = 90
-                
-                // Aumentar tamaño de 120x80 a 130x90, más a la izquierda
-                pdf.addImage(imageBase64, imageFormat, imageX, imageY, imageWidth, imageHeight)
-                
-                // Agregar enlace clickeable a la imagen para abrir en página web
-                const webUrl = getSoporteWebUrl(support.title, support.id, support.code)
-                pdf.link(imageX, imageY, imageWidth, imageHeight, { url: webUrl })
-                
-                // Agregar marca de agua sobre la imagen (más grande y que salga de la imagen)
-                if (logoBase64Watermark) {
-                  pdf.saveGraphicsState()
-                  pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
-                  
-                  const aspectRatio = 24 / 5.5
-                  const watermarkWidth = 120 // El triple de grande (40 * 3)
-                  const watermarkHeight = watermarkWidth / aspectRatio
-                  
-                  // Centrar sobre la imagen pero que salga un poco
-                  const imageCenterX = imageX + imageWidth / 2
-                  const imageCenterY = imageY + imageHeight / 2
-                  
-                  // Rotar 45 grados
-                  pdf.addImage(
-                    logoBase64Watermark,
-                    'JPEG',
-                    imageCenterX - watermarkWidth / 2,
-                    imageCenterY - watermarkHeight / 2,
-                    watermarkWidth,
-                    watermarkHeight,
-                    undefined,
-                    'NONE',
-                    45
-                  )
-                  
-                  pdf.restoreGraphicsState()
-                }
-                
-                // Agregar indicador visual de que es clickeable (debajo de la imagen)
-                pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
-                pdf.setFontSize(6)
-                pdf.setFont('helvetica', 'normal')
-                pdf.text('Clic para abrir en página web', imageX + imageWidth/2, imageY + imageHeight + 3, { align: 'center' })
-              } catch (pdfError) {
-                console.error('❌ Error agregando imagen al PDF:', pdfError)
-              }
-            }
+            // Centrar sobre la imagen pero que salga un poco
+            const imageCenterX = imageX + imageWidth / 2
+            const imageCenterY = imageY + imageHeight / 2
+            
+            // Rotar 45 grados
+            pdf.addImage(
+              logoBase64Watermark,
+              'JPEG',
+              imageCenterX - watermarkWidth / 2,
+              imageCenterY - watermarkHeight / 2,
+              watermarkWidth,
+              watermarkHeight,
+              undefined,
+              'NONE',
+              45
+            )
+            
+            pdf.restoreGraphicsState()
           }
-        } catch (error) {
-          console.error('❌ Error procesando imagen del soporte:', error)
+          
+          // Agregar indicador visual de que es clickeable (debajo de la imagen)
+          pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
+          pdf.setFontSize(6)
+          pdf.setFont('helvetica', 'normal')
+          pdf.text('Clic para abrir en página web', imageX + imageWidth/2, imageY + imageHeight + 3, { align: 'center' })
+        } catch (pdfError) {
+          console.error('❌ Error agregando imagen al PDF:', pdfError)
         }
       }
       
-      // Mapa de ubicación (derecha) - Usar Google Maps Static API con marcador personalizado
-      if (support.latitude && support.longitude) {
+      // Mapa de ubicación (derecha) - Usar datos pre-procesados
+      const preprocessedMap = preprocessedData[index]?.map
+      if (preprocessedMap) {
         try {
-          const lat = support.latitude
-          const lng = support.longitude
-          const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-          
-          // Tamaño del mapa en el PDF (en mm, convertido a pixels para la API)
           const mapWidth = 130 // mm
           const mapHeight = 90 // mm
           const mapX = 155  // Más cerca de la imagen principal (15 + 130 + 10 = 155)
           const mapY = yPosition
           
-          // Convertir mm a pixels (1mm ≈ 3.7795 pixels a 96 DPI)
-          const mapWidthPx = Math.round(mapWidth * 3.7795)
-          const mapHeightPx = Math.round(mapHeight * 3.7795)
+          pdf.addImage(preprocessedMap, 'PNG', mapX, mapY, mapWidth, mapHeight)
           
-          let mapBase64: string | null = null
-          let mapSource: 'osm' | null = null
-          
-          // Generar mapa con OpenStreetMap - Grid de 3x3 tiles con marcador exacto
-          try {
-            const zoom = 17
-            const tileSize = 256
+          // Agregar marca de agua sobre el mapa (más grande y que salga del mapa)
+          if (logoBase64Watermark) {
+            pdf.saveGraphicsState()
+            pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
             
-            // Calcular el tile central
-            const n = Math.pow(2, zoom)
-            const centerX = (lng + 180) / 360 * n
-            const centerY = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n
+            const aspectRatio = 24 / 5.5
+            const watermarkWidth = 120 // El triple de grande (40 * 3)
+            const watermarkHeight = watermarkWidth / aspectRatio
             
-            const tileX = Math.floor(centerX)
-            const tileY = Math.floor(centerY)
+            // Centrar sobre el mapa pero que salga un poco
+            const mapCenterX = mapX + mapWidth / 2
+            const mapCenterY = mapY + mapHeight / 2
             
-            // Calcular la posición del marcador dentro del grid completo (3x3 tiles)
-            const pixelX = (centerX - tileX) * tileSize + tileSize
-            const pixelY = (centerY - tileY) * tileSize + tileSize
+            // Rotar 45 grados
+            pdf.addImage(
+              logoBase64Watermark,
+              'JPEG',
+              mapCenterX - watermarkWidth / 2,
+              mapCenterY - watermarkHeight / 2,
+              watermarkWidth,
+              watermarkHeight,
+              undefined,
+              'NONE',
+              45
+            )
             
-            // Descargar grid de 3x3 tiles y crear composites
-            const composites: any[] = []
-            
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                const tx = tileX + dx
-                const ty = tileY + dy
-                const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`
-                
-                try {
-                  const tileResponse = await fetch(tileUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)' }
-                  })
-                  
-                  if (tileResponse.ok) {
-                    const tileBuffer = Buffer.from(await tileResponse.arrayBuffer())
-                    const col = dx + 1 // -1 -> 0, 0 -> 1, 1 -> 2
-                    const row = dy + 1
-                    
-                    composites.push({
-                      input: tileBuffer,
-                      left: col * tileSize,
-                      top: row * tileSize
-                    })
-                  } else {
-                    console.warn(`⚠️ Tile ${tx},${ty} falló: ${tileResponse.status}`)
-                  }
-                } catch (err) {
-                  console.warn(`⚠️ Error descargando tile ${tx},${ty}:`, err)
-                }
-                
-                // Pequeña pausa para no sobrecargar OSM
-                await new Promise(resolve => setTimeout(resolve, 100))
-              }
-            }
-            
-            if (composites.length === 0) {
-              throw new Error('No se pudo descargar ningún tile')
-            }
-            
-            // Crear canvas base y componer tiles
-            const gridSize = 3 * tileSize
-            const baseCanvas = sharp({
-              create: {
-                width: gridSize,
-                height: gridSize,
-                channels: 4,
-                background: { r: 200, g: 200, b: 200, alpha: 1 }
-              }
-            })
-            
-            const mapWithTiles = await baseCanvas.composite(composites).png().toBuffer()
-            
-            // Agregar icono del billboard
-            const iconPath = path.join(process.cwd(), 'public', 'icons', 'billboard.svg')
-            let finalMapBuffer = mapWithTiles
-            
-            if (fs.existsSync(iconPath)) {
-              const iconSize = 40
-              const iconBuffer = await sharp(iconPath)
-                .resize(iconSize, iconSize, { fit: 'contain' })
-                .png()
-                .toBuffer()
-              
-              finalMapBuffer = await sharp(mapWithTiles)
-                .composite([{
-                  input: iconBuffer,
-                  left: Math.floor(pixelX - iconSize / 2),
-                  top: Math.floor(pixelY - iconSize)
-                }])
-                .png()
-                .toBuffer()
-            }
-            
-            // Recortar al tamaño deseado (centrado en el marcador)
-            const cropLeft = Math.max(0, Math.min(gridSize - mapWidthPx, Math.floor(pixelX - mapWidthPx / 2)))
-            const cropTop = Math.max(0, Math.min(gridSize - mapHeightPx, Math.floor(pixelY - mapHeightPx / 2)))
-            
-            const finalBuffer = await sharp(finalMapBuffer)
-              .extract({
-                left: cropLeft,
-                top: cropTop,
-                width: Math.min(mapWidthPx, gridSize - cropLeft),
-                height: Math.min(mapHeightPx, gridSize - cropTop)
-              })
-              .resize(mapWidthPx, mapHeightPx, { fit: 'fill' })
-              .png()
-              .toBuffer()
-            
-            mapBase64 = `data:image/png;base64,${finalBuffer.toString('base64')}`
-            mapSource = 'osm'
-          } catch (osmError) {
-            console.error('❌ Error generando mapa OSM:', osmError)
+            pdf.restoreGraphicsState()
           }
           
-          
-          // Agregar el mapa al PDF si se generó exitosamente
-          if (mapBase64) {
-            try {
-              pdf.addImage(mapBase64, 'PNG', mapX, mapY, mapWidth, mapHeight)
-              
-              // Agregar marca de agua sobre el mapa (más grande y que salga del mapa)
-              if (logoBase64Watermark) {
-                pdf.saveGraphicsState()
-                pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
-                
-                const aspectRatio = 24 / 5.5
-                const watermarkWidth = 120 // El triple de grande (40 * 3)
-                const watermarkHeight = watermarkWidth / aspectRatio
-                
-                // Centrar sobre el mapa pero que salga un poco
-                const mapCenterX = mapX + mapWidth / 2
-                const mapCenterY = mapY + mapHeight / 2
-                
-                // Rotar 45 grados
-                pdf.addImage(
-                  logoBase64Watermark,
-                  'JPEG',
-                  mapCenterX - watermarkWidth / 2,
-                  mapCenterY - watermarkHeight / 2,
-                  watermarkWidth,
-                  watermarkHeight,
-                  undefined,
-                  'NONE',
-                  45
-                )
-                
-                pdf.restoreGraphicsState()
-              }
-              
-              // Agregar enlace clickeable al mapa para Google Maps
-              const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`
-              pdf.link(mapX, mapY, mapWidth, mapHeight, { url: googleMapsUrl })
-              
-              // El icono de billboard ya está incluido en el mapa generado con OSM
-              // No es necesario agregarlo de nuevo
-              if (false) { // Código legacy, ya no se usa
-                const iconSize = 12 // Tamaño del icono en mm
-                const iconX = mapX + mapWidth/2 - iconSize/2
-                const iconY = mapY + mapHeight/2 - iconSize/2
-                
-                // Dibujar icono de valla publicitaria usando formas geométricas
-                const redColor = [220, 38, 38] // #DC2626 (rojo de la marca)
-                
-                // Guardar estado actual
-                pdf.saveGraphicsState()
-                
-                // Dibujar la valla (rectángulo principal)
-                pdf.setFillColor(redColor[0], redColor[1], redColor[2])
-                pdf.setDrawColor(255, 255, 255) // Borde blanco
-                pdf.setLineWidth(0.5)
-                const billboardWidth = iconSize * 0.75
-                const billboardHeight = iconSize * 0.5
-                const billboardX = iconX + (iconSize - billboardWidth) / 2
-                const billboardY = iconY + (iconSize - billboardHeight) / 2 - 2
-                
-                pdf.roundedRect(billboardX, billboardY, billboardWidth, billboardHeight, 1, 1, 'FD')
-                
-                // Dibujar el poste de soporte
-                const postWidth = iconSize * 0.15
-                const postHeight = iconSize * 0.3
-                const postX = iconX + (iconSize - postWidth) / 2
-                const postY = billboardY + billboardHeight
-                
-                pdf.roundedRect(postX, postY, postWidth, postHeight, 0.5, 0.5, 'FD')
-                
-                // Restaurar estado
-                pdf.restoreGraphicsState()
-              }
-              
-              // Agregar indicador visual de que es clickeable
-              pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
-              pdf.setFontSize(6)
-              pdf.setFont('helvetica', 'normal')
-              pdf.text('Clic para abrir en Google Maps', mapX + mapWidth/2, mapY + mapHeight + 3, { align: 'center' })
-            } catch (pdfError) {
-              console.error('❌ Error agregando mapa al PDF:', pdfError)
-            }
-          } else {
-            // Fallback: mostrar coordenadas sin mapa
-            pdf.setTextColor(0, 0, 0)
-            pdf.setFontSize(8)
-            pdf.setFont('helvetica', 'bold')
-            pdf.text('UBICACIÓN', 220, yPosition + 5, { align: 'center' })
-            pdf.setFontSize(6)
-            pdf.setFont('helvetica', 'normal')
-            pdf.text(`Lat: ${lat.toFixed(4)}`, 200, yPosition + 15)
-            pdf.text(`Lng: ${lng.toFixed(4)}`, 200, yPosition + 20)
+          // Agregar enlace clickeable al mapa para Google Maps
+          if (support.latitude && support.longitude) {
+            const googleMapsUrl = `https://www.google.com/maps?q=${support.latitude},${support.longitude}`
+            pdf.link(mapX, mapY, mapWidth, mapHeight, { url: googleMapsUrl })
           }
           
-        } catch (error) {
-          console.error('❌ Error generando mapa:', error)
-          // Fallback: mostrar coordenadas sin mapa
-          pdf.setTextColor(0, 0, 0)
-          pdf.setFontSize(8)
-          pdf.setFont('helvetica', 'bold')
-          pdf.text('UBICACIÓN', 220, yPosition + 5, { align: 'center' })
+          // Agregar indicador visual de que es clickeable
+          pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
           pdf.setFontSize(6)
           pdf.setFont('helvetica', 'normal')
-          pdf.text(`Lat: ${support.latitude.toFixed(4)}`, 200, yPosition + 15)
-          pdf.text(`Lng: ${support.longitude.toFixed(4)}`, 200, yPosition + 20)
+          pdf.text('Clic para abrir en Google Maps', mapX + mapWidth/2, mapY + mapHeight + 3, { align: 'center' })
+        } catch (pdfError) {
+          console.error('❌ Error agregando mapa al PDF:', pdfError)
         }
+      } else if (support.latitude && support.longitude) {
+        // Fallback: mostrar coordenadas sin mapa
+        pdf.setTextColor(0, 0, 0)
+        pdf.setFontSize(8)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('UBICACIÓN', 220, yPosition + 5, { align: 'center' })
+        pdf.setFontSize(6)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text(`Lat: ${support.latitude.toFixed(4)}`, 200, yPosition + 15)
+        pdf.text(`Lng: ${support.longitude.toFixed(4)}`, 200, yPosition + 20)
       }
       
       yPosition += 100 // Aumentado de 90 a 100 para bajar la línea roja

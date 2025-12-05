@@ -305,6 +305,13 @@ export default function NuevaCotizacionPage() {
             // Detectar unidades (case-insensitive y considerar singular/plural)
             const udmLower = productoActualizado.udm?.toLowerCase().trim() || ''
             const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+            // Detectar si es PRO-001 (servicio general con comportamiento dinámico)
+            const esPRO001 = productoActualizado.producto?.includes('PRO-001') || productoActualizado.producto_id === 'PRO-001'
+            // PRO-001: Si tiene ancho y alto > 0, funciona como m², sino como unidades
+            const anchoVal = typeof productoActualizado.ancho === 'string' ? (productoActualizado.ancho === '' ? 0 : parseFloat(productoActualizado.ancho) || 0) : productoActualizado.ancho
+            const altoVal = typeof productoActualizado.alto === 'string' ? (productoActualizado.alto === '' ? 0 : parseFloat(productoActualizado.alto) || 0) : productoActualizado.alto
+            const esPRO001ConDimensiones = esPRO001 && anchoVal > 0 && altoVal > 0
+            const esPRO001SinDimensiones = esPRO001 && (anchoVal === 0 || altoVal === 0)
             const totalCalculado = calcularTotal(
               productoActualizado.cantidad === '' ? 0 : productoActualizado.cantidad,
               productoActualizado.totalM2,
@@ -312,7 +319,7 @@ export default function NuevaCotizacionPage() {
               productoActualizado.comision === '' ? 0 : productoActualizado.comision,
               productoActualizado.conIVA,
               productoActualizado.conIT,
-              productoActualizado.esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo
+              productoActualizado.esSoporte || esUnidades || esPRO001SinDimensiones, // Tratar PRO-001 sin dimensiones como unidades
               productoActualizado.udm
             )
             // Recalcular automáticamente el total cuando cambian los campos
@@ -731,8 +738,17 @@ export default function NuevaCotizacionPage() {
           productoActualizado.imagen = imagenUrl
         }
 
+        // Detectar si es PRO-001 (servicio general con comportamiento dinámico)
+        const esPRO001 = item.codigo === 'PRO-001' || item.id === 'PRO-001' || producto.producto?.includes('PRO-001')
+        
+        // PRO-001: Si tiene ancho y alto > 0, funciona como m², sino como unidades
+        const esPRO001ConDimensiones = esPRO001 && productoActualizado.ancho > 0 && productoActualizado.alto > 0
+        const esPRO001SinDimensiones = esPRO001 && (productoActualizado.ancho === 0 || productoActualizado.alto === 0)
+        
         // Recalcular total automáticamente al seleccionar producto
         // Para unidades: total = cantidad × precio (como en soportes)
+        // Para PRO-001 sin dimensiones: total = cantidad × precio
+        // Para PRO-001 con dimensiones: total = cantidad × totalM2 × precio (como m²)
         const totalCalculado = calcularTotal(
           productoActualizado.cantidad,
           productoActualizado.totalM2,
@@ -740,7 +756,7 @@ export default function NuevaCotizacionPage() {
           productoActualizado.comision,
           productoActualizado.conIVA,
           productoActualizado.conIT,
-          esSoporte || esUnidades, // Tratar unidades como soportes en el cálculo (cantidad × precio)
+          esSoporte || esUnidades || esPRO001SinDimensiones, // Tratar PRO-001 sin dimensiones como unidades
           productoActualizado.udm
         )
         productoActualizado.total = totalCalculado
@@ -895,6 +911,12 @@ export default function NuevaCotizacionPage() {
     .map(producto => {
       const udmLower = producto.udm?.toLowerCase().trim() || ''
       const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
+      // Detectar si es PRO-001 (servicio general con comportamiento dinámico)
+      const esPRO001 = producto.producto?.includes('PRO-001') || producto.producto_id === 'PRO-001'
+      // PRO-001: Si tiene ancho y alto > 0, funciona como m², sino como unidades
+      const anchoVal = typeof producto.ancho === 'string' ? (producto.ancho === '' ? 0 : parseFloat(producto.ancho) || 0) : producto.ancho
+      const altoVal = typeof producto.alto === 'string' ? (producto.alto === '' ? 0 : parseFloat(producto.alto) || 0) : producto.alto
+      const esPRO001SinDimensiones = esPRO001 && (anchoVal === 0 || altoVal === 0)
 
       // Total calculado es el subtotal sin impuestos (precio mínimo por línea)
       const totalCalculado = calcularTotal(
@@ -904,7 +926,7 @@ export default function NuevaCotizacionPage() {
         producto.comision,
         producto.conIVA,
         producto.conIT,
-        producto.esSoporte || esUnidades,
+        producto.esSoporte || esUnidades || esPRO001SinDimensiones, // Tratar PRO-001 sin dimensiones como unidades
         producto.udm
       )
       return {
@@ -1260,34 +1282,57 @@ export default function NuevaCotizacionPage() {
 
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
 
-      // Buscar comercial por ID (UUID) o por nombre
+      // Obtener el email y número del comercial asignado desde la API (igual que en el listado)
+      let vendedorEmail: string | undefined = undefined
+      let vendedorNumero: string | null = null
+      let nombreVendedor: string = ''
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      let comercialSeleccionado = todosLosComerciales.find(c => c.id === vendedor)
-
-      // Si no se encuentra y el vendedor no es un UUID, buscar por nombre
-      if (!comercialSeleccionado && vendedor && !uuidRegex.test(vendedor)) {
-        comercialSeleccionado = todosLosComerciales.find(c =>
-          c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
-        )
+      
+      try {
+        // Obtener datos del comercial desde la API (igual que en el listado)
+        const comercialesResponse = await fetch(`/api/public/comerciales`)
+        if (comercialesResponse.ok) {
+          const comercialesData = await comercialesResponse.json()
+          
+          // Buscar por ID (UUID) o por nombre
+          let comercialEncontrado = null
+          if (vendedor && uuidRegex.test(vendedor)) {
+            comercialEncontrado = comercialesData.users?.find((u: any) => u.id === vendedor)
+          } else if (vendedor) {
+            // Buscar por nombre
+            comercialEncontrado = comercialesData.users?.find((u: any) => 
+              u.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+            )
+          }
+          
+          if (comercialEncontrado) {
+            vendedorEmail = comercialEncontrado.email
+            vendedorNumero = comercialEncontrado.numero || null
+            nombreVendedor = comercialEncontrado.nombre || ''
+            console.log('✅ Email del comercial asignado encontrado:', vendedorEmail)
+            console.log('✅ Número del comercial asignado encontrado:', vendedorNumero)
+            console.log('✅ Nombre del comercial encontrado:', nombreVendedor)
+          } else {
+            console.log('⚠️ No se encontró comercial asignado en comerciales')
+          }
+        }
+      } catch (error) {
+        console.error('Error obteniendo datos del comercial asignado:', error)
       }
 
-      // Obtener el número del comercial asignado (no del usuario que descarga)
-      let vendedorNumero: string | null = null
-      if (comercialSeleccionado?.numero) {
-        vendedorNumero = comercialSeleccionado.numero
-      } else if (comercialSeleccionado?.id) {
-        // Si no tiene número pero tiene ID, intentar obtenerlo del endpoint de comerciales
-        try {
-          const comercialesResponse = await fetch(`/api/public/comerciales`)
-          if (comercialesResponse.ok) {
-            const comercialesData = await comercialesResponse.json()
-            const comercial = comercialesData.users?.find((u: any) => u.id === comercialSeleccionado.id)
-            if (comercial) {
-              vendedorNumero = comercial.numero || null
-            }
+      // Si no se encontró el nombre del vendedor, intentar obtenerlo de todosLosComerciales como fallback
+      if (!nombreVendedor && vendedor) {
+        const comercialFallback = todosLosComerciales.find(c => c.id === vendedor)
+        if (comercialFallback) {
+          nombreVendedor = comercialFallback.nombre || ''
+        } else if (!uuidRegex.test(vendedor)) {
+          // Si no es UUID, buscar por nombre
+          const comercialFallback2 = todosLosComerciales.find(c =>
+            c.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+          )
+          if (comercialFallback2) {
+            nombreVendedor = comercialFallback2.nombre || ''
           }
-        } catch (error) {
-          console.error('Error obteniendo número del comercial:', error)
         }
       }
 
@@ -1296,8 +1341,8 @@ export default function NuevaCotizacionPage() {
         cliente: clienteSeleccionado?.displayName || '',
         clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
         sucursal: sucursal || '',
-        vendedor: comercialSeleccionado?.nombre || '',
-        vendedorEmail: comercialSeleccionado?.email || undefined,
+        vendedor: nombreVendedor || vendedor || '',
+        vendedorEmail: vendedorEmail,
         vendedorNumero: vendedorNumero, // Usar el número del comercial asignado, no del usuario que descarga
         productos: productosList,
         totalGeneral: totalGeneral,
@@ -2331,7 +2376,7 @@ export default function NuevaCotizacionPage() {
                 Producto: {modalVariantes.itemData?.nombre}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-2 py-4">
               {modalVariantes.itemData?.variantes && Array.isArray(modalVariantes.itemData.variantes) && modalVariantes.itemData.variantes.length > 0 ? (
                 modalVariantes.itemData.variantes
                   // Filtrar la variante "Sucursal" porque se toma automáticamente de la cotización
@@ -2369,15 +2414,19 @@ export default function NuevaCotizacionPage() {
                             }))
                           }
                         >
-                          <SelectTrigger id={`variante-${index}`}>
+                          <SelectTrigger id={`variante-${index}`} className="w-full h-12 text-base">
                             <SelectValue placeholder="Seleccionar" />
                           </SelectTrigger>
                           <SelectContent>
-                            {variante.posibilidades && Array.isArray(variante.posibilidades) && variante.posibilidades.map((posibilidad: string, pIndex: number) => (
-                              <SelectItem key={pIndex} value={posibilidad}>
-                                {posibilidad}
-                              </SelectItem>
-                            ))}
+                            {(() => {
+                              const opciones = variante.valores ?? variante.posibilidades ?? []
+                              console.log("Opciones variante:", nombreLimpio, opciones)
+                              return Array.isArray(opciones) && opciones.length > 0 ? opciones.map((opcion: string, pIndex: number) => (
+                                <SelectItem key={pIndex} value={String(opcion).trim()}>
+                                  {String(opcion).trim()}
+                                </SelectItem>
+                              )) : null
+                            })()}
                           </SelectContent>
                         </Select>
                       </div>

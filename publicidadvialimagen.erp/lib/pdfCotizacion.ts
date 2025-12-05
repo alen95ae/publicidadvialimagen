@@ -81,7 +81,7 @@ function formatearNumero(numero: number): string {
 
 export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4')
-  const primaryColor: [number, number, number] = [213, 70, 68]
+  const primaryColor: [number, number, number] = [190, 8, 18] // #be0812
   const currentDate = new Date().toLocaleDateString('es-ES')
   const currentYear = new Date().getFullYear()
   
@@ -137,18 +137,44 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
     const calculatedWidth = maxHeight * aspectRatio
     const logoWidth = Math.min(calculatedWidth, 45)
     const logoHeight = logoWidth / aspectRatio
-    yPosition += logoHeight + 10 // Más espacio después del logo
+    yPosition += logoHeight + 12 // Acercado más al logo (reducido de 18 a 12)
   } else {
-    yPosition += 15
+    yPosition += 15 // Acercado más (reducido de 20 a 15)
   }
 
-  // Código de cotización en rojo (primaryColor) - MÁS ABAJO con más espacio
-  pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  pdf.setFontSize(14) // Más grande
-  pdf.setFont('helvetica', 'bold')
-  pdf.text(datos.codigo, 15, yPosition)
+  // Código de cotización con estilo similar al listado (fondo gris, borde, monospace)
+  const codigoX = 15 // Alineado a la izquierda
+  const codigoPaddingX = 5 // Aumentado para mejor padding horizontal
+  const codigoPaddingY = 3 // Aumentado para mejor padding vertical
   
-  yPosition += 12
+  // Calcular ancho del texto para el tamaño del recuadro (en negrita)
+  pdf.setFontSize(10) // Ligeramente más grande para que se note más
+  pdf.setFont('courier', 'bold') // Negrita para que se note más
+  const codigoWidth = pdf.getTextWidth(datos.codigo)
+  const codigoHeight = 8 // Altura del badge aumentada para mejor centrado
+  
+  // Calcular posición Y del recuadro
+  const codigoY = yPosition
+  const recuadroWidth = codigoWidth + (codigoPaddingX * 2)
+  
+  // Dibujar fondo gris claro (bg-neutral-100)
+  pdf.setFillColor(245, 245, 245) // neutral-100 aproximado
+  pdf.setDrawColor(229, 229, 229) // neutral-200 para el borde
+  pdf.setLineWidth(0.3)
+  pdf.roundedRect(codigoX, codigoY, recuadroWidth, codigoHeight, 2, 2, 'FD') // FD = Fill + Draw
+  
+  // Texto del código en gris oscuro (text-gray-800) - centrado usando align: "center"
+  pdf.setTextColor(31, 41, 55) // gray-800 aproximado
+  // Centrado horizontal y vertical usando align: "center" (método confiable en jsPDF)
+  // Ajuste vertical: +1 para centrado perfecto (equilibra el baseline de jsPDF)
+  pdf.text(
+    datos.codigo,
+    codigoX + recuadroWidth / 2, // centro horizontal del recuadro
+    codigoY + codigoHeight / 2 + 1, // centro vertical perfecto
+    { align: "center" }
+  )
+  
+  yPosition += codigoHeight + 10 // Espacio después del código (aumentado de 8 a 10)
 
   // Información (solo "Información")
   pdf.setTextColor(0, 0, 0)
@@ -356,10 +382,17 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
       // Para soportes: usar precio directamente
       // Para productos con unidad "unidades": usar precio directamente
       // Para productos con unidad m²: precio × ancho × alto
+      // Para PRO-001: comportamiento dinámico (si tiene ancho/alto > 0, como m², sino como unidades)
       const udmLower = (producto.udm || '').toLowerCase().trim()
       const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
       
-      const precioUnitarioCalculado = producto.esSoporte || esUnidades
+      // Detectar si es PRO-001 (servicio general con comportamiento dinámico)
+      const esPRO001 = producto.producto?.includes('PRO-001')
+      // PRO-001: Si tiene ancho y alto > 0, funciona como m², sino como unidades
+      const esPRO001ConDimensiones = esPRO001 && producto.ancho > 0 && producto.alto > 0
+      const esPRO001SinDimensiones = esPRO001 && (producto.ancho === 0 || producto.alto === 0)
+      
+      const precioUnitarioCalculado = producto.esSoporte || esUnidades || esPRO001SinDimensiones
         ? producto.precio 
         : (producto.precio * producto.ancho * producto.alto)
       
@@ -415,8 +448,8 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
     }
   }
 
-  // Total como una fila más de la tabla
-  const totalRowHeight = 12
+  // Total como una fila más de la tabla (misma altura que el header de Descripción: 9)
+  const totalRowHeight = 9
   
   // Verificar si hay espacio suficiente
   if (yPosition + totalRowHeight > 270) {
@@ -432,12 +465,12 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   pdf.setDrawColor(180, 180, 180)
   pdf.rect(tableX, yPosition, tableWidth, totalRowHeight)
   
-  // Texto en blanco
+  // Texto en blanco (centrado verticalmente igual que el header)
   pdf.setTextColor(255, 255, 255)
   pdf.setFontSize(12)
   pdf.setFont('helvetica', 'bold')
-  pdf.text('TOTAL:', tableX + 3, yPosition + 8)
-  pdf.text(formatearNumero(datos.totalGeneral), tableX + tableWidth - 3, yPosition + 8, { align: 'right' })
+  pdf.text('TOTAL:', tableX + 3, yPosition + 6)
+  pdf.text(formatearNumero(datos.totalGeneral), tableX + tableWidth - 3, yPosition + 6, { align: 'right' })
   
   // Resetear color de texto
   pdf.setTextColor(0, 0, 0)
@@ -534,7 +567,7 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
 
 export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4')
-  const primaryColor: [number, number, number] = [213, 70, 68]
+  const primaryColor: [number, number, number] = [190, 8, 18] // #be0812
   const currentDate = new Date().toLocaleDateString('es-ES')
   const currentYear = new Date().getFullYear()
   
@@ -590,18 +623,44 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
     const calculatedWidth = maxHeight * aspectRatio
     const logoWidth = Math.min(calculatedWidth, 45)
     const logoHeight = logoWidth / aspectRatio
-    yPosition += logoHeight + 10 // Más espacio después del logo
+    yPosition += logoHeight + 12 // Acercado más al logo (reducido de 18 a 12)
   } else {
-    yPosition += 15
+    yPosition += 15 // Acercado más (reducido de 20 a 15)
   }
 
-  // Código de cotización en rojo (primaryColor) - MÁS ABAJO con más espacio
-  pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-  pdf.setFontSize(14) // Más grande
-  pdf.setFont('helvetica', 'bold')
-  pdf.text(datos.codigo, 15, yPosition)
+  // Código de cotización con estilo similar al listado (fondo gris, borde, monospace)
+  const codigoX = 15 // Alineado a la izquierda
+  const codigoPaddingX = 5 // Aumentado para mejor padding horizontal
+  const codigoPaddingY = 3 // Aumentado para mejor padding vertical
   
-  yPosition += 12
+  // Calcular ancho del texto para el tamaño del recuadro (en negrita)
+  pdf.setFontSize(10) // Ligeramente más grande para que se note más
+  pdf.setFont('courier', 'bold') // Negrita para que se note más
+  const codigoWidth = pdf.getTextWidth(datos.codigo)
+  const codigoHeight = 8 // Altura del badge aumentada para mejor centrado
+  
+  // Calcular posición Y del recuadro
+  const codigoY = yPosition
+  const recuadroWidth = codigoWidth + (codigoPaddingX * 2)
+  
+  // Dibujar fondo gris claro (bg-neutral-100)
+  pdf.setFillColor(245, 245, 245) // neutral-100 aproximado
+  pdf.setDrawColor(229, 229, 229) // neutral-200 para el borde
+  pdf.setLineWidth(0.3)
+  pdf.roundedRect(codigoX, codigoY, recuadroWidth, codigoHeight, 2, 2, 'FD') // FD = Fill + Draw
+  
+  // Texto del código en gris oscuro (text-gray-800) - centrado usando align: "center"
+  pdf.setTextColor(31, 41, 55) // gray-800 aproximado
+  // Centrado horizontal y vertical usando align: "center" (método confiable en jsPDF)
+  // Ajuste vertical: +1 para centrado perfecto (equilibra el baseline de jsPDF)
+  pdf.text(
+    datos.codigo,
+    codigoX + recuadroWidth / 2, // centro horizontal del recuadro
+    codigoY + codigoHeight / 2 + 1, // centro vertical perfecto
+    { align: "center" }
+  )
+  
+  yPosition += codigoHeight + 10 // Espacio después del código (aumentado de 8 a 10)
 
   // Información (solo "Información")
   pdf.setTextColor(0, 0, 0)

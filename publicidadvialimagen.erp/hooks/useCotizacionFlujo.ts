@@ -223,9 +223,10 @@ export function prepararLineas(
       }
 
       // REGLA 2: subtotal_linea = EXACTAMENTE el total que la UI muestra
-      const subtotalLinea = producto.totalManual !== null && producto.totalManual !== undefined
+      // Redondear a 2 decimales para evitar números con muchos decimales
+      const subtotalLinea = Math.round((producto.totalManual !== null && producto.totalManual !== undefined
         ? producto.totalManual
-        : producto.total
+        : producto.total) * 100) / 100
 
       return {
         tipo: 'Producto' as const,

@@ -1168,8 +1168,9 @@ export default function EditarCotizacionPage() {
   // O si hay totalManual (total_final de BD), usar ese directamente
   // ============================================================================
   // 🔥 OPTIMIZACIÓN: Usar useMemo para evitar renders innecesarios
+  // Redondear a 2 decimales para evitar números con muchos decimales
   const totalGeneralReal = useMemo(() => {
-    return productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+    return Math.round(productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0) * 100) / 100
   }, [productosConTotal])
 
   const totalGeneral = useMemo(() => {
@@ -1218,9 +1219,9 @@ export default function EditarCotizacionPage() {
           con_iva: producto.conIVA,
           con_it: producto.conIT,
           es_soporte: producto.esSoporte || false,
-          subtotal_linea: producto.totalManual !== null && producto.totalManual !== undefined
+          subtotal_linea: Math.round((producto.totalManual !== null && producto.totalManual !== undefined
             ? producto.totalManual
-            : producto.total
+            : producto.total) * 100) / 100
         }
       })
       

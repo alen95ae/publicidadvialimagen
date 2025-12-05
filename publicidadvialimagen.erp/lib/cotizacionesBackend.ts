@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { verifySession } from '@/lib/auth'
 import { getSupabaseServer } from '@/lib/supabaseServer'
+import { getPermisos, puedeEditar } from '@/lib/permisos'
 
 // ============================================================================
 // TIPOS Y INTERFACES
@@ -89,6 +90,7 @@ export async function getUsuarioAutenticado(request: NextRequest): Promise<Usuar
  * - Es el vendedor de la cotización
  * - Tiene rol de admin
  * - Es el desarrollador (alen95ae@gmail.com)
+ * - Tiene el permiso de "editar" en el módulo "ventas" (permite editar TODAS las cotizaciones)
  * 
  * @param cotizacionId ID de la cotización
  * @param usuario Usuario autenticado
@@ -122,6 +124,19 @@ export async function verificarAccesoCotizacion(
     // Admin siempre tiene acceso
     if (usuario.role === 'admin') {
       return true
+    }
+
+    // Verificar si el usuario tiene permiso de "editar" en el módulo "ventas"
+    // Esto permite editar TODAS las cotizaciones, no solo las propias
+    try {
+      const permisos = await getPermisos(usuario.id, usuario.email)
+      if (puedeEditar(permisos, 'ventas')) {
+        console.log('✅ [verificarAccesoCotizacion] Usuario tiene permiso de editar en ventas')
+        return true
+      }
+    } catch (permisoError) {
+      console.error('❌ [verificarAccesoCotizacion] Error verificando permisos:', permisoError)
+      // Continuar con otras verificaciones si falla la verificación de permisos
     }
 
     // Verificar si el usuario es el vendedor
@@ -400,11 +415,15 @@ export function validarTotalFinal(
 /**
  * Calcula el total_final a partir de las líneas
  * Usa la misma lógica que el backend actual
+ * Redondea a 2 decimales para evitar números con muchos decimales
  */
 export function calcularTotalFinalDesdeLineas(lineas: LineaPayload[]): number {
-  return lineas
+  const total = lineas
     .filter(l => l.tipo === 'Producto')
     .reduce((sum, l) => sum + (l.subtotal_linea || 0), 0)
+  
+  // Redondear a 2 decimales
+  return Math.round(total * 100) / 100
 }
 
 /**

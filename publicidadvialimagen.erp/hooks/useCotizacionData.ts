@@ -134,7 +134,8 @@ export function useCotizacionData(initialTotalManual: number | null = null): Use
     })
 
     // Total general real: suma de los totales de cada línea
-    const totalGeneralReal = productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+    // Redondear a 2 decimales para evitar números con muchos decimales
+    const totalGeneralReal = Math.round(productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0) * 100) / 100
 
     return {
       totalGeneralReal,

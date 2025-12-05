@@ -943,7 +943,8 @@ export default function NuevaCotizacionPage() {
   // Total General = suma de producto.total (valores finales que ve el usuario)
   // ============================================================================
   // Total general real: suma de los totales de cada línea (que YA incluyen impuestos si están activos)
-  const totalGeneralReal = productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0)
+  // Redondear a 2 decimales para evitar números con muchos decimales
+  const totalGeneralReal = Math.round(productosConTotal.reduce((sum, producto) => sum + (producto.total || 0), 0) * 100) / 100
 
   // REGLA 6: totalGeneral SIEMPRE respeta totalManual si existe
   // totalGeneralReal SOLO se usa como fallback en cotizaciones nuevas sin total_final

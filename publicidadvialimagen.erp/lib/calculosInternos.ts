@@ -8,6 +8,17 @@
  * y fórmulas que existían antes. NO se modifica la fórmula de IVA/IT.
  */
 
+import { obtenerPrecioVariante } from '@/lib/variantes/obtenerPrecioVariante'
+
+/**
+ * Redondea un número a 2 decimales
+ * @param num Número a redondear
+ * @returns Número redondeado a 2 decimales
+ */
+function redondearADosDecimales(num: number): number {
+  return Math.round(num * 100) / 100
+}
+
 /**
  * Calcula el total en m² (ancho × alto)
  */
@@ -71,7 +82,8 @@ export function calcularTotal(
     subtotal = subtotal * (1 - 0.03)
   }
 
-  return subtotal + comisionTotal
+  // Redondear a 2 decimales antes de retornar
+  return redondearADosDecimales(subtotal + comisionTotal)
 }
 
 /**
@@ -104,7 +116,7 @@ export async function calcularPrecioConVariantes(
   // Incluir la sucursal seleccionada en la cotización para buscar la variante correcta
   if (item.producto_id || item.id) {
     try {
-      const { obtenerPrecioVariante } = await import('@/lib/variantes/obtenerPrecioVariante')
+      // Usar import estático en lugar de dinámico para evitar errores de chunk loading
       const precioVariante = await obtenerPrecioVariante(
         item.producto_id || item.id,
         variantes,

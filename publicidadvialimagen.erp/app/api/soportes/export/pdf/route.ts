@@ -69,6 +69,28 @@ function getSoporteWebUrl(soporteTitle: string, soporteId?: string, soporteCode?
 }
 
 /**
+ * Función para comprimir imágenes usando sharp
+ * Redimensiona a máximo 800px de ancho y convierte a JPEG con calidad 80%
+ */
+async function compressImage(imageBuffer: Buffer, maxWidth: number = 800, quality: number = 80): Promise<Buffer> {
+  try {
+    const compressed = await sharp(imageBuffer)
+      .resize(maxWidth, null, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer()
+    
+    return compressed
+  } catch (error) {
+    console.error('❌ Error comprimiendo imagen:', error)
+    // Si falla la compresión, retornar el buffer original
+    return imageBuffer
+  }
+}
+
+/**
  * Construye el nombre del archivo PDF según los filtros y selección
  */
 function buildPDFFileName({
@@ -218,7 +240,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
     
     // Configuración de colores
-    const primaryColor: [number, number, number] = [213, 70, 68] // #D54644
+    const primaryColor: [number, number, number] = [190, 8, 18] // #be0812 (mismo rojo que cotización)
     
     let yPosition = 20
 
@@ -240,12 +262,17 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       }
     }
 
-    // Cargar el logo para la marca de agua (una sola vez)
+    // Cargar el logo para la marca de agua y header (una sola vez) - comprimido
     let logoBase64Watermark: string | null = null
+    let logoBase64Header: string | null = null
     try {
       const logoPath = path.join(process.cwd(), 'public', 'logo.jpg')
       const logoBuffer = fs.readFileSync(logoPath)
-      logoBase64Watermark = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
+      // Comprimir el logo también para reducir el tamaño del PDF
+      const compressedLogo = await compressImage(logoBuffer, 400, 85)
+      const logoBase64 = `data:image/jpeg;base64,${compressedLogo.toString('base64')}`
+      logoBase64Watermark = logoBase64
+      logoBase64Header = logoBase64
     } catch (error) {
       // Logo no disponible, continuar sin marca de agua
     }
@@ -263,7 +290,23 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       // Logo de la empresa (esquina superior derecha) - Con proporciones exactas 24x5.5
       const addLogo = () => {
         try {
-          // Cargar el nuevo logo JPG con proporciones exactas
+          // Usar el logo comprimido que ya se cargó antes del loop
+          if (logoBase64Header) {
+            // Proporciones exactas 24x5.5 (aspectRatio = 24/5.5 ≈ 4.36) - Tamaño reducido a la mitad
+            const aspectRatio = 24 / 5.5
+            const maxHeight = 7.5 // Altura reducida a la mitad (15/2)
+            const calculatedWidth = maxHeight * aspectRatio
+            const logoWidth = Math.min(calculatedWidth, 35) // Ancho reducido a la mitad (70/2)
+            const logoHeight = logoWidth / aspectRatio // Altura calculada para mantener proporción exacta
+            
+            const logoX = 20 // Posición a la izquierda del título
+            const logoY = yPosition - 1
+            
+            pdf.addImage(logoBase64Header, 'JPEG', logoX, logoY, logoWidth, logoHeight)
+            return true
+          }
+          
+          // Fallback: intentar cargar sin comprimir (solo si no se cargó antes)
           const logoPath = path.join(process.cwd(), 'public', 'logo.jpg')
           const logoBuffer = fs.readFileSync(logoPath)
           const logoBase64 = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
@@ -368,38 +411,43 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
                   throw new Error('Imagen vacía recibida')
                 }
                 
-                const contentType = response.headers.get('content-type') || ''
+                // Comprimir la imagen antes de convertirla a base64
+                const buffer = Buffer.from(imageBuffer)
+                const compressedBuffer = await compressImage(buffer, 800, 80)
                 
-                // Detectar formato de imagen
-                if (contentType.includes('png') || imageUrl.toLowerCase().includes('.png')) {
-                  imageFormat = 'PNG'
-                } else if (contentType.includes('jpeg') || contentType.includes('jpg') || imageUrl.toLowerCase().includes('.jpg') || imageUrl.toLowerCase().includes('.jpeg')) {
-                  imageFormat = 'JPEG'
-                } else if (contentType.includes('webp') || imageUrl.toLowerCase().includes('.webp')) {
-                  imageFormat = 'WEBP'
-                } else {
-                  // Intentar detectar por extensión si no hay content-type
-                  const urlLower = imageUrl.toLowerCase()
-                  if (urlLower.includes('.png')) imageFormat = 'PNG'
-                  else if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) imageFormat = 'JPEG'
-                  else if (urlLower.includes('.webp')) imageFormat = 'WEBP'
-                }
+                // Después de comprimir, siempre será JPEG
+                imageFormat = 'JPEG'
                 
-                const base64 = Buffer.from(imageBuffer).toString('base64')
-                imageBase64 = `data:image/${imageFormat.toLowerCase()};base64,${base64}`
+                const base64 = compressedBuffer.toString('base64')
+                imageBase64 = `data:image/jpeg;base64,${base64}`
               } catch (error) {
                 console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
                 console.error('   URL:', imageUrl.substring(0, 150))
                 imageBase64 = null
               }
             } else {
-              // Si ya es base64, detectar formato del data URI
-              if (imageUrl.includes('data:image/png')) {
-                imageFormat = 'PNG'
-              } else if (imageUrl.includes('data:image/jpeg') || imageUrl.includes('data:image/jpg')) {
+              // Si ya es base64, comprimirla también
+              try {
+                // Extraer el buffer de la imagen base64
+                const base64Data = imageUrl.split(',')[1] || imageUrl
+                const imageBuffer = Buffer.from(base64Data, 'base64')
+                
+                // Comprimir la imagen
+                const compressedBuffer = await compressImage(imageBuffer, 800, 80)
+                
+                // Después de comprimir, siempre será JPEG
                 imageFormat = 'JPEG'
-              } else if (imageUrl.includes('data:image/webp')) {
-                imageFormat = 'WEBP'
+                imageBase64 = `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`
+              } catch (error) {
+                console.error('❌ Error comprimiendo imagen base64:', error)
+                // Si falla, usar la imagen original
+                if (imageUrl.includes('data:image/png')) {
+                  imageFormat = 'PNG'
+                } else if (imageUrl.includes('data:image/jpeg') || imageUrl.includes('data:image/jpg')) {
+                  imageFormat = 'JPEG'
+                } else if (imageUrl.includes('data:image/webp')) {
+                  imageFormat = 'WEBP'
+                }
               }
             }
             
@@ -734,7 +782,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
           { label: 'Ciudad:', value: support.city || 'N/A' },
           { label: 'Medidas:', value: `${support.widthM || 'N/A'}m × ${support.heightM || 'N/A'}m` },
           { label: 'Divisa:', value: 'Bs' },
-          { label: 'Costo de Producción:', value: `${(() => {
+          { label: 'Precio de Lona:', value: `${(() => {
             // SIEMPRE recalcular área desde ancho × alto (ignorar valor guardado)
             const areaCalculada = (support.widthM || 0) * (support.heightM || 0)
             const areaFinal = areaCalculada > 0 ? areaCalculada : (support.areaM2 || 0)
@@ -748,7 +796,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
           { label: 'Zona:', value: support.zona || 'N/A' },
           { label: 'Iluminación:', value: support.lighting || 'No' },
           { label: 'Impactos diarios:', value: support.impactosDiarios?.toLocaleString() || 'N/A' },
-          { label: 'Costo de alquiler:', value: `${support.priceMonth?.toLocaleString() || 'N/A'} Bs` }
+          { label: 'Precio de alquiler:', value: `${support.priceMonth?.toLocaleString() || 'N/A'} Bs` }
         ]
       ]
       

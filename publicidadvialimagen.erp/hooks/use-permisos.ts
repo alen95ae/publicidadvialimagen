@@ -112,19 +112,23 @@ export function usePermisos() {
 
   // Helper para verificar funciones técnicas
   const tieneFuncionTecnica = (accion: string): boolean => {
-    // Los permisos técnicos deben verificarse específicamente, no se otorgan automáticamente
-    // Solo verificar el permiso específico en el módulo "tecnico"
-    const resultado = tienePermiso("tecnico", accion);
+    // Normalizar acción para coincidir con la clave del backend
+    const accionNormalizada = accion
+      .trim()
+      .replace(/\s+/g, " ");
+    
+    // Verificar directamente en permisos["tecnico"][accion] === true
+    const resultado = permisos["tecnico"]?.[accionNormalizada] === true;
     
     // Log específico para "ver dueño de casa"
     if (accion === 'ver dueño de casa') {
       console.log('🔍 [usePermisos] Verificando "ver dueño de casa":', {
         accion,
+        accionNormalizada,
         resultado,
-        permisosTecnico: permisos['tecnico'],
-        tienePermiso: permisos['tecnico']?.[accion],
-        todasLasAcciones: Object.keys(permisos['tecnico'] || {}),
-        permisosCompletos: permisos
+        valorEnPermisos: permisos['tecnico']?.[accionNormalizada],
+        todasLasClaves: Object.keys(permisos['tecnico'] || {}),
+        permisosTecnico: permisos['tecnico']
       });
     }
     

@@ -195,13 +195,12 @@ export async function GET(request: NextRequest) {
     });
 
     // Log para depuración de permisos técnicos
-    const permisosTecnicos = permisosMatrix['tecnico'] || {};
+    const permisosTecnicosFinal = permisosMatrix['tecnico'] || {};
     console.log('🔍 [Permisos API] Permisos técnicos para usuario:', {
       userId,
-      tieneAdmin: tieneAdminEnAlgunModulo,
-      permisosTecnicos,
-      'ver historial soportes': permisosTecnicos['ver historial soportes'],
-      'ver dueño de casa': permisosTecnicos['ver dueño de casa'],
+      permisosTecnicos: permisosTecnicosFinal,
+      'ver dueño de casa': permisosTecnicosFinal['ver dueño de casa'],
+      'todasLasClaves': Object.keys(permisosTecnicosFinal),
       'permisoIds del rol': permisoIds
     });
 

@@ -981,7 +981,8 @@ export default function SoportesPage() {
                 value={statusFilter.length ? statusFilter.join(',') : 'all'}
                 onValueChange={(value) => setStatusFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
               >
-                <SelectTrigger className="w-40 [&>span]:text-black">
+                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                   <SelectValue placeholder="Disponibilidad" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1002,7 +1003,8 @@ export default function SoportesPage() {
                 value={cityFilter || "all"}
                 onValueChange={(value) => setCityFilter(value === 'all' ? '' : value)}
               >
-                <SelectTrigger className="w-40 [&>span]:text-black">
+                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                   <SelectValue placeholder="Ciudad" />
                 </SelectTrigger>
                 <SelectContent>

@@ -92,7 +92,11 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
       'area_total', 'area_total_calculada', 'iluminacion', 'precio_mensual',
       'precio_m2_calculado', 'impactos_diarios', 'propietario', 'ciudad', 'zona', 'pais',
       'enlace_maps', 'latitud', 'longitud', 'imagen_principal', 'imagen_secundaria_1',
-      'imagen_secundaria_2', 'resumen_ia', 'descripcion', 'sustrato'
+      'imagen_secundaria_2', 'resumen_ia', 'descripcion', 'sustrato',
+      // Campos de costes
+      'dueno_casa', 'temporalidad_pago', 'metodo_pago', 'estructura', 'coste_alquiler',
+      'patentes', 'uso_suelos', 'luz', 'gastos_administrativos', 'comision_ejecutiva',
+      'mantenimiento', 'notas'
     ]
     
     // Filtrar solo campos válidos y remover undefined

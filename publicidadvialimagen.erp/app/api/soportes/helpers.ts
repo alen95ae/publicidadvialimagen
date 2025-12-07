@@ -191,6 +191,19 @@ export function soporteToSupport(soporte: any) {
     available: estado === 'Disponible' || estado === 'A Consultar',
     createdAt: soporte.created_at || new Date().toISOString(),
     updatedAt: soporte.created_at || new Date().toISOString(),
+    // Nuevos campos de costes
+    duenoCasa: soporte.dueno_casa ?? null,
+    temporalidadPago: soporte.temporalidad_pago ?? null,
+    metodoPago: soporte.metodo_pago ?? null,
+    estructura: soporte.estructura ?? null,
+    costeAlquiler: num(soporte.coste_alquiler),
+    patentes: num(soporte.patentes),
+    usoSuelos: num(soporte.uso_suelos),
+    luz: soporte.luz ?? null,
+    gastosAdministrativos: num(soporte.gastos_administrativos),
+    comisionEjecutiva: num(soporte.comision_ejecutiva),
+    mantenimiento: num(soporte.mantenimiento),
+    notas: soporte.notas ?? null,
   }
 }
 
@@ -329,6 +342,20 @@ export async function buildSupabasePayload(data: any, existing?: any) {
   else if (existing?.iluminacion !== undefined) payload.iluminacion = existing.iluminacion
   
   if (data.owner !== undefined) payload.propietario = data.owner || null
+
+  // Campos de costes
+  if (data.duenoCasa !== undefined) payload.dueno_casa = data.duenoCasa || null
+  if (data.temporalidadPago !== undefined) payload.temporalidad_pago = data.temporalidadPago || null
+  if (data.metodoPago !== undefined) payload.metodo_pago = data.metodoPago || null
+  if (data.estructura !== undefined) payload.estructura = data.estructura || null
+  if (data.costeAlquiler !== undefined) payload.coste_alquiler = num(data.costeAlquiler)
+  if (data.patentes !== undefined) payload.patentes = num(data.patentes)
+  if (data.usoSuelos !== undefined) payload.uso_suelos = num(data.usoSuelos)
+  if (data.luz !== undefined) payload.luz = data.luz || null
+  if (data.gastosAdministrativos !== undefined) payload.gastos_administrativos = num(data.gastosAdministrativos)
+  if (data.comisionEjecutiva !== undefined) payload.comision_ejecutiva = num(data.comisionEjecutiva)
+  if (data.mantenimiento !== undefined) payload.mantenimiento = num(data.mantenimiento)
+  if (data.notas !== undefined) payload.notas = data.notas || null
 
   // Manejar imágenes (formato JSONB array para Supabase)
   if (data.images !== undefined && Array.isArray(data.images)) {

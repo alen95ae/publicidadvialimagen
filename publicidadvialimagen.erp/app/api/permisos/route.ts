@@ -100,25 +100,10 @@ export async function GET(request: NextRequest) {
       if (!permisosMatrix[permiso.modulo]) {
         permisosMatrix[permiso.modulo] = {};
       }
+      // Los permisos técnicos se verifican individualmente según el rol asignado
+      // NO se otorgan automáticamente por tener admin
       permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
     });
-
-    // Aplicar lógica: si admin=true en cualquier módulo, dar todos los permisos técnicos
-    const tieneAdminEnAlgunModulo = Object.keys(permisosMatrix).some(modulo => 
-      modulo !== 'tecnico' && permisosMatrix[modulo].admin === true
-    );
-
-    // Si tiene admin en algún módulo, dar todos los permisos técnicos
-    if (tieneAdminEnAlgunModulo) {
-      const permisosTecnicos = permisosData?.filter(p => p.modulo === 'tecnico') || [];
-      permisosTecnicos.forEach(permiso => {
-        if (!permisosMatrix['tecnico']) {
-          permisosMatrix['tecnico'] = {};
-        }
-        permisosMatrix['tecnico'][permiso.accion] = true;
-      });
-      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados:', permisosTecnicos.length);
-    }
 
     // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)
     Object.keys(permisosMatrix).forEach(modulo => {

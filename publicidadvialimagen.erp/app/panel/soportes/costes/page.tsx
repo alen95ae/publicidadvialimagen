@@ -1405,7 +1405,7 @@ export default function CostesPage() {
                         </button>
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Propietario</th>
-                      {puedeVerDuenoCasa && (
+                      {!permisosLoading && puedeVerDuenoCasa && (
                         <th className="text-left py-2 px-3 font-medium text-gray-900">Dueño de casa</th>
                       )}
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Temporalidad de pago</th>
@@ -1506,7 +1506,7 @@ export default function CostesPage() {
                   <tbody>
                     {soportesCostesPaginated.length === 0 ? (
                       <tr>
-                        <td colSpan={puedeVerDuenoCasa ? 26 : 25} className="text-center py-8 text-gray-500">
+                        <td colSpan={(!permisosLoading && puedeVerDuenoCasa) ? 26 : 25} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron soportes con ese criterio de búsqueda' : 'No hay soportes disponibles'}
                         </td>
                       </tr>
@@ -1569,7 +1569,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          {puedeVerDuenoCasa && (
+                          {!permisosLoading && puedeVerDuenoCasa && (
                             <td className="py-2 px-3 whitespace-nowrap">
                               {isSelected && canEdit ? (
                                 <Input

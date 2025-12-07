@@ -137,7 +137,7 @@ export default function CostesPage() {
   const [ciudadesUnicas, setCiudadesUnicas] = useState<string[]>([])
   
   // Estados para ordenamiento
-  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "utilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>(null)
+  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadMensual" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>(null)
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   
   // Estado para controlar cuándo los filtros están cargados
@@ -305,13 +305,18 @@ export default function CostesPage() {
     // Aquí: como comisionEjec ya está en el coste, la utilidad neta es igual a la utilidad bruta
     const utilidadMensual = utilidadBruta
     
-    // % UTILIDAD NETA = (utilidadNeta / precio) * 100 (equivalente a % utilidad neta en calculadora)
-    // Caso especial: si coste total es 0 y precio de venta > 1, mostrar 100%
+    // % UTILIDAD = ((últimoPrecio - costeActual) / costeActual) * 100 (Opción B - margen sobre COSTE)
+    // costeActual es el coste sin impuestos
+    // Si costeActual === 0, retornar 100 para evitar división por 0
+    const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio || null
     let porcentajeBeneficio = 0
-    if (costoTotal === 0 && precioVenta > 1) {
+    if (costeActual === 0) {
       porcentajeBeneficio = 100
+    } else if (ultimoPrecio !== null && ultimoPrecio > 0) {
+      porcentajeBeneficio = round2(((ultimoPrecio - costeActual) / costeActual) * 100)
     } else if (precioVenta > 0) {
-      porcentajeBeneficio = round2((utilidadMensual / precioVenta) * 100)
+      // Fallback: si no hay último precio, usar precio de venta
+      porcentajeBeneficio = round2(((precioVenta - costeActual) / costeActual) * 100)
     }
     
     // Utilidad anual = utilidad mensual * 12
@@ -346,10 +351,12 @@ export default function CostesPage() {
       porcentajeUtilidadReal: (() => {
         const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio || null
         if (ultimoPrecio === null || ultimoPrecio === 0) return null
-        // Calcular % utilidad real = (utilidad mensual / último precio) * 100
-        // Usar coste actual en lugar de costo total
-        const utilidadMensualReal = round2(ultimoPrecio - costeActualTotal)
-        return round2((utilidadMensualReal / ultimoPrecio) * 100)
+        // % utilidad real = ((ultimoPrecio - costeActualTotal) / costeActualTotal) * 100
+        // Si costeActualTotal === 0, retornar 100 para evitar división por 0
+        if (costeActualTotal === 0) {
+          return 100
+        }
+        return round2(((ultimoPrecio - costeActualTotal) / costeActualTotal) * 100)
       })(),
       estadoAlquiler: alquileresData[support.id]?.estado || null
     }
@@ -528,6 +535,11 @@ export default function CostesPage() {
 
     // Aplicar todos los filtros
     let filtered = supportsWithEdits.filter(support => {
+      // Excluir soportes con estado "No disponible"
+      if (support.status === 'No disponible' || support.status === 'no disponible' || support.status === 'NO DISPONIBLE') {
+        return false
+      }
+
       // Filtro de búsqueda (solo código y nombre, NO dueño de casa)
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase()
@@ -778,7 +790,7 @@ export default function CostesPage() {
   }
 
   // Función para manejar el ordenamiento
-  const handleSort = (column: "codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "utilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal") => {
+  const handleSort = (column: "codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadMensual" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal") => {
     if (sortColumn === column) {
       // Si ya está ordenando por esta columna, cambiar dirección o desactivar
       if (sortDirection === "asc") {
@@ -859,7 +871,12 @@ export default function CostesPage() {
         bValue = b.precioVenta
         return sortDirection === "asc" ? aValue - bValue : bValue - aValue
         
-      case "utilidad":
+      case "porcentajeUtilidad":
+        aValue = a.porcentajeBeneficio
+        bValue = b.porcentajeBeneficio
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "utilidadMensual":
         aValue = a.utilidadMensual
         bValue = b.utilidadMensual
         return sortDirection === "asc" ? aValue - bValue : bValue - aValue
@@ -928,16 +945,20 @@ export default function CostesPage() {
   const allSoportesCostes = allSupports.map(calculateCosts)
   // TOTAL COSTES: usar coste actual en lugar de costo total
   const totalCostos = allSoportesCostes.reduce((sum, soporte) => sum + soporte.costeActual, 0)
-  const potencialVentas = allSoportesCostes.reduce((sum, soporte) => sum + soporte.precioVenta, 0)
+  
+  // Potencial de ventas: suma de todos los "último precio" de todos los soportes
+  const potencialVentas = allSoportesCostes
+    .filter(soporte => soporte.ultimoPrecio !== null)
+    .reduce((sum, soporte) => sum + (soporte.ultimoPrecio || 0), 0)
   
   // Ingreso Total: suma de todos los "último precio" de soportes con estado de alquiler activo
   const ingresoTotal = allSoportesCostes
     .filter(soporte => soporte.estadoAlquiler === 'activo' && soporte.ultimoPrecio !== null)
     .reduce((sum, soporte) => sum + (soporte.ultimoPrecio || 0), 0)
   
-  // % Beneficio = (Ingresos Ocupados - Costes Totales) / Costes Totales * 100
-  const beneficioReal = ingresoTotal - totalCostos
-  const porcentajeBeneficioTotal = totalCostos > 0 ? (beneficioReal / totalCostos) * 100 : 0
+  // % Beneficio = ((totalIngresos - totalCostes) / totalCostes) * 100
+  // Si totalCostes === 0, retornar 100 para evitar división por 0
+  const porcentajeBeneficioTotal = totalCostos === 0 ? 100 : round2(((ingresoTotal - totalCostos) / totalCostos) * 100)
 
   return (
     <div className="p-6">
@@ -950,6 +971,32 @@ export default function CostesPage() {
 
         {/* Resumen de Costes */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-600">Potencial de ventas</p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Suma del total de últimos precios de todos los soportes</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600 mt-2">
+                    Bs {potencialVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <DollarSign className="w-8 h-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+          
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -972,32 +1019,6 @@ export default function CostesPage() {
                   </p>
                 </div>
                 <TrendingDown className="w-8 h-8 text-red-500" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-600">Potencial de Ventas</p>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="max-w-xs">Suma del precio de venta que se obtendría si todos los soportes estuviesen alquilados</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-600 mt-2">
-                    Bs {potencialVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <DollarSign className="w-8 h-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -1148,17 +1169,27 @@ export default function CostesPage() {
                 <div className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 rounded-full px-3 py-1 text-sm">
                   <span className="font-medium">Orden:</span>
                   <span className="text-gray-700">
-                    {sortColumn === 'codigo' ? 'Código' :
-                     sortColumn === 'titulo' ? 'Título' :
-                     sortColumn === 'costeAlquiler' ? 'Coste Alquiler' :
-                     sortColumn === 'impuestos' ? 'Impuestos' :
-                     sortColumn === 'costeTotal' ? 'Coste Total' :
-                     sortColumn === 'precioVenta' ? 'Precio Venta' :
-                     sortColumn === 'utilidad' ? 'Utilidad' :
-                     sortColumn === 'utilidadAnual' ? 'Utilidad Anual' :
-                     sortColumn === 'costeActual' ? 'Coste Actual' :
-                     sortColumn === 'ultimoPrecio' ? 'Último Precio' :
-                     sortColumn === 'utilidadReal' ? 'Utilidad Real' : sortColumn} ({sortDirection === 'asc' ? 'A-Z' : 'Z-A'})
+                    {(() => {
+                      const columnName = sortColumn === 'codigo' ? 'Código' :
+                                       sortColumn === 'titulo' ? 'Título' :
+                                       sortColumn === 'costeAlquiler' ? 'Coste Alquiler' :
+                                       sortColumn === 'impuestos' ? 'Impuestos' :
+                                       sortColumn === 'costeTotal' ? 'Coste Total' :
+                                       sortColumn === 'precioVenta' ? 'Precio Venta' :
+                                       sortColumn === 'porcentajeUtilidad' ? 'Utilidad' :
+                                       sortColumn === 'utilidadMensual' ? 'Utilidad Mensual' :
+                                       sortColumn === 'utilidadAnual' ? 'Utilidad Anual' :
+                                       sortColumn === 'costeActual' ? 'Coste Actual' :
+                                       sortColumn === 'ultimoPrecio' ? 'Último Precio' :
+                                       sortColumn === 'utilidadReal' ? 'Utilidad Real' : sortColumn || ''
+                      
+                      const isNumericColumn = ['impuestos', 'costeTotal', 'precioVenta', 'porcentajeUtilidad', 'utilidadMensual', 'utilidadAnual', 'costeActual', 'ultimoPrecio', 'utilidadReal', 'costeAlquiler'].includes(sortColumn || '')
+                      const directionText = isNumericColumn 
+                        ? (sortDirection === 'asc' ? '(Menor a Mayor)' : '(Mayor a Menor)')
+                        : (sortDirection === 'asc' ? '(A-Z)' : '(Z-A)')
+                      
+                      return `${columnName} ${directionText}`
+                    })()}
                   </span>
                   <button
                     type="button"
@@ -1456,14 +1487,22 @@ export default function CostesPage() {
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">
                         <button
-                          onClick={() => handleSort("utilidad")}
+                          onClick={() => handleSort("porcentajeUtilidad")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
                         >
                           % Utilidad
-                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidad" ? "text-[#D54644]" : "text-gray-400"}`} />
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "porcentajeUtilidad" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Utilidad mensual</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("utilidadMensual")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Utilidad mensual
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadMensual" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("utilidadAnual")}
@@ -1707,11 +1746,89 @@ export default function CostesPage() {
                                 className="h-8 text-xs w-28"
                                 placeholder="0"
                               />
-                            ) : soporte.luz && parseFloat(soporte.luz) > 0 ? (
-                              <span>Bs {parseFloat(soporte.luz).toFixed(2)}</span>
-                            ) : (
-                              <span className="text-gray-500">-</span>
-                            )}
+                            ) : (() => {
+                              // Obtener el valor de iluminacion del soporte
+                              // El campo lighting viene como 'Sí' o 'No' (string) desde la API
+                              // También puede estar como boolean en iluminacion
+                              const lightingValue = support?.lighting; // 'Sí' o 'No'
+                              const iluminacionValue = (support as any)?.iluminacion; // boolean (si existe)
+                              const luzValue = soporte.luz;
+                              
+                              // Verificar si iluminacion es false
+                              // lighting puede ser 'No', null, undefined, string vacío, o false
+                              // iluminacion puede ser false (boolean)
+                              // Si lighting no es explícitamente 'Sí' o 'Si', consideramos que es false
+                              const iluminacionEsFalse = 
+                                lightingValue === 'No' ||
+                                lightingValue === 'no' ||
+                                lightingValue === 'NO' ||
+                                lightingValue === '' ||
+                                iluminacionValue === false ||
+                                (lightingValue === null || lightingValue === undefined) ||
+                                (iluminacionValue === null || iluminacionValue === undefined) ||
+                                (lightingValue !== 'Sí' && lightingValue !== 'sí' && lightingValue !== 'SÍ' && lightingValue !== 'Si' && lightingValue !== 'si' && lightingValue !== 'SI' && iluminacionValue !== true);
+                              
+                              // Si iluminacion es false → mostrar "SIN LUZ" en gris (estilo como "No disponible" en soportes)
+                              if (iluminacionEsFalse) {
+                                return (
+                                  <span className="inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800">
+                                    SIN LUZ
+                                  </span>
+                                );
+                              }
+                              
+                              // Si iluminacion es true (lighting === 'Sí' o iluminacion === true)
+                              const iluminacionEsTrue = 
+                                lightingValue === 'Sí' ||
+                                lightingValue === 'sí' ||
+                                lightingValue === 'SÍ' ||
+                                lightingValue === 'Si' ||
+                                lightingValue === 'si' ||
+                                lightingValue === 'SI' ||
+                                iluminacionValue === true;
+                              
+                              if (iluminacionEsTrue && luzValue) {
+                                // Si es "SOLAR" → mostrar en amarillo (estilo como reservas)
+                                if (luzValue.toUpperCase() === "SOLAR") {
+                                  return (
+                                    <span className="inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800">
+                                      SOLAR
+                                    </span>
+                                  );
+                                }
+                                
+                                // Si es un número → mostrarlo como está (sin estilo especial)
+                                const luzNumero = parseFloat(luzValue);
+                                if (!isNaN(luzNumero) && luzNumero > 0) {
+                                  return <span>Bs {luzNumero.toFixed(2)}</span>;
+                                }
+                              }
+                              
+                              // Si hay valor en luz pero iluminacion no está definida claramente, mostrar el valor
+                              if (luzValue) {
+                                // Si es "SOLAR"
+                                if (luzValue.toUpperCase() === "SOLAR") {
+                                  return (
+                                    <span className="inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800">
+                                      SOLAR
+                                    </span>
+                                  );
+                                }
+                                
+                                // Si es un número
+                                const luzNumero = parseFloat(luzValue);
+                                if (!isNaN(luzNumero) && luzNumero > 0) {
+                                  return <span>Bs {luzNumero.toFixed(2)}</span>;
+                                }
+                              }
+                              
+                              // Por defecto, mostrar "SIN LUZ" con el mismo estilo (badge gris)
+                              return (
+                                <span className="inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800">
+                                  SIN LUZ
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             {isSelected && canEdit ? (

@@ -33,6 +33,15 @@ const COLORS = [
   "#6366f1", // índigo
 ]
 
+// Colores específicos para estados de soportes
+const ESTADO_COLORS: Record<string, string> = {
+  'Disponible': '#10b981',    // verde
+  'Ocupado': '#ef4444',       // rojo
+  'A Consultar': '#3b82f6',   // azul
+  'Reservado': '#eab308',     // amarillo
+  'No disponible': '#6b7280', // gris (por si acaso)
+}
+
 type TipoGrafico = 'vendedor' | 'cliente' | 'soporte' | 'ciudad' | 'estado'
 type PeriodoFiltro = 'ultimo_mes' | 'ultimo_ano' | 'personalizado'
 
@@ -432,9 +441,13 @@ export default function InformesPage() {
                             fill="#8884d8"
                             dataKey="value"
                           >
-                            {grafico.datos.map((entry, i) => (
-                              <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
-                            ))}
+                            {grafico.datos.map((entry, i) => {
+                              // Si es tipo 'estado', usar colores específicos por estado
+                              const color = grafico.tipo === 'estado' 
+                                ? (ESTADO_COLORS[entry.name] || COLORS[i % COLORS.length])
+                                : COLORS[i % COLORS.length]
+                              return <Cell key={`cell-${i}`} fill={color} />
+                            })}
                           </Pie>
                           <Tooltip 
                             content={({ active, payload }) => {
@@ -475,12 +488,14 @@ export default function InformesPage() {
                         // Si es tipo 'estado', mostrar números enteros con "Soportes"
                         if (grafico.tipo === 'estado') {
                           const value = Math.round(item.value)
+                          // Usar color específico para el estado
+                          const estadoColor = ESTADO_COLORS[item.name] || COLORS[i % COLORS.length]
                           return (
                             <div key={i} className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <div
                                   className="w-4 h-4 rounded-full"
-                                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                                  style={{ backgroundColor: estadoColor }}
                                 />
                                 <span className="text-sm text-gray-700">{item.name}</span>
                               </div>

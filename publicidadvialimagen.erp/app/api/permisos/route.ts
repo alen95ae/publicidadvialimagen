@@ -194,6 +194,25 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // SOLUCIÓN QUIRÚRGICA: Asegurar que "ver dueño de casa" SIEMPRE sea boolean (nunca undefined)
+    // Esto evita problemas de normalización o claves que no coinciden
+    if (permisosMatrix['tecnico']) {
+      const accionVerDuenoCasa = 'ver dueño de casa';
+      if (permisosMatrix['tecnico'][accionVerDuenoCasa] === undefined) {
+        // Si no existe la clave, verificar si el permiso está en el rol
+        const permisoVerDuenoCasa = permisosData?.find(
+          p => normalizarModulo(p.modulo) === 'tecnico' && normalizarAccion(p.accion) === accionVerDuenoCasa
+        );
+        if (permisoVerDuenoCasa) {
+          permisosMatrix['tecnico'][accionVerDuenoCasa] = permisoIds.includes(permisoVerDuenoCasa.id);
+        } else {
+          permisosMatrix['tecnico'][accionVerDuenoCasa] = false;
+        }
+      }
+      // Asegurar que el valor sea explícitamente boolean
+      permisosMatrix['tecnico'][accionVerDuenoCasa] = Boolean(permisosMatrix['tecnico'][accionVerDuenoCasa]);
+    }
+
     // Log para depuración de permisos técnicos
     const permisosTecnicosFinal = permisosMatrix['tecnico'] || {};
     console.log('🔍 [Permisos API] Permisos técnicos para usuario:', {
@@ -201,7 +220,9 @@ export async function GET(request: NextRequest) {
       permisosTecnicos: permisosTecnicosFinal,
       'ver dueño de casa': permisosTecnicosFinal['ver dueño de casa'],
       'todasLasClaves': Object.keys(permisosTecnicosFinal),
-      'permisoIds del rol': permisoIds
+      'permisoIds del rol': permisoIds,
+      'tipoVerDuenoCasa': typeof permisosTecnicosFinal['ver dueño de casa'],
+      'esBoolean': typeof permisosTecnicosFinal['ver dueño de casa'] === 'boolean'
     });
 
     // Log para depuración del módulo sitio

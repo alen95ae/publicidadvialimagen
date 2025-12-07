@@ -46,21 +46,48 @@ export function usePermisos() {
     }
   };
 
+  // Función para normalizar acciones (elimina espacios extra, mantiene acentos)
+  const normalizarAccion = (accion: string): string => {
+    if (!accion) return '';
+    return accion
+      .trim()                 // elimina espacios al inicio/final
+      .replace(/\s+/g, " ");  // colapsa espacios múltiples a uno solo
+  };
+
   // Helper para verificar un permiso específico
   const tienePermiso = (modulo: string, accion: string): boolean => {
-    const moduloPermisos = permisos[modulo];
+    // Normalizar módulo y acción para coincidir con las claves del backend
+    const moduloNormalizado = modulo
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+    
+    const accionNormalizada = normalizarAccion(accion);
+    
+    const moduloPermisos = permisos[moduloNormalizado];
     if (!moduloPermisos) return false;
 
     // Si tiene admin (solo para módulos no técnicos), tiene todos los permisos estándar
-    if (modulo !== 'tecnico' && moduloPermisos.admin) {
+    if (moduloNormalizado !== 'tecnico' && moduloPermisos.admin) {
       // Para módulos normales, admin da acceso a ver, editar, eliminar
-      if (accion === 'ver' || accion === 'editar' || accion === 'eliminar' || accion === 'admin') {
+      if (accionNormalizada === 'ver' || accionNormalizada === 'editar' || accionNormalizada === 'eliminar' || accionNormalizada === 'admin') {
         return true;
       }
     }
 
-    // Acceder directamente a la propiedad (funciona para acciones estándar y personalizadas)
-    return (moduloPermisos as Record<string, boolean | undefined>)[accion] || false;
+    // Buscar la clave normalizada en el objeto
+    // También buscar variaciones por si acaso
+    const todasLasClaves = Object.keys(moduloPermisos);
+    const claveExacta = todasLasClaves.find(k => normalizarAccion(k) === accionNormalizada);
+    
+    if (claveExacta) {
+      return (moduloPermisos as Record<string, boolean | undefined>)[claveExacta] || false;
+    }
+
+    // Fallback: intentar con la acción normalizada directamente
+    return (moduloPermisos as Record<string, boolean | undefined>)[accionNormalizada] || false;
   };
 
   // Helper para verificar si puede ver el módulo

@@ -20,6 +20,25 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseServer();
 
+    // Función para normalizar módulos y acciones (elimina espacios, normaliza encoding)
+    const normalizarModulo = (modulo: string | undefined | null): string => {
+      if (!modulo) return '';
+      return modulo
+        .normalize("NFD")      // elimina acentos
+        .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
+        .trim()                 // elimina espacios al inicio/final
+        .replace(/\s+/g, " ")   // colapsa espacios múltiples a uno solo
+        .toLowerCase();         // convierte a minúsculas
+    };
+
+    const normalizarAccion = (accion: string | undefined | null): string => {
+      if (!accion) return '';
+      return accion
+        .trim()                 // elimina espacios al inicio/final
+        .replace(/\s+/g, " ");  // colapsa espacios múltiples a uno solo
+      // NO eliminar acentos ni convertir a minúsculas para mantener "ver dueño de casa"
+    };
+
     // Si es desarrollador, dar todos los permisos
     if (isDeveloper) {
       // Obtener todos los permisos disponibles
@@ -36,13 +55,16 @@ export async function GET(request: NextRequest) {
       const sitioWebPermisos = permisosData?.filter(p => p.modulo === 'sitio_web' || p.modulo === 'sitio' || p.modulo === 'web') || [];
       console.log('🔍 [Permisos API] Permisos sitio/sitio_web/web:', sitioWebPermisos);
 
-      // Construir matriz con todos los permisos en true
+      // Construir matriz con todos los permisos en true (normalizados)
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
       (permisosData || []).forEach(permiso => {
-        if (!permisosMatrix[permiso.modulo]) {
-          permisosMatrix[permiso.modulo] = {};
+        const moduloNormalizado = normalizarModulo(permiso.modulo);
+        const accionNormalizada = normalizarAccion(permiso.accion);
+        
+        if (!permisosMatrix[moduloNormalizado]) {
+          permisosMatrix[moduloNormalizado] = {};
         }
-        permisosMatrix[permiso.modulo][permiso.accion] = true;
+        permisosMatrix[moduloNormalizado][accionNormalizada] = true;
       });
       
       // Log para depuración de permisos técnicos
@@ -94,6 +116,25 @@ export async function GET(request: NextRequest) {
 
     const permisoIds = (rolPermisosData || []).map(rp => rp.permiso_id);
 
+    // Función para normalizar módulos y acciones (elimina espacios, normaliza encoding)
+    const normalizarModulo = (modulo: string | undefined | null): string => {
+      if (!modulo) return '';
+      return modulo
+        .normalize("NFD")      // elimina acentos
+        .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
+        .trim()                 // elimina espacios al inicio/final
+        .replace(/\s+/g, " ")   // colapsa espacios múltiples a uno solo
+        .toLowerCase();         // convierte a minúsculas
+    };
+
+    const normalizarAccion = (accion: string | undefined | null): string => {
+      if (!accion) return '';
+      return accion
+        .trim()                 // elimina espacios al inicio/final
+        .replace(/\s+/g, " ");  // colapsa espacios múltiples a uno solo
+      // NO eliminar acentos ni convertir a minúsculas para mantener "ver dueño de casa"
+    };
+
     // Construir matriz de permisos
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
     
@@ -101,20 +142,27 @@ export async function GET(request: NextRequest) {
     permisosMatrix['tecnico'] = {};
     
     (permisosData || []).forEach(permiso => {
-      if (!permisosMatrix[permiso.modulo]) {
-        permisosMatrix[permiso.modulo] = {};
+      // Normalizar módulo y acción antes de usarlas como claves
+      const moduloNormalizado = normalizarModulo(permiso.modulo);
+      const accionNormalizada = normalizarAccion(permiso.accion);
+      
+      if (!permisosMatrix[moduloNormalizado]) {
+        permisosMatrix[moduloNormalizado] = {};
       }
       const estaAsignado = permisoIds.includes(permiso.id);
-      permisosMatrix[permiso.modulo][permiso.accion] = estaAsignado;
+      permisosMatrix[moduloNormalizado][accionNormalizada] = estaAsignado;
       
       // Log específico para "ver dueño de casa"
-      if (permiso.modulo === 'tecnico' && permiso.accion === 'ver dueño de casa') {
+      if (moduloNormalizado === 'tecnico' && accionNormalizada === 'ver dueño de casa') {
         console.log('🔍 [Permisos API] Permiso "ver dueño de casa":', {
           permisoId: permiso.id,
           estaEnRol: estaAsignado,
           permisoIds: permisoIds,
-          modulo: permiso.modulo,
-          accion: permiso.accion
+          moduloOriginal: permiso.modulo,
+          moduloNormalizado: moduloNormalizado,
+          accionOriginal: permiso.accion,
+          accionNormalizada: accionNormalizada,
+          claveUsada: `${moduloNormalizado}.${accionNormalizada}`
         });
       }
     });
@@ -127,25 +175,29 @@ export async function GET(request: NextRequest) {
     // Si tiene admin en algún módulo, dar todos los permisos técnicos EXCEPTO "ver dueño de casa"
     // "ver dueño de casa" solo se otorga si está explícitamente seleccionado en el rol
     if (tieneAdminEnAlgunModulo) {
-      const permisosTecnicos = permisosData?.filter(p => p.modulo === 'tecnico') || [];
+      const permisosTecnicos = permisosData?.filter(p => normalizarModulo(p.modulo) === 'tecnico') || [];
       permisosTecnicos.forEach(permiso => {
-        if (!permisosMatrix['tecnico']) {
-          permisosMatrix['tecnico'] = {};
+        const moduloNormalizado = normalizarModulo(permiso.modulo);
+        const accionNormalizada = normalizarAccion(permiso.accion);
+        
+        if (!permisosMatrix[moduloNormalizado]) {
+          permisosMatrix[moduloNormalizado] = {};
         }
         // "ver dueño de casa" solo se otorga si está explícitamente asignado al rol
-        if (permiso.accion === 'ver dueño de casa') {
+        if (accionNormalizada === 'ver dueño de casa') {
           // Asegurar que el valor se establezca correctamente según si está en el rol
           const estaEnRol = permisoIds.includes(permiso.id);
-          permisosMatrix['tecnico'][permiso.accion] = estaEnRol;
+          permisosMatrix[moduloNormalizado][accionNormalizada] = estaEnRol;
           console.log('🔍 [Permisos API] Usuario con admin - "ver dueño de casa" establecido:', {
-            accion: permiso.accion,
+            accionOriginal: permiso.accion,
+            accionNormalizada: accionNormalizada,
             permisoId: permiso.id,
             estaEnRol: estaEnRol,
-            valorEstablecido: permisosMatrix['tecnico'][permiso.accion]
+            valorEstablecido: permisosMatrix[moduloNormalizado][accionNormalizada]
           });
         } else {
           // Otros permisos técnicos se otorgan automáticamente por admin
-          permisosMatrix['tecnico'][permiso.accion] = true;
+          permisosMatrix[moduloNormalizado][accionNormalizada] = true;
         }
       });
       console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados (excepto ver dueño de casa)');
@@ -153,7 +205,8 @@ export async function GET(request: NextRequest) {
 
     // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)
     Object.keys(permisosMatrix).forEach(modulo => {
-      if (modulo !== 'tecnico' && permisosMatrix[modulo].admin) {
+      const moduloNormalizado = normalizarModulo(modulo);
+      if (moduloNormalizado !== 'tecnico' && permisosMatrix[modulo].admin) {
         permisosMatrix[modulo].ver = true;
         permisosMatrix[modulo].editar = true;
         permisosMatrix[modulo].eliminar = true;

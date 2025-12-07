@@ -85,15 +85,8 @@ export function usePermisos() {
 
   // Helper para verificar funciones técnicas
   const tieneFuncionTecnica = (accion: string): boolean => {
-    // Si tiene admin en cualquier módulo, tiene todos los permisos técnicos
-    const tieneAdmin = Object.keys(permisos).some(modulo => 
-      modulo !== 'tecnico' && permisos[modulo]?.admin === true
-    );
-    
-    if (tieneAdmin) {
-      return true;
-    }
-    
+    // Los permisos técnicos deben verificarse específicamente, no se otorgan automáticamente
+    // Solo verificar el permiso específico en el módulo "tecnico"
     return tienePermiso("tecnico", accion);
   };
 

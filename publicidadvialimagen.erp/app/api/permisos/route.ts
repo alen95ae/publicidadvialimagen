@@ -96,11 +96,27 @@ export async function GET(request: NextRequest) {
 
     // Construir matriz de permisos
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
+    
+    // Inicializar módulo técnico SIEMPRE
+    permisosMatrix['tecnico'] = {};
+    
     (permisosData || []).forEach(permiso => {
       if (!permisosMatrix[permiso.modulo]) {
         permisosMatrix[permiso.modulo] = {};
       }
-      permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
+      const estaAsignado = permisoIds.includes(permiso.id);
+      permisosMatrix[permiso.modulo][permiso.accion] = estaAsignado;
+      
+      // Log específico para "ver dueño de casa"
+      if (permiso.modulo === 'tecnico' && permiso.accion === 'ver dueño de casa') {
+        console.log('🔍 [Permisos API] Permiso "ver dueño de casa":', {
+          permisoId: permiso.id,
+          estaEnRol: estaAsignado,
+          permisoIds: permisoIds,
+          modulo: permiso.modulo,
+          accion: permiso.accion
+        });
+      }
     });
 
     // Aplicar lógica: si admin=true en cualquier módulo, dar todos los permisos técnicos

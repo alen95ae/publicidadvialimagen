@@ -136,6 +136,13 @@ export async function GET(request: NextRequest) {
         if (permiso.accion === 'ver dueño de casa') {
           // Mantener el valor que ya tiene (true si está asignado, false si no)
           // No sobrescribir con true automáticamente
+          const valorActual = permisosMatrix['tecnico'][permiso.accion];
+          console.log('🔍 [Permisos API] Usuario con admin - "ver dueño de casa" mantiene valor:', {
+            accion: permiso.accion,
+            permisoId: permiso.id,
+            valorActual: valorActual,
+            estaEnRol: permisoIds.includes(permiso.id)
+          });
         } else {
           // Otros permisos técnicos se otorgan automáticamente por admin
           permisosMatrix['tecnico'][permiso.accion] = true;
@@ -159,7 +166,9 @@ export async function GET(request: NextRequest) {
       userId,
       tieneAdmin: tieneAdminEnAlgunModulo,
       permisosTecnicos,
-      'ver historial soportes': permisosTecnicos['ver historial soportes']
+      'ver historial soportes': permisosTecnicos['ver historial soportes'],
+      'ver dueño de casa': permisosTecnicos['ver dueño de casa'],
+      'permisoIds del rol': permisoIds
     });
 
     // Log para depuración del módulo sitio

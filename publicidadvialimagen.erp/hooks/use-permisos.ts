@@ -112,13 +112,35 @@ export function usePermisos() {
 
   // Helper para verificar funciones técnicas
   const tieneFuncionTecnica = (accion: string): boolean => {
+    // No verificar si aún está cargando
+    if (loading) return false;
+    
     // Normalizar acción para coincidir con la clave del backend
     const accionNormalizada = accion
       .trim()
       .replace(/\s+/g, " ");
     
-    // Verificar directamente en permisos["tecnico"][accion] === true
-    const resultado = permisos["tecnico"]?.[accionNormalizada] === true;
+    // SOLUCIÓN QUIRÚRGICA: Buscar la clave exacta o variaciones
+    const permisosTecnico = permisos["tecnico"];
+    if (!permisosTecnico) return false;
+    
+    // Intentar con la clave exacta primero
+    let valor = permisosTecnico[accionNormalizada];
+    
+    // Si no se encuentra, buscar en todas las claves con normalización
+    if (valor === undefined) {
+      const todasLasClaves = Object.keys(permisosTecnico);
+      const claveEncontrada = todasLasClaves.find(k => {
+        const kNormalizada = k.trim().replace(/\s+/g, " ");
+        return kNormalizada === accionNormalizada;
+      });
+      if (claveEncontrada) {
+        valor = permisosTecnico[claveEncontrada];
+      }
+    }
+    
+    // Verificar explícitamente que sea true (no truthy)
+    const resultado = valor === true;
     
     // Log específico para "ver dueño de casa"
     if (accion === 'ver dueño de casa') {
@@ -126,9 +148,10 @@ export function usePermisos() {
         accion,
         accionNormalizada,
         resultado,
-        valorEnPermisos: permisos['tecnico']?.[accionNormalizada],
-        todasLasClaves: Object.keys(permisos['tecnico'] || {}),
-        permisosTecnico: permisos['tecnico']
+        valorEnPermisos: valor,
+        tipoValor: typeof valor,
+        todasLasClaves: Object.keys(permisosTecnico || {}),
+        permisosTecnico: permisosTecnico
       });
     }
     

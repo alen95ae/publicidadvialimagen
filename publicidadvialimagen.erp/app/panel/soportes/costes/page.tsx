@@ -113,7 +113,8 @@ const getBeneficioIcon = (porcentaje: number) => {
 
 export default function CostesPage() {
   const { puedeEditar, loading: permisosLoading, tieneFuncionTecnica } = usePermisosContext()
-  const puedeVerDuenoCasa = tieneFuncionTecnica("ver dueño de casa")
+  // SOLUCIÓN QUIRÚRGICA: Solo verificar si los permisos ya están cargados
+  const puedeVerDuenoCasa = !permisosLoading && tieneFuncionTecnica("ver dueño de casa")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSoportes, setSelectedSoportes] = useState<string[]>([])
   const [supports, setSupports] = useState<Support[]>([])

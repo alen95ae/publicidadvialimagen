@@ -134,14 +134,14 @@ export async function GET(request: NextRequest) {
         }
         // "ver dueño de casa" solo se otorga si está explícitamente asignado al rol
         if (permiso.accion === 'ver dueño de casa') {
-          // Mantener el valor que ya tiene (true si está asignado, false si no)
-          // No sobrescribir con true automáticamente
-          const valorActual = permisosMatrix['tecnico'][permiso.accion];
-          console.log('🔍 [Permisos API] Usuario con admin - "ver dueño de casa" mantiene valor:', {
+          // Asegurar que el valor se establezca correctamente según si está en el rol
+          const estaEnRol = permisoIds.includes(permiso.id);
+          permisosMatrix['tecnico'][permiso.accion] = estaEnRol;
+          console.log('🔍 [Permisos API] Usuario con admin - "ver dueño de casa" establecido:', {
             accion: permiso.accion,
             permisoId: permiso.id,
-            valorActual: valorActual,
-            estaEnRol: permisoIds.includes(permiso.id)
+            estaEnRol: estaEnRol,
+            valorEstablecido: permisosMatrix['tecnico'][permiso.accion]
           });
         } else {
           // Otros permisos técnicos se otorgan automáticamente por admin

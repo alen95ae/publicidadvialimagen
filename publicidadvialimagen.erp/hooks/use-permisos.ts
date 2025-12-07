@@ -95,7 +95,9 @@ export function usePermisos() {
         accion,
         resultado,
         permisosTecnico: permisos['tecnico'],
-        tienePermiso: permisos['tecnico']?.[accion]
+        tienePermiso: permisos['tecnico']?.[accion],
+        todasLasAcciones: Object.keys(permisos['tecnico'] || {}),
+        permisosCompletos: permisos
       });
     }
     

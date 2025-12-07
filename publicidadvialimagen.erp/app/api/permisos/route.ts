@@ -38,6 +38,10 @@ export async function GET(request: NextRequest) {
 
       // Construir matriz con todos los permisos en true
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
+      
+      // Inicializar módulo técnico siempre
+      permisosMatrix['tecnico'] = {};
+      
       (permisosData || []).forEach(permiso => {
         if (!permisosMatrix[permiso.modulo]) {
           permisosMatrix[permiso.modulo] = {};
@@ -96,29 +100,16 @@ export async function GET(request: NextRequest) {
 
     // Construir matriz de permisos
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
+    
+    // Inicializar módulo técnico siempre (aunque esté vacío)
+    permisosMatrix['tecnico'] = {};
+    
     (permisosData || []).forEach(permiso => {
       if (!permisosMatrix[permiso.modulo]) {
         permisosMatrix[permiso.modulo] = {};
       }
       permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
     });
-
-    // Aplicar lógica: si admin=true en cualquier módulo, dar todos los permisos técnicos
-    const tieneAdminEnAlgunModulo = Object.keys(permisosMatrix).some(modulo => 
-      modulo !== 'tecnico' && permisosMatrix[modulo].admin === true
-    );
-
-    // Si tiene admin en algún módulo, dar todos los permisos técnicos
-    if (tieneAdminEnAlgunModulo) {
-      const permisosTecnicos = permisosData?.filter(p => p.modulo === 'tecnico') || [];
-      permisosTecnicos.forEach(permiso => {
-        if (!permisosMatrix['tecnico']) {
-          permisosMatrix['tecnico'] = {};
-        }
-        permisosMatrix['tecnico'][permiso.accion] = true;
-      });
-      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados:', permisosTecnicos.length);
-    }
 
     // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)
     Object.keys(permisosMatrix).forEach(modulo => {

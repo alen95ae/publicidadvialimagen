@@ -108,16 +108,24 @@ export async function GET(request: NextRequest) {
       modulo !== 'tecnico' && permisosMatrix[modulo].admin === true
     );
 
-    // Si tiene admin en algún módulo, dar todos los permisos técnicos
+    // Si tiene admin en algún módulo, dar todos los permisos técnicos EXCEPTO "ver dueño de casa"
+    // "ver dueño de casa" solo se otorga si está explícitamente seleccionado en el rol
     if (tieneAdminEnAlgunModulo) {
       const permisosTecnicos = permisosData?.filter(p => p.modulo === 'tecnico') || [];
       permisosTecnicos.forEach(permiso => {
         if (!permisosMatrix['tecnico']) {
           permisosMatrix['tecnico'] = {};
         }
-        permisosMatrix['tecnico'][permiso.accion] = true;
+        // "ver dueño de casa" solo se otorga si está explícitamente asignado al rol
+        if (permiso.accion === 'ver dueño de casa') {
+          // Mantener el valor que ya tiene (true si está asignado, false si no)
+          // No sobrescribir con true automáticamente
+        } else {
+          // Otros permisos técnicos se otorgan automáticamente por admin
+          permisosMatrix['tecnico'][permiso.accion] = true;
+        }
       });
-      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados:', permisosTecnicos.length);
+      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados (excepto ver dueño de casa)');
     }
 
     // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)

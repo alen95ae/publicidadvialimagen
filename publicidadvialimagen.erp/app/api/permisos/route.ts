@@ -148,6 +148,42 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Aplicar lógica: si admin=true en cualquier módulo, dar todos los permisos técnicos
+    const tieneAdminEnAlgunModulo = Object.keys(permisosMatrix).some(modulo => 
+      modulo !== 'tecnico' && permisosMatrix[modulo].admin === true
+    );
+
+    // Si tiene admin en algún módulo, dar todos los permisos técnicos EXCEPTO "ver dueño de casa"
+    // "ver dueño de casa" solo se otorga si está explícitamente seleccionado en el rol
+    if (tieneAdminEnAlgunModulo) {
+      const permisosTecnicos = permisosData?.filter(p => normalizarModulo(p.modulo) === 'tecnico') || [];
+      permisosTecnicos.forEach(permiso => {
+        const moduloNormalizado = normalizarModulo(permiso.modulo);
+        const accionNormalizada = normalizarAccion(permiso.accion);
+        
+        if (!permisosMatrix[moduloNormalizado]) {
+          permisosMatrix[moduloNormalizado] = {};
+        }
+        // "ver dueño de casa" solo se otorga si está explícitamente asignado al rol
+        if (accionNormalizada === 'ver dueño de casa') {
+          // Asegurar que el valor se establezca correctamente según si está en el rol
+          const estaEnRol = permisoIds.includes(permiso.id);
+          permisosMatrix[moduloNormalizado][accionNormalizada] = estaEnRol;
+          console.log('🔍 [Permisos API] Usuario con admin - "ver dueño de casa" establecido:', {
+            accionOriginal: permiso.accion,
+            accionNormalizada: accionNormalizada,
+            permisoId: permiso.id,
+            estaEnRol: estaEnRol,
+            valorEstablecido: permisosMatrix[moduloNormalizado][accionNormalizada]
+          });
+        } else {
+          // Otros permisos técnicos se otorgan automáticamente por admin
+          permisosMatrix[moduloNormalizado][accionNormalizada] = true;
+        }
+      });
+      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados (excepto ver dueño de casa)');
+    }
+
     // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)
     Object.keys(permisosMatrix).forEach(modulo => {
       const moduloNormalizado = normalizarModulo(modulo);
@@ -165,8 +201,7 @@ export async function GET(request: NextRequest) {
       permisosTecnicos: permisosTecnicosFinal,
       'ver dueño de casa': permisosTecnicosFinal['ver dueño de casa'],
       'todasLasClaves': Object.keys(permisosTecnicosFinal),
-      'permisoIds del rol': permisoIds,
-      'tipoVerDuenoCasa': typeof permisosTecnicosFinal['ver dueño de casa']
+      'permisoIds del rol': permisoIds
     });
 
     // Log para depuración del módulo sitio

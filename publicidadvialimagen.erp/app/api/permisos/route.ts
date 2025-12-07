@@ -116,25 +116,6 @@ export async function GET(request: NextRequest) {
 
     const permisoIds = (rolPermisosData || []).map(rp => rp.permiso_id);
 
-    // Función para normalizar módulos y acciones (elimina espacios, normaliza encoding)
-    const normalizarModulo = (modulo: string | undefined | null): string => {
-      if (!modulo) return '';
-      return modulo
-        .normalize("NFD")      // elimina acentos
-        .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
-        .trim()                 // elimina espacios al inicio/final
-        .replace(/\s+/g, " ")   // colapsa espacios múltiples a uno solo
-        .toLowerCase();         // convierte a minúsculas
-    };
-
-    const normalizarAccion = (accion: string | undefined | null): string => {
-      if (!accion) return '';
-      return accion
-        .trim()                 // elimina espacios al inicio/final
-        .replace(/\s+/g, " ");  // colapsa espacios múltiples a uno solo
-      // NO eliminar acentos ni convertir a minúsculas para mantener "ver dueño de casa"
-    };
-
     // Construir matriz de permisos
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
     

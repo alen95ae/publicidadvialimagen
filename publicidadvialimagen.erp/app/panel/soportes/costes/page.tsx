@@ -14,7 +14,10 @@ import {
   Filter, 
   Download, 
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  ArrowUpDown,
+  X,
+  Info
 } from "lucide-react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -75,6 +78,7 @@ interface SupportCosts {
   notas: string
   estructura: string
   costeAlquiler: number
+  costeAlquilerActual: number | null // Coste de alquiler actual (null si no se aplica)
   patentes: number
   usoSuelos: number
   luz: string
@@ -83,6 +87,7 @@ interface SupportCosts {
   mantenimiento: number
   impuestos18: number
   costoTotal: number
+  costeActual: number // Coste actual según método de pago y estado de alquiler
   precioVenta: number
   porcentajeBeneficio: number
   utilidadMensual: number
@@ -107,7 +112,8 @@ const getBeneficioIcon = (porcentaje: number) => {
 }
 
 export default function CostesPage() {
-  const { puedeEditar, loading: permisosLoading } = usePermisosContext()
+  const { puedeEditar, loading: permisosLoading, tieneFuncionTecnica } = usePermisosContext()
+  const puedeVerDuenoCasa = tieneFuncionTecnica("ver dueño de casa")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSoportes, setSelectedSoportes] = useState<string[]>([])
   const [supports, setSupports] = useState<Support[]>([])
@@ -129,6 +135,13 @@ export default function CostesPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [ciudadesUnicas, setCiudadesUnicas] = useState<string[]>([])
   
+  // Estados para ordenamiento
+  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "utilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>(null)
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  
+  // Estado para controlar cuándo los filtros están cargados
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
+  
   // Estados para datos de alquileres
   const [alquileresData, setAlquileresData] = useState<Record<string, { ultimoPrecio: number | null, estado: 'activo' | 'reservado' | 'proximo' | 'finalizado' | null }>>({})
 
@@ -142,57 +155,77 @@ export default function CostesPage() {
   // Función auxiliar para redondear a 2 decimales
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-  // Función para obtener datos de alquileres para un soporte
-  const fetchAlquileresForSupport = async (supportId: string) => {
+  // Cargar datos de alquileres para todos los soportes (optimizado: una sola llamada)
+  const loadAlquileresData = async (supports: Support[]) => {
     try {
-      const response = await fetch(`/api/alquileres?soporte_id=${supportId}&pageSize=1000`)
+      // Obtener todos los alquileres de una vez
+      const response = await fetch(`/api/alquileres?pageSize=10000`)
       if (response.ok) {
         const result = await response.json()
-        const alquileres = result.data || []
+        const allAlquileres = result.data || []
         
-        if (alquileres.length > 0) {
-          // Ordenar por fecha de inicio descendente para obtener el más reciente (fecha más avanzada)
-          const sortedAlquileres = alquileres.sort((a: any, b: any) => {
-            const dateA = a.inicio ? new Date(a.inicio).getTime() : 0
-            const dateB = b.inicio ? new Date(b.inicio).getTime() : 0
-            return dateB - dateA
-          })
-          
-          const ultimoAlquiler = sortedAlquileres[0]
-          // Calcular precio mensual: total / meses
-          const precioMensual = ultimoAlquiler.meses && ultimoAlquiler.meses > 0 
-            ? (ultimoAlquiler.total || 0) / ultimoAlquiler.meses 
-            : null
-          
-          return {
-            ultimoPrecio: precioMensual,
-            estado: ultimoAlquiler.estado || null
+        // Crear un mapa de soporte_id -> alquileres
+        const alquileresPorSoporte: Record<string, any[]> = {}
+        allAlquileres.forEach((alquiler: any) => {
+          if (alquiler.soporte_id) {
+            const soporteId = String(alquiler.soporte_id)
+            if (!alquileresPorSoporte[soporteId]) {
+              alquileresPorSoporte[soporteId] = []
+            }
+            alquileresPorSoporte[soporteId].push(alquiler)
           }
-        }
+        })
+        
+        // Procesar cada soporte para obtener el último alquiler
+        const alquileresMap: Record<string, { ultimoPrecio: number | null, estado: 'activo' | 'reservado' | 'proximo' | 'finalizado' | null }> = {}
+        
+        supports.forEach((support) => {
+          const alquileres = alquileresPorSoporte[support.id] || []
+          
+          if (alquileres.length > 0) {
+            // Ordenar por fecha de inicio descendente para obtener el más reciente (fecha más avanzada)
+            const sortedAlquileres = alquileres.sort((a: any, b: any) => {
+              const dateA = a.inicio ? new Date(a.inicio).getTime() : 0
+              const dateB = b.inicio ? new Date(b.inicio).getTime() : 0
+              return dateB - dateA
+            })
+            
+            const ultimoAlquiler = sortedAlquileres[0]
+            
+            // Calcular precio mensual: (total / número_de_días) * 30
+            let precioMensual: number | null = null
+            if (ultimoAlquiler.total && ultimoAlquiler.inicio && ultimoAlquiler.fin) {
+              const fechaInicio = new Date(ultimoAlquiler.inicio)
+              const fechaFin = new Date(ultimoAlquiler.fin)
+              const diferenciaMs = fechaFin.getTime() - fechaInicio.getTime()
+              const dias = Math.max(1, Math.ceil(diferenciaMs / (1000 * 60 * 60 * 24))) // Al menos 1 día para evitar división por 0
+              
+              if (dias > 0) {
+                const precioPorDia = (ultimoAlquiler.total || 0) / dias
+                precioMensual = round2(precioPorDia * 30)
+              }
+            }
+            
+            alquileresMap[support.id] = {
+              ultimoPrecio: precioMensual,
+              estado: ultimoAlquiler.estado || null
+            }
+          } else {
+            alquileresMap[support.id] = { ultimoPrecio: null, estado: null }
+          }
+        })
+        
+        setAlquileresData(alquileresMap)
       }
     } catch (error) {
-      console.error(`Error obteniendo alquileres para soporte ${supportId}:`, error)
+      console.error('Error obteniendo alquileres:', error)
+      // En caso de error, inicializar con valores null
+      const alquileresMap: Record<string, { ultimoPrecio: number | null, estado: 'activo' | 'reservado' | 'proximo' | 'finalizado' | null }> = {}
+      supports.forEach((support) => {
+        alquileresMap[support.id] = { ultimoPrecio: null, estado: null }
+      })
+      setAlquileresData(alquileresMap)
     }
-    return { ultimoPrecio: null, estado: null }
-  }
-
-  // Cargar datos de alquileres para todos los soportes
-  const loadAlquileresData = async (supports: Support[]) => {
-    const alquileresMap: Record<string, { ultimoPrecio: number | null, estado: 'activo' | 'reservado' | 'proximo' | 'finalizado' | null }> = {}
-    
-    // Cargar en paralelo con límite de concurrencia
-    const batchSize = 10
-    for (let i = 0; i < supports.length; i += batchSize) {
-      const batch = supports.slice(i, i + batchSize)
-      await Promise.all(
-        batch.map(async (support) => {
-          const data = await fetchAlquileresForSupport(support.id)
-          alquileresMap[support.id] = data
-        })
-      )
-    }
-    
-    setAlquileresData(alquileresMap)
   }
 
   // Función para calcular costes basados en datos reales (siguiendo lógica de calculadora de precios)
@@ -209,15 +242,59 @@ export default function CostesPage() {
     const comisionEjec = support.comisionEjecutiva || 0
     const mantenimiento = support.mantenimiento || 0
     
-    // COSTE = Suma de todos los costes (equivalente a "coste" en calculadora de precios)
+    // Obtener método de pago y estado de alquiler
+    const metodoPago = (support.metodoPago || "").toUpperCase()
+    const estadoAlquiler = alquileresData[support.id]?.estado || null
+    const alquilerActivo = estadoAlquiler === 'activo'
+    
+    // Calcular COSTE ACTUAL según las reglas:
+    // - Coste de alquiler: 
+    //   * Si método de pago = "FIJO" → siempre se calcula
+    //   * Si método de pago = "CUANDO SE ALQUILA" → solo cuando el alquiler está activo
+    //   * Si método de pago = "NO SE PAGA" → no se suma (0)
+    // - Patentes, uso de suelos, luz, gastos administrativos y mantenimiento: solo cuando método de pago = "FIJO"
+    // - Comisión ejec. y alquiler: siempre cuando el alquiler esté activo
+    
+    let costeAlquilerActual = 0
+    if (metodoPago === "FIJO") {
+      costeAlquilerActual = costeAlquiler
+    } else if (metodoPago === "CUANDO SE ALQUILA") {
+      if (alquilerActivo) {
+        costeAlquilerActual = costeAlquiler
+      }
+    } else if (metodoPago === "NO SE PAGA") {
+      costeAlquilerActual = 0
+    } else {
+      // Por defecto, si no hay método de pago definido, usar el valor original
+      costeAlquilerActual = costeAlquiler
+    }
+    
+    // Patentes, uso de suelos, luz, gastos administrativos y mantenimiento: solo si método de pago = "FIJO"
+    const costePatentes = metodoPago === "FIJO" ? patentes : 0
+    const costeUsoSuelos = metodoPago === "FIJO" ? usoSuelos : 0
+    const costeLuz = metodoPago === "FIJO" ? luz : 0
+    const costeGastosAdmin = metodoPago === "FIJO" ? gastosAdministrativos : 0
+    const costeMantenimiento = metodoPago === "FIJO" ? mantenimiento : 0
+    
+    // Comisión ejecutiva: siempre cuando el alquiler esté activo
+    const costeComisionEjec = alquilerActivo ? comisionEjec : 0
+    
+    // COSTE ACTUAL = suma de todos los costes según las reglas
+    const costeActual = round2(costeAlquilerActual + costePatentes + costeUsoSuelos + costeLuz + costeGastosAdmin + costeComisionEjec + costeMantenimiento)
+    
+    // COSTE = Suma de todos los costes (equivalente a "coste" en calculadora de precios) - MANTENER PARA COMPATIBILIDAD
     const coste = round2(costeAlquiler + patentes + usoSuelos + luz + gastosAdministrativos + comisionEjec + mantenimiento)
     
     // IMPUESTOS 18% = equivalente a factura + IUE en calculadora, se extrae del PRECIO (no del coste)
     // En la calculadora: factura = precio * 16%, iue = precio * 2% (total 18%)
-    const impuestos18 = round2(precioVenta * 0.18)
+    // SOLO se aplican cuando el alquiler está activo
+    const impuestos18 = alquilerActivo ? round2(precioVenta * 0.18) : 0
     
-    // COSTE TOTAL = coste + impuestos 18% (equivalente a costosTotales = coste + factura + iue en calculadora)
+    // COSTE TOTAL = coste + impuestos 18% (equivalente a costosTotales = coste + factura + iue en calculadora) - MANTENER PARA COMPATIBILIDAD
     const costoTotal = round2(coste + impuestos18)
+    
+    // COSTE ACTUAL TOTAL = coste actual + impuestos 18% (solo si alquiler activo)
+    const costeActualTotal = round2(costeActual + impuestos18)
     
     // UTILIDAD BRUTA = precio - coste total (equivalente a utilidadBruta en calculadora)
     const utilidadBruta = round2(precioVenta - costoTotal)
@@ -250,6 +327,7 @@ export default function CostesPage() {
       notas: support.notas || "",
       estructura: support.estructura || "",
       costeAlquiler,
+      costeAlquilerActual: metodoPago === "NO SE PAGA" ? null : (metodoPago === "CUANDO SE ALQUILA" && !alquilerActivo ? null : costeAlquilerActual),
       patentes,
       usoSuelos,
       luz: luzTexto,
@@ -258,6 +336,7 @@ export default function CostesPage() {
       mantenimiento,
       impuestos18,
       costoTotal,
+      costeActual: costeActualTotal, // Coste actual total (incluye impuestos)
       precioVenta,
       porcentajeBeneficio,
       utilidadMensual,
@@ -267,8 +346,8 @@ export default function CostesPage() {
         const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio || null
         if (ultimoPrecio === null || ultimoPrecio === 0) return null
         // Calcular % utilidad real = (utilidad mensual / último precio) * 100
-        // Pero necesitamos recalcular la utilidad mensual con el último precio
-        const utilidadMensualReal = round2(ultimoPrecio - costoTotal)
+        // Usar coste actual en lugar de costo total
+        const utilidadMensualReal = round2(ultimoPrecio - costeActualTotal)
         return round2((utilidadMensualReal / ultimoPrecio) * 100)
       })(),
       estadoAlquiler: alquileresData[support.id]?.estado || null
@@ -324,6 +403,83 @@ export default function CostesPage() {
     }
   }
 
+  // 1) Cargar los filtros una sola vez al montar
+  useEffect(() => {
+    const saved = sessionStorage.getItem("costes_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setSearchTerm(f.searchTerm ?? "")
+        setFiltroCiudad(f.filtroCiudad ?? "all")
+        setFiltroMetodoPago(f.filtroMetodoPago ?? "all")
+        setFiltroPropietario(f.filtroPropietario ?? "all")
+        setFiltroEstado(f.filtroEstado ?? "all")
+        setSortColumn(f.sortColumn ?? null)
+        setSortDirection(f.sortDirection ?? "asc")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    // Garantizamos que SOLO ahora los filtros están listos
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("costes_filtros", JSON.stringify({
+      searchTerm,
+      filtroCiudad,
+      filtroMetodoPago,
+      filtroPropietario,
+      filtroEstado,
+      sortColumn,
+      sortDirection
+    }))
+  }, [searchTerm, filtroCiudad, filtroMetodoPago, filtroPropietario, filtroEstado, sortColumn, sortDirection, filtersLoaded])
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    console.log('🧹 Limpiando todos los filtros')
+    setSearchTerm("")
+    setFiltroCiudad("all")
+    setFiltroMetodoPago("all")
+    setFiltroPropietario("all")
+    setFiltroEstado("all")
+    setSortColumn(null)
+    setSortDirection("asc")
+    sessionStorage.removeItem('costes_filtros')
+  }
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'ciudad' | 'metodoPago' | 'propietario' | 'estado' | 'orden') => {
+    console.log('🗑️ Eliminando filtro:', tipo)
+    switch (tipo) {
+      case 'busqueda':
+        setSearchTerm("")
+        break
+      case 'ciudad':
+        setFiltroCiudad("all")
+        break
+      case 'metodoPago':
+        setFiltroMetodoPago("all")
+        break
+      case 'propietario':
+        setFiltroPropietario("all")
+        break
+      case 'estado':
+        setFiltroEstado("all")
+        break
+      case 'orden':
+        setSortColumn(null)
+        setSortDirection("asc")
+        break
+    }
+  }
+
   // Cargar ciudades únicas al inicio
   useEffect(() => {
     const loadCiudades = async () => {
@@ -371,13 +527,12 @@ export default function CostesPage() {
 
     // Aplicar todos los filtros
     let filtered = supportsWithEdits.filter(support => {
-      // Filtro de búsqueda
+      // Filtro de búsqueda (solo código y nombre, NO dueño de casa)
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase()
         const matchesSearch = 
           (support.code || '').toLowerCase().includes(searchLower) ||
-          (support.title || '').toLowerCase().includes(searchLower) ||
-          (support.owner || '').toLowerCase().includes(searchLower)
+          (support.title || '').toLowerCase().includes(searchLower)
         if (!matchesSearch) return false
       }
 
@@ -413,18 +568,18 @@ export default function CostesPage() {
     setCurrentPage(1) // Resetear a primera página cuando cambian los filtros
   }, [supports, searchTerm, filtroMetodoPago, filtroPropietario, filtroEstado, editedSupports, alquileresData])
 
-  // Paginación en frontend
-  const totalPages = Math.ceil(filteredSupports.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedSupports = filteredSupports.slice(startIndex, endIndex)
-
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedSoportes(paginatedSupports.map(s => s.id))
+      // Esto se actualizará después de que se calculen los soportes paginados
+      setSelectedSoportes([])
     } else {
       setSelectedSoportes([])
     }
+  }
+  
+  // Obtener los soportes originales para los paginados
+  const getSupportById = (id: string) => {
+    return filteredSupports.find(s => s.id === id)
   }
 
   const handleSelectSoporte = (id: string, checked: boolean) => {
@@ -522,12 +677,11 @@ export default function CostesPage() {
       return
     }
 
-    // Definir las columnas en el orden correcto
+    // Definir las columnas en el orden correcto (sin "Dueño de casa")
     const headers = [
       "Código",
       "Título",
       "Propietario",
-      "Dueño de casa",
       "Temporalidad de pago",
       "Método de pago",
       "Notas",
@@ -541,6 +695,7 @@ export default function CostesPage() {
       "Mantenimiento",
       "Impuestos 18%",
       "Coste Total",
+      "Coste Actual",
       "Precio Venta",
       "% Utilidad",
       "Utilidad mensual",
@@ -560,12 +715,11 @@ export default function CostesPage() {
       return str
     }
 
-    // Crear las filas de datos
+    // Crear las filas de datos (sin "Dueño de casa")
     const rows = data.map(soporte => [
       escapeCSV(soporte.codigo),
       escapeCSV(soporte.titulo),
       escapeCSV(soporte.propietario),
-      escapeCSV(soporte.duenoCasa),
       escapeCSV(soporte.temporalidadPago),
       escapeCSV(soporte.metodoPago),
       escapeCSV(soporte.notas),
@@ -579,6 +733,7 @@ export default function CostesPage() {
       escapeCSV(soporte.mantenimiento.toFixed(2)),
       escapeCSV(soporte.impuestos18.toFixed(2)),
       escapeCSV(soporte.costoTotal.toFixed(2)),
+      escapeCSV(soporte.costeActual.toFixed(2)),
       escapeCSV(soporte.precioVenta.toFixed(2)),
       escapeCSV(soporte.porcentajeBeneficio.toFixed(1) + "%"),
       escapeCSV(soporte.utilidadMensual.toFixed(2)),
@@ -615,12 +770,147 @@ export default function CostesPage() {
     toast.success(`${data.length} registro(s) exportado(s)`)
   }
 
-  // Funciones de paginación
+  // Funciones de paginación (se definirán después de calcular totalPages)
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Función para manejar el ordenamiento
+  const handleSort = (column: "codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "utilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal") => {
+    if (sortColumn === column) {
+      // Si ya está ordenando por esta columna, cambiar dirección o desactivar
+      if (sortDirection === "asc") {
+        setSortDirection("desc")
+      } else {
+        // Si estaba en desc, desactivar el ordenamiento (ciclo: asc -> desc -> sin orden -> asc)
+        setSortColumn(null)
+        setSortDirection("asc")
+      }
+    } else {
+      // Si es una nueva columna, empezar con asc
+      setSortColumn(column)
+      setSortDirection("asc")
+    }
+  }
+
+  // Convertir soportes filtrados a costes
+  const soportesCostesBase = filteredSupports.map(calculateCosts)
+
+  // Aplicar ordenamiento si está activo
+  const soportesCostes = [...soportesCostesBase].sort((a, b) => {
+    if (!sortColumn) return 0
+    
+    let aValue: any
+    let bValue: any
+    
+    switch (sortColumn) {
+      case "codigo":
+        // Parsear código formato "123-SCZ" -> número y letras
+        const parseCode = (code: string) => {
+          const parts = (code || "").split("-")
+          const numberPart = parts[0] ? parseInt(parts[0], 10) : 0
+          const letterPart = parts[1] ? parts[1].toLowerCase() : ""
+          return { number: isNaN(numberPart) ? 0 : numberPart, letters: letterPart }
+        }
+        
+        const aParsed = parseCode(a.codigo || "")
+        const bParsed = parseCode(b.codigo || "")
+        
+        // Primero comparar por número (orden numérico)
+        if (aParsed.number !== bParsed.number) {
+          return sortDirection === "asc" 
+            ? aParsed.number - bParsed.number 
+            : bParsed.number - aParsed.number
+        }
+        
+        // Si los números son iguales, comparar por letras (orden alfabético)
+        if (aParsed.letters < bParsed.letters) return sortDirection === "asc" ? -1 : 1
+        if (aParsed.letters > bParsed.letters) return sortDirection === "asc" ? 1 : -1
+        return 0
+        
+      case "titulo":
+        aValue = (a.titulo || "").toLowerCase()
+        bValue = (b.titulo || "").toLowerCase()
+        if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
+        if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
+        return 0
+        
+      case "costeAlquiler":
+        aValue = a.costeAlquilerActual ?? a.costeAlquiler
+        bValue = b.costeAlquilerActual ?? b.costeAlquiler
+        if (aValue === null) aValue = 0
+        if (bValue === null) bValue = 0
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "impuestos":
+        aValue = a.impuestos18
+        bValue = b.impuestos18
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "costeTotal":
+        aValue = a.costoTotal
+        bValue = b.costoTotal
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "precioVenta":
+        aValue = a.precioVenta
+        bValue = b.precioVenta
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "utilidad":
+        aValue = a.utilidadMensual
+        bValue = b.utilidadMensual
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "utilidadAnual":
+        aValue = a.utilidadAnual
+        bValue = b.utilidadAnual
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "costeActual":
+        aValue = a.costeActual
+        bValue = b.costeActual
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "ultimoPrecio":
+        aValue = a.ultimoPrecio ?? 0
+        bValue = b.ultimoPrecio ?? 0
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      case "utilidadReal":
+        aValue = a.porcentajeUtilidadReal ?? 0
+        bValue = b.porcentajeUtilidadReal ?? 0
+        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+        
+      default:
+        return 0
+    }
+  })
+
+  // Aplicar paginación después del ordenamiento
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const soportesCostesPaginated = soportesCostes.slice(startIndex, endIndex)
+  
+  // Paginación en frontend (ahora basada en soportesCostes ordenados)
+  const totalPages = Math.ceil(soportesCostes.length / itemsPerPage)
+  
+  // Obtener los soportes originales para los costes paginados
+  const paginatedSupports = soportesCostesPaginated.map(coste => {
+    return filteredSupports.find(s => s.id === coste.id)
+  }).filter(Boolean) as Support[]
+  
+  // Actualizar handleSelectAll para usar los soportes paginados correctos
+  const handleSelectAllUpdated = (checked: boolean) => {
+    if (checked) {
+      setSelectedSoportes(soportesCostesPaginated.map(s => s.id))
+    } else {
+      setSelectedSoportes([])
+    }
+  }
+  
+  // Funciones de paginación (después de calcular totalPages)
   const handlePrevPage = () => {
     if (currentPage > 1) {
       handlePageChange(currentPage - 1)
@@ -633,17 +923,16 @@ export default function CostesPage() {
     }
   }
 
-  // Convertir soportes paginados a costes (ya están filtrados)
-  const soportesCostes = paginatedSupports.map(calculateCosts)
-
   // Cálculos del panel superior usando TODOS los soportes (no solo los de la página)
   const allSoportesCostes = allSupports.map(calculateCosts)
-  const totalCostos = allSoportesCostes.reduce((sum, soporte) => sum + soporte.costoTotal, 0)
+  // TOTAL COSTES: usar coste actual en lugar de costo total
+  const totalCostos = allSoportesCostes.reduce((sum, soporte) => sum + soporte.costeActual, 0)
   const potencialVentas = allSoportesCostes.reduce((sum, soporte) => sum + soporte.precioVenta, 0)
   
-  // Ingresos solo de soportes ocupados (de todos los soportes)
-  const soportesOcupados = allSupports.filter(s => s.status === 'Ocupado')
-  const ingresoTotal = soportesOcupados.reduce((sum, s) => sum + (s.priceMonth || 0), 0)
+  // Ingreso Total: suma de todos los "último precio" de soportes con estado de alquiler activo
+  const ingresoTotal = allSoportesCostes
+    .filter(soporte => soporte.estadoAlquiler === 'activo' && soporte.ultimoPrecio !== null)
+    .reduce((sum, soporte) => sum + (soporte.ultimoPrecio || 0), 0)
   
   // % Beneficio = (Ingresos Ocupados - Costes Totales) / Costes Totales * 100
   const beneficioReal = ingresoTotal - totalCostos
@@ -663,13 +952,25 @@ export default function CostesPage() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Costes</p>
-                  <p className="text-2xl font-bold text-red-600">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-600">Total Costes</p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Suma de todos los costes de los soportes con alquiler activo</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-2xl font-bold text-red-600 mt-2">
                     Bs {totalCostos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <DollarSign className="w-8 h-8 text-red-500" />
+                <TrendingDown className="w-8 h-8 text-red-500" />
               </div>
             </CardContent>
           </Card>
@@ -677,13 +978,25 @@ export default function CostesPage() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Potencial de Ventas</p>
-                  <p className="text-2xl font-bold text-blue-600">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-600">Potencial de Ventas</p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Suma del precio de venta que se obtendría si todos los soportes estuviesen alquilados</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600 mt-2">
                     Bs {potencialVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-blue-500" />
+                <DollarSign className="w-8 h-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -691,13 +1004,25 @@ export default function CostesPage() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Ingreso Total</p>
-                  <p className="text-2xl font-bold text-green-600">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-600">Ingreso Total</p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Suma del precio actual de venta de los soportes activos</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-2xl font-bold text-green-600 mt-2">
                     Bs {ingresoTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-green-500" />
+                <TrendingUp className="w-8 h-8 text-green-600" />
               </div>
             </CardContent>
           </Card>
@@ -705,13 +1030,34 @@ export default function CostesPage() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">% Beneficio</p>
-                  <p className={`text-2xl font-bold ${getBeneficioColor(porcentajeBeneficioTotal)}`}>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-600">% Beneficio</p>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">Utilidad neta de los soportes activos actualmente menos el total de costes</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className={`text-2xl font-bold ${getBeneficioColor(porcentajeBeneficioTotal)} mt-2`}>
                     {porcentajeBeneficioTotal.toFixed(1)}%
                   </p>
                 </div>
-                {getBeneficioIcon(porcentajeBeneficioTotal)}
+                {(() => {
+                  const color = getBeneficioColor(porcentajeBeneficioTotal)
+                  const isRedOrBlack = color === "text-red-600" || color === "text-black"
+                  // El color del icono siempre coincide con el color de la cifra
+                  if (isRedOrBlack) {
+                    return <TrendingDown className={`w-8 h-8 ${color}`} />
+                  } else {
+                    return <TrendingUp className={`w-8 h-8 ${color}`} />
+                  }
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -719,12 +1065,127 @@ export default function CostesPage() {
 
         {/* Actions Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          {/* Etiquetas de filtros activos */}
+          {(searchTerm || filtroCiudad !== "all" || filtroMetodoPago !== "all" || filtroPropietario !== "all" || filtroEstado !== "all" || sortColumn) && (
+            <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
+              {searchTerm && (
+                <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Búsqueda:</span>
+                  <span className="text-gray-700">{searchTerm}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('busqueda')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {filtroCiudad !== "all" && (
+                <div className="flex items-center gap-1 bg-purple-100 hover:bg-purple-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Ciudad:</span>
+                  <span className="text-gray-700">{filtroCiudad}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('ciudad')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {filtroMetodoPago !== "all" && (
+                <div className="flex items-center gap-1 bg-indigo-100 hover:bg-indigo-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Método de pago:</span>
+                  <span className="text-gray-700">{filtroMetodoPago}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('metodoPago')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {filtroPropietario !== "all" && (
+                <div className="flex items-center gap-1 bg-pink-100 hover:bg-pink-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Propietario:</span>
+                  <span className="text-gray-700">{filtroPropietario === 'imagen' ? 'Imagen' : 'Otros'}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('propietario')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {filtroEstado !== "all" && (
+                <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Estado:</span>
+                  <span className="text-gray-700">
+                    {filtroEstado === 'activo' ? 'Activo' :
+                     filtroEstado === 'reservado' ? 'Reservado' :
+                     filtroEstado === 'proximo' ? 'Próximo' :
+                     filtroEstado === 'finalizado' ? 'Finalizado' : filtroEstado}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('estado')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {sortColumn && (
+                <div className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Orden:</span>
+                  <span className="text-gray-700">
+                    {sortColumn === 'codigo' ? 'Código' :
+                     sortColumn === 'titulo' ? 'Título' :
+                     sortColumn === 'costeAlquiler' ? 'Coste Alquiler' :
+                     sortColumn === 'impuestos' ? 'Impuestos' :
+                     sortColumn === 'costeTotal' ? 'Coste Total' :
+                     sortColumn === 'precioVenta' ? 'Precio Venta' :
+                     sortColumn === 'utilidad' ? 'Utilidad' :
+                     sortColumn === 'utilidadAnual' ? 'Utilidad Anual' :
+                     sortColumn === 'costeActual' ? 'Coste Actual' :
+                     sortColumn === 'ultimoPrecio' ? 'Último Precio' :
+                     sortColumn === 'utilidadReal' ? 'Utilidad Real' : sortColumn} ({sortDirection === 'asc' ? 'A-Z' : 'Z-A'})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('orden')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {/* Botón para limpiar todos */}
+              <button
+                type="button"
+                onClick={limpiarTodosFiltros}
+                className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+              >
+                Limpiar todo
+              </button>
+            </div>
+          )}
+          
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar soportes..."
+                  placeholder="Buscar por código o nombre..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 max-w-64"
@@ -918,64 +1379,164 @@ export default function CostesPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3">
+                      <th className="text-left py-2 px-3 sticky left-0 z-20 bg-white border-r border-gray-200" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                         <Checkbox
-                          checked={selectedSoportes.length === soportesCostes.length && soportesCostes.length > 0}
-                          onCheckedChange={handleSelectAll}
+                          checked={selectedSoportes.length === soportesCostesPaginated.length && soportesCostesPaginated.length > 0}
+                          onCheckedChange={handleSelectAllUpdated}
                         />
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Código</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Título</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900 sticky left-[40px] z-20 bg-white border-r border-gray-200" style={{ width: '120px', minWidth: '120px' }}>
+                        <button
+                          onClick={() => handleSort("codigo")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Código
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "codigo" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("titulo")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Título
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "titulo" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Propietario</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Dueño de casa</th>
+                      {puedeVerDuenoCasa && (
+                        <th className="text-left py-2 px-3 font-medium text-gray-900">Dueño de casa</th>
+                      )}
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Temporalidad de pago</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Método de pago</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Notas</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Estructura</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Coste Alquiler</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("costeAlquiler")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Coste Alquiler
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "costeAlquiler" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Patentes</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Uso de suelos</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Luz</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Gastos administrativos</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Comisión ejec.</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Mantenimiento</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Impuestos 18%</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Coste Total</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Precio Venta</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">% Utilidad</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("impuestos")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Impuestos 18%
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "impuestos" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("costeTotal")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Coste Total
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "costeTotal" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("precioVenta")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Precio Venta
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "precioVenta" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("utilidad")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          % Utilidad
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidad" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Utilidad mensual</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Utilidad anual</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Último precio</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">% Utilidad real</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("utilidadAnual")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Utilidad anual
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadAnual" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("costeActual")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Coste Actual
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "costeActual" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("ultimoPrecio")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          Último precio
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "ultimoPrecio" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                        <button
+                          onClick={() => handleSort("utilidadReal")}
+                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
+                        >
+                          % Utilidad real
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadReal" ? "text-[#D54644]" : "text-gray-400"}`} />
+                        </button>
+                      </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {soportesCostes.length === 0 ? (
+                    {soportesCostesPaginated.length === 0 ? (
                       <tr>
-                        <td colSpan={22} className="text-center py-8 text-gray-500">
+                        <td colSpan={puedeVerDuenoCasa ? 26 : 25} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron soportes con ese criterio de búsqueda' : 'No hay soportes disponibles'}
                         </td>
                       </tr>
                     ) : (
-                      soportesCostes.map((soporte) => {
+                      soportesCostesPaginated.map((soporte) => {
                         const isSelected = selectedSoportes.includes(soporte.id)
-                        const support = paginatedSupports.find(s => s.id === soporte.id)
+                        const support = getSupportById(soporte.id)
                         const edited = editedSupports[soporte.id] || {}
                         const canEdit = !permisosLoading && puedeEditar("soportes")
                         
                         return (
-                        <tr key={soporte.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-2 px-3">
+                        <tr key={soporte.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}>
+                          <td className={`py-2 px-3 sticky left-0 z-10 ${isSelected ? 'bg-gray-100' : 'bg-white'} border-r border-gray-200`} style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={(checked) => handleSelectSoporte(soporte.id, checked as boolean)}
                             />
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
-                              {soporte.codigo}
-                            </span>
+                          <td className={`py-2 px-3 whitespace-nowrap sticky left-[40px] z-10 ${isSelected ? 'bg-gray-100' : 'bg-white'} border-r border-gray-200`} style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                                    {soporte.codigo}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-sm">
+                                  {soporte.titulo || '-'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             {soporte.titulo?.length > 40 ? (
@@ -1007,31 +1568,33 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            {isSelected && canEdit ? (
-                              <Input
-                                value={edited.duenoCasa ?? support?.duenoCasa ?? ""}
-                                onChange={(e) => handleFieldChange(soporte.id, 'duenoCasa', e.target.value)}
-                                className="h-8 text-xs w-32"
-                                placeholder="Dueño de casa"
-                              />
-                            ) : soporte.duenoCasa ? (
-                              soporte.duenoCasa.length > 20 ? (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger className="text-left">
-                                      <span className="text-sm">{soporte.duenoCasa.slice(0, 20) + '…'}</span>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-sm">{soporte.duenoCasa}</TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+                          {puedeVerDuenoCasa && (
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              {isSelected && canEdit ? (
+                                <Input
+                                  value={edited.duenoCasa ?? support?.duenoCasa ?? ""}
+                                  onChange={(e) => handleFieldChange(soporte.id, 'duenoCasa', e.target.value)}
+                                  className="h-8 text-xs w-32"
+                                  placeholder="Dueño de casa"
+                                />
+                              ) : soporte.duenoCasa ? (
+                                soporte.duenoCasa.length > 20 ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger className="text-left">
+                                        <span className="text-sm">{soporte.duenoCasa.slice(0, 20) + '…'}</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-sm">{soporte.duenoCasa}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  <span className="text-sm">{soporte.duenoCasa}</span>
+                                )
                               ) : (
-                                <span className="text-sm">{soporte.duenoCasa}</span>
-                              )
-                            ) : (
-                              <span className="text-gray-500">-</span>
-                            )}
-                          </td>
+                                <span className="text-gray-500">-</span>
+                              )}
+                            </td>
+                          )}
                           <td className="py-2 px-3 whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
@@ -1101,8 +1664,10 @@ export default function CostesPage() {
                                 className="h-8 text-xs w-28"
                                 placeholder="0.00"
                               />
+                            ) : soporte.costeAlquilerActual !== null ? (
+                              <span className="font-medium">Bs {soporte.costeAlquilerActual.toFixed(2)}</span>
                             ) : (
-                              <span className="font-medium">Bs {soporte.costeAlquiler.toFixed(2)}</span>
+                              <span className="text-gray-500">-</span>
                             )}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
@@ -1213,6 +1778,9 @@ export default function CostesPage() {
                             <span className={`font-medium ${soporte.utilidadAnual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               Bs {soporte.utilidadAnual.toFixed(2)}
                             </span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            <span className="font-medium text-purple-600">Bs {soporte.costeActual.toFixed(2)}</span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             {soporte.ultimoPrecio !== null ? (

@@ -53,21 +53,36 @@ export async function GET(request: NextRequest) {
       // Construir estructura: { modulo: { accion: true/false } }
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
       
-      // Separar permisos técnicos
+      // Función auxiliar para normalizar módulos (elimina acentos, espacios, mayúsculas, etc.)
+      const normalizarModulo = (modulo: string | undefined | null): string => {
+        if (!modulo) return '';
+        return modulo
+          .normalize("NFD")      // elimina acentos
+          .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
+          .trim()                 // elimina espacios al inicio/final
+          .toLowerCase();         // convierte a minúsculas
+      };
+
+      // Separar permisos técnicos (módulo "tecnico" normalizado)
       const permisosTecnicos: Array<{ id: string; accion: string; asignado: boolean }> = [];
       
       (permisosData || []).forEach(permiso => {
-        if (permiso.modulo === 'tecnico') {
+        // Normalizar módulo para evitar errores por espacios, acentos o mayúsculas
+        const moduloNormalizado = normalizarModulo(permiso.modulo);
+        
+        // Incluir en Funciones Técnicas: todos los permisos del módulo "tecnico" (normalizado)
+        if (moduloNormalizado === 'tecnico') {
           permisosTecnicos.push({
             id: permiso.id,
             accion: permiso.accion,
             asignado: permisoIds.includes(permiso.id),
           });
         } else {
-          if (!permisosMatrix[permiso.modulo]) {
-            permisosMatrix[permiso.modulo] = {};
+          // Usar módulo normalizado como clave
+          if (!permisosMatrix[moduloNormalizado]) {
+            permisosMatrix[moduloNormalizado] = {};
           }
-          permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
+          permisosMatrix[moduloNormalizado][permiso.accion] = permisoIds.includes(permiso.id);
         }
       });
 
@@ -255,21 +270,36 @@ export async function PUT(request: NextRequest) {
       .eq('rol_id', id);
 
     const permisoIds = (rolPermisosData || []).map(rp => rp.permiso_id);
+    // Función auxiliar para normalizar módulos (elimina acentos, espacios, mayúsculas, etc.)
+    const normalizarModulo = (modulo: string | undefined | null): string => {
+      if (!modulo) return '';
+      return modulo
+        .normalize("NFD")      // elimina acentos
+        .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
+        .trim()                 // elimina espacios al inicio/final
+        .toLowerCase();         // convierte a minúsculas
+    };
+
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
     const permisosTecnicos: Array<{ id: string; accion: string; asignado: boolean }> = [];
     
     (permisosData || []).forEach(permiso => {
-      if (permiso.modulo === 'tecnico') {
+      // Normalizar módulo para evitar errores por espacios, acentos o mayúsculas
+      const moduloNormalizado = normalizarModulo(permiso.modulo);
+      
+      // Incluir en Funciones Técnicas: todos los permisos del módulo "tecnico" (normalizado)
+      if (moduloNormalizado === 'tecnico') {
         permisosTecnicos.push({
           id: permiso.id,
           accion: permiso.accion,
           asignado: permisoIds.includes(permiso.id),
         });
       } else {
-        if (!permisosMatrix[permiso.modulo]) {
-          permisosMatrix[permiso.modulo] = {};
+        // Usar módulo normalizado como clave
+        if (!permisosMatrix[moduloNormalizado]) {
+          permisosMatrix[moduloNormalizado] = {};
         }
-        permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
+        permisosMatrix[moduloNormalizado][permiso.accion] = permisoIds.includes(permiso.id);
       }
     });
 

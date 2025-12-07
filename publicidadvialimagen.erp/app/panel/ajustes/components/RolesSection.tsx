@@ -46,6 +46,17 @@ export default function RolesSection() {
   // Estado para permisos técnicos: { id: string, accion: string, asignado: boolean }
   const [permisosTecnicos, setPermisosTecnicos] = useState<Array<{ id: string; accion: string; asignado: boolean }>>([]);
 
+  // Función auxiliar para normalizar módulos (elimina acentos, espacios, mayúsculas, etc.)
+  // Debe estar aquí al principio para poder usarse en todas las funciones
+  const normalizarModulo = (modulo: string | undefined | null): string => {
+    if (!modulo) return '';
+    return modulo
+      .normalize("NFD")      // elimina acentos
+      .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
+      .trim()                 // elimina espacios al inicio/final
+      .toLowerCase();         // convierte a minúsculas
+  };
+
   useEffect(() => {
     loadRoles();
   }, []);
@@ -60,26 +71,38 @@ export default function RolesSection() {
         setRoles(data.roles || []);
         setPermisos(data.permisos || []);
         
-        // Inicializar matriz de permisos basada en los permisos disponibles (excluyendo técnicos)
+        // Inicializar matriz de permisos basada en los permisos disponibles (excluyendo técnicos y "ver dueño de casa")
         const initialMatrix: Record<string, Record<string, boolean>> = {};
         const permisosTecnicosInicial: Array<{ id: string; accion: string; asignado: boolean }> = [];
         
         (data.permisos || []).forEach((permiso: Permiso) => {
-          if (permiso.modulo === 'tecnico') {
+          // Normalizar módulo para evitar errores por espacios, acentos o mayúsculas
+          const moduloNormalizado = normalizarModulo(permiso.modulo);
+          
+          // Incluir en Funciones Técnicas: todos los permisos del módulo "tecnico" (normalizado)
+          const esTecnico = moduloNormalizado === 'tecnico';
+          
+          if (esTecnico) {
+            // SOLO funciones técnicas - NO meter en initialMatrix
             permisosTecnicosInicial.push({
               id: permiso.id,
               accion: permiso.accion,
               asignado: false,
             });
-          } else {
-            if (!initialMatrix[permiso.modulo]) {
-              initialMatrix[permiso.modulo] = {};
-            }
-            initialMatrix[permiso.modulo][permiso.accion] = false;
+            // ❗ Clave: evitar que técnico entre en initialMatrix
+            return; // Continuar con el siguiente permiso sin tocar initialMatrix
           }
+          
+          // Módulos normales - usar módulo normalizado como clave
+          if (!initialMatrix[moduloNormalizado]) {
+            initialMatrix[moduloNormalizado] = {};
+          }
+          initialMatrix[moduloNormalizado][permiso.accion] = false;
         });
+        // ❗ Eliminar "tecnico" de initialMatrix para que NUNCA aparezca en "Permisos por Módulo"
+        delete initialMatrix["tecnico"];
         setPermisoMatrix(initialMatrix);
-        setPermisosTecnicos(permisosTecnicosInicial);
+        setPermisosTecnicos(ordenarPermisosTecnicos(permisosTecnicosInicial));
       } else {
         toast({
           title: "Error",
@@ -146,21 +169,33 @@ export default function RolesSection() {
         const initialMatrix: Record<string, Record<string, boolean>> = {};
         const permisosTecnicosReset: Array<{ id: string; accion: string; asignado: boolean }> = [];
         permisos.forEach(permiso => {
-          if (permiso.modulo === 'tecnico') {
+          // Normalizar módulo para evitar errores por espacios, acentos o mayúsculas
+          const moduloNormalizado = normalizarModulo(permiso.modulo);
+          
+          // Incluir en Funciones Técnicas: todos los permisos del módulo "tecnico" (normalizado)
+          const esTecnico = moduloNormalizado === 'tecnico';
+          
+          if (esTecnico) {
+            // SOLO funciones técnicas - NO meter en initialMatrix
             permisosTecnicosReset.push({
               id: permiso.id,
               accion: permiso.accion,
               asignado: false,
             });
-          } else {
-            if (!initialMatrix[permiso.modulo]) {
-              initialMatrix[permiso.modulo] = {};
-            }
-            initialMatrix[permiso.modulo][permiso.accion] = false;
+            // ❗ Clave: evitar que técnico entre en initialMatrix
+            return; // Continuar con el siguiente permiso sin tocar initialMatrix
           }
+          
+          // Módulos normales - usar módulo normalizado como clave
+          if (!initialMatrix[moduloNormalizado]) {
+            initialMatrix[moduloNormalizado] = {};
+          }
+          initialMatrix[moduloNormalizado][permiso.accion] = false;
         });
+        // ❗ Eliminar "tecnico" de initialMatrix para que NUNCA aparezca en "Permisos por Módulo"
+        delete initialMatrix["tecnico"];
         setPermisoMatrix(initialMatrix);
-        setPermisosTecnicos(permisosTecnicosReset);
+        setPermisosTecnicos(ordenarPermisosTecnicos(permisosTecnicosReset));
         loadRoles();
       } else {
         toast({
@@ -279,31 +314,47 @@ export default function RolesSection() {
       nombre: role.nombre,
       descripcion: role.descripcion,
     });
-    // Cargar permisos del rol en la matriz
-    setPermisoMatrix({ ...role.permisos });
+    // Cargar permisos del rol en la matriz (excluyendo técnico)
+    const permisosSinTecnico: Record<string, Record<string, boolean>> = {};
+    Object.entries(role.permisos).forEach(([modulo, acciones]) => {
+      // Normalizar módulo para comparación correcta
+      const moduloNormalizado = normalizarModulo(modulo);
+      if (moduloNormalizado !== 'tecnico') {
+        // Usar módulo normalizado como clave
+        permisosSinTecnico[moduloNormalizado] = acciones;
+      }
+    });
+    // ❗ Eliminar "tecnico" de permisosSinTecnico para que NUNCA aparezca en "Permisos por Módulo"
+    delete permisosSinTecnico["tecnico"];
+    setPermisoMatrix(permisosSinTecnico);
     // Cargar permisos técnicos del rol
     if ((role as any).permisosTecnicos) {
-      setPermisosTecnicos((role as any).permisosTecnicos);
+      setPermisosTecnicos(ordenarPermisosTecnicos((role as any).permisosTecnicos));
     } else {
       // Si no vienen permisos técnicos, inicializar desde permisos disponibles
       const permisosTecnicosInicial: Array<{ id: string; accion: string; asignado: boolean }> = [];
-      permisos.filter(p => p.modulo === 'tecnico').forEach(permiso => {
+      permisos.filter(p => normalizarModulo(p.modulo) === 'tecnico').forEach(permiso => {
         permisosTecnicosInicial.push({
           id: permiso.id,
           accion: permiso.accion,
           asignado: false,
         });
       });
-      setPermisosTecnicos(permisosTecnicosInicial);
+      setPermisosTecnicos(ordenarPermisosTecnicos(permisosTecnicosInicial));
     }
     setIsEditDialogOpen(true);
   };
 
   const handlePermissionChange = (modulo: string, accion: string, value: boolean) => {
+    // Normalizar módulo para consistencia
+    const moduloNormalizado = normalizarModulo(modulo);
+    // No permitir modificar permisos técnicos desde aquí
+    if (moduloNormalizado === 'tecnico') return;
+    
     setPermisoMatrix(prev => ({
       ...prev,
-      [modulo]: {
-        ...prev[modulo],
+      [moduloNormalizado]: {
+        ...prev[moduloNormalizado],
         [accion]: value,
       },
     }));
@@ -331,12 +382,14 @@ export default function RolesSection() {
 
   // Agrupar permisos por módulo (excluyendo técnicos)
   const permisosPorModulo = permisos
-    .filter(p => p.modulo !== 'tecnico')
+    .filter(p => normalizarModulo(p.modulo) !== 'tecnico')
     .reduce((acc, permiso) => {
-      if (!acc[permiso.modulo]) {
-        acc[permiso.modulo] = [];
+      // Usar módulo normalizado como clave
+      const moduloNormalizado = normalizarModulo(permiso.modulo);
+      if (!acc[moduloNormalizado]) {
+        acc[moduloNormalizado] = [];
       }
-      acc[permiso.modulo].push(permiso);
+      acc[moduloNormalizado].push(permiso);
       return acc;
     }, {} as Record<string, Permiso[]>);
 
@@ -348,6 +401,33 @@ export default function RolesSection() {
     setPermisosTecnicos(prev => 
       prev.map(pt => pt.id === id ? { ...pt, asignado: checked } : pt)
     );
+  };
+
+  // Función para ordenar permisos técnicos: "ver propietario soportes" -> "ver dueño de casa" -> "descargar ot" -> resto
+  const ordenarPermisosTecnicos = (permisos: Array<{ id: string; accion: string; asignado: boolean }>) => {
+    return [...permisos].sort((a, b) => {
+      const accionA = a.accion.toLowerCase();
+      const accionB = b.accion.toLowerCase();
+      
+      // Función auxiliar para obtener el orden de prioridad
+      const getOrder = (accion: string): number => {
+        if (accion === "ver propietario soportes") return 0;
+        if (accion === "ver dueño de casa") return 1;
+        if (accion === "descargar ot") return 2;
+        return 3; // Resto de permisos
+      };
+      
+      const orderA = getOrder(accionA);
+      const orderB = getOrder(accionB);
+      
+      // Si tienen diferente prioridad, ordenar por prioridad
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      
+      // Si tienen la misma prioridad (ambos son 3), orden alfabético
+      return accionA.localeCompare(accionB);
+    });
   };
 
   return (
@@ -362,21 +442,33 @@ export default function RolesSection() {
             const initialMatrix: Record<string, Record<string, boolean>> = {};
             const permisosTecnicosInicial: Array<{ id: string; accion: string; asignado: boolean }> = [];
             permisos.forEach(permiso => {
-              if (permiso.modulo === 'tecnico') {
+              // Normalizar módulo para evitar errores por espacios, acentos o mayúsculas
+              const moduloNormalizado = normalizarModulo(permiso.modulo);
+              
+              // Incluir en Funciones Técnicas: todos los permisos del módulo "tecnico" (normalizado)
+              const esTecnico = moduloNormalizado === 'tecnico';
+              
+              if (esTecnico) {
+                // SOLO funciones técnicas - NO meter en initialMatrix
                 permisosTecnicosInicial.push({
                   id: permiso.id,
                   accion: permiso.accion,
                   asignado: false,
                 });
-              } else {
-                if (!initialMatrix[permiso.modulo]) {
-                  initialMatrix[permiso.modulo] = {};
-                }
-                initialMatrix[permiso.modulo][permiso.accion] = false;
+                // ❗ Clave: evitar que técnico entre en initialMatrix
+                return; // Continuar con el siguiente permiso sin tocar initialMatrix
               }
+              
+              // Módulos normales - usar módulo normalizado como clave
+              if (!initialMatrix[moduloNormalizado]) {
+                initialMatrix[moduloNormalizado] = {};
+              }
+              initialMatrix[moduloNormalizado][permiso.accion] = false;
             });
+            // ❗ Eliminar "tecnico" de initialMatrix para que NUNCA aparezca en "Permisos por Módulo"
+            delete initialMatrix["tecnico"];
             setPermisoMatrix(initialMatrix);
-            setPermisosTecnicos(permisosTecnicosInicial);
+            setPermisosTecnicos(ordenarPermisosTecnicos(permisosTecnicosInicial));
             setFormData({ nombre: "", descripcion: "" });
           }
         }}>

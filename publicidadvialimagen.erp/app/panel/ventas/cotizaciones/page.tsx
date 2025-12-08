@@ -22,7 +22,8 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  FileText
+  FileText,
+  X
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
@@ -114,6 +115,7 @@ export default function CotizacionesPage() {
     hasNext: false,
     hasPrev: false,
   })
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
 
   // Función para obtener iniciales del vendedor
   const getInitials = (nombre: string) => {
@@ -161,16 +163,76 @@ export default function CotizacionesPage() {
 
   // E4: Vendedores se cargan cuando cambian las cotizaciones (ver useEffect más abajo)
 
+  // 1) Cargar los filtros una sola vez al montar
+  useEffect(() => {
+    const saved = sessionStorage.getItem("cotizaciones_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setSearchTerm(f.searchTerm ?? "")
+        setFiltroVendedor(f.filtroVendedor ?? "all")
+        setFiltroSucursal(f.filtroSucursal ?? "all")
+        setFiltroEstado(f.filtroEstado ?? "all")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("cotizaciones_filtros", JSON.stringify({
+      searchTerm,
+      filtroVendedor,
+      filtroSucursal,
+      filtroEstado
+    }))
+  }, [searchTerm, filtroVendedor, filtroSucursal, filtroEstado, filtersLoaded])
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'vendedor' | 'sucursal' | 'estado') => {
+    switch (tipo) {
+      case 'busqueda':
+        setSearchTerm("")
+        break
+      case 'vendedor':
+        setFiltroVendedor("all")
+        break
+      case 'sucursal':
+        setFiltroSucursal("all")
+        break
+      case 'estado':
+        setFiltroEstado("all")
+        break
+    }
+  }
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setSearchTerm("")
+    setFiltroVendedor("all")
+    setFiltroSucursal("all")
+    setFiltroEstado("all")
+    sessionStorage.removeItem('cotizaciones_filtros')
+  }
+
   // Recargar cotizaciones cuando cambien los filtros (resetear a página 1)
   useEffect(() => {
+    if (!filtersLoaded) return
     setCurrentPage(1)
-  }, [filtroVendedor, filtroSucursal, filtroEstado, searchTerm])
+  }, [filtroVendedor, filtroSucursal, filtroEstado, searchTerm, filtersLoaded])
 
   // Recargar cotizaciones cuando cambie la página o los filtros
   // E3: Evitar doble carga - usar un solo useEffect con debounce implícito
   useEffect(() => {
+    if (!filtersLoaded) return
     fetchCotizaciones(currentPage)
-  }, [currentPage, filtroVendedor, filtroSucursal, filtroEstado, searchTerm])
+  }, [currentPage, filtroVendedor, filtroSucursal, filtroEstado, searchTerm, filtersLoaded])
 
   // E4: Cargar vendedores solo una vez al inicio y cuando cambien las cotizaciones
   useEffect(() => {
@@ -594,17 +656,72 @@ export default function CotizacionesPage() {
         {/* Actions Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex flex-col gap-4">
-            {/* Primera fila: Buscador y botones */}
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Buscar por código, cliente o vendedor..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
-                />
+            {/* Primera fila: Buscador, Filtros y botones */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+              <div className="flex flex-wrap gap-2 items-center flex-1">
+                {/* Buscador */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Buscar por código, cliente o vendedor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-64"
+                  />
+                </div>
+
+                {/* Filtro por Vendedor */}
+                <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
+                  <SelectTrigger className="w-44 [&>span]:text-black [&>svg]:ml-auto [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 relative pl-9 pr-3">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                    <SelectValue placeholder="Vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Vendedor</SelectItem>
+                    {vendedores.map((v) => (
+                      <SelectItem key={v.id} value={v.nombre}>
+                        {v.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por Sucursal */}
+                <Select value={filtroSucursal} onValueChange={setFiltroSucursal}>
+                  <SelectTrigger className="w-44 [&>span]:text-black [&>svg]:ml-auto [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 relative pl-9 pr-3">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                    <SelectValue placeholder="Sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Sucursal</SelectItem>
+                    {sucursalesUnicas.map((suc) => (
+                      <SelectItem key={suc} value={suc}>
+                        {suc}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por Estado */}
+                <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                  <SelectTrigger className="w-44 [&>span]:text-black [&>svg]:ml-auto [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 relative pl-9 pr-3">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Estado</SelectItem>
+                    {Object.entries(ESTADO_META).map(([key, meta]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                          {meta.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              
               <div className="flex gap-2">
                 {!loading && tieneFuncionTecnica("ver boton exportar") && (
                   <Button 
@@ -625,56 +742,76 @@ export default function CotizacionesPage() {
                 </Link>
               </div>
             </div>
-            {/* Segunda fila: Filtros */}
-            <div className="flex flex-wrap gap-2 items-center">
-              {/* Filtro por Vendedor */}
-              <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
-                <SelectTrigger className="w-48 [&>span]:text-black">
-                  <SelectValue placeholder="Vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los vendedores</SelectItem>
-                  {vendedores.map((v) => (
-                    <SelectItem key={v.id} value={v.nombre}>
-                      {v.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Filtro por Sucursal */}
-              <Select value={filtroSucursal} onValueChange={setFiltroSucursal}>
-                <SelectTrigger className="w-48 [&>span]:text-black">
-                  <SelectValue placeholder="Sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las sucursales</SelectItem>
-                  {sucursalesUnicas.map((suc) => (
-                    <SelectItem key={suc} value={suc}>
-                      {suc}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Filtro por Estado */}
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger className="w-48 [&>span]:text-black">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  {Object.entries(ESTADO_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
-                        {meta.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            
+            {/* Etiquetas de filtros activos */}
+            {(searchTerm || filtroVendedor !== "all" || filtroSucursal !== "all" || filtroEstado !== "all") && (
+              <div className="flex flex-wrap gap-2 items-center pt-2 border-t">
+                {searchTerm && (
+                  <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Búsqueda:</span>
+                    <span className="text-gray-700">{searchTerm}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('busqueda')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filtroVendedor !== "all" && (
+                  <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Vendedor:</span>
+                    <span className="text-gray-700">{filtroVendedor}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('vendedor')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filtroSucursal !== "all" && (
+                  <div className="flex items-center gap-1 bg-purple-100 hover:bg-purple-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Sucursal:</span>
+                    <span className="text-gray-700">{filtroSucursal}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('sucursal')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filtroEstado !== "all" && (
+                  <div className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Estado:</span>
+                    <span className="text-gray-700">{ESTADO_META[filtroEstado as keyof typeof ESTADO_META]?.label || filtroEstado}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('estado')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Botón para limpiar todos */}
+                <button
+                  type="button"
+                  onClick={limpiarTodosFiltros}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+                >
+                  Limpiar todo
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

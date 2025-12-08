@@ -18,7 +18,8 @@ import {
   Eye,
   Calendar,
   User,
-  DollarSign
+  DollarSign,
+  X
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
@@ -70,6 +71,7 @@ export default function AlquileresPage() {
     hasNext: false,
     hasPrev: false,
   })
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
 
   // Cargar alquileres desde la API
   const loadAlquileres = async (page: number = currentPage) => {
@@ -150,13 +152,67 @@ export default function AlquileresPage() {
     fetchVendedoresSistema()
   }, [])
 
+  // 1) Cargar los filtros una sola vez al montar
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, filtroVendedor, filtroEstado])
+    const saved = sessionStorage.getItem("alquileres_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setSearchTerm(f.searchTerm ?? "")
+        setFiltroVendedor(f.filtroVendedor ?? "all")
+        setFiltroEstado(f.filtroEstado ?? "all")
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("alquileres_filtros", JSON.stringify({
+      searchTerm,
+      filtroVendedor,
+      filtroEstado
+    }))
+  }, [searchTerm, filtroVendedor, filtroEstado, filtersLoaded])
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'vendedor' | 'estado') => {
+    switch (tipo) {
+      case 'busqueda':
+        setSearchTerm("")
+        break
+      case 'vendedor':
+        setFiltroVendedor("all")
+        break
+      case 'estado':
+        setFiltroEstado("all")
+        break
+    }
+  }
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setSearchTerm("")
+    setFiltroVendedor("all")
+    setFiltroEstado("all")
+    sessionStorage.removeItem('alquileres_filtros')
+  }
 
   useEffect(() => {
+    if (!filtersLoaded) return
+    setCurrentPage(1)
+  }, [searchTerm, filtroVendedor, filtroEstado, filtersLoaded])
+
+  useEffect(() => {
+    if (!filtersLoaded) return
     loadAlquileres(currentPage)
-  }, [currentPage, searchTerm, filtroVendedor, filtroEstado])
+  }, [currentPage, searchTerm, filtroVendedor, filtroEstado, filtersLoaded])
 
   // Funciones de paginación
   const handlePageChange = (page: number) => {
@@ -269,75 +325,133 @@ export default function AlquileresPage() {
 
         {/* Actions Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex flex-wrap gap-2 items-center flex-1">
-              {/* Buscador */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Buscar por cliente, vendedor, código o soporte..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 w-64"
-                />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="flex flex-wrap gap-2 items-center flex-1">
+                {/* Buscador */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Buscar por cliente, vendedor, código o soporte..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 w-64"
+                  />
+                </div>
+
+                {/* Filtro por Vendedor */}
+                <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
+                  <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                    <SelectValue placeholder="Vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los vendedores</SelectItem>
+                    {vendedoresUnicos.map((vendedor) => (
+                      <SelectItem key={vendedor} value={vendedor}>
+                        {vendedor}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por Estado */}
+                <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                  <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                          {meta.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              {/* Filtro por Vendedor */}
-              <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
-                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                  <SelectValue placeholder="Vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los vendedores</SelectItem>
-                  {vendedoresUnicos.map((vendedor) => (
-                    <SelectItem key={vendedor} value={vendedor}>
-                      {vendedor}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Filtro por Estado */}
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
-                        {meta.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              
+              <div className="flex gap-2">
+                {tieneFuncionTecnica("ver boton exportar") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    disabled={exporting || alquileres.length === 0}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    {exporting ? 'Exportando...' : 'Exportar'}
+                  </Button>
+                )}
+                
+                <Link href="/panel/ventas/nuevo">
+                  <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nuevo Alquiler
+                  </Button>
+                </Link>
+              </div>
             </div>
             
-            <div className="flex gap-2">
-              {tieneFuncionTecnica("ver boton exportar") && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExport}
-                  disabled={exporting || alquileres.length === 0}
+            {/* Etiquetas de filtros activos */}
+            {(searchTerm || filtroVendedor !== "all" || filtroEstado !== "all") && (
+              <div className="flex flex-wrap gap-2 items-center pb-4 border-b">
+                {searchTerm && (
+                  <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Búsqueda:</span>
+                    <span className="text-gray-700">{searchTerm}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('busqueda')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filtroVendedor !== "all" && (
+                  <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Vendedor:</span>
+                    <span className="text-gray-700">{filtroVendedor}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('vendedor')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {filtroEstado !== "all" && (
+                  <div className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 rounded-full px-3 py-1 text-sm">
+                    <span className="font-medium">Estado:</span>
+                    <span className="text-gray-700">{ESTADOS_ALQUILER[filtroEstado as keyof typeof ESTADOS_ALQUILER]?.label || filtroEstado}</span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarFiltro('estado')}
+                      className="ml-1 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Botón para limpiar todos */}
+                <button
+                  type="button"
+                  onClick={limpiarTodosFiltros}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
                 >
-                  <Download className="w-4 h-4 mr-2" />
-                  {exporting ? 'Exportando...' : 'Exportar'}
-                </Button>
-              )}
-              
-              <Link href="/panel/ventas/nuevo">
-                <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nuevo Alquiler
-                </Button>
-              </Link>
-            </div>
+                  Limpiar todo
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

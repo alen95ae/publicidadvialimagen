@@ -133,6 +133,8 @@ function AjustesInventarioPageContent() {
   const [editedItems, setEditedItems] = useState<Record<string, Partial<AjusteInventarioItem>>>({})
   const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<AjusteInventarioItem>>>({})
   const [savingChanges, setSavingChanges] = useState(false)
+  // Estado para valores de escritura libre (strings) mientras se edita
+  const [inputValues, setInputValues] = useState<Record<string, { diferenciaPrecio?: string, precioVariante?: string, stock?: string }>>({})
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 100
   const [filtersLoaded, setFiltersLoaded] = useState(false)
@@ -340,11 +342,11 @@ function AjustesInventarioPageContent() {
         const datosVariante = controlStock[key]
         
         if (datosVariante) {
-          const diferencia = datosVariante.diferenciaPrecio || 0
+          const diferencia = Math.round((datosVariante.diferenciaPrecio || 0) * 100) / 100
           // Si hay precioVariante guardado, usarlo; sino calcularlo
           const precio = datosVariante.precioVariante !== undefined
-            ? datosVariante.precioVariante
-            : (recurso.coste || 0) + diferencia
+            ? Math.round(datosVariante.precioVariante * 100) / 100
+            : Math.round(((recurso.coste || 0) + diferencia) * 100) / 100
           return {
             precio,
             diferencia
@@ -440,21 +442,24 @@ function AjustesInventarioPageContent() {
       const recurso = item ? items.find(r => r.id === item.recursoId) : null
       const costeBase = recurso?.coste || 0
       
+      // Todos los campos (diferenciaPrecio, precioVariante y stock) redondean a 2 decimales
+      const processedValue = Math.round(parseFloat(value) * 100) / 100 || 0
+      
       const fieldUpdates: Partial<AjusteInventarioItem> = {
         ...(pendingChanges[id] || {}),
-        [field]: value
+        [field]: processedValue
       }
       
       // Si cambia diferenciaPrecio, también actualizar precioVariante
       if (field === 'diferenciaPrecio') {
-        const nuevaDiferencia = parseFloat(value) || 0
-        fieldUpdates.precioVariante = costeBase + nuevaDiferencia
+        const nuevaDiferencia = processedValue
+        fieldUpdates.precioVariante = Math.round((costeBase + nuevaDiferencia) * 100) / 100
       }
       
       // Si cambia precioVariante, también actualizar diferenciaPrecio
       if (field === 'precioVariante') {
-        const nuevoPrecio = parseFloat(value) || 0
-        const nuevaDiferencia = nuevoPrecio - costeBase
+        const nuevoPrecio = processedValue
+        const nuevaDiferencia = Math.round((nuevoPrecio - costeBase) * 100) / 100
         fieldUpdates.diferenciaPrecio = nuevaDiferencia
       }
       
@@ -512,16 +517,20 @@ function AjustesInventarioPageContent() {
         
         // Si se actualizó precioVariante directamente, recalcular diferenciaPrecio
         if (changes.precioVariante !== undefined) {
-          diferenciaPrecioActual = precioVarianteActual - costeBase
+          diferenciaPrecioActual = Math.round((precioVarianteActual - costeBase) * 100) / 100
         }
         // Si se actualizó diferenciaPrecio, recalcular precioVariante
         else if (changes.diferenciaPrecio !== undefined) {
-          precioVarianteActual = costeBase + diferenciaPrecioActual
+          precioVarianteActual = Math.round((costeBase + diferenciaPrecioActual) * 100) / 100
         }
+        
+        // Redondear valores antes de guardar
+        diferenciaPrecioActual = Math.round(diferenciaPrecioActual * 100) / 100
+        precioVarianteActual = Math.round(precioVarianteActual * 100) / 100
         
         // Actualizar con los cambios
         if (changes.stock !== undefined) {
-          cambiosPorRecurso[recursoId][key].stock = changes.stock
+          cambiosPorRecurso[recursoId][key].stock = Math.round(changes.stock * 100) / 100
         }
         if (changes.diferenciaPrecio !== undefined) {
           cambiosPorRecurso[recursoId][key].diferenciaPrecio = diferenciaPrecioActual
@@ -618,6 +627,7 @@ function AjustesInventarioPageContent() {
       const count = Object.keys(pendingChanges).length
       setPendingChanges({})
       setEditedItems({})
+      setInputValues({})
       setSelected({})
       toast.success(`${count} item(s) actualizado(s) correctamente`)
       
@@ -635,32 +645,88 @@ function AjustesInventarioPageContent() {
   const handleDiscardChanges = () => {
     setPendingChanges({})
     setEditedItems({})
+    setInputValues({})
     toast.info("Cambios descartados")
   }
 
-  // Manejar cambios en campos individuales
-  const handleFieldChange = (id: string, field: 'diferenciaPrecio' | 'stock' | 'precioVariante', value: string | number) => {
-    const numValue = typeof value === 'string' ? (field === 'stock' ? parseInt(value) || 0 : parseFloat(value) || 0) : value
+  // Función para validar y formatear número con máximo 2 decimales
+  const validateNumberInput = (value: string, currentValue: string = ''): string => {
+    // Permitir vacío para poder borrar
+    if (value === '' || value === '-') return value
     
+    // Reemplazar coma por punto
+    value = value.replace(',', '.')
+    
+    // Solo permitir números, un punto decimal y signo negativo al inicio
+    const validPattern = /^-?\d*\.?\d{0,2}$/
+    if (!validPattern.test(value)) {
+      // Si no es válido, retornar el valor anterior
+      return currentValue
+    }
+    
+    return value
+  }
+
+  // Manejar cambios en campos individuales (escritura libre)
+  const handleFieldChange = (id: string, field: 'diferenciaPrecio' | 'stock' | 'precioVariante', value: string) => {
     const item = filteredItems.find(i => i.id === id)
+    if (!item) return
+    
+    // Obtener el valor actual del input
+    const currentInputValue = inputValues[id]?.[field] ?? (() => {
+      const val = editedItems[id]?.[field] ?? pendingChanges[id]?.[field] ?? (field === 'diferenciaPrecio' ? item.diferenciaPrecio : field === 'precioVariante' ? item.precioVariante : item.stock)
+      return typeof val === 'number' ? val.toFixed(2) : String(val || '0.00')
+    })()
+    
+    // Validar el input
+    const validatedValue = validateNumberInput(value, currentInputValue)
+    
+    // Guardar el valor como string para escritura libre
+    setInputValues(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: validatedValue
+      }
+    }))
+    
+    // Convertir a número solo si es válido
+    const numValue = validatedValue === '' || validatedValue === '-' ? 0 : parseFloat(validatedValue) || 0
+    const roundedValue = Math.round(numValue * 100) / 100
     const recurso = item ? items.find(r => r.id === item.recursoId) : null
     const costeBase = recurso?.coste || 0
     
     // Si cambia diferenciaPrecio, también actualizar precioVariante
-    const updates: Partial<AjusteInventarioItem> = { [field]: numValue }
+    const updates: Partial<AjusteInventarioItem> = { [field]: roundedValue }
     if (field === 'diferenciaPrecio') {
       // Calcular nuevo precioVariante
-      const nuevaDiferencia = numValue as number
-      const nuevoPrecioVariante = costeBase + nuevaDiferencia
+      const nuevaDiferencia = roundedValue
+      const nuevoPrecioVariante = Math.round((costeBase + nuevaDiferencia) * 100) / 100
       updates.precioVariante = nuevoPrecioVariante
+      // Actualizar también el input value de precioVariante
+      setInputValues(prev => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          precioVariante: nuevoPrecioVariante.toFixed(2)
+        }
+      }))
     }
     
     // Si cambia precioVariante, también actualizar diferenciaPrecio
     if (field === 'precioVariante') {
-      const nuevoPrecio = numValue as number
-      const nuevaDiferencia = nuevoPrecio - costeBase
+      const nuevoPrecio = roundedValue
+      const nuevaDiferencia = Math.round((nuevoPrecio - costeBase) * 100) / 100
       updates.precioVariante = nuevoPrecio
       updates.diferenciaPrecio = nuevaDiferencia
+      // Actualizar también el input value de diferenciaPrecio
+      setInputValues(prev => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          diferenciaPrecio: nuevaDiferencia.toFixed(2)
+        }
+      }))
     }
     
     setEditedItems(prev => ({
@@ -680,6 +746,29 @@ function AjustesInventarioPageContent() {
           ...updates
         }
       }))
+    }
+  }
+
+  // Función para formatear valor al perder el foco
+  const handleFieldBlur = (id: string, field: 'diferenciaPrecio' | 'stock' | 'precioVariante') => {
+    const inputValue = inputValues[id]?.[field]
+    if (inputValue !== undefined) {
+      const numValue = inputValue === '' || inputValue === '-' ? 0 : parseFloat(inputValue) || 0
+      const formattedValue = Math.round(numValue * 100) / 100
+      
+      // Actualizar el input value con formato
+      setInputValues(prev => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          [field]: formattedValue.toFixed(2)
+        }
+      }))
+      
+      // Guardar cambios si hay edición
+      if (editedItems[id]) {
+        handleSaveChanges(id)
+      }
     }
   }
 
@@ -715,6 +804,12 @@ function AjustesInventarioPageContent() {
       const newItems = { ...prev }
       delete newItems[id]
       return newItems
+    })
+    // Limpiar valores de input
+    setInputValues(prev => {
+      const newValues = { ...prev }
+      delete newValues[id]
+      return newValues
     })
     setSelected(prev => ({ ...prev, [id]: false }))
   }
@@ -826,13 +921,15 @@ function AjustesInventarioPageContent() {
                         <div className="flex items-center gap-2">
                           <label className="text-sm text-gray-700">Diferencia Precio:</label>
                           <Input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="Cambiar diferencia"
                             className="h-8 w-32 text-right"
                             onChange={(e) => {
-                              const value = parseFloat(e.target.value) || 0
-                              handleBulkFieldChange('diferenciaPrecio', value)
+                              const value = validateNumberInput(e.target.value, '')
+                              if (value !== '') {
+                                handleBulkFieldChange('diferenciaPrecio', value)
+                              }
                             }}
                           />
                         </div>
@@ -841,13 +938,15 @@ function AjustesInventarioPageContent() {
                         <div className="flex items-center gap-2">
                           <label className="text-sm text-gray-700">Precio Variante:</label>
                           <Input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="Cambiar precio"
                             className="h-8 w-32 text-right"
                             onChange={(e) => {
-                              const value = parseFloat(e.target.value) || 0
-                              handleBulkFieldChange('precioVariante', value)
+                              const value = validateNumberInput(e.target.value, '')
+                              if (value !== '') {
+                                handleBulkFieldChange('precioVariante', value)
+                              }
                             }}
                           />
                         </div>
@@ -856,13 +955,15 @@ function AjustesInventarioPageContent() {
                         <div className="flex items-center gap-2">
                           <label className="text-sm text-gray-700">Stock:</label>
                           <Input
-                            type="number"
-                            min="0"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="Cambiar stock"
                             className="h-8 w-32 text-right"
                             onChange={(e) => {
-                              const value = parseInt(e.target.value) || 0
-                              handleBulkFieldChange('stock', value)
+                              const value = validateNumberInput(e.target.value, '')
+                              if (value !== '') {
+                                handleBulkFieldChange('stock', value)
+                              }
                             }}
                           />
                         </div>
@@ -929,9 +1030,35 @@ function AjustesInventarioPageContent() {
                           {puedeEditar("inventario") && (
                             <Checkbox
                               checked={!!selected[item.id]}
-                              onCheckedChange={(v) =>
-                                setSelected(prev => ({ ...prev, [item.id]: Boolean(v) }))
-                              }
+                              onCheckedChange={(v) => {
+                                const isSelected = Boolean(v)
+                                setSelected(prev => ({ ...prev, [item.id]: isSelected }))
+                                
+                                // Inicializar valores de input cuando se selecciona
+                                if (isSelected) {
+                                  setInputValues(prev => ({
+                                    ...prev,
+                                    [item.id]: {
+                                      diferenciaPrecio: (pendingChanges[item.id]?.diferenciaPrecio ?? item.diferenciaPrecio).toFixed(2),
+                                      precioVariante: (pendingChanges[item.id]?.precioVariante ?? item.precioVariante).toFixed(2),
+                                      stock: (pendingChanges[item.id]?.stock ?? item.stock).toFixed(2)
+                                    }
+                                  }))
+                                } else {
+                                  // Limpiar valores cuando se deselecciona
+                                  setInputValues(prev => {
+                                    const newValues = { ...prev }
+                                    delete newValues[item.id]
+                                    return newValues
+                                  })
+                                  // También limpiar ediciones
+                                  setEditedItems(prev => {
+                                    const newItems = { ...prev }
+                                    delete newItems[item.id]
+                                    return newItems
+                                  })
+                                }
+                              }}
                               aria-label={`Seleccionar ${item.nombre}`}
                             />
                           )}
@@ -958,29 +1085,31 @@ function AjustesInventarioPageContent() {
                           <div className="flex justify-center">
                             {selected[item.id] && puedeEditar("inventario") ? (
                               <Input
-                                type="number"
-                                step="0.01"
-                                value={editedItems[item.id]?.diferenciaPrecio ?? pendingChanges[item.id]?.diferenciaPrecio ?? item.diferenciaPrecio}
+                                type="text"
+                                inputMode="decimal"
+                                value={inputValues[item.id]?.diferenciaPrecio ?? (() => {
+                                  const val = editedItems[item.id]?.diferenciaPrecio ?? pendingChanges[item.id]?.diferenciaPrecio ?? item.diferenciaPrecio
+                                  return typeof val === 'number' ? val.toFixed(2) : String(val || '0.00')
+                                })()}
                                 onChange={(e) => handleFieldChange(item.id, 'diferenciaPrecio', e.target.value)}
-                              className="h-8 w-24 text-center"
-                              onBlur={() => {
-                                // No guardar automáticamente, solo agregar a pendingChanges
-                                if (editedItems[item.id]) {
-                                  handleSaveChanges(item.id)
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveChanges(item.id)
-                                } else if (e.key === 'Escape') {
-                                  handleCancelEdit(item.id)
-                                }
-                              }}
-                              autoFocus
-                            />
+                                className="h-8 w-24 text-center"
+                                onBlur={() => handleFieldBlur(item.id, 'diferenciaPrecio')}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleFieldBlur(item.id, 'diferenciaPrecio')
+                                    handleSaveChanges(item.id)
+                                  } else if (e.key === 'Escape') {
+                                    handleCancelEdit(item.id)
+                                  }
+                                }}
+                                autoFocus
+                              />
                             ) : (
                               <span className="text-black">
-                                {(pendingChanges[item.id]?.diferenciaPrecio ?? item.diferenciaPrecio).toFixed(2)}
+                                {(() => {
+                                  const val = pendingChanges[item.id]?.diferenciaPrecio ?? item.diferenciaPrecio
+                                  return typeof val === 'number' ? val.toFixed(2) : parseFloat(val || 0).toFixed(2)
+                                })()}
                               </span>
                             )}
                           </div>
@@ -989,19 +1118,18 @@ function AjustesInventarioPageContent() {
                           <div className="flex justify-end">
                             {selected[item.id] && puedeEditar("inventario") ? (
                               <Input
-                                type="number"
-                                step="0.01"
-                                value={editedItems[item.id]?.precioVariante ?? pendingChanges[item.id]?.precioVariante ?? item.precioVariante}
+                                type="text"
+                                inputMode="decimal"
+                                value={inputValues[item.id]?.precioVariante ?? (() => {
+                                  const val = editedItems[item.id]?.precioVariante ?? pendingChanges[item.id]?.precioVariante ?? item.precioVariante
+                                  return typeof val === 'number' ? val.toFixed(2) : String(val || '0.00')
+                                })()}
                                 onChange={(e) => handleFieldChange(item.id, 'precioVariante', e.target.value)}
                                 className="h-8 w-24 text-right"
-                                onBlur={() => {
-                                  // No guardar automáticamente, solo agregar a pendingChanges
-                                  if (editedItems[item.id]) {
-                                    handleSaveChanges(item.id)
-                                  }
-                                }}
+                                onBlur={() => handleFieldBlur(item.id, 'precioVariante')}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
+                                    handleFieldBlur(item.id, 'precioVariante')
                                     handleSaveChanges(item.id)
                                   } else if (e.key === 'Escape') {
                                     handleCancelEdit(item.id)
@@ -1011,11 +1139,12 @@ function AjustesInventarioPageContent() {
                               />
                             ) : (
                               <span className="font-medium text-green-600">
-                                Bs {(
-                                  pendingChanges[item.id]?.precioVariante ?? 
-                                  editedItems[item.id]?.precioVariante ?? 
-                                  item.precioVariante
-                                ).toFixed(2)}
+                                Bs {(() => {
+                                  const val = pendingChanges[item.id]?.precioVariante ?? 
+                                    editedItems[item.id]?.precioVariante ?? 
+                                    item.precioVariante
+                                  return typeof val === 'number' ? val.toFixed(2) : parseFloat(val || 0).toFixed(2)
+                                })()}
                               </span>
                             )}
                           </div>
@@ -1024,28 +1153,41 @@ function AjustesInventarioPageContent() {
                           <div className="flex justify-end">
                             {selected[item.id] && puedeEditar("inventario") ? (
                               <Input
-                                type="number"
-                                min="0"
-                                value={editedItems[item.id]?.stock ?? pendingChanges[item.id]?.stock ?? item.stock}
+                                type="text"
+                                inputMode="decimal"
+                                value={inputValues[item.id]?.stock ?? (() => {
+                                  const val = editedItems[item.id]?.stock ?? pendingChanges[item.id]?.stock ?? item.stock
+                                  return typeof val === 'number' ? val.toFixed(2) : String(val || '0.00')
+                                })()}
                                 onChange={(e) => handleFieldChange(item.id, 'stock', e.target.value)}
-                              className="h-8 w-24 text-right"
-                              onBlur={() => {
-                                // No guardar automáticamente, solo agregar a pendingChanges
-                                if (editedItems[item.id]) {
-                                  handleSaveChanges(item.id)
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveChanges(item.id)
-                                } else if (e.key === 'Escape') {
-                                  handleCancelEdit(item.id)
-                                }
-                              }}
-                            />
+                                className="h-8 w-24 text-right"
+                                onBlur={() => handleFieldBlur(item.id, 'stock')}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleFieldBlur(item.id, 'stock')
+                                    handleSaveChanges(item.id)
+                                  } else if (e.key === 'Escape') {
+                                    handleCancelEdit(item.id)
+                                  }
+                                }}
+                                autoFocus
+                              />
                             ) : (
-                              <Badge className={(pendingChanges[item.id]?.stock ?? item.stock) > 0 ? "bg-green-100 text-green-800 hover:bg-green-100" : "bg-red-100 text-red-800 hover:bg-red-100"}>
-                                {pendingChanges[item.id]?.stock ?? item.stock}
+                              <Badge className={(() => {
+                                const stockValue = pendingChanges[item.id]?.stock ?? item.stock
+                                const numValue = typeof stockValue === 'number' ? stockValue : parseFloat(stockValue || 0)
+                                if (numValue > 0) {
+                                  return "bg-green-100 text-green-800 hover:bg-green-100"
+                                } else if (numValue === 0) {
+                                  return "bg-gray-100 text-gray-800 hover:bg-gray-100"
+                                } else {
+                                  return "bg-red-100 text-red-800 hover:bg-red-100"
+                                }
+                              })()}>
+                                {(() => {
+                                  const val = pendingChanges[item.id]?.stock ?? item.stock
+                                  return typeof val === 'number' ? val.toFixed(2) : parseFloat(val || 0).toFixed(2)
+                                })()}
                               </Badge>
                             )}
                           </div>

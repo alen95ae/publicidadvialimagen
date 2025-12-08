@@ -186,8 +186,8 @@ async function descontarStockRecurso(params: {
     const datosVariante = controlStock[claveVariante] || {}
     const stockActual = Number(datosVariante.stock) || 0
 
-    // Calcular nuevo stock (evitar negativo)
-    const nuevoStock = Math.max(stockActual - cantidad, 0)
+    // Calcular nuevo stock (PERMITIR NEGATIVO - el usuario pidió esto explícitamente)
+    const nuevoStock = round2(stockActual - cantidad)
 
     // Actualizar control_stock
     controlStock[claveVariante] = {
@@ -206,7 +206,12 @@ async function descontarStockRecurso(params: {
       throw new Error(`Error actualizando stock: ${updateError.message}`)
     }
 
-    console.log(`✅ Stock actualizado: ${recurso.nombre} (${claveVariante}): ${stockActual} → ${nuevoStock}`)
+    console.log(`✅ [DESCONTAR] Stock actualizado: ${recurso.nombre}`)
+    console.log(`   - Clave variante: ${claveVariante}`)
+    console.log(`   - Stock anterior: ${stockActual}`)
+    console.log(`   - Cantidad descontada: ${cantidad}`)
+    console.log(`   - Stock nuevo: ${nuevoStock}`)
+    console.log(`   - UPDATE ejecutado correctamente en recursos.id = ${recursoId}`)
   } catch (error) {
     console.error('❌ Error descontando stock de recurso:', error)
     throw error
@@ -239,6 +244,413 @@ export async function registrarMovimiento(params: RegistrarMovimientoParams): Pr
   } catch (error) {
     console.error('❌ Error registrando movimiento:', error)
     // No lanzar error, solo loguear
+  }
+}
+
+/**
+ * Interface para descontar insumos desde cotización
+ */
+export interface DescontarInsumosParams {
+  cotizacionId: string
+  lineas: Array<{
+    tipo: string
+    codigo_producto?: string | null
+    nombre_producto?: string | null
+    cantidad: number
+    ancho?: number | null
+    alto?: number | null
+    total_m2?: number | null
+    unidad_medida?: string
+    es_soporte?: boolean
+    variantes?: any
+  }>
+  sucursal: string
+}
+
+/**
+ * Redondea a 2 decimales
+ */
+function round2(num: number): number {
+  return Math.round(num * 100) / 100
+}
+
+/**
+ * Busca un recurso por ID, código o nombre (insensible a mayúsculas)
+ */
+async function buscarRecurso(itemReceta: any, recursosCache?: any[]): Promise<any> {
+  // Si hay cache, buscar primero ahí
+  if (recursosCache) {
+    // Buscar por ID
+    if (itemReceta.recurso_id) {
+      const encontrado = recursosCache.find(r => r.id === itemReceta.recurso_id)
+      if (encontrado) return encontrado
+    }
+
+    // Buscar por código
+    if (itemReceta.recurso_codigo) {
+      const encontrado = recursosCache.find(r => r.codigo && r.codigo.toLowerCase() === itemReceta.recurso_codigo.toLowerCase())
+      if (encontrado) return encontrado
+    }
+
+    // Buscar por nombre (insensible a mayúsculas)
+    if (itemReceta.recurso_nombre) {
+      const nombreBuscar = itemReceta.recurso_nombre.trim()
+      const encontrado = recursosCache.find(r => 
+        r.nombre && r.nombre.trim().toLowerCase() === nombreBuscar.toLowerCase()
+      )
+      if (encontrado) return encontrado
+    }
+  }
+
+  // Si no se encontró en cache, buscar en BD
+  // Buscar por recurso_id primero
+  if (itemReceta.recurso_id) {
+    const { data, error } = await supabase
+      .from('recursos')
+      .select('id, nombre, codigo, control_stock, variantes, categoria')
+      .eq('id', itemReceta.recurso_id)
+      .single()
+    
+    if (!error && data) return data
+  }
+
+  // Buscar por recurso_codigo
+  if (itemReceta.recurso_codigo) {
+    const { data, error } = await supabase
+      .from('recursos')
+      .select('id, nombre, codigo, control_stock, variantes, categoria')
+      .ilike('codigo', itemReceta.recurso_codigo)
+      .single()
+    
+    if (!error && data) return data
+  }
+
+  // Buscar por recurso_nombre (insensible a mayúsculas)
+  if (itemReceta.recurso_nombre) {
+    const { data, error } = await supabase
+      .from('recursos')
+      .select('id, nombre, codigo, control_stock, variantes, categoria')
+      .ilike('nombre', itemReceta.recurso_nombre.trim())
+      .single()
+    
+    if (!error && data) return data
+  }
+
+  throw new Error(`Recurso no encontrado: ${itemReceta.recurso_id || itemReceta.recurso_codigo || itemReceta.recurso_nombre}`)
+}
+
+/**
+ * Aplica variantes del producto a los insumos
+ * Solo incluye variantes que el insumo también tiene
+ */
+function aplicarVariantesAInsumo(
+  recurso: any,
+  variantesProducto: Record<string, string>
+): Record<string, string> {
+  // Si no hay variantes del producto, retornar vacío
+  if (!variantesProducto || Object.keys(variantesProducto).length === 0) {
+    return {}
+  }
+
+  // Si el recurso no tiene variantes definidas, retornar vacío
+  if (!recurso.variantes) {
+    return {}
+  }
+
+  // Parsear variantes del recurso
+  let variantesRecurso: any[] = []
+  try {
+    if (typeof recurso.variantes === 'string') {
+      variantesRecurso = JSON.parse(recurso.variantes)
+    } else if (Array.isArray(recurso.variantes)) {
+      variantesRecurso = recurso.variantes
+    } else if (recurso.variantes.variantes && Array.isArray(recurso.variantes.variantes)) {
+      variantesRecurso = recurso.variantes.variantes
+    }
+  } catch (e) {
+    console.warn('⚠️ Error parseando variantes del recurso:', e)
+    return {}
+  }
+
+  // Extraer nombres de variantes que el recurso tiene
+  const nombresVariantesRecurso = new Set<string>()
+  variantesRecurso.forEach((v: any) => {
+    if (v && v.nombre) {
+      nombresVariantesRecurso.add(v.nombre)
+    }
+  })
+
+  // Filtrar variantes del producto solo por las que el recurso tiene
+  const variantesAplicadas: Record<string, string> = {}
+  Object.entries(variantesProducto).forEach(([nombre, valor]) => {
+    if (nombresVariantesRecurso.has(nombre)) {
+      variantesAplicadas[nombre] = valor
+    }
+  })
+
+  return variantesAplicadas
+}
+
+/**
+ * Descuenta insumos desde una cotización aprobada
+ * Considera unidad de medida (m² vs unidades), receta, variantes y excluye soportes
+ */
+export async function descontarInsumosDesdeCotizacion(
+  params: DescontarInsumosParams
+): Promise<void> {
+  const { cotizacionId, lineas, sucursal } = params
+
+  console.log(`📦 [DESCONTAR] Procesando cotización ${cotizacionId}`)
+  console.log(`📦 [DESCONTAR] Sucursal: ${sucursal}`)
+  console.log(`📦 [DESCONTAR] Total líneas recibidas: ${lineas.length}`)
+
+  try {
+    // 1. Filtrar líneas válidas
+    const lineasValidas = lineas.filter(linea => {
+      // Solo procesar líneas de tipo 'Producto'
+      if (linea.tipo !== 'Producto') {
+        return false
+      }
+
+      // Excluir soportes
+      if (linea.es_soporte === true) {
+        console.log(`⚠️ [DESCONTAR] Línea ${linea.nombre_producto || linea.codigo_producto} es soporte, omitiendo`)
+        return false
+      }
+
+      // Debe tener código o nombre de producto
+      if (!linea.codigo_producto && !linea.nombre_producto) {
+        console.log(`⚠️ [DESCONTAR] Línea sin código ni nombre, omitiendo`)
+        return false
+      }
+
+      // Debe tener cantidad > 0
+      if (!linea.cantidad || linea.cantidad <= 0) {
+        console.log(`⚠️ [DESCONTAR] Línea ${linea.nombre_producto || linea.codigo_producto} sin cantidad válida, omitiendo`)
+        return false
+      }
+
+      return true
+    })
+
+    console.log(`📦 [DESCONTAR] Líneas válidas a procesar: ${lineasValidas.length}`)
+
+    if (lineasValidas.length === 0) {
+      console.log('⚠️ [DESCONTAR] No hay líneas válidas para procesar')
+      return
+    }
+
+    // 2. Obtener todos los recursos de una vez (optimización)
+    const { data: recursos, error: recursosError } = await supabase
+      .from('recursos')
+      .select('id, nombre, codigo, control_stock, variantes, categoria')
+
+    if (recursosError || !recursos) {
+      console.error('❌ [DESCONTAR] Error obteniendo recursos:', recursosError)
+      throw new Error('Error obteniendo recursos')
+    }
+
+    // 3. Procesar cada línea válida
+    for (const linea of lineasValidas) {
+      try {
+        console.log(`📦 [DESCONTAR] Procesando: ${linea.nombre_producto || linea.codigo_producto}`)
+
+        // a. Buscar producto
+        let producto: any = null
+        if (linea.codigo_producto) {
+          const { data, error } = await supabase
+            .from('productos')
+            .select('id, nombre, codigo, receta, unidad_medida')
+            .eq('codigo', linea.codigo_producto)
+            .single()
+          
+          if (!error && data) {
+            producto = data
+          }
+        }
+
+        // Si no se encontró por código, buscar por nombre
+        if (!producto && linea.nombre_producto) {
+          const { data, error } = await supabase
+            .from('productos')
+            .select('id, nombre, codigo, receta, unidad_medida')
+            .eq('nombre', linea.nombre_producto)
+            .single()
+          
+          if (!error && data) {
+            producto = data
+          }
+        }
+
+        if (!producto) {
+          console.warn(`⚠️ [DESCONTAR] Producto no encontrado: ${linea.codigo_producto || linea.nombre_producto}`)
+          continue
+        }
+
+        // b. Validar que tenga receta
+        const receta = producto.receta || []
+        if (!Array.isArray(receta) || receta.length === 0) {
+          console.log(`⚠️ [DESCONTAR] Producto ${producto.nombre} no tiene receta, omitiendo`)
+          continue
+        }
+
+        // c. Calcular consumo real según unidad de medida
+        let consumoReal: number = 0
+
+        const unidadMedida = linea.unidad_medida || producto.unidad_medida || ''
+        const unidadNormalizada = unidadMedida.toLowerCase().trim()
+
+        if (unidadNormalizada === 'm²' || unidadNormalizada === 'm2' || unidadNormalizada === 'm') {
+          // Calcular m² reales: cantidad × ancho × alto
+          const cantidad = Number(linea.cantidad) || 0
+          const ancho = Number(linea.ancho) || 0
+          const alto = Number(linea.alto) || 0
+          const m2 = cantidad * ancho * alto
+          
+          // Si no hay ancho/alto, usar total_m2 si existe
+          const m2Final = m2 > 0 ? m2 : (Number(linea.total_m2) || 0)
+          consumoReal = round2(m2Final)
+
+          console.log(`📦 [DESCONTAR]   - Unidad: m²`)
+          console.log(`📦 [DESCONTAR]   - Cantidad items: ${cantidad}, Ancho: ${ancho}, Alto: ${alto}`)
+          console.log(`📦 [DESCONTAR]   - m² calculados: ${m2Final}`)
+          console.log(`📦 [DESCONTAR]   - Consumo real (m²): ${consumoReal}`)
+        } else {
+          // Para unidades, solo usar cantidad
+          consumoReal = round2(Number(linea.cantidad) || 0)
+          console.log(`📦 [DESCONTAR]   - Unidad: ${unidadMedida}`)
+          console.log(`📦 [DESCONTAR]   - Cantidad items: ${consumoReal}`)
+          console.log(`📦 [DESCONTAR]   - Consumo real (unidades): ${consumoReal}`)
+        }
+
+        if (consumoReal <= 0) {
+          console.warn(`⚠️ [DESCONTAR] Consumo inválido para producto ${producto.nombre}, omitiendo`)
+          continue
+        }
+
+        // d. Obtener variantes del producto
+        let variantesProducto: Record<string, string> = {}
+        if (linea.variantes) {
+          try {
+            if (typeof linea.variantes === 'string') {
+              variantesProducto = JSON.parse(linea.variantes)
+            } else if (typeof linea.variantes === 'object') {
+              variantesProducto = linea.variantes
+            }
+          } catch (e) {
+            console.warn('⚠️ [DESCONTAR] Error parseando variantes:', e)
+          }
+        }
+
+        console.log(`📦 [DESCONTAR]   - Variantes producto: ${JSON.stringify(variantesProducto)}`)
+
+        // e. Procesar cada item de la receta
+        for (const itemReceta of receta) {
+          try {
+            // Buscar recurso (insumo) - usar cache primero
+            let recurso: any = null
+            
+            // Buscar en cache por nombre (insensible a mayúsculas)
+            if (itemReceta.recurso_nombre) {
+              const nombreBuscar = itemReceta.recurso_nombre.trim().toLowerCase()
+              recurso = recursos.find(r => 
+                r.nombre && r.nombre.trim().toLowerCase() === nombreBuscar
+              )
+            }
+
+            // Si no se encuentra, buscar por código
+            if (!recurso && itemReceta.recurso_codigo) {
+              recurso = recursos.find(r => 
+                r.codigo && r.codigo.toLowerCase() === itemReceta.recurso_codigo.toLowerCase()
+              )
+            }
+
+            // Si no se encuentra, buscar por ID
+            if (!recurso && itemReceta.recurso_id) {
+              recurso = recursos.find(r => r.id === itemReceta.recurso_id)
+            }
+
+            // Si no se encuentra en cache, buscar en BD
+            if (!recurso) {
+              try {
+                recurso = await buscarRecurso(itemReceta, recursos)
+              } catch (e) {
+                console.error(`❌ [DESCONTAR] Recurso no encontrado para receta:`, {
+                  recurso_id: itemReceta.recurso_id,
+                  recurso_codigo: itemReceta.recurso_codigo,
+                  recurso_nombre: itemReceta.recurso_nombre,
+                  error: e instanceof Error ? e.message : String(e)
+                })
+                continue
+              }
+            }
+
+            if (!recurso) {
+              console.error(`❌ [DESCONTAR] No se pudo encontrar recurso: ${itemReceta.recurso_nombre || itemReceta.recurso_id}`)
+              continue
+            }
+
+            // Validar que sea insumo
+            if (recurso.categoria !== 'Insumos') {
+              console.log(`⚠️ [DESCONTAR] Recurso ${recurso.nombre} no es insumo (categoría: ${recurso.categoria}), omitiendo`)
+              continue
+            }
+
+            // Calcular cantidad a descontar
+            // IMPORTANTE: cantidadReceta es la cantidad por m² o por unidad
+            // consumoReal es el total de m² o unidades vendidas
+            // cantidadDescontar = cantidadReceta × consumoReal
+            const cantidadReceta = Number(itemReceta.cantidad) || 0
+            const cantidadDescontar = round2(cantidadReceta * consumoReal)
+
+            if (cantidadDescontar <= 0) {
+              console.warn(`⚠️ [DESCONTAR] Cantidad a descontar inválida para ${recurso.nombre}: ${cantidadDescontar}`)
+              continue
+            }
+
+            // Aplicar variantes del producto a los insumos SOLO si el insumo tiene variantes
+            const variantesInsumo = aplicarVariantesAInsumo(recurso, variantesProducto)
+
+            console.log(`📦 [DESCONTAR]   - Insumo: ${recurso.nombre}`)
+            console.log(`📦 [DESCONTAR]   - Cantidad en receta (por m²/unidad): ${cantidadReceta}`)
+            console.log(`📦 [DESCONTAR]   - Consumo real (m²/unidades vendidas): ${consumoReal}`)
+            console.log(`📦 [DESCONTAR]   - Cantidad a descontar: ${cantidadDescontar}`)
+            console.log(`📦 [DESCONTAR]   - Variantes aplicadas: ${JSON.stringify(variantesInsumo)}`)
+
+            // Descontar stock del insumo con variantes
+            await descontarStockRecurso({
+              recursoId: recurso.id,
+              cantidad: cantidadDescontar,
+              sucursal: sucursal,
+              variantes: variantesInsumo
+            })
+
+            // Registrar movimiento
+            await registrarMovimiento({
+              tipo: 'cotizacion',
+              recursoId: recurso.id,
+              variante: variantesInsumo,
+              delta: -cantidadDescontar,
+              sucursal,
+              referencia: cotizacionId
+            })
+
+            console.log(`✅ [DESCONTAR] Stock descontado: ${recurso.nombre} - ${cantidadDescontar} unidades`)
+          } catch (error) {
+            console.error(`❌ [DESCONTAR] Error procesando insumo ${itemReceta.recurso_nombre || itemReceta.recurso_id}:`, error)
+            // Continuar con siguiente insumo
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [DESCONTAR] Error procesando línea ${linea.nombre_producto || linea.codigo_producto}:`, error)
+        // Continuar con siguiente línea
+      }
+    }
+
+    console.log(`✅ [DESCONTAR] Procesamiento completado para cotización ${cotizacionId}`)
+  } catch (error) {
+    console.error('❌ [DESCONTAR] Error general descontando insumos:', error)
+    throw error
   }
 }
 

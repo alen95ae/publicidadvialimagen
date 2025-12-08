@@ -16,7 +16,7 @@ import {
   calcularDesgloseImpuestos,
   type CotizacionPayload
 } from '@/lib/cotizacionesBackend'
-import { descontarStockProducto, registrarMovimiento } from '@/lib/services/inventoryService'
+import { descontarStockProducto, registrarMovimiento, descontarInsumosDesdeCotizacion } from '@/lib/services/inventoryService'
 
 export async function GET(
   request: Request,
@@ -287,80 +287,49 @@ export async function PATCH(
       const seEstaAprobando = estadoAnterior !== 'Aprobada' && nuevoEstado === 'Aprobada'
       
       // Si se está aprobando, descontar stock de los productos (con idempotencia)
-      if (seEstaAprobando && lineasNormalizadas.length > 0) {
+      if (seEstaAprobando) {
         console.log('📦 [PATCH /api/cotizaciones/[id]] Descontando stock por aprobación de cotización...')
         try {
           // Verificar si ya se descontó stock para esta cotización (idempotencia)
-          // Nota: Por ahora verificamos en los movimientos registrados
-          // Si existe tabla movimientos_inventario, verificar ahí
           // Por ahora, asumimos que si la cotización ya estaba aprobada, el stock ya fue descontado
           const yaDescontado = estadoAnterior === 'Aprobada'
           
           if (yaDescontado) {
             console.log('⚠️ [PATCH /api/cotizaciones/[id]] Stock ya descontado previamente para esta cotización, omitiendo descuento duplicado')
           } else {
-            // Obtener sucursal de la cotización
-            const sucursal = cotizacionActualizada.sucursal || 'La Paz'
-            
-            // Obtener instancia de Supabase para consultas
-            const { getSupabaseServer } = await import('@/lib/supabaseServer')
-            const supabase = getSupabaseServer()
-            
-            // Procesar cada línea para descontar stock
-            for (const linea of lineasNormalizadas) {
-              if (linea.codigo_producto && linea.cantidad) {
-                try {
-                  // Parsear variantes si existen
-                  let variantes: Record<string, string> = {}
-                  if (linea.variantes) {
-                    if (typeof linea.variantes === 'string') {
-                      variantes = JSON.parse(linea.variantes)
-                    } else {
-                      variantes = linea.variantes
-                    }
-                  }
-                  
-                  // Obtener producto para obtener su ID
-                  const { data: producto } = await supabase
-                    .from('productos')
-                    .select('id')
-                    .eq('codigo', linea.codigo_producto)
-                    .single()
-                  
-                  if (producto) {
-                    await descontarStockProducto({
-                      productoId: producto.id,
-                      cantidad: Number(linea.cantidad) || 1,
-                      sucursal,
-                      variantes
-                    })
-                    
-                    await registrarMovimiento({
-                      tipo: 'cotizacion',
-                      productoId: producto.id,
-                      variante: variantes,
-                      delta: -(Number(linea.cantidad) || 1),
-                      sucursal,
-                      referencia: id
-                    })
-                    
-                    console.log(`✅ Stock descontado: ${linea.codigo_producto} (${linea.cantidad} unidades)`)
-                  }
-                } catch (errorStock) {
-                  console.error(`❌ Error descontando stock para ${linea.codigo_producto}:`, errorStock)
-                  // No fallar la actualización si falla el descuento de stock
-                }
+            // Si no se enviaron líneas en el body, obtenerlas de la BD
+            let lineasParaDescuento = lineasNormalizadas
+            if (lineasParaDescuento.length === 0) {
+              console.log('📦 [PATCH /api/cotizaciones/[id]] No se enviaron líneas en el body, obteniendo de BD...')
+              const lineasBD = await getLineasByCotizacionId(id)
+              if (lineasBD && lineasBD.length > 0) {
+                lineasParaDescuento = lineasBD
+                console.log(`📦 [PATCH /api/cotizaciones/[id]] Líneas obtenidas de BD: ${lineasParaDescuento.length}`)
+              } else {
+                console.warn('⚠️ [PATCH /api/cotizaciones/[id]] No se encontraron líneas en BD')
               }
             }
-            
-            // Marcar que el stock ya fue descontado (idempotencia)
-            // Nota: Si existe columna stock_descontado en cotizaciones, actualizarla
-            // Por ahora, solo logueamos
-            console.log('✅ [PATCH /api/cotizaciones/[id]] Stock descontado correctamente')
+
+            if (lineasParaDescuento.length > 0) {
+              // Obtener sucursal de la cotización
+              const sucursal = cotizacionActualizada.sucursal || 'La Paz'
+              
+              // Usar la nueva función mejorada que considera m², unidades, variantes y excluye soportes
+              await descontarInsumosDesdeCotizacion({
+                cotizacionId: id,
+                lineas: lineasParaDescuento,
+                sucursal: sucursal
+              })
+              
+              console.log('✅ [PATCH /api/cotizaciones/[id]] Stock descontado correctamente')
+            } else {
+              console.warn('⚠️ [PATCH /api/cotizaciones/[id]] No hay líneas para descontar stock')
+            }
           }
         } catch (errorStock) {
           console.error('❌ [PATCH /api/cotizaciones/[id]] Error descontando stock:', errorStock)
-          // No fallar la actualización si falla el descuento de stock
+          // NO fallar la aprobación si falla el descuento de stock
+          // Solo loguear el error para que el usuario pueda revisarlo
         }
       }
 

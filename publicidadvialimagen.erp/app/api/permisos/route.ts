@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import {
+  normalizarModulo,
+  normalizarAccion,
+  obtenerModulosPorDefectoPorRol,
+  MODULOS_SIDEBAR
+} from "@/lib/permisos-utils";
+
+/**
+ * API de Permisos - Gestión centralizada de permisos por usuario
+ * 
+ * IMPORTANTE - Uso de getSupabaseAdmin():
+ * Esta API usa el cliente Admin de Supabase porque:
+ * 1. Lee METADATOS del sistema (roles, permisos, rol_permisos)
+ * 2. NO lee datos de negocio del usuario (soportes, ventas, contactos, etc.)
+ * 3. Evita problemas de RLS en tablas de configuración del sistema
+ * 4. El userId está verificado con JWT antes de consultar
+ * 
+ * NUNCA usar Admin para leer datos de negocio del usuario.
+ */
 
 // GET - Obtener permisos del usuario actual
 export async function GET(request: NextRequest) {
@@ -18,42 +37,17 @@ export async function GET(request: NextRequest) {
     const userId = session.sub;
     const isDeveloper = session.email?.toLowerCase() === "alen95ae@gmail.com";
 
-    const supabase = getSupabaseServer();
-
-    // Función para normalizar módulos y acciones (elimina espacios, normaliza encoding)
-    const normalizarModulo = (modulo: string | undefined | null): string => {
-      if (!modulo) return '';
-      return modulo
-        .normalize("NFD")      // elimina acentos
-        .replace(/[\u0300-\u036f]/g, "")  // elimina diacríticos
-        .trim()                 // elimina espacios al inicio/final
-        .replace(/\s+/g, " ")   // colapsa espacios múltiples a uno solo
-        .toLowerCase();         // convierte a minúsculas
-    };
-
-    const normalizarAccion = (accion: string | undefined | null): string => {
-      if (!accion) return '';
-      return accion
-        .trim()                 // elimina espacios al inicio/final
-        .replace(/\s+/g, " ");  // colapsa espacios múltiples a uno solo
-      // NO eliminar acentos ni convertir a minúsculas para mantener "ver dueño de casa"
-    };
+    // Cliente Admin SOLO para metadatos de permisos (ver comentario arriba)
+    const supabaseClient = getSupabaseAdmin();
 
     // Si es desarrollador, dar todos los permisos
     if (isDeveloper) {
       // Obtener todos los permisos disponibles
-      const { data: permisosData } = await supabase
+      const { data: permisosData } = await supabaseClient
         .from('permisos')
         .select('*')
         .order('modulo', { ascending: true })
         .order('accion', { ascending: true });
-
-      console.log('🔍 [Permisos API] Desarrollador - Permisos encontrados:', permisosData?.length || 0);
-      console.log('🔍 [Permisos API] Módulos únicos:', [...new Set(permisosData?.map(p => p.modulo) || [])]);
-      
-      // Verificar si existe sitio_web
-      const sitioWebPermisos = permisosData?.filter(p => p.modulo === 'sitio_web' || p.modulo === 'sitio' || p.modulo === 'web') || [];
-      console.log('🔍 [Permisos API] Permisos sitio/sitio_web/web:', sitioWebPermisos);
 
       // Construir matriz con todos los permisos en true (normalizados)
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
@@ -66,31 +60,24 @@ export async function GET(request: NextRequest) {
         }
         permisosMatrix[moduloNormalizado][accionNormalizada] = true;
       });
-      
-      // Log para depuración de permisos técnicos
-      const permisosTecnicos = permisosMatrix['tecnico'] || {};
-      console.log('🔍 [Permisos API] Desarrollador - Permisos técnicos:', {
-        total: Object.keys(permisosTecnicos).length,
-        permisos: permisosTecnicos,
-        'ver historial soportes': permisosTecnicos['ver historial soportes']
-      });
 
-      // Asegurar que sitio_web tenga todos los permisos si no existe
-      if (!permisosMatrix['sitio_web'] && !permisosMatrix['sitio'] && !permisosMatrix['web']) {
-        console.log('⚠️ [Permisos API] No se encontraron permisos para sitio/sitio_web/web, creando permisos por defecto');
-        permisosMatrix['sitio_web'] = {
-          ver: true,
-          editar: true,
-          eliminar: true,
-          admin: true
-        };
-      }
+      // 🔒 Desarrollador = acceso total implícito a todos los módulos del sidebar
+      MODULOS_SIDEBAR.forEach((modulo) => {
+        if (!permisosMatrix[modulo]) {
+          permisosMatrix[modulo] = {
+            ver: true,
+            editar: true,
+            eliminar: true,
+            admin: true
+          }
+        }
+      })
 
       return NextResponse.json({ permisos: permisosMatrix });
     }
 
     // Obtener rol_id del usuario
-    const { data: userData } = await supabase
+    const { data: userData } = await supabaseClient
       .from('usuarios')
       .select('rol_id')
       .eq('id', userId)
@@ -102,19 +89,43 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener todos los permisos disponibles
-    const { data: permisosData } = await supabase
+    const { data: permisosData } = await supabaseClient
       .from('permisos')
       .select('*')
       .order('modulo', { ascending: true })
       .order('accion', { ascending: true });
 
     // Obtener permisos asignados al rol
-    const { data: rolPermisosData } = await supabase
+    const { data: rolPermisosData, error: rolPermisosError } = await supabaseClient
       .from('rol_permisos')
       .select('permiso_id')
       .eq('rol_id', userData.rol_id);
 
-    const permisoIds = (rolPermisosData || []).map(rp => rp.permiso_id);
+
+    let permisoIds = (rolPermisosData || []).map(rp => rp.permiso_id);
+
+    // 🛡️ FALLBACK DE SEGURIDAD: Si no hay permisos asignados, aplicar permisos por defecto
+    // Esto previene que usuarios con roles válidos queden sin acceso al sistema
+    // PRIORIDAD: 1) rol_permisos (BD) → 2) permisos por defecto del rol
+    if (permisoIds.length === 0) {
+      const { data: rolData } = await supabaseClient
+        .from('roles')
+        .select('nombre')
+        .eq('id', userData.rol_id)
+        .single();
+      
+      const rolNombre = rolData?.nombre || '';
+      const modulosPermitidos = obtenerModulosPorDefectoPorRol(rolNombre);
+      
+      // Filtrar permisosData para obtener solo los IDs de "ver" de esos módulos
+      const permisosDefecto = (permisosData || []).filter(p => {
+        const modulo = normalizarModulo(p.modulo);
+        const accion = normalizarAccion(p.accion);
+        return modulosPermitidos.includes(modulo) && accion === 'ver';
+      });
+      
+      permisoIds = permisosDefecto.map(p => p.id);
+    }
 
     // Construir matriz de permisos
     const permisosMatrix: Record<string, Record<string, boolean>> = {};
@@ -126,26 +137,19 @@ export async function GET(request: NextRequest) {
       // Normalizar módulo y acción antes de usarlas como claves
       const moduloNormalizado = normalizarModulo(permiso.modulo);
       const accionNormalizada = normalizarAccion(permiso.accion);
-      
-      if (!permisosMatrix[moduloNormalizado]) {
-        permisosMatrix[moduloNormalizado] = {};
-      }
       const estaAsignado = permisoIds.includes(permiso.id);
-      permisosMatrix[moduloNormalizado][accionNormalizada] = estaAsignado;
       
-      // Log específico para "ver dueño de casa"
-      if (moduloNormalizado === 'tecnico' && accionNormalizada === 'ver dueño de casa') {
-        console.log('🔍 [Permisos API] Permiso "ver dueño de casa":', {
-          permisoId: permiso.id,
-          estaEnRol: estaAsignado,
-          permisoIds: permisoIds,
-          moduloOriginal: permiso.modulo,
-          moduloNormalizado: moduloNormalizado,
-          accionOriginal: permiso.accion,
-          accionNormalizada: accionNormalizada,
-          claveUsada: `${moduloNormalizado}.${accionNormalizada}`
-        });
+      // ✅ Solo agregar si está asignado O si el módulo ya existe
+      if (estaAsignado) {
+        if (!permisosMatrix[moduloNormalizado]) {
+          permisosMatrix[moduloNormalizado] = {};
+        }
+        permisosMatrix[moduloNormalizado][accionNormalizada] = true;
+      } else if (permisosMatrix[moduloNormalizado]) {
+        // Si el módulo ya existe (tiene otros permisos), marcar este como false
+        permisosMatrix[moduloNormalizado][accionNormalizada] = false;
       }
+      // ✅ Si no está asignado Y el módulo no existe, NO crear entrada
     });
 
     // Aplicar lógica: si admin=true en cualquier módulo, dar todos los permisos técnicos
@@ -169,19 +173,11 @@ export async function GET(request: NextRequest) {
           // Asegurar que el valor se establezca correctamente según si está en el rol
           const estaEnRol = permisoIds.includes(permiso.id);
           permisosMatrix[moduloNormalizado][accionNormalizada] = estaEnRol;
-          console.log('🔍 [Permisos API] Usuario con admin - "ver dueño de casa" establecido:', {
-            accionOriginal: permiso.accion,
-            accionNormalizada: accionNormalizada,
-            permisoId: permiso.id,
-            estaEnRol: estaEnRol,
-            valorEstablecido: permisosMatrix[moduloNormalizado][accionNormalizada]
-          });
         } else {
           // Otros permisos técnicos se otorgan automáticamente por admin
           permisosMatrix[moduloNormalizado][accionNormalizada] = true;
         }
       });
-      console.log('🔍 [Permisos API] Usuario con admin - Permisos técnicos otorgados (excepto ver dueño de casa)');
     }
 
     // Aplicar lógica: si admin=true, forzar todos a true (solo para módulos no técnicos)
@@ -213,27 +209,23 @@ export async function GET(request: NextRequest) {
       permisosMatrix['tecnico'][accionVerDuenoCasa] = Boolean(permisosMatrix['tecnico'][accionVerDuenoCasa]);
     }
 
-    // Log para depuración de permisos técnicos
-    const permisosTecnicosFinal = permisosMatrix['tecnico'] || {};
-    console.log('🔍 [Permisos API] Permisos técnicos para usuario:', {
-      userId,
-      permisosTecnicos: permisosTecnicosFinal,
-      'ver dueño de casa': permisosTecnicosFinal['ver dueño de casa'],
-      'todasLasClaves': Object.keys(permisosTecnicosFinal),
-      'permisoIds del rol': permisoIds,
-      'tipoVerDuenoCasa': typeof permisosTecnicosFinal['ver dueño de casa'],
-      'esBoolean': typeof permisosTecnicosFinal['ver dueño de casa'] === 'boolean'
-    });
 
-    // Log para depuración del módulo sitio
-    const sitioPermisos = permisosMatrix['sitio'] || permisosMatrix['sitio_web'] || permisosMatrix['web'] || {};
-    console.log('🔍 [Permisos API] Permisos sitio para usuario:', { 
-      userId, 
-      sitio: permisosMatrix['sitio'], 
-      sitio_web: permisosMatrix['sitio_web'], 
-      web: permisosMatrix['web'],
-      sitioPermisos 
-    });
+
+    // 🔐 Normalización: Si tiene admin/editar/eliminar pero no "ver", activar "ver"
+    Object.keys(permisosMatrix).forEach((modulo) => {
+      const permisos = permisosMatrix[modulo]
+      const tieneAlguno = permisos.admin || permisos.editar || permisos.eliminar || permisos.ver
+
+      if (tieneAlguno && !permisos.ver) {
+        permisos.ver = true
+      }
+    })
+
+    // 🛡️ PROTECCIÓN FINAL: Garantizar que siempre hay al menos módulo técnico
+    // Esto previene completamente el escenario de menú vacío
+    if (Object.keys(permisosMatrix).length === 0) {
+      permisosMatrix['tecnico'] = {};
+    }
 
     return NextResponse.json({ permisos: permisosMatrix });
   } catch (error) {

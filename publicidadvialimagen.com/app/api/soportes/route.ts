@@ -125,7 +125,27 @@ export async function GET(req: Request) {
     const maxPrice = searchParams.get('maxPrice')
 
     // Obtener todos los datos de Supabase
-    const result = await getAllSoportes()
+    // Esta es una ruta pública, no requiere autenticación
+    let result
+    try {
+      result = await getAllSoportes()
+    } catch (error: any) {
+      console.error('Error en getAllSoportes:', error)
+      console.error('Error message:', error?.message)
+      console.error('Error code:', error?.code)
+      console.error('Error hint:', error?.hint)
+      
+      // Si es un error de RLS o permisos, devolver un error más descriptivo
+      if (error?.code === '42501' || error?.message?.includes('permission denied') || error?.message?.includes('RLS')) {
+        return NextResponse.json({ 
+          error: 'Error de permisos al acceder a los soportes',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        }, { status: 403 })
+      }
+      
+      // Re-lanzar el error para que se maneje en el catch general
+      throw error
+    }
 
     const soportes = result.records.map(r => {
       // Extraer coordenadas del enlace de Google Maps
@@ -288,14 +308,35 @@ export async function GET(req: Request) {
       }
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in soportes API:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
+    console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error)
     console.error('Error details:', JSON.stringify(error, null, 2))
+    
+    // Determinar el código de estado apropiado
+    let statusCode = 500
+    let errorMessage = 'Error interno del servidor'
+    
+    if (error?.code === '42501' || error?.message?.includes('permission denied')) {
+      statusCode = 403
+      errorMessage = 'Error de permisos al acceder a los soportes'
+    } else if (error?.code === 'PGRST116' || error?.message?.includes('JWT')) {
+      statusCode = 401
+      errorMessage = 'Error de autenticación'
+    } else if (error?.message) {
+      errorMessage = error.message
+    }
+    
     return NextResponse.json({ 
-      error: 'Error interno del servidor',
-      details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
-    }, { status: 500 })
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error instanceof Error ? error.message : String(error),
+        code: error?.code,
+        hint: error?.hint,
+        stack: error instanceof Error ? error.stack : undefined
+      } : undefined
+    }, { status: statusCode })
   }
 }
 

@@ -1,8 +1,5 @@
-import { NextResponse } from 'next/server'
-import {
-  updateSolicitud,
-  deleteSolicitud
-} from '@/lib/supabaseSolicitudes'
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseUser } from '@/lib/supabaseServer'
 
 interface BulkRequest {
   ids: string[]
@@ -10,8 +7,15 @@ interface BulkRequest {
   data?: any
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Usar cliente de usuario (RLS controla acceso)
+    const supabase = await getSupabaseUser(req);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const { ids, action, data }: BulkRequest = await req.json()
 
     if (!Array.isArray(ids) || !ids.length) {
@@ -22,9 +26,15 @@ export async function POST(req: Request) {
       let deletedCount = 0
       for (const id of ids) {
         try {
-          const success = await deleteSolicitud(id)
-          if (success) {
+          const { error } = await supabase
+            .from('solicitudes')
+            .delete()
+            .or(`id.eq.${id},codigo.eq.${id}`)
+          
+          if (!error) {
             deletedCount += 1
+          } else {
+            console.error(`Error deleting solicitud ${id}:`, error)
           }
         } catch (error) {
           console.error(`Error deleting solicitud ${id}:`, error)
@@ -49,9 +59,18 @@ export async function POST(req: Request) {
       let updatedCount = 0
       for (const id of ids) {
         try {
-          const result = await updateSolicitud(id, { estado: data.estado })
-          if (result) {
+          const { error } = await supabase
+            .from('solicitudes')
+            .update({ 
+              estado: data.estado,
+              updated_at: new Date().toISOString()
+            })
+            .or(`id.eq.${id},codigo.eq.${id}`)
+          
+          if (!error) {
             updatedCount += 1
+          } else {
+            console.error(`Error updating solicitud ${id}:`, error)
           }
         } catch (error) {
           console.error(`Error updating solicitud ${id}:`, error)

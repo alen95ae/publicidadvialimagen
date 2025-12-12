@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { normalizarModulo, normalizarAccion } from "@/lib/permisos-utils";
 
 export interface PermisosMatrix {
   [modulo: string]: {
@@ -46,24 +47,9 @@ export function usePermisos() {
     }
   };
 
-  // Función para normalizar acciones (elimina espacios extra, mantiene acentos)
-  const normalizarAccion = (accion: string): string => {
-    if (!accion) return '';
-    return accion
-      .trim()                 // elimina espacios al inicio/final
-      .replace(/\s+/g, " ");  // colapsa espacios múltiples a uno solo
-  };
-
   // Helper para verificar un permiso específico
   const tienePermiso = (modulo: string, accion: string): boolean => {
-    // Normalizar módulo y acción para coincidir con las claves del backend
-    const moduloNormalizado = modulo
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toLowerCase();
-    
+    const moduloNormalizado = normalizarModulo(modulo);
     const accionNormalizada = normalizarAccion(accion);
     
     const moduloPermisos = permisos[moduloNormalizado];

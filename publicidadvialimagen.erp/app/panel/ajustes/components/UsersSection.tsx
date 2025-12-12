@@ -219,6 +219,33 @@ export default function UsersSection() {
     if (!editingUser) return;
 
     try {
+      // Si hay una imagen pendiente de subir, subirla primero
+      if (imageFile) {
+        setUploadingImage(true);
+        const formDataImage = new FormData();
+        formDataImage.append('file', imageFile);
+
+        const imageResponse = await fetch(`/api/ajustes/usuarios/image?userId=${editingUser.id}`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formDataImage,
+        });
+
+        const imageData = await imageResponse.json();
+
+        if (!imageResponse.ok || !imageData.success) {
+          toast({
+            title: "Error",
+            description: imageData.error || "Error al subir imagen",
+            variant: "destructive",
+          });
+          setUploadingImage(false);
+          return;
+        }
+        setUploadingImage(false);
+      }
+
+      // Actualizar datos del usuario
       const response = await fetch("/api/ajustes/usuarios", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -253,11 +280,13 @@ export default function UsersSection() {
         });
       }
     } catch (error) {
+      console.error("Error editing user:", error);
       toast({
         title: "Error",
         description: "Error al actualizar usuario",
         variant: "destructive",
       });
+      setUploadingImage(false);
     }
   };
 
@@ -450,7 +479,7 @@ export default function UsersSection() {
                   <TableCell className="text-left">
                     <div className="flex items-center justify-start gap-2">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={userImage || ""} alt={user.nombre} />
+                        <AvatarImage src={userImage || undefined} alt={user.nombre} />
                         <AvatarFallback className="bg-[#D54644] text-white text-xs font-medium">
                           {getInitials(user.nombre)}
                         </AvatarFallback>
@@ -539,7 +568,7 @@ export default function UsersSection() {
               <Label>Imagen de Perfil</Label>
               <div className="flex items-center gap-4 mt-2">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={imagePreview || ""} alt={formData.nombre || "Usuario"} />
+                  <AvatarImage src={imagePreview || undefined} alt={formData.nombre || "Usuario"} />
                   <AvatarFallback>{getInitials(formData.nombre || "")}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">

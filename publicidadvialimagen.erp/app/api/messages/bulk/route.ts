@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
-import { messagesService } from '@/lib/messages'
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseUser } from '@/lib/supabaseServer'
 
 interface BulkRequest {
   ids: string[]
@@ -7,8 +7,15 @@ interface BulkRequest {
   data?: any
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Usar cliente de usuario (RLS controla acceso por permisos)
+    const supabase = await getSupabaseUser(req);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const { ids, action, data }: BulkRequest = await req.json()
 
     if (!Array.isArray(ids) || !ids.length) {
@@ -17,7 +24,6 @@ export async function POST(req: Request) {
 
     if (action === 'delete') {
       let deletedCount = 0
-      const supabase = (await import('@/lib/supabaseServer')).getSupabaseServer()
       
       for (const id of ids) {
         try {
@@ -57,13 +63,18 @@ export async function POST(req: Request) {
       let updatedCount = 0
       for (const id of ids) {
         try {
-          // messagesService.updateMessageStatus espera "LEÍDO" pero lo convierte internamente
-          const success = await messagesService.updateMessageStatus(
-            id, 
-            data.estado as "NUEVO" | "LEÍDO" | "CONTESTADO"
-          )
-          if (success) {
+          const { error } = await supabase
+            .from('mensajes')
+            .update({ 
+              estado: estadoNormalizado,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+          
+          if (!error) {
             updatedCount += 1
+          } else {
+            console.error(`Error updating message ${id}:`, error)
           }
         } catch (error) {
           console.error(`Error updating message ${id}:`, error)

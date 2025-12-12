@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteSolicitud } from '@/lib/supabaseSolicitudes'
+import { getSupabaseUser } from '@/lib/supabaseServer'
 
 export async function DELETE(request: NextRequest) {
   console.log('DELETE method called for solicitudes')
   
   try {
+    // Usar cliente de usuario (RLS controla acceso)
+    const supabase = await getSupabaseUser(request);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const url = new URL(request.url)
     const id = url.searchParams.get('id')
     
@@ -18,9 +25,21 @@ export async function DELETE(request: NextRequest) {
 
     console.log('Eliminando solicitud:', id)
     
-    const eliminada = await deleteSolicitud(id)
+    // Eliminar usando cliente de usuario (RLS controlará permisos)
+    const { error, count } = await supabase
+      .from('solicitudes')
+      .delete({ count: 'exact' })
+      .or(`id.eq.${id},codigo.eq.${id}`)
     
-    if (!eliminada) {
+    if (error) {
+      console.error('Error al eliminar solicitud:', error);
+      return NextResponse.json(
+        { error: 'Error al eliminar la solicitud' },
+        { status: 500 }
+      )
+    }
+
+    if (count === 0) {
       console.log('⚠️ No se encontró solicitud con código:', id)
       return NextResponse.json(
         { error: 'Solicitud no encontrada o error al eliminar' },

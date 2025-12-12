@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession } from '@/lib/auth'
 import { getUserByIdSupabase } from '@/lib/supabaseUsers'
-import { getSupabaseServer } from '@/lib/supabaseServer'
+import { getSupabaseUser, getSupabaseAdmin } from '@/lib/supabaseServer'
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,8 +28,13 @@ export async function GET(request: NextRequest) {
     let roleName = user.rol || payload.role || 'invitado'
     if (user.rol_id && !user.rol) {
       // Si tenemos rol_id pero no el nombre, obtenerlo
-      const supabase = getSupabaseServer()
-      const { data: roleData } = await supabase
+      // FASE 0: Usar cliente de usuario (bajo riesgo - solo lectura de roles)
+      const supabase = await getSupabaseUser(request)
+      // ⚠️ TEMPORAL: Fallback a admin si no hay sesión (solo para FASE 0)
+      // ANTES DE ACTIVAR RLS: Eliminar este fallback y manejar el error correctamente
+      const supabaseClient = supabase || getSupabaseAdmin()
+      
+      const { data: roleData } = await supabaseClient
         .from('roles')
         .select('nombre')
         .eq('id', user.rol_id)

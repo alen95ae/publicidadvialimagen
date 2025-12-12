@@ -1,14 +1,58 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server"
-import { getAllSolicitudes } from "@/lib/supabaseSolicitudes"
+import { NextRequest, NextResponse } from "next/server"
+import { getSupabaseUser } from "@/lib/supabaseServer"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    // Usar cliente de usuario (RLS controla acceso)
+    const supabase = await getSupabaseUser(request);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url)
     const estadoFilterParam = searchParams.get('estado')
 
-    let solicitudes = await getAllSolicitudes()
+    // Obtener solicitudes usando cliente de usuario
+    const { data, error } = await supabase
+      .from('solicitudes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error al obtener solicitudes:', error);
+      return NextResponse.json(
+        { error: 'Error interno del servidor' },
+        { status: 500 }
+      );
+    }
+
+    // Convertir a formato esperado por el frontend
+    let solicitudes = (data || []).map((record: any) => {
+      const fechaCreacion = record.created_at 
+        ? new Date(record.created_at).toLocaleString('es-BO')
+        : new Date().toLocaleString('es-BO');
+
+      return {
+        id: record.id,
+        codigo: record.codigo,
+        fechaCreacion,
+        empresa: record.empresa || '',
+        contacto: record.contacto || '',
+        telefono: record.telefono || '',
+        email: record.email || '',
+        comentarios: record.comentarios || '',
+        estado: record.estado || 'Nueva',
+        fechaInicio: record.fecha_inicio,
+        mesesAlquiler: record.meses_alquiler,
+        soporte: record.soporte,
+        serviciosAdicionales: Array.isArray(record.servicios_adicionales) 
+          ? record.servicios_adicionales 
+          : (record.servicios_adicionales ? [record.servicios_adicionales] : [])
+      };
+    });
 
     // Filtrar por estado si se proporciona
     if (estadoFilterParam && estadoFilterParam !== 'all') {

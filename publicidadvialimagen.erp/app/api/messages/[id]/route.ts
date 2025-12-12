@@ -1,15 +1,47 @@
-import { NextResponse } from "next/server";
-import { messagesService } from "@/lib/messages";
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseUser } from "@/lib/supabaseServer";
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const { id } = params instanceof Promise ? await params : params;
-    const mensaje = await messagesService.getMessageById(id);
     
-    if (!mensaje) {
+    // Usar cliente de usuario (RLS controla acceso por permisos)
+    const supabase = await getSupabaseUser(req);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const { data, error } = await supabase
+      .from('mensajes')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching message from Supabase:", error);
+      return NextResponse.json({ error: "Error al obtener mensaje" }, { status: 500 });
+    }
+
+    if (!data) {
       return NextResponse.json({ error: "Mensaje no encontrado" }, { status: 404 });
     }
+
+    // Mapear los campos de Supabase al formato esperado por el frontend
+    const mensaje = {
+      id: data.id,
+      nombre: data.nombre || '',
+      email: data.email || '',
+      telefono: data.telefono || '',
+      empresa: data.empresa || '',
+      mensaje: data.mensaje || '',
+      fecha_recepcion: data.fecha || data.created_at || new Date().toISOString(),
+      // Mapear "LEIDO" (sin tilde) de la BD a "LEÍDO" (con tilde) para el frontend
+      estado: data.estado === 'LEIDO' ? 'LEÍDO' : (data.estado || 'NUEVO'),
+      origen: 'contacto' as const,
+      created_at: data.created_at,
+      updated_at: data.updated_at
+    };
 
     return NextResponse.json(mensaje);
   } catch (error) {
@@ -18,12 +50,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const { id } = params instanceof Promise ? await params : params;
     const body = await req.json();
     console.log('🔍 PATCH /api/messages/[id] - ID:', id);
     console.log('🔍 PATCH /api/messages/[id] - Body:', body);
+
+    // Usar cliente de usuario (RLS controla acceso por permisos)
+    const supabase = await getSupabaseUser(req);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
     // Si solo se actualiza el estado
     if (body.estado) {
@@ -36,36 +75,88 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }, { status: 400 });
       }
 
+      // Mapear "LEÍDO" a "LEIDO" para la BD
+      const estadoParaBD = body.estado === 'LEÍDO' ? 'LEIDO' : body.estado.trim();
+
       console.log('🔄 Actualizando estado a:', body.estado);
-      const success = await messagesService.updateMessageStatus(id, body.estado as "NUEVO" | "LEÍDO" | "CONTESTADO");
       
-      if (!success) {
-        console.error('❌ Error al actualizar estado - success es false');
+      const { data, error: updateError } = await supabase
+        .from('mensajes')
+        .update({ 
+          estado: estadoParaBD,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (updateError) {
+        console.error('❌ Error al actualizar estado:', updateError);
         return NextResponse.json({ error: "Error al actualizar estado" }, { status: 500 });
       }
       
-      console.log('✅ Estado actualizado correctamente, obteniendo mensaje actualizado...');
-      const mensaje = await messagesService.getMessageById(id);
-      
-      if (!mensaje) {
+      if (!data) {
         console.error('❌ No se pudo obtener el mensaje actualizado');
         return NextResponse.json({ error: "Error al obtener mensaje actualizado" }, { status: 500 });
       }
       
-      console.log('✅ Mensaje actualizado:', mensaje.id, 'Estado:', mensaje.estado);
+      // Mapear de vuelta "LEIDO" a "LEÍDO" para el frontend
+      const estadoFrontend = data.estado === 'LEIDO' ? 'LEÍDO' : data.estado;
+      
+      console.log('✅ Mensaje actualizado:', data.id, 'Estado:', estadoFrontend);
       return NextResponse.json({ 
         success: true, 
-        id: mensaje.id,
-        estado: mensaje.estado 
+        id: data.id,
+        estado: estadoFrontend
       });
     }
 
     // Si se actualiza el mensaje completo
-    const mensaje = await messagesService.updateMessage(id, body);
-    if (!mensaje) {
-      console.error('❌ Error al actualizar mensaje completo');
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+    
+    if (body.nombre !== undefined) updateData.nombre = body.nombre;
+    if (body.email !== undefined) updateData.email = body.email;
+    if (body.telefono !== undefined) updateData.telefono = body.telefono;
+    if (body.empresa !== undefined) updateData.empresa = body.empresa;
+    if (body.mensaje !== undefined) updateData.mensaje = body.mensaje;
+    // Mapear "LEÍDO" a "LEIDO" para la BD
+    if (body.estado !== undefined) {
+      updateData.estado = body.estado === 'LEÍDO' ? 'LEIDO' : body.estado;
+    }
+
+    const { data, error: updateError } = await supabase
+      .from('mensajes')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('❌ Error al actualizar mensaje completo:', updateError);
       return NextResponse.json({ error: "Error al actualizar mensaje" }, { status: 500 });
     }
+
+    if (!data) {
+      return NextResponse.json({ error: "Error al actualizar mensaje" }, { status: 500 });
+    }
+
+    // Mapear los campos de Supabase al formato esperado por el frontend
+    const mensaje = {
+      id: data.id,
+      nombre: data.nombre || '',
+      email: data.email || '',
+      telefono: data.telefono || '',
+      empresa: data.empresa || '',
+      mensaje: data.mensaje || '',
+      fecha_recepcion: data.fecha || data.created_at || new Date().toISOString(),
+      // Mapear "LEIDO" (sin tilde) de la BD a "LEÍDO" (con tilde) para el frontend
+      estado: data.estado === 'LEIDO' ? 'LEÍDO' : (data.estado || 'NUEVO'),
+      origen: 'contacto' as const,
+      created_at: data.created_at,
+      updated_at: data.updated_at
+    };
 
     return NextResponse.json({ 
       success: true, 
@@ -82,10 +173,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const { id } = params instanceof Promise ? await params : params;
-    const supabase = getSupabaseServer();
+    
+    // Usar cliente de usuario (RLS controla acceso por permisos)
+    const supabase = await getSupabaseUser(req);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const { error } = await supabase
       .from('mensajes')
       .delete()

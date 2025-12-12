@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
 import { updateUserSupabase, findUserByEmailSupabase } from "@/lib/supabaseUsers";
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseUser, getSupabaseAdmin } from "@/lib/supabaseServer";
 import bcrypt from "bcryptjs";
 
 // PUT /api/perfil - Actualizar perfil del usuario actual
@@ -34,8 +34,13 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: "Debes ingresar tu contraseña actual" }, { status: 400 });
       }
 
-      const supabase = getSupabaseServer();
-      const { data: userData } = await supabase
+      // FASE 0: Usar cliente de usuario (bajo riesgo - usuario lee su propia contraseña)
+      const supabase = await getSupabaseUser(request);
+      // ⚠️ TEMPORAL: Fallback a admin si no hay sesión (solo para FASE 0)
+      // ANTES DE ACTIVAR RLS: Eliminar este fallback y manejar el error correctamente
+      const supabaseClient = supabase || getSupabaseAdmin();
+      
+      const { data: userData } = await supabaseClient
         .from('usuarios')
         .select('passwordhash')
         .eq('id', userId)

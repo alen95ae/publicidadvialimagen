@@ -229,23 +229,9 @@ export default function Sidebar({ children }: SidebarProps) {
                 )
               }
               
-              // Para módulo sitio, verificar con "sitio", "sitio_web" y "web" como fallback
-              if (module.key === 'sitio') {
-                const tieneAcceso = puedeVer('sitio') || puedeVer('sitio_web') || puedeVer('web')
-                if (!tieneAcceso) {
-                  console.log('🔍 Módulo sitio sin acceso:', { 
-                    sitio: puedeVer('sitio'), 
-                    sitio_web: puedeVer('sitio_web'), 
-                    web: puedeVer('web') 
-                  })
-                  return null
-                }
-                console.log('✅ Módulo sitio con acceso')
-              } else {
-              // Filtrar módulos sin permiso ver
+              // Filtrar módulos sin permiso ver (normalizado)
               if (!puedeVer(module.key)) {
                 return null
-                }
               }
               
               // Para el módulo inventario, también considerar activo cuando estamos en insumos

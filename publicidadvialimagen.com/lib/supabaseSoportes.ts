@@ -1,4 +1,4 @@
-import { getSupabaseServer } from '@/lib/supabaseServer'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 // Tipo para un registro de soporte desde Supabase (nombres reales de columnas en snake_case)
 export type SoporteRow = {
@@ -88,6 +88,7 @@ export function supabaseRowToAirtableFormat(row: SoporteRow): any {
 }
 
 // Obtener todos los soportes (para la web pública)
+// Esta función usa getSupabaseAdmin() para bypass RLS ya que es una ruta pública
 export async function getAllSoportes() {
   try {
     // Verificar que Supabase esté configurado
@@ -95,19 +96,29 @@ export async function getAllSoportes() {
       throw new Error('Supabase no está configurado. Verifica las variables de entorno NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY')
     }
 
-    const supabase = getSupabaseServer()
+    // Usar getSupabaseAdmin() para bypass RLS (ruta pública)
+    const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('soportes')
       .select('*')
 
     if (error) {
       console.error('Error obteniendo soportes de Supabase:', error)
+      console.error('Error code:', error.code)
+      console.error('Error message:', error.message)
       console.error('Error details:', JSON.stringify(error, null, 2))
       throw error
     }
 
+    if (!data) {
+      console.warn('getAllSoportes: data es null o undefined')
+      return {
+        records: []
+      }
+    }
+
     return {
-      records: (data || []).map(row => ({
+      records: data.map(row => ({
         id: row.id,
         fields: supabaseRowToAirtableFormat(row as SoporteRow)
       }))
@@ -115,6 +126,7 @@ export async function getAllSoportes() {
   } catch (error) {
     console.error('Error en getAllSoportes:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
+    console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error)
     throw error
   }
 }

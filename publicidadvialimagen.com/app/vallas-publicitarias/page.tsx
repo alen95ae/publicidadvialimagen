@@ -20,10 +20,13 @@ import { CITY_COORDINATES } from "@/lib/city-coordinates"
 import { getBillboardUrl } from "@/lib/url-utils"
 import dynamic from "next/dynamic"
 
-const LeafletHybridMap = dynamic(() => import("@/components/maps/LeafletHybridMap"), {
-  ssr: false,
-  loading: () => <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">Cargando mapa...</div>
-})
+const LeafletHybridMap = dynamic(
+  () => import("@/components/maps/LeafletHybridMap").then((mod) => mod.default || mod),
+  {
+    ssr: false,
+    loading: () => <div className="h-[400px] bg-gray-100 rounded-lg flex items-center justify-center">Cargando mapa...</div>
+  }
+)
 
 // Configuración para evitar prerender
 export const dynamicParams = 'force-dynamic'

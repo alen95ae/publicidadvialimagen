@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServer } from '@/lib/supabaseServer'
+import { getSupabaseUser, getSupabaseAdmin } from '@/lib/supabaseServer'
 import { supabaseToRecurso } from '@/lib/supabaseRecursos'
 
-const supabase = getSupabaseServer()
-
+/**
+ * FASE 0: Migrado a usar cliente de usuario (bajo riesgo - búsqueda pública de recursos)
+ */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -20,8 +21,15 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // FASE 0: Usar cliente de usuario (bajo riesgo - búsqueda pública de recursos)
+    const supabase = await getSupabaseUser(request);
+    // ⚠️ TEMPORAL: Fallback a admin si no hay sesión (solo para FASE 0)
+    // ANTES DE ACTIVAR RLS: Eliminar este fallback y manejar el error correctamente
+    // Nota: Esta ruta podría ser pública, considerar permitir acceso anónimo
+    const supabaseClient = supabase || getSupabaseAdmin();
+
     // Buscar recursos directamente en Supabase
-    let queryBuilder = supabase
+    let queryBuilder = supabaseClient
       .from('recursos')
       .select('*')
       .limit(limit)

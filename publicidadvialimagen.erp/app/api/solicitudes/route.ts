@@ -4,6 +4,8 @@ import {
   createSolicitud,
   generarSiguienteCodigo
 } from '@/lib/supabaseSolicitudes'
+import { getSupabaseUser } from '@/lib/supabaseServer'
+import { verifySession } from '@/lib/auth'
 
 // Interface para las solicitudes de cotización
 interface SolicitudCotizacion {
@@ -56,6 +58,26 @@ function normalizarServiciosAdicionales(servicios: string[]): string[] {
 
 export async function POST(request: NextRequest) {
   try {
+    // Usar cliente de usuario (RLS controla acceso)
+    const supabase = await getSupabaseUser(request);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Extraer sesión para obtener user_id
+    const token = request.cookies.get('session')?.value;
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const session = await verifySession(token);
+    if (!session || !session.sub) {
+      return NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
+    }
+
+    const userId = session.sub;
+
     const body = await request.json()
     
     // Validar datos requeridos
@@ -89,21 +111,71 @@ export async function POST(request: NextRequest) {
     console.log('🔧 Servicios originales:', serviciosAdicionales)
     console.log('🔧 Servicios normalizados:', serviciosNormalizados)
 
-    // Crear la solicitud en Supabase
+    // Crear la solicitud en Supabase usando cliente de usuario
+    // RLS controlará el acceso, y asignamos user_id explícitamente
     try {
-      const nuevaSolicitud = await createSolicitud(
+      const now = new Date().toISOString();
+      
+      const solicitudData: any = {
         codigo,
-        'Nueva',
-        fechaInicio,
-        parseInt(mesesAlquiler),
+        estado: 'Nueva',
+        fecha_inicio: fechaInicio,
+        meses_alquiler: parseInt(mesesAlquiler),
         soporte,
-        serviciosNormalizados,
+        servicios_adicionales: serviciosNormalizados.length > 0 ? serviciosNormalizados : null,
         empresa,
         contacto,
         telefono,
         email,
-        comentarios || ''
-      )
+        comentarios: comentarios || '',
+        user_id: userId, // Asignar explícitamente user_id del usuario autenticado
+        created_at: now,
+        updated_at: now
+      };
+
+      const { data, error } = await supabase
+        .from('solicitudes')
+        .insert([solicitudData])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error guardando en Supabase:', error);
+        return NextResponse.json(
+          { error: 'Error al guardar en Supabase', details: error.message },
+          { status: 500 }
+        );
+      }
+
+      if (!data) {
+        return NextResponse.json(
+          { error: 'Error al guardar en Supabase' },
+          { status: 500 }
+        );
+      }
+
+      // Convertir a formato esperado por el frontend
+      const fechaCreacion = data.created_at 
+        ? new Date(data.created_at).toLocaleString('es-BO')
+        : new Date().toLocaleString('es-BO');
+
+      const nuevaSolicitud = {
+        id: data.id,
+        codigo: data.codigo,
+        fechaCreacion,
+        empresa: data.empresa || '',
+        contacto: data.contacto || '',
+        telefono: data.telefono || '',
+        email: data.email || '',
+        comentarios: data.comentarios || '',
+        estado: data.estado || 'Nueva',
+        fechaInicio: data.fecha_inicio,
+        mesesAlquiler: data.meses_alquiler,
+        soporte: data.soporte,
+        serviciosAdicionales: Array.isArray(data.servicios_adicionales) 
+          ? data.servicios_adicionales 
+          : (data.servicios_adicionales ? [data.servicios_adicionales] : [])
+      };
 
       console.log('✅ Solicitud guardada en Supabase:', nuevaSolicitud.codigo)
 
@@ -135,9 +207,54 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Leer desde Supabase
+    // Usar cliente de usuario (RLS controla acceso)
+    const supabase = await getSupabaseUser(request);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Leer desde Supabase usando cliente de usuario
     console.log('🔍 Leyendo solicitudes desde Supabase...')
-    const solicitudes = await getAllSolicitudes()
+    
+    const { data, error } = await supabase
+      .from('solicitudes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error al obtener solicitudes:', error);
+      return NextResponse.json(
+        { error: 'Error interno del servidor' },
+        { status: 500 }
+      );
+    }
+
+    // Convertir a formato esperado por el frontend
+    const solicitudes = (data || []).map((record: any) => {
+      const fechaCreacion = record.created_at 
+        ? new Date(record.created_at).toLocaleString('es-BO')
+        : new Date().toLocaleString('es-BO');
+
+      return {
+        id: record.id,
+        codigo: record.codigo,
+        fechaCreacion,
+        empresa: record.empresa || '',
+        contacto: record.contacto || '',
+        telefono: record.telefono || '',
+        email: record.email || '',
+        comentarios: record.comentarios || '',
+        estado: record.estado || 'Nueva',
+        fechaInicio: record.fecha_inicio,
+        mesesAlquiler: record.meses_alquiler,
+        soporte: record.soporte,
+        serviciosAdicionales: Array.isArray(record.servicios_adicionales) 
+          ? record.servicios_adicionales 
+          : (record.servicios_adicionales ? [record.servicios_adicionales] : [])
+      };
+    });
+
     console.log('✅ Solicitudes cargadas desde Supabase:', solicitudes.length)
 
     return NextResponse.json(solicitudes)

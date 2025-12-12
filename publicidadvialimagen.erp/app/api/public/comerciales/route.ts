@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseUser, getSupabaseAdmin } from "@/lib/supabaseServer";
 import { verifySession } from "@/lib/auth";
 
 /**
  * Endpoint público pero seguro para obtener lista de comerciales (vendedores)
  * Accesible por cualquier usuario autenticado, sin requerir permisos de admin
+ * 
+ * FASE 0: Migrado a usar cliente de usuario (bajo riesgo - lectura pública de vendedores)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -20,11 +22,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
     }
 
-    // Obtener cliente de Supabase con Service Role (bypass RLS)
-    const supabase = getSupabaseServer();
+    // FASE 0: Usar cliente de usuario (bajo riesgo - lectura pública de vendedores)
+    const supabase = await getSupabaseUser(req);
+    // ⚠️ TEMPORAL: Fallback a admin si no hay sesión (solo para FASE 0)
+    // ANTES DE ACTIVAR RLS: Eliminar este fallback y manejar el error correctamente
+    const supabaseClient = supabase || getSupabaseAdmin();
 
     // Consultar usuarios con vendedor = true
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("usuarios")
       .select("id, nombre, email, vendedor, imagen_usuario, numero")
       .eq("vendedor", true)

@@ -1,15 +1,46 @@
-import { NextResponse } from "next/server"
-import { messagesService } from "@/lib/messages"
+import { NextRequest, NextResponse } from "next/server"
+import { getSupabaseUser } from "@/lib/supabaseServer"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    // Usar cliente de usuario (RLS controla acceso por permisos)
+    const supabase = await getSupabaseUser(request);
+    
+    if (!supabase) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get('estado') || ''
     
     console.log('📤 Export mensajes params:', { estado })
 
     // Obtener todos los mensajes
-    const mensajes = await messagesService.getMessages()
+    const { data, error } = await supabase
+      .from('mensajes')
+      .select('*')
+      .order('fecha', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching messages:', error);
+      return NextResponse.json({ error: "Error al obtener mensajes" }, { status: 500 });
+    }
+
+    // Mapear los campos de Supabase al formato esperado por el frontend
+    const mensajes = (data || []).map((msg: any) => ({
+      id: msg.id,
+      nombre: msg.nombre || '',
+      email: msg.email || '',
+      telefono: msg.telefono || '',
+      empresa: msg.empresa || '',
+      mensaje: msg.mensaje || '',
+      fecha_recepcion: msg.fecha || msg.created_at || new Date().toISOString(),
+      // Mapear "LEIDO" (sin tilde) de la BD a "LEÍDO" (con tilde) para el frontend
+      estado: msg.estado === 'LEIDO' ? 'LEÍDO' : (msg.estado || 'NUEVO'),
+      origen: 'contacto' as const,
+      created_at: msg.created_at,
+      updated_at: msg.updated_at
+    }));
 
     // Filtrar por estado si se especifica
     let filteredMensajes = mensajes

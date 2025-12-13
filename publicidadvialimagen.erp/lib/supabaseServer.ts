@@ -138,24 +138,30 @@ export async function getSupabaseUser(
     if (request) {
       // API route: extraer de request.cookies
       token = request.cookies.get('session')?.value
+      console.log('[getSupabaseUser] API route - Token from cookies:', token ? 'FOUND' : 'NOT FOUND')
     } else {
       // Server component: extraer de cookies()
       const cookieStore = await cookies()
       token = cookieStore.get('session')?.value
+      console.log('[getSupabaseUser] Server component - Token from cookies:', token ? 'FOUND' : 'NOT FOUND')
     }
 
     if (!token) {
+      console.warn('[getSupabaseUser] No token found - returning null')
       // No hay sesión - retornar null (NO fallback)
       return null
     }
 
     // Validar sesión existente
+    console.log('[getSupabaseUser] Validating session token...')
     const payload = await verifySession(token)
     if (!payload || !payload.sub) {
+      console.warn('[getSupabaseUser] Session invalid - no payload or sub')
       // Sesión inválida - retornar null
       return null
     }
 
+    console.log('[getSupabaseUser] Session valid - User ID:', payload.sub)
     userId = payload.sub
   } catch (error) {
     console.warn('[getSupabaseUser] Error verificando sesión:', error)

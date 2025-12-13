@@ -9,10 +9,9 @@
  * Normaliza un nombre de módulo a su clave canónica
  * 
  * Ejemplos:
- * - "Sitio Web" → "sitio"
- * - "Diseño Gráfico" → "diseno"
  * - "Ventas" → "ventas"
  * - "Producción" → "produccion"
+ * - "Mantenimiento" → "mantenimiento"
  * 
  * @param modulo - Nombre del módulo en cualquier formato
  * @returns Clave canónica del módulo (sin espacios, sin acentos, minúsculas)
@@ -22,12 +21,6 @@ export function normalizarModulo(modulo: string | undefined | null): string {
   
   // Mapeo explícito para módulos con nombres compuestos en BD
   const mapaModulos: Record<string, string> = {
-    'sitio web': 'sitio',
-    'sitio_web': 'sitio',
-    'web': 'sitio',
-    'diseño gráfico': 'diseno',
-    'diseño grafico': 'diseno',
-    'diseno grafico': 'diseno',
     'panel principal': 'panel',
   };
   
@@ -78,7 +71,7 @@ export const PERMISOS_POR_DEFECTO_POR_ROL: Record<string, string[]> = {
   'admin': [
     'mensajes', 'calendario', 'contactos', 'ventas', 'soportes',
     'inventario', 'produccion', 'mantenimiento', 'contabilidad',
-    'metricas', 'sitio', 'diseno', 'empleados', 'ajustes'
+    'metricas', 'ajustes'
   ],
   'ventas': ['mensajes', 'calendario', 'contactos', 'ventas', 'soportes'],
   'tecnico': ['mensajes', 'calendario', 'soportes', 'mantenimiento'],
@@ -115,9 +108,6 @@ export const MODULOS_SIDEBAR = [
   'mantenimiento',
   'contabilidad',
   'metricas',
-  'sitio',
-  'diseno',
-  'empleados',
   'ajustes'
 ] as const;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Package, MessageSquare, Calendar, Handshake, Monitor, LineChart, Hammer, Wrench, Palette, Globe, Receipt, UserCog, Settings } from "lucide-react";
+import { Users, Package, MessageSquare, Calendar, Handshake, Monitor, LineChart, Hammer, Wrench, Receipt, Settings } from "lucide-react";
 import { usePermisosContext } from "@/hooks/permisos-provider";
 
 const modules = [
@@ -15,9 +15,6 @@ const modules = [
   { name: "Mantenimiento", icon: Wrench, href: "/panel/mantenimiento", key: "mantenimiento" },
   { name: "Contabilidad", icon: Receipt, href: "/panel/contabilidad", key: "contabilidad" },
   { name: "Métricas", icon: LineChart, href: "/panel/metricas", key: "metricas" },
-  { name: "Sitio Web", icon: Globe, href: "/panel/sitio", key: "sitio" },
-  { name: "Diseño", icon: Palette, href: "/panel/diseno", key: "diseno" },
-  { name: "Empleados", icon: UserCog, href: "/panel/empleados", key: "empleados" },
   { name: "Ajustes", icon: Settings, href: "/panel/ajustes/usuarios", key: "ajustes" },
 ];
 

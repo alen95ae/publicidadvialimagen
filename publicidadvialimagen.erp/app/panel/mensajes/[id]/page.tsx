@@ -209,10 +209,10 @@ export default function MensajeDetailPage() {
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-800 mb-2">Error</h2>
             <p className="text-gray-600 mb-4">{error || 'No se pudo cargar el mensaje'}</p>
-            <Link href="/panel/mensajes">
+            <Link href="/panel/mensajes/formularios">
               <Button variant="outline">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Volver a Mensajes
+                Volver a Formularios
               </Button>
             </Link>
           </div>
@@ -228,10 +228,10 @@ export default function MensajeDetailPage() {
         <div className="max-w-4xl mx-auto">
           {/* Botón Volver */}
           <div className="mb-4 flex justify-end">
-            <Link href="/panel/mensajes">
+            <Link href="/panel/mensajes/formularios">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Volver a Mensajes
+                Volver a Formularios
               </Button>
             </Link>
           </div>

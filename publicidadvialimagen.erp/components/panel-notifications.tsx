@@ -21,7 +21,10 @@ export default function PanelNotifications() {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('/api/notifications')
+        const res = await fetch('/api/notifications', {
+          cache: 'no-store',
+          credentials: 'include'
+        })
         if (res.ok) {
           const data = await res.json()
           setNotifications(Array.isArray(data) ? data : [])

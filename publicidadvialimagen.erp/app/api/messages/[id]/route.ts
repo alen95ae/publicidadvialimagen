@@ -1,19 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseUser } from "@/lib/supabaseServer";
+import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { verifySession } from "@/lib/auth/verifySession";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const { id } = params instanceof Promise ? await params : params;
     
-    // Usar cliente de usuario (RLS controla acceso por permisos)
-    const supabase = await getSupabaseUser(req);
-    
-    if (!supabase) {
+    // Verificar sesión del usuario
+    const token = req.cookies.get('session')?.value;
+    if (!token) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    let userId: string;
+    try {
+      const payload = await verifySession(token);
+      if (!payload || !payload.sub) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      }
+      userId = payload.sub;
+    } catch (error) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Usar admin client para leer formularios
+    const supabase = getSupabaseAdmin();
+
     const { data, error } = await supabase
-      .from('mensajes')
+      .from('formularios')
       .select('*')
       .eq('id', id)
       .single();
@@ -57,12 +71,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     console.log('🔍 PATCH /api/messages/[id] - ID:', id);
     console.log('🔍 PATCH /api/messages/[id] - Body:', body);
 
-    // Usar cliente de usuario (RLS controla acceso por permisos)
-    const supabase = await getSupabaseUser(req);
-    
-    if (!supabase) {
+    // Verificar sesión del usuario
+    const token = req.cookies.get('session')?.value;
+    if (!token) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
+
+    let userId: string;
+    try {
+      const payload = await verifySession(token);
+      if (!payload || !payload.sub) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      }
+      userId = payload.sub;
+    } catch (error) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Usar admin client para actualizar formularios
+    const supabase = getSupabaseAdmin();
 
     // Si solo se actualiza el estado
     if (body.estado) {
@@ -81,7 +108,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       console.log('🔄 Actualizando estado a:', body.estado);
       
       const { data, error: updateError } = await supabase
-        .from('mensajes')
+        .from('formularios')
         .update({ 
           estado: estadoParaBD,
           updated_at: new Date().toISOString()
@@ -127,7 +154,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const { data, error: updateError } = await supabase
-      .from('mensajes')
+      .from('formularios')
       .update(updateData)
       .eq('id', id)
       .select()
@@ -154,6 +181,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // Mapear "LEIDO" (sin tilde) de la BD a "LEÍDO" (con tilde) para el frontend
       estado: data.estado === 'LEIDO' ? 'LEÍDO' : (data.estado || 'NUEVO'),
       origen: 'contacto' as const,
+      asignado_a: data.asignado_a || null,
       created_at: data.created_at,
       updated_at: data.updated_at
     };
@@ -177,15 +205,28 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = params instanceof Promise ? await params : params;
     
-    // Usar cliente de usuario (RLS controla acceso por permisos)
-    const supabase = await getSupabaseUser(req);
-    
-    if (!supabase) {
+    // Verificar sesión del usuario
+    const token = req.cookies.get('session')?.value;
+    if (!token) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    let userId: string;
+    try {
+      const payload = await verifySession(token);
+      if (!payload || !payload.sub) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      }
+      userId = payload.sub;
+    } catch (error) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Usar admin client para eliminar formularios
+    const supabase = getSupabaseAdmin();
+
     const { error } = await supabase
-      .from('mensajes')
+      .from('formularios')
       .delete()
       .eq('id', id);
 

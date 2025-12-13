@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import Sidebar from "@/components/sidebar";
 import { PermisosProvider } from "@/hooks/permisos-provider";
+import SessionProtection from "@/components/session-protection";
 
 export default async function PanelLayout({
   children,
@@ -24,6 +25,7 @@ export default async function PanelLayout({
 
   return (
     <PermisosProvider>
+      <SessionProtection />
       <Sidebar>
         {children}
       </Sidebar>

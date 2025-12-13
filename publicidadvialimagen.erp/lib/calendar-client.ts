@@ -35,6 +35,8 @@ export async function getEvents(): Promise<CalendarEvent[]> {
       headers: {
         "Content-Type": "application/json",
       },
+      cache: 'no-store',
+      credentials: 'include'
     })
 
     if (!response.ok) {
@@ -65,6 +67,8 @@ export async function addEvent(eventData: EventFormData): Promise<CalendarEvent 
         "Content-Type": "application/json",
       },
       body: JSON.stringify(eventData),
+      cache: 'no-store',
+      credentials: 'include'
     })
 
     if (!response.ok) {
@@ -97,6 +101,8 @@ export async function updateEvent(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(eventData),
+      cache: 'no-store',
+      credentials: 'include'
     })
 
     if (!response.ok) {
@@ -125,6 +131,8 @@ export async function deleteEvent(eventId: string): Promise<boolean> {
       headers: {
         "Content-Type": "application/json",
       },
+      cache: 'no-store',
+      credentials: 'include'
     })
 
     if (!response.ok) {
@@ -148,6 +156,8 @@ export async function getEmployees(): Promise<Array<{ id: string; name: string; 
       headers: {
         "Content-Type": "application/json",
       },
+      cache: 'no-store',
+      credentials: 'include'
     })
 
     if (!response.ok) {

@@ -1,350 +1,169 @@
 "use client"
 
-import Link from "next/link"
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import { 
-  MessageSquare, 
-  Plus, 
-  Search, 
-  Filter, 
-  Download, 
-  MoreHorizontal,
-  Calendar,
-  User,
-  Building,
-  Phone,
-  Mail,
-  Clock,
-  CheckCircle,
+  Bell, 
+  CheckCircle, 
+  Info, 
+  AlertTriangle, 
   XCircle,
-  AlertCircle,
-  Eye,
   Trash2,
+  ExternalLink,
   RefreshCw
 } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { useRouter } from "next/navigation"
 
-// Tipos para los mensajes
-interface Message {
+interface Notificacion {
   id: string
-  nombre: string
-  email: string
-  telefono: string
-  empresa: string
+  titulo: string
   mensaje: string
-  fecha_recepcion: string
-  estado: "NUEVO" | "LEÍDO" | "CONTESTADO"
+  tipo: 'info' | 'success' | 'warning' | 'error'
+  leida: boolean
+  entidad_tipo?: string
+  entidad_id?: string
+  url?: string
+  created_at: string
 }
 
-// Los mensajes se cargan desde la API de Airtable
-
-const getEstadoColor = (estado: string) => {
-  switch (estado) {
-    case "CONTESTADO":
-      return "bg-green-100 text-green-800"
-    case "LEÍDO":
-      return "bg-blue-100 text-blue-800"
-    case "NUEVO":
-      return "bg-yellow-100 text-yellow-800"
+const getTipoIcon = (tipo: string) => {
+  switch (tipo) {
+    case 'success':
+      return <CheckCircle className="w-5 h-5 text-green-600" />
+    case 'warning':
+      return <AlertTriangle className="w-5 h-5 text-yellow-600" />
+    case 'error':
+      return <XCircle className="w-5 h-5 text-red-600" />
     default:
-      return "bg-gray-100 text-gray-800"
+      return <Info className="w-5 h-5 text-blue-600" />
   }
 }
 
-const getEstadoIcon = (estado: string) => {
-  switch (estado) {
-    case "CONTESTADO":
-      return <CheckCircle className="w-4 h-4" />
-    case "LEÍDO":
-      return <Clock className="w-4 h-4" />
-    case "NUEVO":
-      return <AlertCircle className="w-4 h-4" />
+const getTipoBadge = (tipo: string) => {
+  switch (tipo) {
+    case 'success':
+      return 'bg-green-100 text-green-800'
+    case 'warning':
+      return 'bg-yellow-100 text-yellow-800'
+    case 'error':
+      return 'bg-red-100 text-red-800'
     default:
-      return <AlertCircle className="w-4 h-4" />
+      return 'bg-blue-100 text-blue-800'
   }
-}
-
-
-// Estados para filtros
-const ESTADOS_META = {
-  NUEVO: { label: "Nuevo", className: "bg-yellow-100 text-yellow-800" },
-  LEÍDO: { label: "Leído", className: "bg-blue-100 text-blue-800" },
-  CONTESTADO: { label: "Contestado", className: "bg-green-100 text-green-800" }
 }
 
 export default function MensajesPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedMensajes, setSelectedMensajes] = useState<string[]>([])
-  const [mensajesList, setMensajesList] = useState<Message[]>([])
-  const [estadoFilter, setEstadoFilter] = useState<string[]>([])
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([])
   const [loading, setLoading] = useState(true)
-  const [editedMessages, setEditedMessages] = useState<Record<string, Partial<Message>>>({})
-  const [savingChanges, setSavingChanges] = useState(false)
+  const router = useRouter()
 
-  // Cargar mensajes desde Supabase
-  const loadMensajes = async () => {
+  const loadNotificaciones = async () => {
     try {
       setLoading(true)
-      // Usar cache: 'no-store' para evitar problemas de caché
-      const response = await fetch('/api/messages', {
+      const response = await fetch('/api/notificaciones', {
+        credentials: 'include',
         cache: 'no-store',
         next: { revalidate: 0 }
       })
+      
       if (response.ok) {
         const data = await response.json()
-        setMensajesList(data)
-        console.log(`✅ Cargados ${data.length} mensajes desde Supabase`)
+        // Log temporal para debugging
+        console.log('[Frontend] Notificaciones recibidas:', data)
+        // Asegurar que siempre sea un array
+        setNotificaciones(Array.isArray(data) ? data : [])
       } else {
-        const errorData = await response.json()
-        console.error('Error loading messages:', errorData)
-        alert(`Error al cargar mensajes: ${errorData.error || 'Error desconocido'}`)
+        // Si hay error, establecer array vacío en lugar de mostrar error
+        setNotificaciones([])
       }
     } catch (error) {
-      console.error('Error loading messages:', error)
-      alert('Error de conexión al cargar mensajes')
+      // En caso de error, establecer array vacío
+      setNotificaciones([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadMensajes()
+    loadNotificaciones()
   }, [])
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedMensajes(mensajesList.map(m => m.id))
-    } else {
-      setSelectedMensajes([])
-    }
-  }
-
-  const handleSelectMensaje = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedMensajes([...selectedMensajes, id])
-    } else {
-      setSelectedMensajes(selectedMensajes.filter(m => m !== id))
-    }
-  }
-
-  const handleEliminarMensaje = async (id: string) => {
-    if (confirm('¿Estás seguro de que quieres eliminar este mensaje?')) {
-      try {
-        const response = await fetch(`/api/messages/${id}`, {
-          method: 'DELETE',
-          cache: 'no-store'
-        })
-        if (response.ok) {
-          // Recargar mensajes para obtener datos actualizados desde Supabase
-          await loadMensajes()
-          setSelectedMensajes(selectedMensajes.filter(m => m !== id))
-        } else {
-          alert('Error al eliminar el mensaje')
-        }
-      } catch (error) {
-        console.error('Error deleting message:', error)
-        alert('Error al eliminar el mensaje')
-      }
-    }
-  }
-
-  // Cambiar estado inline (para un solo mensaje)
-  const handleEstadoChange = (id: string, newEstado: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
-    setEditedMessages(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        estado: newEstado
-      }
-    }))
-  }
-
-  // Cambiar estado masivo (para múltiples mensajes)
-  const handleBulkEstadoChange = (newEstado: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
-    const updates: Record<string, Partial<Message>> = {}
-    selectedMensajes.forEach(id => {
-      updates[id] = {
-        ...(editedMessages[id] || {}),
-        estado: newEstado
-      }
-    })
-    setEditedMessages(prev => ({ ...prev, ...updates }))
-    toast.info(`Estado actualizado para ${selectedMensajes.length} mensaje(s)`)
-  }
-
-  // Guardar cambios
-  const handleSaveChanges = async () => {
-    if (Object.keys(editedMessages).length === 0) return
-
+  const marcarComoLeida = async (id: string) => {
     try {
-      setSavingChanges(true)
-      const count = Object.keys(editedMessages).length
-
-      // Si hay un solo mensaje, usar PATCH individual
-      if (count === 1) {
-        const [id] = Object.keys(editedMessages)
-        const changes = editedMessages[id]
-        
-        if (changes.estado) {
-          const response = await fetch(`/api/messages/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ estado: changes.estado }),
-            cache: 'no-store'
-          })
-          
-          if (!response.ok) {
-            throw new Error('Error al actualizar mensaje')
-          }
-        }
-      } else {
-        // Si hay múltiples, usar bulk update
-        const ids = Object.keys(editedMessages)
-        const estados = ids.map(id => editedMessages[id].estado)
-        
-        // Agrupar por estado para hacer updates más eficientes
-        const estadosUnicos = [...new Set(estados.filter(Boolean))]
-        
-        for (const estado of estadosUnicos) {
-          const idsConEsteEstado = ids.filter(id => editedMessages[id].estado === estado)
-          
-          if (idsConEsteEstado.length > 0 && estado) {
-            const response = await fetch('/api/messages/bulk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ids: idsConEsteEstado,
-                action: 'update',
-                data: { estado }
-              })
-            })
-            
-            if (!response.ok) {
-              const errorData = await response.json()
-              throw new Error(errorData.error || 'Error al actualizar mensajes')
-            }
-          }
-        }
-      }
-
-      setEditedMessages({})
-      setSelectedMensajes([])
-      await loadMensajes()
-      toast.success(`${count} mensaje(s) actualizado(s)`)
-    } catch (error) {
-      console.error('Error al guardar cambios:', error)
-      toast.error("Error al guardar cambios")
-    } finally {
-      setSavingChanges(false)
-    }
-  }
-
-  // Descartar cambios
-  const handleDiscardChanges = () => {
-    setEditedMessages({})
-    toast.info("Cambios descartados")
-  }
-
-  // Exportar mensajes a CSV
-  const handleExport = async () => {
-    try {
-      const estadoParam = estadoFilter.length > 0 ? estadoFilter.join(',') : 'all'
-      const url = `/api/messages/export?estado=${estadoParam}`
-      
-      const response = await fetch(url)
-      
-      if (!response.ok) {
-        throw new Error('Error al exportar mensajes')
-      }
-      
-      // Convertir a blob y descargar
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = `mensajes_${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-      
-      toast.success(`Mensajes exportados correctamente`)
-    } catch (error) {
-      console.error('Error exportando mensajes:', error)
-      toast.error('Error al exportar mensajes')
-    }
-  }
-
-  // Eliminar mensajes seleccionados
-  const handleBulkDelete = async () => {
-    if (selectedMensajes.length === 0) {
-      toast.error("Selecciona al menos un mensaje para eliminar")
-      return
-    }
-
-    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedMensajes.length} mensaje(s)?`)) {
-      return
-    }
-
-    try {
-      const response = await fetch('/api/messages/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: selectedMensajes,
-          action: 'delete'
-        })
+      const response = await fetch(`/api/notificaciones/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        cache: 'no-store'
       })
-
+      
       if (response.ok) {
-        await loadMensajes()
-        setSelectedMensajes([])
-        toast.success(`${selectedMensajes.length} mensaje(s) eliminado(s)`)
+        setNotificaciones(prev => 
+          prev.map(n => n.id === id ? { ...n, leida: true } : n)
+        )
+        // No mostrar toast para no ser ruidoso
       } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || 'Error al eliminar los mensajes')
+        // Solo mostrar error si es un error real (no 404)
+        if (response.status !== 404) {
+          const errorData = await response.json().catch(() => ({}))
+          console.error('Error al marcar como leída:', errorData)
+        }
       }
     } catch (error) {
-      console.error('Error eliminando mensajes:', error)
-      toast.error('Error de conexión')
+      // Error silencioso - no romper la UI
+      console.error('Error marking as read:', error)
     }
   }
 
+  const eliminarNotificacion = async (id: string) => {
+    try {
+      const response = await fetch(`/api/notificaciones/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        cache: 'no-store'
+      })
+      
+      if (response.ok) {
+        setNotificaciones(prev => prev.filter(n => n.id !== id))
+        // No mostrar toast para no ser ruidoso
+      } else {
+        // Solo mostrar error si es un error real (no 404)
+        if (response.status !== 404) {
+          const errorData = await response.json().catch(() => ({}))
+          console.error('Error al eliminar:', errorData)
+        }
+      }
+    } catch (error) {
+      // Error silencioso - no romper la UI
+      console.error('Error deleting notification:', error)
+    }
+  }
 
-  const filteredMensajes = mensajesList.filter(mensaje => {
-    const matchesSearch = mensaje.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mensaje.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mensaje.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mensaje.mensaje.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesEstado = estadoFilter.length === 0 || estadoFilter.includes(mensaje.estado)
-    
-    return matchesSearch && matchesEstado
-  })
+  const handleNavegar = (notificacion: Notificacion) => {
+    if (notificacion.url) {
+      router.push(notificacion.url)
+    }
+    if (!notificacion.leida) {
+      marcarComoLeida(notificacion.id)
+    }
+  }
 
-  // Ordenar del más reciente al más antiguo
-  const sortedMensajes = filteredMensajes.sort((a, b) => 
-    new Date(b.fecha_recepcion).getTime() - new Date(a.fecha_recepcion).getTime()
-  )
+  const notificacionesNoLeidas = notificaciones.filter(n => !n.leida)
+  const notificacionesLeidas = notificaciones.filter(n => n.leida)
 
   return (
     <div className="p-6">
-      {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">Gestión de Mensajes</h1>
-            <p className="text-gray-600">Administra los mensajes recibidos desde los formularios de la web</p>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">Notificaciones</h1>
+            <p className="text-gray-600">Gestiona tus notificaciones del sistema</p>
           </div>
           <Button
-            onClick={loadMensajes}
+            onClick={loadNotificaciones}
             variant="outline"
             size="sm"
             disabled={loading}
@@ -355,250 +174,168 @@ export default function MensajesPage() {
           </Button>
         </div>
 
-        {/* Actions Bar */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Buscar mensajes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
-                />
-              </div>
-              <Select
-                value={estadoFilter.length ? estadoFilter.join(',') : 'all'}
-                onValueChange={(value) => setEstadoFilter(value === 'all' ? [] : (value ? value.split(',') : []))}
-              >
-                <SelectTrigger className="max-w-48">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {Object.entries(ESTADOS_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
-                        {meta.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mensajes Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Listado de Mensajes</CardTitle>
-            <CardDescription>
-              {sortedMensajes.length} mensajes encontrados
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Barra azul unificada de acciones masivas */}
-            {(selectedMensajes.length > 0 || Object.keys(editedMessages).length > 0) && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    {selectedMensajes.length > 0 && (
-                      <span className="text-sm font-medium text-blue-800">
-                        {selectedMensajes.length} seleccionado{selectedMensajes.length > 1 ? 's' : ''}
-                      </span>
-                    )}
-                    
-                    {/* Solo mostrar desplegable cuando hay más de 1 mensaje seleccionado */}
-                    {selectedMensajes.length > 1 && (
-                      <Select
-                        value=""
-                        onValueChange={(value: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
-                          handleBulkEstadoChange(value)
-                        }}
-                      >
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Cambiar estado..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(ESTADOS_META).map(([key, meta]) => (
-                            <SelectItem key={key} value={key}>
-                              <div className="flex items-center gap-2">
-                                <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
-                                {meta.label}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    {Object.keys(editedMessages).length > 0 && (
-                      <>
-                        <Button 
-                          size="sm" 
-                          onClick={handleSaveChanges}
-                          disabled={savingChanges}
-                          className="bg-red-600 hover:bg-red-700 text-white"
-                        >
-                          {savingChanges ? "Guardando..." : `Guardar cambios (${Object.keys(editedMessages).length})`}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={handleDiscardChanges}
-                        >
-                          Descartar
-                        </Button>
-                      </>
-                    )}
-                    
-                    {selectedMensajes.length > 0 && (
-                      <Button 
-                        size="sm" 
-                        onClick={handleBulkDelete}
-                        className="bg-red-600 hover:bg-red-700 text-white"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Eliminar{selectedMensajes.length > 1 ? ` (${selectedMensajes.length})` : ''}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* Notificaciones */}
+        <div className="space-y-6">
 
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644] mx-auto mb-4"></div>
-                  <p className="text-gray-600">Cargando mensajes...</p>
-                </div>
-              </div>
+              <Card>
+                <CardContent className="py-8">
+                  <div className="flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644] mx-auto mb-4"></div>
+                      <p className="text-gray-600">Cargando notificaciones...</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : notificaciones.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Bell className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No tienes notificaciones</p>
+                </CardContent>
+              </Card>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4">
-                      <Checkbox
-                        checked={selectedMensajes.length === mensajesList.length}
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Nombre</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Email</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900 w-40">Teléfono</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Empresa</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Mensaje</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Fecha</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Estado</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-900">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedMensajes.map((mensaje) => (
-                    <tr key={mensaje.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <Checkbox
-                          checked={selectedMensajes.includes(mensaje.id)}
-                          onCheckedChange={(checked) => handleSelectMensaje(mensaje.id, checked as boolean)}
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-medium line-clamp-2">{mensaje.nombre}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="max-w-xs truncate" title={mensaje.email}>
-                          {mensaje.email.length > 25 ? `${mensaje.email.substring(0, 25)}...` : mensaje.email}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 w-40">
-                        <span className="whitespace-nowrap overflow-hidden text-ellipsis">
-                          {mensaje.telefono}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="max-w-xs truncate">{mensaje.empresa}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="max-w-xs">
-                          <span className="text-sm text-gray-600 line-clamp-2">{mensaje.mensaje}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-sm">
-                          {new Date(mensaje.fecha_recepcion).toLocaleDateString('es-ES')}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {selectedMensajes.length === 1 && selectedMensajes.includes(mensaje.id) ? (
-                          // Edición inline cuando solo hay un mensaje seleccionado
-                          <Select
-                            value={editedMessages[mensaje.id]?.estado || mensaje.estado}
-                            onValueChange={(value: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
-                              handleEstadoChange(mensaje.id, value)
-                            }}
+              <>
+                {/* Notificaciones no leídas */}
+                {notificacionesNoLeidas.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">No leídas ({notificacionesNoLeidas.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                        {notificacionesNoLeidas.map((notificacion) => (
+                          <div
+                            key={notificacion.id}
+                            className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                           >
-                            <SelectTrigger className="w-40">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(ESTADOS_META).map(([key, meta]) => (
-                                <SelectItem key={key} value={key}>
-                                  <div className="flex items-center gap-2">
-                                    <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
-                                    {meta.label}
+                            <div className="flex items-start gap-3">
+                              <div className="mt-1">
+                                {getTipoIcon(notificacion.tipo)}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-gray-900 mb-1">
+                                      {notificacion.titulo}
+                                    </h3>
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      {notificacion.mensaje}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                      <span>
+                                        {new Date(notificacion.created_at).toLocaleString('es-ES')}
+                                      </span>
+                                      {notificacion.entidad_tipo && (
+                                        <>
+                                          <span>•</span>
+                                          <Badge className={getTipoBadge(notificacion.tipo)}>
+                                            {notificacion.entidad_tipo}
+                                          </Badge>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          // Vista normal cuando no está seleccionado o hay múltiples seleccionados
-                          <Badge className={`${getEstadoColor(editedMessages[mensaje.id]?.estado || mensaje.estado)} flex items-center gap-1 w-fit`}>
-                            {getEstadoIcon(editedMessages[mensaje.id]?.estado || mensaje.estado)}
-                            {(editedMessages[mensaje.id]?.estado || mensaje.estado).replace('_', ' ')}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex gap-1">
-                          <Link href={`/panel/mensajes/${mensaje.id}`}>
-                            <Button variant="ghost" size="sm" title="Ver detalles">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </Link>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Eliminar"
-                            onClick={() => handleEliminarMensaje(mensaje.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  <div className="flex gap-2">
+                                    {notificacion.url && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleNavegar(notificacion)}
+                                        className="flex items-center gap-1"
+                                      >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Ver
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => marcarComoLeida(notificacion.id)}
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => eliminarNotificacion(notificacion.id)}
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Notificaciones leídas */}
+                {notificacionesLeidas.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Leídas ({notificacionesLeidas.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                        {notificacionesLeidas.map((notificacion) => (
+                          <div
+                            key={notificacion.id}
+                            className="p-4 border border-gray-200 rounded-lg bg-gray-50 opacity-75"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
+                            <div className="flex items-start gap-3">
+                              <div className="mt-1 opacity-50">
+                                {getTipoIcon(notificacion.tipo)}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-gray-700 mb-1">
+                                      {notificacion.titulo}
+                                    </h3>
+                                    <p className="text-sm text-gray-500 mb-2">
+                                      {notificacion.mensaje}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                                      <span>
+                                        {new Date(notificacion.created_at).toLocaleString('es-ES')}
+                                      </span>
+                                      {notificacion.entidad_tipo && (
+                                        <>
+                                          <span>•</span>
+                                          <Badge variant="outline" className="opacity-50">
+                                            {notificacion.entidad_tipo}
+                                          </Badge>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarNotificacion(notificacion.id)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+              </>
             )}
-          </CardContent>
-        </Card>
+        </div>
       </main>
       <Toaster />
     </div>

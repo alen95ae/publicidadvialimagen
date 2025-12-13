@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Mail, User, Lock, Upload, Loader2, Eye, EyeOff, Phone } from "lucide-react"
+import { Mail, User, Lock, Upload, Loader2, Eye, EyeOff, Phone, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
 export default function ProfilePage() {
@@ -31,6 +31,7 @@ export default function ProfilePage() {
   const [showPasswordActual, setShowPasswordActual] = useState(false)
   const [showPasswordNueva, setShowPasswordNueva] = useState(false)
   const [showPasswordConfirmar, setShowPasswordConfirmar] = useState(false)
+  const [resettingSession, setResettingSession] = useState(false)
 
   useEffect(() => {
     fetchUser()
@@ -39,6 +40,7 @@ export default function ProfilePage() {
   const fetchUser = async () => {
     try {
       const response = await fetch("/api/auth/me", {
+        cache: 'no-store',
         credentials: "include",
       })
       if (response.ok) {
@@ -104,6 +106,7 @@ export default function ProfilePage() {
       const response = await fetch('/api/usuarios/image', {
         method: 'POST',
         credentials: 'include',
+        cache: 'no-store',
         body: formData,
       })
 
@@ -152,6 +155,7 @@ export default function ProfilePage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        cache: 'no-store',
         body: JSON.stringify({
           nombre: formData.nombre,
           email: formData.email,
@@ -396,6 +400,47 @@ export default function ProfilePage() {
               >
             Cerrar Sesión
           </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!confirm('¿Estás seguro de que deseas restablecer tu sesión? Esto cerrará tu sesión actual y limpiará todos los datos locales.')) {
+                    return
+                  }
+                  try {
+                    setResettingSession(true)
+                    // Sign out
+                    await fetch("/api/auth/logout", {
+                      method: "POST",
+                      credentials: "include",
+                      cache: 'no-store'
+                    })
+                    // Limpiar storage
+                    localStorage.clear()
+                    sessionStorage.clear()
+                    // Redirigir a login
+                    window.location.href = '/login'
+                  } catch (error) {
+                    console.error("Error resetting session:", error)
+                    toast.error("Error al restablecer sesión")
+                    setResettingSession(false)
+                  }
+                }}
+                disabled={resettingSession}
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+              >
+                {resettingSession ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Restableciendo...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Restablecer Sesión
+                  </>
+                )}
+              </Button>
       </div>
           </form>
         </CardContent>

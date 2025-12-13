@@ -86,7 +86,8 @@ const moduleConfigs: Record<string, ModuleConfig> = {
   mensajes: {
     title: "Mensajes",
     navItems: [
-      { label: "Mensajes", href: "/panel/mensajes" },
+      { label: "Notificaciones", href: "/panel/mensajes" },
+      { label: "Formularios", href: "/panel/mensajes/formularios" },
     ],
   },
 }
@@ -142,6 +143,7 @@ export default function PanelHeader() {
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notificationCount, setNotificationCount] = useState(0)
+  const [sistemaNotificacionesCount, setSistemaNotificacionesCount] = useState(0)
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set())
 
@@ -150,8 +152,12 @@ export default function PanelHeader() {
   useEffect(() => {
     fetchUser()
     fetchNotifications()
+    fetchSistemaNotificaciones()
     // Actualizar notificaciones cada 30 segundos
-    const interval = setInterval(fetchNotifications, 30000)
+    const interval = setInterval(() => {
+      fetchNotifications()
+      fetchSistemaNotificaciones()
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -280,6 +286,25 @@ export default function PanelHeader() {
     }
   }
 
+  const fetchSistemaNotificaciones = async () => {
+    try {
+      const response = await fetch("/api/notificaciones/count", {
+        credentials: "include",
+        cache: "no-store",
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setSistemaNotificacionesCount(data.count || 0)
+      } else {
+        // Si hay error, asumir 0 para no romper el header
+        setSistemaNotificacionesCount(0)
+      }
+    } catch (error) {
+      // Error silencioso - asumir 0
+      setSistemaNotificacionesCount(0)
+    }
+  }
+
   const handleNotificationClick = (notification: Notification) => {
     markNotificationAsRead(notification)
     router.push(notification.link)
@@ -317,6 +342,13 @@ export default function PanelHeader() {
   const isActive = (href: string) => {
     // Coincidencia exacta
     if (href === pathname) return true
+    
+    // Caso especial para mensajes: /panel/mensajes solo debe estar activo si es exactamente esa ruta
+    // No debe activarse cuando estás en /panel/mensajes/formularios o /panel/mensajes/[id]
+    if (href === "/panel/mensajes") {
+      return pathname === "/panel/mensajes" && !pathname.startsWith("/panel/mensajes/")
+    }
+    
     // Para rutas dinámicas o subrutas, verificar que empiece con el href
     // pero evitar falsos positivos (ej: /panel/ajustes no debería activar /panel/ajustes/roles)
     if (pathname.startsWith(href + "/") && href !== "/panel") return true
@@ -380,14 +412,13 @@ export default function PanelHeader() {
                 variant="ghost" 
                 size="icon" 
                 className="relative"
-                onClick={(e) => e.preventDefault()}
               >
                 <Bell className="h-5 w-5" />
-                {notificationCount > 0 && (
+                {(notificationCount + sistemaNotificacionesCount) > 0 && (
                   <Badge
                     className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-[#D54644] hover:bg-[#D54644]"
                   >
-                    {notificationCount > 9 ? "9+" : notificationCount}
+                    {(notificationCount + sistemaNotificacionesCount) > 9 ? "9+" : (notificationCount + sistemaNotificacionesCount)}
                   </Badge>
                 )}
               </Button>
@@ -395,18 +426,24 @@ export default function PanelHeader() {
             <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
               <DropdownMenuLabel className="flex items-center justify-between">
                 <span>Notificaciones</span>
-                {notificationCount > 0 && (
+                {(notificationCount + sistemaNotificacionesCount) > 0 && (
                   <Badge variant="secondary" className="ml-2">
-                    {notificationCount}
+                    {notificationCount + sistemaNotificacionesCount}
                   </Badge>
                 )}
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/panel/mensajes" className="cursor-pointer">
+                  Ver todas las notificaciones
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {loadingNotifications ? (
                 <div className="p-4 text-center text-sm text-gray-500">
                   Cargando...
                 </div>
-              ) : notifications.length === 0 ? (
+              ) : (notifications.length === 0 && sistemaNotificacionesCount === 0) ? (
                 <div className="p-4 text-center text-sm text-gray-500">
                   No hay notificaciones nuevas
                 </div>

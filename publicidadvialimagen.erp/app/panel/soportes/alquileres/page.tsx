@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -72,6 +72,8 @@ export default function AlquileresPage() {
     hasPrev: false,
   })
   const [filtersLoaded, setFiltersLoaded] = useState(false)
+  const hadDataRef = useRef(false)
+  const reloadAttemptedRef = useRef(false)
 
   // Cargar alquileres desde la API
   const loadAlquileres = async (page: number = currentPage) => {
@@ -96,25 +98,38 @@ export default function AlquileresPage() {
       
       const response = await fetch(`/api/alquileres?${params.toString()}`, {
         cache: 'no-store',
-        next: { revalidate: 0 }
+        credentials: 'include'
       })
       
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          setAlquileres(data.data || [])
+          const alquileresData = data.data || []
+          
+          // Failsafe: si antes había datos y ahora no, y no hemos intentado reload, hacer reload
+          if (hadDataRef.current && alquileresData.length === 0 && !reloadAttemptedRef.current) {
+            reloadAttemptedRef.current = true
+            console.warn("[Alquileres] Datos vacíos inesperados, recargando página...")
+            setTimeout(() => {
+              window.location.reload()
+            }, 1000)
+            return
+          }
+          
+          setAlquileres(alquileresData)
           setPagination(data.pagination || pagination)
           setCurrentPage(page)
+          hadDataRef.current = alquileresData.length > 0
           
           // Actualizar lista única de vendedores para el filtro (de los alquileres)
-          const nuevosVendedores = Array.from(new Set((data.data || []).map((a: Alquiler) => a.vendedor).filter(Boolean))) as string[]
+          const nuevosVendedores = Array.from(new Set(alquileresData.map((a: Alquiler) => a.vendedor).filter(Boolean))) as string[]
           
           setVendedoresUnicos(prev => {
             const combined = [...new Set([...prev, ...nuevosVendedores])]
             return combined.sort()
           })
           
-          console.log(`✅ Cargados ${data.data?.length || 0} alquileres`)
+          console.log(`✅ Cargados ${alquileresData.length} alquileres`)
         } else {
           throw new Error(data.error || 'Error al cargar alquileres')
         }

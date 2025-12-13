@@ -19,9 +19,6 @@ const KNOWN_MODULES = [
   "/panel/contabilidad",
   "/panel/reservas",
   "/panel/clientes",
-  "/panel/empleados",
-  "/panel/diseno",
-  "/panel/sitio",
   "/panel/ajustes",
   "/panel/perfil",
   "/panel/__wip",
@@ -76,6 +73,12 @@ export async function middleware(req: NextRequest) {
       loginUrl.search = "";
       return NextResponse.redirect(loginUrl);
     }
+
+    // Headers anti-cache para rutas del panel
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
 
     // Verificar que el token sea válido
     try {
@@ -148,8 +151,25 @@ export async function middleware(req: NextRequest) {
       const wipUrl = req.nextUrl.clone();
       wipUrl.pathname = "/panel/__wip";
       wipUrl.search = "";
-      return NextResponse.rewrite(wipUrl);
+      const wipResponse = NextResponse.rewrite(wipUrl);
+      // Headers anti-cache también para rewrite
+      wipResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      wipResponse.headers.set('Pragma', 'no-cache');
+      wipResponse.headers.set('Expires', '0');
+      return wipResponse;
     }
+
+    // Retornar response con headers anti-cache
+    return response;
+  }
+
+  // Headers anti-cache para rutas /api/* del ERP
+  if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth")) {
+    const response = NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    return response;
   }
 
   return NextResponse.next();

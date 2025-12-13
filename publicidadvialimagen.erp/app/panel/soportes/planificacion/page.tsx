@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,49 +32,78 @@ const ESTADOS_ALQUILER = {
 
 const getMesIndex = (mes: string) => meses.indexOf(mes)
 
-// Función para obtener el mes de inicio de un alquiler en un año específico
-// Si el alquiler empieza antes del año, devuelve enero. Si empieza durante el año, devuelve el mes correspondiente.
-const getMesInicioAlquiler = (inicio: string, fin: string, año: number): string | null => {
+/**
+ * Helper para parsear fechas en UTC
+ * Asegura que todas las fechas se interpreten en UTC, independientemente del timezone del navegador
+ */
+function parseUTC(dateString: string): Date | null {
+  if (!dateString) return null
+  // Si ya termina en Z, es UTC. Si no, añadir Z para forzar UTC
+  const utcString = dateString.endsWith('Z') ? dateString : `${dateString}Z`
+  return new Date(utcString)
+}
+
+/**
+ * Función para obtener el mes de inicio de un alquiler en un año específico
+ * Usa UTC para evitar problemas de timezone
+ * NUNCA descarta alquileres - siempre retorna un mes válido si el alquiler existe
+ */
+const getMesInicioAlquiler = (inicio: string, fin: string, año: number): string => {
   try {
-    const inicioDate = new Date(inicio)
-    const finDate = new Date(fin)
-    const añoInicio = `${año}-01-01`
-    const añoFin = `${año}-12-31`
-    const añoInicioDate = new Date(añoInicio)
-    const añoFinDate = new Date(añoFin)
+    const inicioDate = parseUTC(inicio)
+    const finDate = parseUTC(fin)
     
-    // Si el alquiler no se solapa con el año, retornar null
-    if (inicioDate > añoFinDate || finDate < añoInicioDate) {
-      return null
+    if (!inicioDate || !finDate) {
+      // Si no se puede parsear, usar enero como fallback
+      return meses[0]
+    }
+    
+    // Rangos del año en UTC
+    const añoInicioUTC = parseUTC(`${año}-01-01T00:00:00`)
+    const añoFinUTC = parseUTC(`${año}-12-31T23:59:59`)
+    
+    if (!añoInicioUTC || !añoFinUTC) {
+      return meses[0]
     }
     
     // Si el alquiler empieza antes del año, el mes de inicio es enero
-    if (inicioDate < añoInicioDate) {
+    if (inicioDate < añoInicioUTC) {
       return meses[0] // enero
     }
     
-    // Si el alquiler empieza durante el año, devolver el mes correspondiente
-    const fechaAño = inicioDate.getFullYear()
-    const fechaMes = inicioDate.getMonth() // 0-11
+    // Si el alquiler empieza durante el año, devolver el mes correspondiente en UTC
+    const fechaAño = inicioDate.getUTCFullYear()
+    const fechaMes = inicioDate.getUTCMonth() // 0-11
     
     if (fechaAño === año) {
       return meses[fechaMes]
     }
     
-    return null
+    // Si el alquiler empieza después del año pero se solapa (fin >= inicio año), usar enero
+    if (finDate >= añoInicioUTC) {
+      return meses[0]
+    }
+    
+    // Fallback: usar enero
+    return meses[0]
   } catch {
-    return null
+    // En caso de error, nunca descartar - usar enero
+    return meses[0]
   }
 }
 
-// Función para calcular duración en meses entre dos fechas
+// Función para calcular duración en meses entre dos fechas (en UTC)
 const calcularDuracionMeses = (inicio: string, fin: string): number => {
   try {
-    const inicioDate = new Date(inicio)
-    const finDate = new Date(fin)
+    const inicioDate = parseUTC(inicio)
+    const finDate = parseUTC(fin)
     
-    const yearDiff = finDate.getFullYear() - inicioDate.getFullYear()
-    const monthDiff = finDate.getMonth() - inicioDate.getMonth()
+    if (!inicioDate || !finDate) {
+      return 1
+    }
+    
+    const yearDiff = finDate.getUTCFullYear() - inicioDate.getUTCFullYear()
+    const monthDiff = finDate.getUTCMonth() - inicioDate.getUTCMonth()
     
     return yearDiff * 12 + monthDiff + 1 // +1 porque incluye ambos meses
   } catch {
@@ -82,25 +111,33 @@ const calcularDuracionMeses = (inicio: string, fin: string): number => {
   }
 }
 
-// Función para calcular la duración de un alquiler dentro de un año específico
+// Función para calcular la duración de un alquiler dentro de un año específico (en UTC)
 const calcularDuracionEnAño = (inicio: string, fin: string, año: number): number => {
   try {
-    const inicioDate = new Date(inicio)
-    const finDate = new Date(fin)
-    const añoInicio = `${año}-01-01`
-    const añoFin = `${año}-12-31`
-    const añoInicioDate = new Date(añoInicio)
-    const añoFinDate = new Date(añoFin)
+    const inicioDate = parseUTC(inicio)
+    const finDate = parseUTC(fin)
+    
+    if (!inicioDate || !finDate) {
+      return 1
+    }
+    
+    // Rangos del año en UTC
+    const añoInicioUTC = parseUTC(`${año}-01-01T00:00:00`)
+    const añoFinUTC = parseUTC(`${año}-12-31T23:59:59`)
+    
+    if (!añoInicioUTC || !añoFinUTC) {
+      return 1
+    }
     
     // Fecha de inicio efectiva: máximo entre inicio del alquiler e inicio del año
-    const inicioEfectivo = inicioDate < añoInicioDate ? añoInicioDate : inicioDate
+    const inicioEfectivo = inicioDate < añoInicioUTC ? añoInicioUTC : inicioDate
     
     // Fecha de fin efectiva: mínimo entre fin del alquiler y fin del año
-    const finEfectivo = finDate > añoFinDate ? añoFinDate : finDate
+    const finEfectivo = finDate > añoFinUTC ? añoFinUTC : finDate
     
-    // Calcular meses entre fechas efectivas
-    const yearDiff = finEfectivo.getFullYear() - inicioEfectivo.getFullYear()
-    const monthDiff = finEfectivo.getMonth() - inicioEfectivo.getMonth()
+    // Calcular meses entre fechas efectivas usando UTC
+    const yearDiff = finEfectivo.getUTCFullYear() - inicioEfectivo.getUTCFullYear()
+    const monthDiff = finEfectivo.getUTCMonth() - inicioEfectivo.getUTCMonth()
     
     return Math.max(1, yearDiff * 12 + monthDiff + 1)
   } catch {
@@ -150,7 +187,13 @@ interface SoportePlanificacion {
 export default function PlanificacionPage() {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
-  const [año, setAño] = useState(new Date().getFullYear())
+  // Obtener año actual en UTC para evitar problemas de timezone
+  const getCurrentYearUTC = () => {
+    const now = new Date()
+    return now.getUTCFullYear()
+  }
+  
+  const [año, setAño] = useState(getCurrentYearUTC())
   const [filtroVendedor, setFiltroVendedor] = useState("all")
   const [filtroEstado, setFiltroEstado] = useState("all")
   const [agrupador, setAgrupador] = useState<"ninguno" | "vendedor" | "cliente" | "estado" | "ciudad">("ninguno")
@@ -158,6 +201,8 @@ export default function PlanificacionPage() {
   const [vendedoresUnicos, setVendedoresUnicos] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
+  const hadDataRef = useRef(false)
+  const reloadAttemptedRef = useRef(false)
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 100,
@@ -188,10 +233,8 @@ export default function PlanificacionPage() {
         params.set('fecha_inicio', fechaInicio)
         params.set('fecha_fin', fechaFin)
         
-        // Búsqueda general en múltiples campos
-        if (searchTerm) {
-          params.set('search', searchTerm)
-        }
+        // No aplicar búsqueda en la API para mantener orden global
+        // Los filtros de vendedor y estado sí se aplican en la API para optimizar
         if (filtroVendedor !== 'all') {
           params.set('vendedor', filtroVendedor)
         }
@@ -199,7 +242,10 @@ export default function PlanificacionPage() {
           params.set('estado', filtroEstado)
         }
         
-        const response = await fetch(`/api/alquileres?${params.toString()}`)
+        const response = await fetch(`/api/alquileres?${params.toString()}`, {
+          cache: 'no-store',
+          credentials: 'include'
+        })
         const data = await response.json()
         
         if (data.success) {
@@ -220,11 +266,12 @@ export default function PlanificacionPage() {
         // Agrupar alquileres por soporte
         const soportesMap = new Map<string | number, SoportePlanificacion>()
         
+        // IMPORTANTE: NO filtrar alquileres por fechas - incluir TODOS
+        // El backend ya filtra correctamente por rango de fechas usando UTC
         alquileres.forEach((alquiler) => {
           const soporteId = alquiler.soporte_id
+          // getMesInicioAlquiler ahora SIEMPRE retorna un mes válido (nunca null)
           const mesInicio = getMesInicioAlquiler(alquiler.inicio, alquiler.fin, año)
-          
-          if (!mesInicio) return // Si no se solapa con el año, saltar
           
           if (!soportesMap.has(soporteId)) {
             soportesMap.set(soporteId, {
@@ -259,6 +306,13 @@ export default function PlanificacionPage() {
         
         const soportesArray = Array.from(soportesMap.values())
         
+        // Ordenar TODOS los soportes alfabéticamente por código antes de paginar
+        soportesArray.sort((a, b) => {
+          const codigoA = (a.codigo || '').toLowerCase()
+          const codigoB = (b.codigo || '').toLowerCase()
+          return codigoA.localeCompare(codigoB)
+        })
+        
         // Actualizar listas únicas para los filtros
         const nuevosVendedores = Array.from(new Set(alquileres.map(a => a.vendedor).filter(Boolean))) as string[]
         setVendedoresUnicos(prev => {
@@ -266,23 +320,19 @@ export default function PlanificacionPage() {
           return combined.sort()
         })
         
-        // Aplicar paginación
-        const total = soportesArray.length
-        const totalPages = Math.ceil(total / 100)
-        const from = (currentPage - 1) * 100
-        const to = from + 100
-        const paginatedSoportes = soportesArray.slice(from, to)
-        
-        setSoportesPlanificacion(paginatedSoportes)
-        setPagination({
-          page: currentPage,
-          limit: 100,
-          total,
-          totalPages,
-          hasNext: currentPage < totalPages,
-          hasPrev: currentPage > 1
-        })
+        // Guardar TODOS los soportes ordenados (sin paginar aún)
+        setSoportesPlanificacion(soportesArray)
+        hadDataRef.current = soportesArray.length > 0
       } else {
+        // Failsafe: si antes había datos y ahora no, y no hemos intentado reload, hacer reload
+        if (hadDataRef.current && !reloadAttemptedRef.current) {
+          reloadAttemptedRef.current = true
+          console.warn("[Planificación] Datos vacíos inesperados, recargando página...")
+          setTimeout(() => {
+            window.location.reload()
+          }, 1000)
+          return
+        }
         toast.error('Error al cargar los alquileres')
       }
     } catch (error) {
@@ -337,7 +387,13 @@ export default function PlanificacionPage() {
   // Función para agrupar soportes
   const agruparSoportes = (soportes: SoportePlanificacion[]) => {
     if (agrupador === "ninguno") {
-      return [{ grupo: null, soportes }]
+      // Si no hay agrupación, solo ordenar alfabéticamente
+      const soportesOrdenados = [...soportes].sort((a, b) => {
+        const codigoA = (a.codigo || '').toLowerCase()
+        const codigoB = (b.codigo || '').toLowerCase()
+        return codigoA.localeCompare(codigoB)
+      })
+      return [{ grupo: null, soportes: soportesOrdenados }]
     }
 
     const gruposMap = new Map<string, SoportePlanificacion[]>()
@@ -389,7 +445,12 @@ export default function PlanificacionPage() {
     // Convertir a array y ordenar
     const grupos = Array.from(gruposMap.entries()).map(([grupo, soportes]) => ({
       grupo,
-      soportes
+      soportes: soportes.sort((a, b) => {
+        // Ordenar soportes dentro de cada grupo alfabéticamente por código
+        const codigoA = (a.codigo || '').toLowerCase()
+        const codigoB = (b.codigo || '').toLowerCase()
+        return codigoA.localeCompare(codigoB)
+      })
     }))
     
     // Ordenar grupos alfabéticamente
@@ -398,7 +459,73 @@ export default function PlanificacionPage() {
     return grupos
   }
 
-  const gruposSoportes = agruparSoportes(filteredSoportes)
+  // Agrupar TODOS los soportes (sin filtrar por búsqueda aún, para mantener orden global)
+  const todosLosGrupos = agruparSoportes(soportesPlanificacion)
+  
+  // Aplanar todos los grupos en una lista única manteniendo el orden
+  const todosLosSoportesAplanados: Array<{ grupo: string | null, soporte: SoportePlanificacion }> = []
+  todosLosGrupos.forEach(grupoData => {
+    grupoData.soportes.forEach(soporte => {
+      todosLosSoportesAplanados.push({ grupo: grupoData.grupo, soporte })
+    })
+  })
+  
+  // Aplicar filtro de búsqueda a los soportes aplanados
+  const soportesFiltradosAplanados = todosLosSoportesAplanados.filter(({ soporte }) => {
+    const matchesSearch = soporte.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      soporte.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      soporte.alquileres.some(a => 
+        (a.cliente && a.cliente.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (a.vendedor && a.vendedor.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (a.codigo && a.codigo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (a.soporte_codigo && a.soporte_codigo.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    return matchesSearch
+  })
+  
+  // Aplicar paginación a los soportes filtrados
+  const total = soportesFiltradosAplanados.length
+  const totalPages = Math.ceil(total / 100)
+  const from = (currentPage - 1) * 100
+  const to = from + 100
+  const soportesPaginados = soportesFiltradosAplanados.slice(from, to)
+  
+  // Reconstruir la estructura de grupos para la página actual
+  const gruposMapPaginados = new Map<string | null, SoportePlanificacion[]>()
+  soportesPaginados.forEach(({ grupo, soporte }) => {
+    if (!gruposMapPaginados.has(grupo)) {
+      gruposMapPaginados.set(grupo, [])
+    }
+    gruposMapPaginados.get(grupo)!.push(soporte)
+  })
+  
+  const gruposSoportes = Array.from(gruposMapPaginados.entries()).map(([grupo, soportes]) => ({
+    grupo,
+    soportes: soportes.sort((a, b) => {
+      // Mantener orden alfabético dentro del grupo
+      const codigoA = (a.codigo || '').toLowerCase()
+      const codigoB = (b.codigo || '').toLowerCase()
+      return codigoA.localeCompare(codigoB)
+    })
+  })).sort((a, b) => {
+    // Ordenar grupos alfabéticamente
+    if (a.grupo === null && b.grupo === null) return 0
+    if (a.grupo === null) return 1
+    if (b.grupo === null) return -1
+    return a.grupo.localeCompare(b.grupo)
+  })
+  
+  // Sincronizar estado de paginación
+  useEffect(() => {
+    setPagination({
+      page: currentPage,
+      limit: 100,
+      total,
+      totalPages,
+      hasNext: currentPage < totalPages,
+      hasPrev: currentPage > 1
+    })
+  }, [total, totalPages, currentPage])
 
   // Función para detectar si dos alquileres se solapan
   const seSolapan = (alq1: { mes: string; duracion: number }, alq2: { mes: string; duracion: number }): boolean => {
@@ -436,9 +563,11 @@ export default function PlanificacionPage() {
     return filas.flat() // Aplanar para tener todos los alquileres con su número de fila
   }
 
-  // Función para formatear fecha
+  // Función para formatear fecha (usa UTC para consistencia)
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES')
+    const date = parseUTC(dateString)
+    if (!date) return dateString
+    return date.toLocaleDateString('es-ES', { timeZone: 'UTC' })
   }
 
   // Función para formatear precio
@@ -568,7 +697,7 @@ export default function PlanificacionPage() {
         {/* Timeline */}
         <Card>
           <CardHeader>
-            <CardTitle>Línea de Tiempo - {año} ({filteredSoportes.length})</CardTitle>
+            <CardTitle>Línea de Tiempo - {año} ({total})</CardTitle>
             <CardDescription>
               Ocupación de soportes publicitarios por mes
             </CardDescription>
@@ -599,7 +728,7 @@ export default function PlanificacionPage() {
                   </div>
 
                   {/* Filas de soportes */}
-                  {filteredSoportes.length === 0 ? (
+                  {total === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       {searchTerm ? 'No se encontraron soportes con ese criterio de búsqueda' : 'No hay alquileres para este año'}
                     </div>

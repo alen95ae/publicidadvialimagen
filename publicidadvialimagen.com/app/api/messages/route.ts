@@ -121,6 +121,7 @@ export async function POST(req: Request) {
     // 1️⃣ Guardar mensaje en Supabase (principal)
     let mensajeId: string | null = null
     try {
+      console.log('📝 Intentando guardar en Supabase:', { nombre, email, telefono, empresa, mensaje: mensaje.substring(0, 50) + '...' })
       const mensajeSupabase = await createMensajeSupabase({
         nombre: nombre || '',
         email: email,
@@ -133,7 +134,17 @@ export async function POST(req: Request) {
       console.log('✅ Mensaje guardado en Supabase:', mensajeId)
     } catch (error: any) {
       console.error('❌ Error guardando en Supabase:', error)
-      // Continuar con Airtable como fallback
+      console.error('❌ Error details:', error.message)
+      console.error('❌ Error stack:', error.stack)
+      // Si falla Supabase, lanzar el error para que se vea en el response
+      return NextResponse.json(
+        { 
+          error: "Error al guardar formulario en Supabase", 
+          details: error.message,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        },
+        { status: 500 }
+      )
     }
 
     // 2️⃣ Fallback: Crear o actualizar contacto en Airtable (opcional, para compatibilidad)
@@ -177,9 +188,15 @@ export async function POST(req: Request) {
       source: mensajeId ? 'supabase' : 'airtable'
     });
   } catch (e: any) {
-    console.error("Error en /api/messages:", e);
+    console.error("❌ Error en /api/messages:", e);
+    console.error("❌ Error message:", e.message);
+    console.error("❌ Error stack:", e.stack);
     return NextResponse.json(
-      { error: e.message || "Error interno" },
+      { 
+        error: e.message || "Error interno",
+        details: e.message,
+        stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+      },
       { status: 500 }
     );
   }

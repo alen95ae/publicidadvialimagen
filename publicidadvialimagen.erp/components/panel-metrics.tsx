@@ -22,12 +22,18 @@ export default function PanelMetrics({ userName }: { userName: string }) {
     const fetchMetrics = async () => {
       try {
         // Obtener mensajes
-        const mensajesRes = await fetch('/api/messages')
+        const mensajesRes = await fetch('/api/messages', {
+          cache: 'no-store',
+          credentials: 'include'
+        })
         const mensajes = mensajesRes.ok ? await mensajesRes.json() : []
         const totalMensajes = Array.isArray(mensajes) ? mensajes.length : 0
 
         // Obtener alquileres activos del vendedor
-        const alquileresRes = await fetch(`/api/alquileres?estado=activo&vendedor=${encodeURIComponent(userName)}`)
+        const alquileresRes = await fetch(`/api/alquileres?estado=activo&vendedor=${encodeURIComponent(userName)}`, {
+          cache: 'no-store',
+          credentials: 'include'
+        })
         const alquileresData = alquileresRes.ok ? await alquileresRes.json() : { data: [] }
         const alquileresActivos = Array.isArray(alquileresData.data) ? alquileresData.data.length : 0
 
@@ -37,7 +43,11 @@ export default function PanelMetrics({ userName }: { userName: string }) {
         const finMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59)
         
         const ventasRes = await fetch(
-          `/api/cotizaciones?estado=Aprobada&page=1&pageSize=1000`
+          `/api/cotizaciones?estado=Aprobada&page=1&pageSize=1000`,
+          {
+            cache: 'no-store',
+            credentials: 'include'
+          }
         )
         const ventasData = ventasRes.ok ? await ventasRes.json() : { data: [] }
         

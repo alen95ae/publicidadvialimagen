@@ -160,7 +160,10 @@ export default function CostesPage() {
   const loadAlquileresData = async (supports: Support[]) => {
     try {
       // Obtener todos los alquileres de una vez
-      const response = await fetch(`/api/alquileres?pageSize=10000`)
+      const response = await fetch(`/api/alquileres?pageSize=10000`, {
+        cache: 'no-store',
+        credentials: 'include'
+      })
       if (response.ok) {
         const result = await response.json()
         const allAlquileres = result.data || []

@@ -3,6 +3,9 @@ import { cookies } from "next/headers"
 import { verifySession } from "@/lib/auth"
 import { getEvents, addEvent, EventFormData } from "@/lib/calendar-api"
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // GET - Obtener todos los eventos
 export async function GET() {
   try {

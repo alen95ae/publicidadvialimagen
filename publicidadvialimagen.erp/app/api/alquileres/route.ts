@@ -81,6 +81,15 @@ export async function POST(request: NextRequest) {
 
     const alquiler = await createAlquiler(body)
 
+    // Crear notificación de alquiler creado
+    try {
+      const { notificarAlquilerCreado } = await import('@/lib/notificaciones')
+      await notificarAlquilerCreado(alquiler.id, alquiler.codigo)
+    } catch (notifError) {
+      // No fallar la creación si falla la notificación
+      console.error('⚠️ [POST /api/alquileres] Error creando notificación:', notifError)
+    }
+
     return NextResponse.json({
       success: true,
       data: alquiler

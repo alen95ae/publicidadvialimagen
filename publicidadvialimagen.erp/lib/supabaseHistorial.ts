@@ -1,4 +1,5 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getCotizacionById } from "@/lib/supabaseCotizaciones";
 
 /**
  * Tipos de eventos del historial
@@ -145,13 +146,25 @@ export async function registrarAlquilerCreado(
   total: number,
   realizadoPor?: string | null
 ): Promise<HistorialEvento> {
+  // Obtener el código de la cotización en lugar del ID
+  let codigoCotizacion = cotizacionId; // Fallback al ID si no se puede obtener el código
+  try {
+    const cotizacion = await getCotizacionById(cotizacionId);
+    if (cotizacion?.codigo) {
+      codigoCotizacion = cotizacion.codigo;
+    }
+  } catch (error) {
+    console.warn(`⚠️ [registrarAlquilerCreado] No se pudo obtener código de cotización ${cotizacionId}, usando ID:`, error);
+  }
+
   return addHistorialEvento({
     soporte_id: soporteId,
     tipo_evento: 'ALQUILER',
-    descripcion: `Alquiler generado desde cotización editada (${cotizacionId})`,
+    descripcion: `Alquiler generado desde cotización editada (${codigoCotizacion})`,
     realizado_por: realizadoPor || null,
     datos: {
       cotizacion_id: cotizacionId,
+      cotizacion_codigo: codigoCotizacion,
       inicio,
       fin,
       total,
@@ -169,13 +182,25 @@ export async function registrarAlquilerEliminado(
   alquilerCodigo: string,
   realizadoPor?: string | null
 ): Promise<HistorialEvento> {
+  // Obtener el código de la cotización en lugar del ID
+  let codigoCotizacion = cotizacionId; // Fallback al ID si no se puede obtener el código
+  try {
+    const cotizacion = await getCotizacionById(cotizacionId);
+    if (cotizacion?.codigo) {
+      codigoCotizacion = cotizacion.codigo;
+    }
+  } catch (error) {
+    console.warn(`⚠️ [registrarAlquilerEliminado] No se pudo obtener código de cotización ${cotizacionId}, usando ID:`, error);
+  }
+
   return addHistorialEvento({
     soporte_id: soporteId,
     tipo_evento: 'ELIMINACION',
-    descripcion: `Alquiler ${alquilerCodigo} eliminado debido a edición de cotización (${cotizacionId})`,
+    descripcion: `Alquiler ${alquilerCodigo} eliminado debido a edición de cotización (${codigoCotizacion})`,
     realizado_por: realizadoPor || null,
     datos: {
       cotizacion_id: cotizacionId,
+      cotizacion_codigo: codigoCotizacion,
       alquiler_codigo: alquilerCodigo,
       motivo: 'edicion_cotizacion'
     }

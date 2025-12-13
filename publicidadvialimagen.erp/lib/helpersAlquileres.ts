@@ -154,6 +154,15 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
       
       alquileresCreados.push(alquiler)
       
+      // Crear notificación de alquiler creado
+      try {
+        const { notificarAlquilerCreado } = await import('@/lib/notificaciones')
+        await notificarAlquilerCreado(alquiler.id, alquiler.codigo)
+      } catch (notifError) {
+        // No fallar la creación si falla la notificación
+        console.error('⚠️ Error creando notificación de alquiler:', notifError)
+      }
+      
       // Actualizar estado del soporte a "Ocupado"
       await updateSoporte(String(info.soporte.id), { estado: 'Ocupado' })
       

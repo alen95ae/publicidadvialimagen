@@ -86,13 +86,17 @@ export function PermisoTecnico({ accion, children, fallback = null }: { accion: 
   // Verificar el permiso técnico específico
   const tienePermiso = tieneFuncionTecnica(accion);
   
-  // Log para depuración (solo en desarrollo)
-  if (process.env.NODE_ENV === 'development' && accion === 'ver historial soportes') {
+  // Log para depuración - SIEMPRE mostrar para "ver historial soportes"
+  if (accion === 'ver historial soportes' || accion === 'ver dueño de casa') {
     console.log('🔍 [PermisoTecnico] Verificando permiso:', {
       accion,
       tienePermiso,
+      loading,
       permisosTecnicos: permisos['tecnico'],
-      tieneAdmin: Object.keys(permisos).some(modulo => modulo !== 'tecnico' && permisos[modulo]?.admin === true)
+      tieneAdmin: Object.keys(permisos).some(modulo => modulo !== 'tecnico' && permisos[modulo]?.admin === true),
+      valorExplicito: permisos['tecnico']?.[accion],
+      todasLasClaves: Object.keys(permisos['tecnico'] || {}),
+      permisosCompletos: permisos
     });
   }
 

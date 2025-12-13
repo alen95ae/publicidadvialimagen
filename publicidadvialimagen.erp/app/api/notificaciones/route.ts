@@ -35,75 +35,71 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Si la tabla no existe o hay error de estructura, devolver array vacío
-      if (error.code === 'PGRST116' || error.code === '42P01') {
-        return NextResponse.json([]);
-      }
-      // Para otros errores, loguear pero devolver array vacío para no romper el frontend
       console.error("Error obteniendo notificaciones:", error.message);
-      return NextResponse.json([]);
+      return NextResponse.json(
+        { error: "Error al obtener notificaciones", details: error.message },
+        { status: 500 }
+      );
     }
 
-    // Log temporal para debugging
-    console.log(`[API /api/notificaciones] Encontradas ${data?.length || 0} notificaciones para usuario ${userId}`);
-    if (data && data.length > 0) {
-      console.log('[API /api/notificaciones] Primera notificación raw:', JSON.stringify(data[0], null, 2));
-    }
-
-    // Mapear los datos de la BD al formato esperado por el frontend
+    // Devolver formato EXACTO de la tabla + url construida desde entidad_tipo
     const notificaciones = (data || []).map((notif: any) => {
-      // Validar y normalizar el tipo
-      let tipo: 'info' | 'success' | 'warning' | 'error' = 'info';
-      if (notif.tipo && ['info', 'success', 'warning', 'error'].includes(notif.tipo.toLowerCase())) {
-        tipo = notif.tipo.toLowerCase() as 'info' | 'success' | 'warning' | 'error';
-      }
-
-      // Generar URL basada en entidad_tipo y entidad_id
-      let url: string | undefined = undefined;
-      if (notif.entidad_tipo && notif.entidad_id) {
+      // Construir URL desde entidad_tipo y entidad_id si no existe
+      let url = notif.url;
+      if (!url && notif.entidad_tipo && notif.entidad_id) {
         switch (notif.entidad_tipo.toLowerCase()) {
           case 'formulario':
-          case 'mensaje':
-            url = `/panel/mensajes/${notif.entidad_id}`;
-            break;
-          case 'solicitud':
-            url = `/panel/ventas/solicitudes/${notif.entidad_id}`;
+            url = `/panel/mensajes/formularios?id=${notif.entidad_id}`;
             break;
           case 'cotizacion':
             url = `/panel/ventas/cotizaciones/${notif.entidad_id}`;
             break;
+          case 'alquiler':
+            url = `/panel/soportes/alquileres?id=${notif.entidad_id}`;
+            break;
+          case 'mantenimiento':
+            url = `/panel/soportes/mantenimiento?id=${notif.entidad_id}`;
+            break;
+          case 'solicitud':
+            url = `/panel/ventas/solicitudes/${notif.entidad_id}`;
+            break;
           case 'soporte':
             url = `/panel/soportes/gestion/${notif.entidad_id}`;
             break;
+          case 'producto':
+            url = `/panel/inventario?id=${notif.entidad_id}`;
+            break;
+          case 'factura':
+            url = `/panel/contabilidad/facturas/${notif.entidad_id}`;
+            break;
+          case 'evento':
+            url = `/panel/calendario?evento=${notif.entidad_id}`;
+            break;
           default:
-            // Si no hay mapeo específico, no generar URL
-            url = undefined;
+            url = null;
         }
       }
 
       return {
         id: notif.id,
+        tipo: notif.tipo || 'info',
         titulo: notif.titulo || 'Sin título',
         mensaje: notif.mensaje || '',
-        tipo: tipo,
+        prioridad: notif.prioridad || 'media',
         leida: notif.leida === true || notif.leida === 'true' || notif.leida === 1,
-        entidad_tipo: notif.entidad_tipo || undefined,
-        entidad_id: notif.entidad_id || undefined,
-        url: url,
+        entidad_tipo: notif.entidad_tipo || null,
+        entidad_id: notif.entidad_id || null,
+        url: url || null,
         created_at: notif.created_at || new Date().toISOString()
       };
     });
 
-    // Log temporal para debugging
-    if (notificaciones.length > 0) {
-      console.log('[API /api/notificaciones] Primera notificación mapeada:', JSON.stringify(notificaciones[0], null, 2));
-    }
-
-    // Siempre devolver array, aunque esté vacío
     return NextResponse.json(notificaciones);
   } catch (error) {
-    // En caso de error inesperado, devolver array vacío para no romper el frontend
     console.error("Error en GET /api/notificaciones:", error instanceof Error ? error.message : 'Unknown error');
-    return NextResponse.json([]);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }

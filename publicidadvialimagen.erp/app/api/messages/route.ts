@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { verifySession } from "@/lib/auth/verifySession";
+import { notificarFormularioNuevo } from "@/lib/notificaciones";
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const runtime = 'nodejs' // Asegurar runtime Node.js para notificaciones
 
 export async function GET(request: NextRequest) {
   try {
@@ -137,6 +139,27 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('[API /api/messages] Message created:', record.id)
+    
+    // Crear notificación OBLIGATORIA para usuarios con permiso de mensajes
+    // Si falla, loguear pero NO fallar la creación del formulario
+    console.log('[API /api/messages] ==========================================')
+    console.log('[API /api/messages] LLAMANDO A notificarFormularioNuevo()')
+    console.log('[API /api/messages] Formulario ID:', record.id)
+    console.log('[API /api/messages] ==========================================')
+    
+    try {
+      await notificarFormularioNuevo(
+        record.id,
+        record.nombre || body.name || body.nombre || 'Sin nombre',
+        record.email || body.email || ''
+      );
+      console.log('[API /api/messages] ✅ Notificación creada para formulario:', record.id)
+    } catch (notifError) {
+      // Log error pero NO fallar la creación del formulario
+      console.error('[API /api/messages] ❌ ERROR creando notificación (continuando):', notifError);
+      console.error('[API /api/messages] Error details:', notifError instanceof Error ? notifError.message : String(notifError));
+    }
+    
     return NextResponse.json({ success: true, id: record.id });
   } catch (error) {
     console.error('[API /api/messages] Error creating message:', error);

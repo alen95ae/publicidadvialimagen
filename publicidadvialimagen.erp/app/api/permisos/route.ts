@@ -43,11 +43,52 @@ export async function GET(request: NextRequest) {
     // Si es desarrollador, dar todos los permisos
     if (isDeveloper) {
       // Obtener todos los permisos disponibles
-      const { data: permisosData } = await supabaseClient
+      let { data: permisosData } = await supabaseClient
         .from('permisos')
         .select('*')
         .order('modulo', { ascending: true })
         .order('accion', { ascending: true });
+      
+      console.log('🔍 [API Permisos] Desarrollador detectado, permisos encontrados:', permisosData?.length || 0);
+      
+      // Verificar que el permiso "ver historial soportes" existe, si no, crearlo
+      const permisoHistorialExisteDev = permisosData?.some(p => 
+        normalizarModulo(p.modulo) === 'tecnico' && 
+        normalizarAccion(p.accion) === 'ver historial soportes'
+      );
+      
+      if (!permisoHistorialExisteDev) {
+        console.warn('⚠️ [API Permisos] Permiso "ver historial soportes" no existe, creándolo...');
+        try {
+          const { error: insertError } = await supabaseClient
+            .from('permisos')
+            .insert({
+              modulo: 'tecnico',
+              accion: 'ver historial soportes'
+            });
+          
+          if (insertError) {
+            console.error('❌ [API Permisos] Error creando permiso:', insertError);
+          } else {
+            console.log('✅ [API Permisos] Permiso "ver historial soportes" creado exitosamente');
+            // Recargar permisos después de crear
+            const { data: permisosDataActualizados } = await supabaseClient
+              .from('permisos')
+              .select('*')
+              .order('modulo', { ascending: true })
+              .order('accion', { ascending: true });
+            permisosData = permisosDataActualizados;
+          }
+        } catch (error) {
+          console.error('❌ [API Permisos] Error al crear permiso:', error);
+        }
+      }
+      
+      const permisoHistorial = permisosData?.find(p => 
+        normalizarModulo(p.modulo) === 'tecnico' && 
+        normalizarAccion(p.accion) === 'ver historial soportes'
+      );
+      console.log('🔍 [API Permisos] Permiso "ver historial soportes" encontrado:', permisoHistorial ? 'SÍ' : 'NO');
 
       // Construir matriz con todos los permisos en true (normalizados)
       const permisosMatrix: Record<string, Record<string, boolean>> = {};
@@ -73,6 +114,14 @@ export async function GET(request: NextRequest) {
         }
       })
 
+      // Log para verificar que el permiso de historial está en la matriz
+      console.log('🔍 [API Permisos] Matriz de permisos técnicos:', {
+        tieneModuloTecnico: !!permisosMatrix['tecnico'],
+        permisosTecnicos: permisosMatrix['tecnico'],
+        tieneHistorial: permisosMatrix['tecnico']?.['ver historial soportes'],
+        todasLasClaves: Object.keys(permisosMatrix['tecnico'] || {})
+      });
+
       return NextResponse.json({ permisos: permisosMatrix });
     }
 
@@ -89,11 +138,44 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener todos los permisos disponibles
-    const { data: permisosData } = await supabaseClient
+    let { data: permisosData } = await supabaseClient
       .from('permisos')
       .select('*')
       .order('modulo', { ascending: true })
       .order('accion', { ascending: true });
+    
+    // Verificar que el permiso "ver historial soportes" existe, si no, crearlo
+    const permisoHistorialExiste = permisosData?.some(p => 
+      normalizarModulo(p.modulo) === 'tecnico' && 
+      normalizarAccion(p.accion) === 'ver historial soportes'
+    );
+    
+    if (!permisoHistorialExiste) {
+      console.warn('⚠️ [API Permisos] Permiso "ver historial soportes" no existe, creándolo...');
+      try {
+        const { error: insertError } = await supabaseClient
+          .from('permisos')
+          .insert({
+            modulo: 'tecnico',
+            accion: 'ver historial soportes'
+          });
+        
+        if (insertError) {
+          console.error('❌ [API Permisos] Error creando permiso:', insertError);
+        } else {
+          console.log('✅ [API Permisos] Permiso "ver historial soportes" creado exitosamente');
+          // Recargar permisos después de crear
+          const { data: permisosDataActualizados } = await supabaseClient
+            .from('permisos')
+            .select('*')
+            .order('modulo', { ascending: true })
+            .order('accion', { ascending: true });
+          permisosData = permisosDataActualizados;
+        }
+      } catch (error) {
+        console.error('❌ [API Permisos] Error al crear permiso:', error);
+      }
+    }
 
     // Obtener permisos asignados al rol
     const { data: rolPermisosData, error: rolPermisosError } = await supabaseClient
@@ -147,7 +229,10 @@ export async function GET(request: NextRequest) {
         permisosMatrix[moduloNormalizado][accionNormalizada] = true;
       } else if (permisosMatrix[moduloNormalizado]) {
         // Si el módulo ya existe (tiene otros permisos), marcar este como false
-        permisosMatrix[moduloNormalizado][accionNormalizada] = false;
+        // EXCEPTO si es un permiso técnico y el usuario tiene admin (se procesará después)
+        if (moduloNormalizado !== 'tecnico') {
+          permisosMatrix[moduloNormalizado][accionNormalizada] = false;
+        }
       }
       // ✅ Si no está asignado Y el módulo no existe, NO crear entrada
     });
@@ -190,23 +275,26 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // SOLUCIÓN QUIRÚRGICA: Asegurar que "ver dueño de casa" SIEMPRE sea boolean (nunca undefined)
+    // SOLUCIÓN QUIRÚRGICA: Asegurar que permisos técnicos específicos SIEMPRE sean boolean (nunca undefined)
     // Esto evita problemas de normalización o claves que no coinciden
     if (permisosMatrix['tecnico']) {
-      const accionVerDuenoCasa = 'ver dueño de casa';
-      if (permisosMatrix['tecnico'][accionVerDuenoCasa] === undefined) {
-        // Si no existe la clave, verificar si el permiso está en el rol
-        const permisoVerDuenoCasa = permisosData?.find(
-          p => normalizarModulo(p.modulo) === 'tecnico' && normalizarAccion(p.accion) === accionVerDuenoCasa
-        );
-        if (permisoVerDuenoCasa) {
-          permisosMatrix['tecnico'][accionVerDuenoCasa] = permisoIds.includes(permisoVerDuenoCasa.id);
-        } else {
-          permisosMatrix['tecnico'][accionVerDuenoCasa] = false;
+      const accionesEspeciales = ['ver dueño de casa', 'ver historial soportes'];
+      
+      accionesEspeciales.forEach(accionEspecial => {
+        if (permisosMatrix['tecnico'][accionEspecial] === undefined) {
+          // Si no existe la clave, verificar si el permiso está en el rol
+          const permisoEspecial = permisosData?.find(
+            p => normalizarModulo(p.modulo) === 'tecnico' && normalizarAccion(p.accion) === accionEspecial
+          );
+          if (permisoEspecial) {
+            permisosMatrix['tecnico'][accionEspecial] = permisoIds.includes(permisoEspecial.id);
+          } else {
+            permisosMatrix['tecnico'][accionEspecial] = false;
+          }
         }
-      }
-      // Asegurar que el valor sea explícitamente boolean
-      permisosMatrix['tecnico'][accionVerDuenoCasa] = Boolean(permisosMatrix['tecnico'][accionVerDuenoCasa]);
+        // Asegurar que el valor sea explícitamente boolean
+        permisosMatrix['tecnico'][accionEspecial] = Boolean(permisosMatrix['tecnico'][accionEspecial]);
+      });
     }
 
 
@@ -225,6 +313,15 @@ export async function GET(request: NextRequest) {
     // Esto previene completamente el escenario de menú vacío
     if (Object.keys(permisosMatrix).length === 0) {
       permisosMatrix['tecnico'] = {};
+    }
+
+    // Log para verificar que el permiso de historial está en la matriz (para usuarios no desarrolladores)
+    if (permisosMatrix['tecnico']) {
+      console.log('🔍 [API Permisos] Matriz de permisos técnicos (no desarrollador):', {
+        tieneModuloTecnico: !!permisosMatrix['tecnico'],
+        tieneHistorial: permisosMatrix['tecnico']['ver historial soportes'],
+        todasLasClaves: Object.keys(permisosMatrix['tecnico'] || {})
+      });
     }
 
     return NextResponse.json({ permisos: permisosMatrix });

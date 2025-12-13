@@ -99,7 +99,12 @@ export function usePermisos() {
   // Helper para verificar funciones técnicas
   const tieneFuncionTecnica = (accion: string): boolean => {
     // No verificar si aún está cargando
-    if (loading) return false;
+    if (loading) {
+      if (accion === 'ver historial soportes') {
+        console.log('⏳ [usePermisos] Aún cargando permisos, retornando false');
+      }
+      return false;
+    }
     
     // Normalizar acción para coincidir con la clave del backend
     const accionNormalizada = accion
@@ -108,7 +113,12 @@ export function usePermisos() {
     
     // SOLUCIÓN QUIRÚRGICA: Buscar la clave exacta o variaciones
     const permisosTecnico = permisos["tecnico"];
-    if (!permisosTecnico) return false;
+    if (!permisosTecnico) {
+      if (accion === 'ver historial soportes') {
+        console.warn('⚠️ [usePermisos] No hay módulo técnico en permisos');
+      }
+      return false;
+    }
     
     // Intentar con la clave exacta primero
     let valor = permisosTecnico[accionNormalizada];
@@ -122,22 +132,26 @@ export function usePermisos() {
       });
       if (claveEncontrada) {
         valor = permisosTecnico[claveEncontrada];
+        if (accion === 'ver historial soportes') {
+          console.log(`✅ [usePermisos] Clave encontrada con normalización: "${claveEncontrada}"`);
+        }
       }
     }
     
     // Verificar explícitamente que sea true (no truthy)
     const resultado = valor === true;
     
-    // Log específico para "ver dueño de casa"
-    if (accion === 'ver dueño de casa') {
-      console.log('🔍 [usePermisos] Verificando "ver dueño de casa":', {
+    // Log específico para permisos técnicos importantes - SIEMPRE mostrar
+    if (accion === 'ver dueño de casa' || accion === 'ver historial soportes') {
+      console.log(`🔍 [usePermisos] Verificando "${accion}":`, {
         accion,
         accionNormalizada,
         resultado,
         valorEnPermisos: valor,
         tipoValor: typeof valor,
         todasLasClaves: Object.keys(permisosTecnico || {}),
-        permisosTecnico: permisosTecnico
+        permisosTecnico: permisosTecnico,
+        permisosCompletos: permisos
       });
     }
     

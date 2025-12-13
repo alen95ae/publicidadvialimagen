@@ -290,7 +290,7 @@ export async function GET(req: Request) {
         })(),
         description: soporte.descripcion || '',
         status: soporte.estado || 'Disponible',
-        available: soporte.estado === 'Disponible' || soporte.estado === 'A Consultar',
+        available: soporte.estado === 'Disponible',
         availableMonths: generateAvailableMonths(),
         features: getFeaturesFromType(soporte.tipo_soporte),
         coordinates,

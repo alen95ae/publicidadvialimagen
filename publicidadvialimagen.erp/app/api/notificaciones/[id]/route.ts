@@ -42,10 +42,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Notificación no encontrada" }, { status: 404 });
     }
 
-    // Marcar como leída
+    // Marcar como leída (NO existe updated_at en la tabla)
     const { error: updateError } = await supabase
       .from('notificaciones')
-      .update({ leida: true, updated_at: new Date().toISOString() })
+      .update({ leida: true })
       .eq('id', id)
       .eq('user_id', userId);
 

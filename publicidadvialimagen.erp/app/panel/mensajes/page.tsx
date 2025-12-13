@@ -20,18 +20,19 @@ import { useRouter } from "next/navigation"
 
 interface Notificacion {
   id: string
+  tipo: string
   titulo: string
   mensaje: string
-  tipo: 'info' | 'success' | 'warning' | 'error'
+  prioridad: 'baja' | 'media' | 'alta'
   leida: boolean
-  entidad_tipo?: string
-  entidad_id?: string
-  url?: string
+  entidad_tipo?: string | null
+  entidad_id?: string | null
+  url?: string | null
   created_at: string
 }
 
 const getTipoIcon = (tipo: string) => {
-  switch (tipo) {
+  switch (tipo.toLowerCase()) {
     case 'success':
       return <CheckCircle className="w-5 h-5 text-green-600" />
     case 'warning':
@@ -44,7 +45,7 @@ const getTipoIcon = (tipo: string) => {
 }
 
 const getTipoBadge = (tipo: string) => {
-  switch (tipo) {
+  switch (tipo.toLowerCase()) {
     case 'success':
       return 'bg-green-100 text-green-800'
     case 'warning':
@@ -53,6 +54,46 @@ const getTipoBadge = (tipo: string) => {
       return 'bg-red-100 text-red-800'
     default:
       return 'bg-blue-100 text-blue-800'
+  }
+}
+
+const getPrioridadBadge = (prioridad: string) => {
+  switch (prioridad.toLowerCase()) {
+    case 'alta':
+      return 'bg-red-100 text-red-800 border-red-300'
+    case 'media':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+    case 'baja':
+      return 'bg-gray-100 text-gray-800 border-gray-300'
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-300'
+  }
+}
+
+const getNotificationUrl = (entidadTipo?: string | null, entidadId?: string | null): string | null => {
+  if (!entidadTipo || !entidadId) return null;
+  
+  switch (entidadTipo.toLowerCase()) {
+    case 'formulario':
+      return `/panel/mensajes/formularios?id=${entidadId}`;
+    case 'cotizacion':
+      return `/panel/ventas/cotizaciones/${entidadId}`;
+    case 'alquiler':
+      return `/panel/soportes/alquileres?id=${entidadId}`;
+    case 'mantenimiento':
+      return `/panel/soportes/mantenimiento?id=${entidadId}`;
+    case 'solicitud':
+      return `/panel/ventas/solicitudes/${entidadId}`;
+    case 'soporte':
+      return `/panel/soportes/gestion/${entidadId}`;
+    case 'producto':
+      return `/panel/inventario?id=${entidadId}`;
+    case 'factura':
+      return `/panel/contabilidad/facturas/${entidadId}`;
+    case 'evento':
+      return `/panel/calendario?evento=${entidadId}`;
+    default:
+      return null;
   }
 }
 
@@ -143,8 +184,9 @@ export default function MensajesPage() {
   }
 
   const handleNavegar = (notificacion: Notificacion) => {
-    if (notificacion.url) {
-      router.push(notificacion.url)
+    const url = getNotificationUrl(notificacion.entidad_tipo, notificacion.entidad_id)
+    if (url) {
+      router.push(url)
     }
     if (!notificacion.leida) {
       marcarComoLeida(notificacion.id)
@@ -223,7 +265,7 @@ export default function MensajesPage() {
                                     <p className="text-sm text-gray-600 mb-2">
                                       {notificacion.mensaje}
                                     </p>
-                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                                       <span>
                                         {new Date(notificacion.created_at).toLocaleString('es-ES')}
                                       </span>
@@ -235,32 +277,42 @@ export default function MensajesPage() {
                                           </Badge>
                                         </>
                                       )}
+                                      <span>•</span>
+                                      <Badge variant="outline" className={getPrioridadBadge(notificacion.prioridad)}>
+                                        {notificacion.prioridad.toUpperCase()}
+                                      </Badge>
                                     </div>
                                   </div>
                                   <div className="flex gap-2">
-                                    {notificacion.url && (
+                                    {/* Botón Ver - SIEMPRE activo si hay URL (leída o no) */}
+                                    {(notificacion.url || getNotificationUrl(notificacion.entidad_tipo, notificacion.entidad_id)) && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleNavegar(notificacion)}
                                         className="flex items-center gap-1"
+                                        title="Ver notificación"
                                       >
                                         <ExternalLink className="w-4 h-4" />
                                         Ver
                                       </Button>
                                     )}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => marcarComoLeida(notificacion.id)}
-                                    >
-                                      <CheckCircle className="w-4 h-4" />
-                                    </Button>
+                                    {!notificacion.leida && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => marcarComoLeida(notificacion.id)}
+                                        title="Marcar como leída"
+                                      >
+                                        <CheckCircle className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => eliminarNotificacion(notificacion.id)}
                                       className="text-red-600 hover:text-red-700"
+                                      title="Eliminar notificación"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </Button>
@@ -301,7 +353,7 @@ export default function MensajesPage() {
                                     <p className="text-sm text-gray-500 mb-2">
                                       {notificacion.mensaje}
                                     </p>
-                                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                                    <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
                                       <span>
                                         {new Date(notificacion.created_at).toLocaleString('es-ES')}
                                       </span>
@@ -313,16 +365,36 @@ export default function MensajesPage() {
                                           </Badge>
                                         </>
                                       )}
+                                      <span>•</span>
+                                      <Badge variant="outline" className={`opacity-50 ${getPrioridadBadge(notificacion.prioridad)}`}>
+                                        {notificacion.prioridad.toUpperCase()}
+                                      </Badge>
                                     </div>
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarNotificacion(notificacion.id)}
-                                    className="text-red-600 hover:text-red-700"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  <div className="flex gap-2">
+                                    {/* Botón Ver - SIEMPRE activo si hay URL (leída o no) */}
+                                    {(notificacion.url || getNotificationUrl(notificacion.entidad_tipo, notificacion.entidad_id)) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleNavegar(notificacion)}
+                                        className="flex items-center gap-1"
+                                        title="Ver notificación"
+                                      >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Ver
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => eliminarNotificacion(notificacion.id)}
+                                      className="text-red-600 hover:text-red-700"
+                                      title="Eliminar notificación"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </div>

@@ -127,12 +127,15 @@ function getModuleConfig(pathname: string): ModuleConfig | null {
 
 interface Notification {
   id: string
-  codigo?: string // Para solicitudes
-  type: "mensaje" | "solicitud"
+  tipo: string
   titulo: string
   mensaje: string
-  fecha: string
-  link: string
+  prioridad: 'baja' | 'media' | 'alta'
+  leida: boolean
+  entidad_tipo?: string | null
+  entidad_id?: string | null
+  url?: string | null
+  created_at: string
 }
 
 export default function PanelHeader() {
@@ -142,7 +145,8 @@ export default function PanelHeader() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [notificationCount, setNotificationCount] = useState(0)
+  // CONTADOR ÚNICO: Solo usar sistemaNotificacionesCount de /api/notificaciones/count
+  // Eliminado notificationCount para evitar duplicados
   const [sistemaNotificacionesCount, setSistemaNotificacionesCount] = useState(0)
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set())
@@ -153,11 +157,11 @@ export default function PanelHeader() {
     fetchUser()
     fetchNotifications()
     fetchSistemaNotificaciones()
-    // Actualizar notificaciones cada 30 segundos
+    // Actualizar notificaciones cada 15 segundos (polling inteligente)
     const interval = setInterval(() => {
       fetchNotifications()
       fetchSistemaNotificaciones()
-    }, 30000)
+    }, 15000) // 15 segundos para mejor tiempo real
     return () => clearInterval(interval)
   }, [])
 
@@ -206,27 +210,29 @@ export default function PanelHeader() {
   const fetchNotifications = async () => {
     try {
       setLoadingNotifications(true)
-      const response = await fetch("/api/notifications", {
+      const response = await fetch("/api/notificaciones", {
         credentials: "include",
         cache: "no-store",
       })
       if (response.ok) {
         const data = await response.json()
-        const allNotifications = data.notificaciones || []
-        // Filtrar las notificaciones ya leídas usando el estado actual
+        // Asegurar que siempre sea un array
+        const allNotifications: Notification[] = Array.isArray(data) ? data : []
+        
+        // Filtrar las notificaciones ya leídas y por permisos
         setReadNotifications((currentRead) => {
           const unreadNotifications = allNotifications.filter(
             (n: Notification) => {
               // Filtrar notificaciones ya leídas
-              if (currentRead.has(n.id)) return false
+              if (n.leida || currentRead.has(n.id)) return false
               
-              // Filtrar notificaciones de mensajes si no tiene permiso ver mensajes
-              if (n.type === "mensaje" && !puedeVer("mensajes")) {
+              // Filtrar notificaciones de formularios/mensajes si no tiene permiso ver mensajes
+              if ((n.entidad_tipo === "formulario" || n.entidad_tipo === "mensaje") && !puedeVer("mensajes")) {
                 return false
               }
               
               // Filtrar notificaciones de solicitudes si no tiene función técnica ver solicitudes cotizacion
-              if (n.type === "solicitud" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+              if (n.entidad_tipo === "solicitud" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
                 return false
               }
               
@@ -234,20 +240,18 @@ export default function PanelHeader() {
             }
           )
           setNotifications(unreadNotifications)
-          setNotificationCount(unreadNotifications.length)
+          // NO actualizar notificationCount - el contador viene solo de sistemaNotificacionesCount
           return currentRead
         })
       } else {
         // Si la respuesta no es OK, simplemente no mostrar notificaciones
-        console.warn("Notifications API returned non-OK status:", response.status)
+        console.warn("Notificaciones API returned non-OK status:", response.status)
         setNotifications([])
-        setNotificationCount(0)
       }
     } catch (error) {
       // Error silencioso - no mostrar notificaciones si falla
       console.error("Error fetching notifications:", error)
       setNotifications([])
-      setNotificationCount(0)
     } finally {
       setLoadingNotifications(false)
     }
@@ -260,27 +264,15 @@ export default function PanelHeader() {
       
       // Remover de la lista de notificaciones
       setNotifications((prev) => prev.filter((n) => n.id !== notification.id))
-      setNotificationCount((prev) => Math.max(0, prev - 1))
+      // NO actualizar notificationCount - el contador viene solo de sistemaNotificacionesCount
+      // El contador se actualizará automáticamente en el próximo fetchSistemaNotificaciones()
 
-      // Actualizar el estado en el backend
-      if (notification.type === "mensaje") {
-        await fetch(`/api/messages/${notification.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ estado: "LEÍDO" }),
-          cache: 'no-store'
-        })
-      } else if (notification.type === "solicitud") {
-        // Para solicitudes, usar el código si está disponible, sino extraerlo del link
-        const codigo = notification.codigo || notification.link.split("/").pop()
-        if (codigo) {
-          await fetch(`/api/solicitudes/${codigo}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ estado: "Pendiente" }),
-          })
-        }
-      }
+      // Actualizar el estado en el backend usando el endpoint de notificaciones
+      await fetch(`/api/notificaciones/${notification.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        cache: 'no-store'
+      })
     } catch (error) {
       console.error("Error marking notification as read:", error)
     }
@@ -305,9 +297,46 @@ export default function PanelHeader() {
     }
   }
 
+  const getNotificationUrl = (entidadTipo?: string | null, entidadId?: string | null): string | null => {
+    if (!entidadTipo || !entidadId) return null;
+    
+    // Mapeo OBLIGATORIO a rutas REALES (no placeholders)
+    switch (entidadTipo.toLowerCase()) {
+      case 'formulario':
+        return `/panel/mensajes/formularios?id=${entidadId}`;
+      case 'cotizacion':
+        return `/panel/ventas/cotizaciones/${entidadId}`;
+      case 'alquiler':
+        return `/panel/soportes/alquileres?id=${entidadId}`;
+      case 'mantenimiento':
+        return `/panel/soportes/mantenimiento?id=${entidadId}`;
+      case 'solicitud':
+        return `/panel/ventas/solicitudes/${entidadId}`;
+      case 'soporte':
+        return `/panel/soportes/gestion/${entidadId}`;
+      case 'producto':
+        return `/panel/inventario?id=${entidadId}`;
+      case 'factura':
+        return `/panel/contabilidad/facturas/${entidadId}`;
+      case 'evento':
+        return `/panel/calendario?evento=${entidadId}`;
+      default:
+        // Si no hay mapeo, ir a la página de notificaciones en vez de catchall
+        return `/panel/mensajes`;
+    }
+  }
+
   const handleNotificationClick = (notification: Notification) => {
-    markNotificationAsRead(notification)
-    router.push(notification.link)
+    // Marcar como leída si no lo está (pero no bloquear navegación)
+    if (!notification.leida) {
+      markNotificationAsRead(notification)
+    }
+    
+    // Construir URL desde entidad_tipo y entidad_id (si no viene en notification.url)
+    const url = notification.url || getNotificationUrl(notification.entidad_tipo, notification.entidad_id)
+    if (url) {
+      router.push(url)
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -327,6 +356,13 @@ export default function PanelHeader() {
     } catch {
       return dateString
     }
+  }
+
+  const getNotificationIcon = (entidadTipo?: string) => {
+    if (entidadTipo === "formulario" || entidadTipo === "mensaje") {
+      return <Mail className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+    }
+    return <FileText className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
   }
 
   const handleLogout = async () => {
@@ -414,11 +450,11 @@ export default function PanelHeader() {
                 className="relative"
               >
                 <Bell className="h-5 w-5" />
-                {(notificationCount + sistemaNotificacionesCount) > 0 && (
+                {sistemaNotificacionesCount > 0 && (
                   <Badge
                     className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-[#D54644] hover:bg-[#D54644]"
                   >
-                    {(notificationCount + sistemaNotificacionesCount) > 9 ? "9+" : (notificationCount + sistemaNotificacionesCount)}
+                    {sistemaNotificacionesCount > 9 ? "9+" : sistemaNotificacionesCount}
                   </Badge>
                 )}
               </Button>
@@ -426,9 +462,9 @@ export default function PanelHeader() {
             <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
               <DropdownMenuLabel className="flex items-center justify-between">
                 <span>Notificaciones</span>
-                {(notificationCount + sistemaNotificacionesCount) > 0 && (
+                {sistemaNotificacionesCount > 0 && (
                   <Badge variant="secondary" className="ml-2">
-                    {notificationCount + sistemaNotificacionesCount}
+                    {sistemaNotificacionesCount}
                   </Badge>
                 )}
               </DropdownMenuLabel>
@@ -455,11 +491,7 @@ export default function PanelHeader() {
                     onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start gap-2 w-full">
-                      {notification.type === "mensaje" ? (
-                        <Mail className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                      ) : (
-                        <FileText className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                      )}
+                      {getNotificationIcon(notification.entidad_tipo)}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {notification.titulo}
@@ -470,7 +502,7 @@ export default function PanelHeader() {
                           </p>
                         )}
                         <p className="text-xs text-gray-400 mt-1">
-                          {formatDate(notification.fecha)}
+                          {formatDate(notification.created_at)}
                         </p>
                       </div>
                     </div>

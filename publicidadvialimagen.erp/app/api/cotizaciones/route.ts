@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const runtime = 'nodejs' // Asegurar runtime Node.js para notificaciones
 import {
   getCotizaciones,
   createCotizacion,
@@ -200,6 +202,23 @@ export async function POST(request: NextRequest) {
       })
 
       console.log('✅ [POST /api/cotizaciones] Cotización creada correctamente:', nuevaCotizacion.id)
+
+      // Crear notificación OBLIGATORIA de cotización creada
+      // Si falla, loguear pero NO fallar la creación de la cotización
+      console.log('[POST /api/cotizaciones] ==========================================')
+      console.log('[POST /api/cotizaciones] LLAMANDO A notificarCotizacion()')
+      console.log('[POST /api/cotizaciones] Cotización ID:', nuevaCotizacion.id)
+      console.log('[POST /api/cotizaciones] ==========================================')
+      
+      try {
+        const { notificarCotizacion } = await import('@/lib/notificaciones')
+        await notificarCotizacion(nuevaCotizacion.id, 'creada', usuario.id)
+        console.log('[POST /api/cotizaciones] ✅ Notificación creada para cotización:', nuevaCotizacion.id)
+      } catch (notifError) {
+        // Log error pero NO fallar la creación de la cotización
+        console.error('[POST /api/cotizaciones] ❌ ERROR creando notificación (continuando):', notifError);
+        console.error('[POST /api/cotizaciones] Error details:', notifError instanceof Error ? notifError.message : String(notifError));
+      }
 
       // Paso 2: Crear las líneas de cotización
       if (lineasNormalizadas.length > 0) {

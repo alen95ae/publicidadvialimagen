@@ -10,19 +10,18 @@ export async function GET(request: NextRequest) {
     // Verificar sesión del usuario
     const token = request.cookies.get('session')?.value;
     if (!token) {
-      return NextResponse.json({ count: 0 });
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     let userId: string;
     try {
       const payload = await verifySession(token);
       if (!payload || !payload.sub) {
-        return NextResponse.json({ count: 0 });
+        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
       }
       userId = payload.sub;
     } catch (error) {
-      // Si la sesión no es válida, devolver 0 en lugar de error
-      return NextResponse.json({ count: 0 });
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     // Usar admin client pero filtrar por user_id manualmente

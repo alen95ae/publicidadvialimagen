@@ -146,14 +146,18 @@ export default function CotizacionesPage() {
     
     try {
       const response = await fetch(`/api/cotizaciones/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       })
       
       if (response.ok) {
         toast.success("Cotización eliminada correctamente")
-        fetchCotizaciones() // Recargar lista
+        // Recargar lista y resetear a página 1
+        setCurrentPage(1)
+        fetchCotizaciones(1)
       } else {
-        toast.error("Error al eliminar cotización")
+        const errorData = await response.json().catch(() => ({}))
+        toast.error(errorData.error || "Error al eliminar cotización")
       }
     } catch (error) {
       console.error('Error deleting cotización:', error)

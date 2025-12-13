@@ -483,8 +483,12 @@ export default function PlanificacionPage() {
     return matchesSearch
   })
   
-  // Aplicar paginación a los soportes filtrados
-  const total = soportesFiltradosAplanados.length
+  // Calcular total de soportes ÚNICOS (no instancias duplicadas por agrupación)
+  // Esto asegura que el total sea consistente independientemente de la agrupación
+  const soportesUnicosFiltrados = new Set(
+    soportesFiltradosAplanados.map(({ soporte }) => soporte.id)
+  )
+  const total = soportesUnicosFiltrados.size
   const totalPages = Math.ceil(total / 100)
   const from = (currentPage - 1) * 100
   const to = from + 100
@@ -840,7 +844,7 @@ export default function PlanificacionPage() {
                                               {reserva.cliente && reserva.cliente.length > 8 ? reserva.cliente.substring(0, 8) + '...' : (reserva.cliente || 'Sin cliente')}
                                             </div>
                                             <div className="text-xs opacity-75 leading-tight mt-0.5">
-                                              {reserva.duracion} mes{reserva.duracion > 1 ? 'es' : ''}
+                                              {reserva.meses || reserva.duracion} mes{(reserva.meses || reserva.duracion) > 1 ? 'es' : ''}
                                             </div>
                                           </div>
                                         </TooltipTrigger>

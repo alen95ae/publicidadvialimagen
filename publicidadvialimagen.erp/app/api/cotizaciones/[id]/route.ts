@@ -4,6 +4,8 @@ import {
   updateCotizacion, 
   deleteCotizacion
 } from '@/lib/supabaseCotizaciones'
+
+export const runtime = 'nodejs' // Asegurar runtime Node.js para notificaciones
 import { getLineasByCotizacionId, deleteLineasByCotizacionId, createMultipleLineas } from '@/lib/supabaseCotizacionLineas'
 import { cancelarAlquileresCotizacion } from '@/lib/helpersAlquileres'
 import { getAlquileresPorCotizacion } from '@/lib/supabaseAlquileres'
@@ -283,8 +285,45 @@ export async function PATCH(
 
       console.log('✅ [PATCH /api/cotizaciones/[id]] Cotización actualizada:', cotizacionActualizada.codigo)
 
-      // Detectar si se está aprobando la cotización (cambio de estado a "Aprobada")
+      // Detectar cambios de estado
       const seEstaAprobando = estadoAnterior !== 'Aprobada' && nuevoEstado === 'Aprobada'
+      const seEstaRechazando = estadoAnterior !== 'Rechazada' && nuevoEstado === 'Rechazada'
+      const hayCambioEstado = estadoAnterior !== nuevoEstado
+
+      // Crear notificación OBLIGATORIA según el cambio de estado
+      // Si falla, loguear pero NO fallar la actualización de la cotización
+      console.log('[PATCH /api/cotizaciones/[id]] ==========================================')
+      console.log('[PATCH /api/cotizaciones/[id]] LLAMANDO A notificarCotizacion()')
+      console.log('[PATCH /api/cotizaciones/[id]] Estado:', {
+        seEstaAprobando,
+        seEstaRechazando,
+        hayCambioEstado
+      })
+      console.log('[PATCH /api/cotizaciones/[id]] ==========================================')
+      
+      try {
+        const { notificarCotizacion } = await import('@/lib/notificaciones')
+        
+        if (seEstaAprobando) {
+          console.log('[PATCH /api/cotizaciones/[id]] Notificando aprobada...');
+          await notificarCotizacion(id, 'aprobada', usuario.id)
+          console.log('[PATCH /api/cotizaciones/[id]] ✅ Notificación aprobada creada');
+        } else if (seEstaRechazando) {
+          console.log('[PATCH /api/cotizaciones/[id]] Notificando rechazada...');
+          await notificarCotizacion(id, 'rechazada', usuario.id)
+          console.log('[PATCH /api/cotizaciones/[id]] ✅ Notificación rechazada creada');
+        } else if (hayCambioEstado) {
+          // Si hay cambio de estado pero no es aprobada/rechazada, notificar como actualizada
+          console.log('[PATCH /api/cotizaciones/[id]] Notificando actualizada...');
+          await notificarCotizacion(id, 'actualizada', usuario.id)
+          console.log('[PATCH /api/cotizaciones/[id]] ✅ Notificación actualizada creada');
+        }
+        // Si no hay cambio de estado, no notificar (solo cambios de campos)
+      } catch (notifError) {
+        // Log error pero NO fallar la actualización de la cotización
+        console.error('[PATCH /api/cotizaciones/[id]] ❌ ERROR creando notificación (continuando):', notifError);
+        console.error('[PATCH /api/cotizaciones/[id]] Error details:', notifError instanceof Error ? notifError.message : String(notifError));
+      }
       
       // Si se está aprobando, descontar stock de los productos (con idempotencia)
       if (seEstaAprobando) {
@@ -441,9 +480,31 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // ============================================================================
+  // C1, C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
+  // ============================================================================
+  const usuario = await getUsuarioAutenticado(request as NextRequest)
+  if (!usuario) {
+    return NextResponse.json(
+      { success: false, error: 'No autorizado. Debes iniciar sesión.' },
+      { status: 401 }
+    )
+  }
+
   try {
     const { id } = await params
     console.log('🗑️ Eliminando cotización:', id)
+
+    // ============================================================================
+    // C3: VERIFICAR ACCESO A LA COTIZACIÓN
+    // ============================================================================
+    const tieneAcceso = await verificarAccesoCotizacion(id, usuario)
+    if (!tieneAcceso) {
+      return NextResponse.json(
+        { success: false, error: 'No tienes permiso para eliminar esta cotización.' },
+        { status: 403 }
+      )
+    }
 
     // Eliminar las líneas primero (por la FK)
     const { deleteLineasByCotizacionId } = await import('@/lib/supabaseCotizacionLineas')
@@ -461,8 +522,9 @@ export async function DELETE(
 
   } catch (error) {
     console.error('❌ Error eliminando cotización:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error al eliminar cotización'
     return NextResponse.json(
-      { success: false, error: 'Error al eliminar cotización' },
+      { success: false, error: errorMessage },
       { status: 500 }
     )
   }

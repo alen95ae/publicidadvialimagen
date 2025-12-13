@@ -509,6 +509,11 @@ export default function VallasPublicitariasPage() {
       }
     }
 
+    // Excluir siempre "No disponible" y "A Consultar" (igual que no disponibles)
+    if (billboard.status === 'No disponible' || billboard.status === 'A Consultar') {
+      return false
+    }
+
     // Lógica de filtrado de disponibilidad según los nuevos requerimientos
     if (selectedFilters.availability.length > 0) {
       // Si está marcado "Disponible ahora" - mostrar solo los disponibles
@@ -528,17 +533,7 @@ export default function VallasPublicitariasPage() {
         }
       }
       // Si están marcados ambos - mostrar disponibles, ocupados y reservados
-      else if (selectedFilters.availability.includes("available") && selectedFilters.availability.includes("coming-soon")) {
-        // Mostrar todos excepto "No disponible"
-        if (billboard.status === 'No disponible') {
-          return false
-        }
-      }
-    } else {
-      // Si no hay filtros de disponibilidad - mostrar todos excepto "No disponible"
-      if (billboard.status === 'No disponible') {
-        return false
-      }
+      // (ya se excluyeron "No disponible" y "A Consultar" arriba)
     }
 
     return true

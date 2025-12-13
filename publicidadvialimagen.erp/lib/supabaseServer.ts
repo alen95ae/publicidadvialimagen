@@ -80,8 +80,20 @@ export function getSupabaseAdmin(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase environment variables')
+  // Verificación explícita y obligatoria
+  console.log('[getSupabaseAdmin] Verificando variables de entorno...')
+  console.log('[getSupabaseAdmin] NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'EXISTS' : 'MISSING')
+  console.log('[getSupabaseAdmin] SERVICE_ROLE_OK:', !!supabaseServiceKey)
+  console.log('[getSupabaseAdmin] SERVICE_ROLE_KEY length:', supabaseServiceKey?.length || 0)
+
+  if (!supabaseUrl) {
+    console.error('[getSupabaseAdmin] ❌ NEXT_PUBLIC_SUPABASE_URL NO EXISTE')
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
+  }
+
+  if (!supabaseServiceKey) {
+    console.error('[getSupabaseAdmin] ❌ SUPABASE_SERVICE_ROLE_KEY NO EXISTE')
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY - Esta variable es CRÍTICA para insertar notificaciones')
   }
 
   _supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {

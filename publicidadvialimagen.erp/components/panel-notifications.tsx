@@ -7,11 +7,15 @@ import Link from "next/link"
 
 interface Notification {
   id: string
-  type: "mensaje" | "solicitud"
+  tipo: string
   titulo: string
   mensaje: string
-  fecha: string
-  link: string
+  prioridad: 'baja' | 'media' | 'alta'
+  leida: boolean
+  entidad_tipo?: string | null
+  entidad_id?: string | null
+  url?: string | null
+  created_at: string
 }
 
 export default function PanelNotifications() {
@@ -21,13 +25,17 @@ export default function PanelNotifications() {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('/api/notifications', {
+        const res = await fetch('/api/notificaciones', {
           cache: 'no-store',
           credentials: 'include'
         })
         if (res.ok) {
           const data = await res.json()
-          setNotifications(Array.isArray(data) ? data : [])
+          // Filtrar solo las no leídas
+          const unreadNotifications = (Array.isArray(data) ? data : []).filter(
+            (n: Notification) => !n.leida
+          )
+          setNotifications(unreadNotifications)
         }
       } catch (error) {
         console.error('Error fetching notifications:', error)
@@ -84,25 +92,44 @@ export default function PanelNotifications() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notifications.slice(0, 5).map((notif) => (
-              <Link
-                key={notif.id}
-                href={notif.link}
-                className="flex items-start justify-between pb-3 border-b hover:bg-gray-50 p-2 rounded transition-colors"
-              >
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{notif.titulo}</p>
-                  {notif.mensaje && (
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {notif.mensaje}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
-                  {formatDate(notif.fecha)}
-                </span>
-              </Link>
-            ))}
+            {notifications.slice(0, 5).map((notif) => {
+              const getUrl = () => {
+                // Usar url si existe, sino construir desde entidad_tipo y entidad_id
+                if (notif.url) return notif.url;
+                if (!notif.entidad_tipo || !notif.entidad_id) return '#';
+                switch (notif.entidad_tipo.toLowerCase()) {
+                  case 'formulario': return `/panel/mensajes/formularios?id=${notif.entidad_id}`;
+                  case 'cotizacion': return `/panel/ventas/cotizaciones/${notif.entidad_id}`;
+                  case 'alquiler': return `/panel/soportes/alquileres?id=${notif.entidad_id}`;
+                  case 'mantenimiento': return `/panel/soportes/mantenimiento?id=${notif.entidad_id}`;
+                  case 'solicitud': return `/panel/ventas/solicitudes/${notif.entidad_id}`;
+                  case 'soporte': return `/panel/soportes/gestion/${notif.entidad_id}`;
+                  case 'producto': return `/panel/inventario?id=${notif.entidad_id}`;
+                  case 'factura': return `/panel/contabilidad/facturas/${notif.entidad_id}`;
+                  case 'evento': return `/panel/calendario?evento=${notif.entidad_id}`;
+                  default: return '#';
+                }
+              };
+              return (
+                <Link
+                  key={notif.id}
+                  href={getUrl()}
+                  className="flex items-start justify-between pb-3 border-b hover:bg-gray-50 p-2 rounded transition-colors"
+                >
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{notif.titulo}</p>
+                    {notif.mensaje && (
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                        {notif.mensaje}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                    {formatDate(notif.created_at)}
+                  </span>
+                </Link>
+              );
+            })}
             {notifications.length > 5 && (
               <Link 
                 href="/panel/mensajes"

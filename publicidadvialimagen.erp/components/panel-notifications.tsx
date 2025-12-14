@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bell, ChevronRight } from "lucide-react"
 import Link from "next/link"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 interface Notification {
   id: string
@@ -19,6 +20,7 @@ interface Notification {
 }
 
 export default function PanelNotifications() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -31,9 +33,18 @@ export default function PanelNotifications() {
         })
         if (res.ok) {
           const data = await res.json()
-          // Filtrar solo las no leídas
+          // Filtrar solo las no leídas y por permisos
           const unreadNotifications = (Array.isArray(data) ? data : []).filter(
-            (n: Notification) => !n.leida
+            (n: Notification) => {
+              // Solo no leídas
+              if (n.leida) return false
+              // Formularios y solicitudes solo para usuarios con función técnica
+              if (n.entidad_tipo === "formulario" || n.entidad_tipo === "mensaje" || n.entidad_tipo === "solicitud") {
+                return tieneFuncionTecnica("ver solicitudes cotizacion")
+              }
+              // Otras notificaciones se muestran normalmente
+              return true
+            }
           )
           setNotifications(unreadNotifications)
         }
@@ -96,6 +107,12 @@ export default function PanelNotifications() {
               }
               
               const notification = newNotification as Notification
+              
+              // Filtrar formularios y solicitudes: solo para usuarios con función técnica
+              if ((notification.entidad_tipo === "formulario" || notification.entidad_tipo === "mensaje" || notification.entidad_tipo === "solicitud") && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                return // No tiene permiso, ignorar
+              }
+              
               setNotifications((prev) => {
                 const exists = prev.some(n => n.id === notification.id)
                 if (exists) return prev
@@ -116,7 +133,7 @@ export default function PanelNotifications() {
     }
 
     setupRealtime()
-  }, [])
+  }, [tieneFuncionTecnica])
 
   const formatDate = (dateString: string) => {
     try {

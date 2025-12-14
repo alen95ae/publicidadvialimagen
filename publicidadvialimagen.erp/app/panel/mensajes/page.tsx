@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { useRouter } from "next/navigation"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 interface Notificacion {
   id: string
@@ -98,6 +99,7 @@ const getNotificationUrl = (entidadTipo?: string | null, entidadId?: string | nu
 }
 
 export default function MensajesPage() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -115,8 +117,16 @@ export default function MensajesPage() {
         const data = await response.json()
         // Log temporal para debugging
         console.log('[Frontend] Notificaciones recibidas:', data)
-        // Asegurar que siempre sea un array
-        setNotificaciones(Array.isArray(data) ? data : [])
+        // Filtrar notificaciones: formularios y solicitudes solo para usuarios con función técnica
+        const notificacionesFiltradas = (Array.isArray(data) ? data : []).filter((n: Notificacion) => {
+          // Si es formulario, mensaje o solicitud, verificar función técnica
+          if (n.entidad_tipo === "formulario" || n.entidad_tipo === "mensaje" || n.entidad_tipo === "solicitud") {
+            return tieneFuncionTecnica("ver solicitudes cotizacion")
+          }
+          // Otras notificaciones se muestran normalmente
+          return true
+        })
+        setNotificaciones(notificacionesFiltradas)
       } else {
         // Si hay error, establecer array vacío en lugar de mostrar error
         setNotificaciones([])
@@ -196,7 +206,7 @@ export default function MensajesPage() {
     }
 
     setupRealtime()
-  }, [])
+  }, [tieneFuncionTecnica])
 
   const marcarComoLeida = async (id: string) => {
     try {

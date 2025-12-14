@@ -232,11 +232,8 @@ export default function PanelHeader() {
                 
                 // Filtrar por permisos antes de añadir (usar hooks del contexto)
                 const notification = newNotification as Notification
-                if ((notification.entidad_tipo === "formulario" || notification.entidad_tipo === "mensaje") && !puedeVer("mensajes")) {
-                  return prev
-                }
-                
-                if (notification.entidad_tipo === "solicitud" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                // Formularios y solicitudes solo para usuarios con función técnica "ver solicitudes cotizacion"
+                if ((notification.entidad_tipo === "formulario" || notification.entidad_tipo === "mensaje" || notification.entidad_tipo === "solicitud") && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
                   return prev
                 }
                 

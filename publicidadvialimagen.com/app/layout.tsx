@@ -15,8 +15,27 @@ export const metadata: Metadata = {
   title: "Publicidad Vial Imagen | Vallas Publicitarias",
   description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca - Multilingual support ES/EN",
   generator: 'v0.app',
-  icons: {
-    icon: '/favicon.svg',
+  openGraph: {
+    title: "Publicidad Vial Imagen | Vallas Publicitarias",
+    description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca",
+    url: 'https://publicidadvialimagen.com',
+    siteName: 'Publicidad Vial Imagen',
+    images: [
+      {
+        url: 'https://publicidadvialimagen.com/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Publicidad Vial Imagen',
+      },
+    ],
+    locale: 'es_ES',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Publicidad Vial Imagen | Vallas Publicitarias",
+    description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca",
+    images: ['https://publicidadvialimagen.com/og-image.jpg'],
   },
 }
 
@@ -27,8 +46,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <head>
-        {/* Google Analytics 4 */}
+      <body className={inter.className}>
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-891H449FXK"
           strategy="afterInteractive"
@@ -43,9 +61,6 @@ export default function RootLayout({
             });
           `}
         </Script>
-        
-      </head>
-      <body className={inter.className}>
         <Providers>
           <div className="flex min-h-screen flex-col">
             <Header />

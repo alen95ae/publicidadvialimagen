@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 // Función para normalizar nombres de ciudades (mapeo ERP → Web)
 function normalizeCityName(city: string): string {
@@ -81,8 +81,12 @@ export function useBillboards() {
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const hasFetched = useRef(false)
 
   useEffect(() => {
+    if (hasFetched.current) return
+    hasFetched.current = true
+
     async function fetchBillboards() {
       try {
         setLoading(true)
@@ -146,6 +150,11 @@ export function useBillboards() {
         console.log('✅ Datos transformados:', transformedData.length, 'soportes')
         setBillboards(transformedData)
       } catch (err: any) {
+        // Ignorar errores de abort o errores transitorios en desarrollo
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          return
+        }
+        
         console.error('Error fetching billboards:', err)
         setError(err.message || 'Error al cargar las vallas publicitarias')
         

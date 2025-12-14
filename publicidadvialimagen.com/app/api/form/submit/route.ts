@@ -171,7 +171,7 @@ export async function POST(req: Request) {
         // Crear notificación para rol 'admin'
         try {
           await crearNotificacionPorRol('admin', {
-            titulo: 'Nuevo formulario recibido',
+            titulo: 'Nuevo formulario de contacto',
             mensaje: `${nombre} (${email}) ha enviado un nuevo formulario`,
             tipo: 'info',
             entidad_tipo: 'formulario',
@@ -183,10 +183,10 @@ export async function POST(req: Request) {
           console.error('[NOTIFICACIONES] Error creando notificación de formulario para admin:', error?.message || 'Unknown');
         }
 
-        // Crear notificación para rol 'ventas'
+        // Crear notificación para rol 'desarrollador'
         try {
-          await crearNotificacionPorRol('ventas', {
-            titulo: 'Nuevo formulario recibido',
+          await crearNotificacionPorRol('desarrollador', {
+            titulo: 'Nuevo formulario de contacto',
             mensaje: `${nombre} (${email}) ha enviado un nuevo formulario`,
             tipo: 'info',
             entidad_tipo: 'formulario',
@@ -195,7 +195,7 @@ export async function POST(req: Request) {
           });
         } catch (error: any) {
           // Log solo en caso de error
-          console.error('[NOTIFICACIONES] Error creando notificación de formulario para ventas:', error?.message || 'Unknown');
+          console.error('[NOTIFICACIONES] Error creando notificación de formulario para desarrollador:', error?.message || 'Unknown');
         }
       }
       // Si no hay supabase, continuar silenciosamente sin notificaciones

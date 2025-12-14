@@ -61,7 +61,6 @@ export async function GET(request: NextRequest) {
     }
 
     const rolUsuario = rolData.nombre.toLowerCase().trim();
-    console.log('[GET /api/notificaciones] 🔍 ROL DEL USUARIO:', rolUsuario);
 
     // 2. Obtener notificaciones donde el rol del usuario está en roles_destino
     // Obtener todas y filtrar manualmente (más confiable que contains con arrays)
@@ -78,12 +77,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('[GET /api/notificaciones] 📊 TOTAL notificaciones en BD:', todasNotificaciones?.length || 0);
-    console.log('[GET /api/notificaciones] 🔍 Primeras 3 notificaciones (debug):');
-    todasNotificaciones?.slice(0, 3).forEach((n: any, i: number) => {
-      console.log(`  [${i}] ID: ${n.id}, roles_destino: ${JSON.stringify(n.roles_destino)}, leida: ${n.leida}`);
-    });
-
     // 3. Filtrar por rol del usuario y estado de lectura (MODELO LEGACY)
     const notificacionesFiltradas = (todasNotificaciones || []).filter((notif: any) => {
       const roles = notif.roles_destino || [];
@@ -96,25 +89,8 @@ export async function GET(request: NextRequest) {
       const tieneRol = rolesNormalizados.includes(rolUsuario);
       const noLeida = notif.leida === false || notif.leida === null;
       
-      // Debug detallado
-      if (notif.id === '849782d8-32fa-4934-8421-eaafa045d613') {
-        console.log('[GET /api/notificaciones] 🎯 NOTIFICACIÓN DE PRUEBA ENCONTRADA:');
-        console.log(`  - roles_destino raw: ${JSON.stringify(roles)}`);
-        console.log(`  - roles tipo: ${typeof roles}, isArray: ${Array.isArray(roles)}`);
-        console.log(`  - roles[0] tipo: ${typeof roles[0]}, valor: "${roles[0]}"`);
-        console.log(`  - roles normalizados: ${JSON.stringify(rolesNormalizados)}`);
-        console.log(`  - rol usuario: "${rolUsuario}"`);
-        console.log(`  - tieneRol: ${tieneRol}`);
-        console.log(`  - includes check: ${rolesNormalizados.includes(rolUsuario)}`);
-        console.log(`  - leida: ${notif.leida}`);
-        console.log(`  - noLeida: ${noLeida}`);
-        console.log(`  - PASA FILTRO: ${tieneRol && noLeida}`);
-      }
-      
       return tieneRol && noLeida;
     });
-
-    console.log('[GET /api/notificaciones] ✅ Notificaciones filtradas:', notificacionesFiltradas.length);
 
     // 4. Construir respuesta
     const notificaciones = notificacionesFiltradas
@@ -124,7 +100,10 @@ export async function GET(request: NextRequest) {
         if (notif.entidad_tipo && notif.entidad_id) {
           switch (notif.entidad_tipo.toLowerCase()) {
             case 'formulario':
-              url = `/panel/mensajes/formularios?id=${notif.entidad_id}`;
+              url = `/panel/mensajes`;
+              break;
+            case 'mensaje':
+              url = `/panel/mensajes`;
               break;
             case 'cotizacion':
               url = `/panel/ventas/cotizaciones/${notif.entidad_id}`;
@@ -136,7 +115,7 @@ export async function GET(request: NextRequest) {
               url = `/panel/soportes/mantenimiento?id=${notif.entidad_id}`;
               break;
             case 'solicitud':
-              url = `/panel/ventas/solicitudes/${notif.entidad_id}`;
+              url = `/panel/ventas/solicitudes`;
               break;
             case 'soporte':
               url = `/panel/soportes/gestion/${notif.entidad_id}`;

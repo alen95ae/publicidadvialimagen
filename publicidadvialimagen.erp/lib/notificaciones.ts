@@ -151,7 +151,7 @@ export async function notificarFormularioNuevo(
     entidad_tipo: 'formulario',
     entidad_id: formularioId,
     prioridad: 'media',
-    roles_destino: ['admin', 'ventas'], // UNA notificación para estos roles
+    roles_destino: ['admin', 'desarrollador'], // Solo admin y desarrollador
   });
 
   console.log('[NOTIFICACIONES] [notificarFormularioNuevo] ✅ Proceso completado');
@@ -217,6 +217,29 @@ export async function notificarAlquilerCreado(
     prioridad: 'media',
     roles_destino: ['produccion', 'admin'],
   });
+}
+
+/**
+ * Helper para crear notificación de solicitud de cotización web
+ */
+export async function notificarSolicitudCotizacion(
+  solicitudId: string,
+  empresa: string,
+  contacto: string
+): Promise<void> {
+  console.log('[NOTIFICACIONES] [notificarSolicitudCotizacion] Llamado con:', { solicitudId, empresa, contacto });
+
+  await crearNotificacion({
+    titulo: 'Nueva solicitud de cotización',
+    mensaje: `${empresa} (${contacto}) ha enviado una solicitud de cotización`,
+    tipo: 'info',
+    entidad_tipo: 'solicitud',
+    entidad_id: solicitudId,
+    prioridad: 'alta',
+    roles_destino: ['admin', 'desarrollador'],
+  });
+
+  console.log('[NOTIFICACIONES] [notificarSolicitudCotizacion] ✅ Proceso completado');
 }
 
 /**

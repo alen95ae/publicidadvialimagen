@@ -8,6 +8,7 @@ import {
   generarSiguienteCodigo
 } from '@/lib/supabaseSolicitudes'
 import { getAllSoportes } from '@/lib/supabaseSoportes'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 // Configuración de tablas
 const TABLE_SOLICITUDES = process.env.AIRTABLE_TABLE_SOLICITUDES || "Solicitudes"
@@ -142,6 +143,73 @@ export async function POST(request: NextRequest) {
       )
 
       console.log('✅ Solicitud guardada en Supabase:', nuevaSolicitud.codigo)
+
+      // ============================================
+      // NOTIFICACIONES → SIDE EFFECT (NO BLOQUEANTE)
+      // ============================================
+      try {
+        const supabase = getSupabaseAdmin();
+        
+        // Helper local para crear notificación por rol
+        const crearNotificacionPorRol = async (rolNombre: string, data: {
+          titulo: string;
+          mensaje: string;
+          tipo: 'info' | 'success' | 'warning' | 'error';
+          entidad_tipo: string;
+          entidad_id: string;
+          prioridad: 'baja' | 'media' | 'alta';
+        }) => {
+          const rolNormalizado = rolNombre.toLowerCase().trim();
+          
+          const { error } = await supabase
+            .from('notificaciones')
+            .insert({
+              titulo: data.titulo,
+              mensaje: data.mensaje,
+              tipo: data.tipo,
+              entidad_tipo: data.entidad_tipo,
+              entidad_id: data.entidad_id,
+              prioridad: data.prioridad,
+              roles_destino: [rolNormalizado],
+              leida: false,
+            });
+
+          if (error) {
+            throw error;
+          }
+        };
+
+        // Crear notificación para 'admin'
+        try {
+          await crearNotificacionPorRol('admin', {
+            titulo: 'Nueva solicitud de cotización',
+            mensaje: `${empresa} (${contacto}) ha enviado una solicitud de cotización`,
+            tipo: 'info',
+            entidad_tipo: 'solicitud',
+            entidad_id: nuevaSolicitud.id,
+            prioridad: 'alta',
+          });
+        } catch (error: any) {
+          console.error('[NOTIFICACIONES] Error creando notificación de solicitud para admin:', error?.message || 'Unknown');
+        }
+
+        // Crear notificación para 'desarrollador'
+        try {
+          await crearNotificacionPorRol('desarrollador', {
+            titulo: 'Nueva solicitud de cotización',
+            mensaje: `${empresa} (${contacto}) ha enviado una solicitud de cotización`,
+            tipo: 'info',
+            entidad_tipo: 'solicitud',
+            entidad_id: nuevaSolicitud.id,
+            prioridad: 'alta',
+          });
+        } catch (error: any) {
+          console.error('[NOTIFICACIONES] Error creando notificación de solicitud para desarrollador:', error?.message || 'Unknown');
+        }
+      } catch (notifError: any) {
+        // ERROR SILENCIOSO - NO afecta a la solicitud
+        console.error('[NOTIFICACIONES] Error en bloque de notificaciones (no bloquea solicitud):', notifError?.message || 'Unknown');
+      }
 
       return NextResponse.json({
         success: true,

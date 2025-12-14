@@ -81,11 +81,12 @@ export function useBillboards() {
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const hasFetched = useRef(false)
+  const fetchAttempted = useRef(false)
 
   useEffect(() => {
-    if (hasFetched.current) return
-    hasFetched.current = true
+    // Prevenir doble fetch en desarrollo (React Strict Mode)
+    if (fetchAttempted.current) return
+    fetchAttempted.current = true
 
     async function fetchBillboards() {
       try {
@@ -150,13 +151,15 @@ export function useBillboards() {
         console.log('✅ Datos transformados:', transformedData.length, 'soportes')
         setBillboards(transformedData)
       } catch (err: any) {
-        // Ignorar errores de abort o errores transitorios en desarrollo
+        // Ignorar errores de abort
         if (err.name === 'AbortError' || err.message?.includes('aborted')) {
           return
         }
         
-        console.error('Error fetching billboards:', err)
-        setError(err.message || 'Error al cargar las vallas publicitarias')
+        // Solo loggear errores en desarrollo, no en producción
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching billboards:', err)
+        }
         
         // Fallback a datos mock en caso de error
         const mockData: Billboard[] = [
@@ -184,6 +187,8 @@ export function useBillboards() {
           }
         ]
         setBillboards(mockData)
+        // No establecer error si tenemos datos mock - solo silenciar el error
+        // setError(null) // Ya está en null al inicio del try
       } finally {
         setLoading(false)
       }

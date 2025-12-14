@@ -45,6 +45,77 @@ export default function PanelNotifications() {
     }
 
     fetchNotifications()
+
+    // Configurar Realtime después de carga inicial
+    const setupRealtime = async () => {
+      try {
+        // Obtener usuario para saber su rol
+        const userRes = await fetch('/api/auth/me', {
+          credentials: 'include'
+        })
+        if (!userRes.ok) return
+        
+        const userData = await userRes.json()
+        const userRol = userData.user?.role || userData.user?.rol
+        if (!userRol) return
+
+        const rolNormalizado = userRol.toLowerCase()
+        
+        // Importar Supabase client dinámicamente
+        const { createClient } = await import('@supabase/supabase-js')
+        
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        
+        if (!supabaseUrl || !supabaseAnonKey) {
+          console.warn('[Realtime] Variables de entorno faltantes')
+          return
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        
+        // Suscribirse a cambios
+        // Nota: No podemos filtrar por array directamente en Realtime,
+        // así que recibimos todos los INSERTs y filtramos en el handler
+        const channel = supabase
+          .channel(`notificaciones-widget:${rolNormalizado}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notificaciones'
+            },
+            (payload) => {
+              const newNotification = payload.new as any
+              
+              // Filtrar por rol: verificar si el rol del usuario está en roles_destino
+              const rolesDestino = newNotification.roles_destino || []
+              if (!Array.isArray(rolesDestino) || !rolesDestino.includes(rolNormalizado)) {
+                return // No es para este rol, ignorar
+              }
+              
+              const notification = newNotification as Notification
+              setNotifications((prev) => {
+                const exists = prev.some(n => n.id === notification.id)
+                if (exists) return prev
+                // Solo añadir si no está leída
+                if (notification.leida) return prev
+                return [notification, ...prev]
+              })
+            }
+          )
+          .subscribe()
+        
+        return () => {
+          supabase.removeChannel(channel)
+        }
+      } catch (error) {
+        console.error('[Realtime] Error configurando suscripción:', error)
+      }
+    }
+
+    setupRealtime()
   }, [])
 
   const formatDate = (dateString: string) => {
@@ -111,23 +182,23 @@ export default function PanelNotifications() {
                 }
               };
               return (
-                <Link
-                  key={notif.id}
+              <Link
+                key={notif.id}
                   href={getUrl()}
-                  className="flex items-start justify-between pb-3 border-b hover:bg-gray-50 p-2 rounded transition-colors"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{notif.titulo}</p>
-                    {notif.mensaje && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                        {notif.mensaje}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                className="flex items-start justify-between pb-3 border-b hover:bg-gray-50 p-2 rounded transition-colors"
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{notif.titulo}</p>
+                  {notif.mensaje && (
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                      {notif.mensaje}
+                    </p>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
                     {formatDate(notif.created_at)}
-                  </span>
-                </Link>
+                </span>
+              </Link>
               );
             })}
             {notifications.length > 5 && (

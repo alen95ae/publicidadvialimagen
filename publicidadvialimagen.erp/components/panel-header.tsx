@@ -157,12 +157,6 @@ export default function PanelHeader() {
     fetchUser()
     fetchNotifications()
     fetchSistemaNotificaciones()
-    // Actualizar notificaciones cada 15 segundos (polling inteligente)
-    const interval = setInterval(() => {
-      fetchNotifications()
-      fetchSistemaNotificaciones()
-    }, 15000) // 15 segundos para mejor tiempo real
-    return () => clearInterval(interval)
   }, [])
 
   const fetchUser = async () => {
@@ -180,6 +174,104 @@ export default function PanelHeader() {
       setLoading(false)
     }
   }
+
+  // Setup Realtime en un useEffect separado después de obtener el usuario
+  useEffect(() => {
+    if (!user?.role && !user?.rol) return
+
+    const userRol = user.role || user.rol
+    const rolNormalizado = userRol.toLowerCase()
+    let cleanup: (() => void) | undefined
+
+    const setupRealtime = async () => {
+      try {
+        // Importar Supabase client dinámicamente
+        const { createClient } = await import('@supabase/supabase-js')
+        
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        
+        if (!supabaseUrl || !supabaseAnonKey) {
+          console.warn('[Realtime] Variables de entorno faltantes, usando polling como fallback')
+          // Fallback a polling si no hay variables de entorno
+          const interval = setInterval(() => {
+            fetchNotifications()
+            fetchSistemaNotificaciones()
+          }, 15000)
+          cleanup = () => clearInterval(interval)
+          return
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        
+        // Suscribirse a cambios en notificaciones
+        // Nota: No podemos filtrar por array directamente en Realtime, 
+        // así que recibimos todos los INSERTs y filtramos en el handler
+        const channel = supabase
+          .channel(`notificaciones:${rolNormalizado}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notificaciones'
+            },
+            (payload) => {
+              const newNotification = payload.new as any
+              
+              // Filtrar por rol: verificar si el rol del usuario está en roles_destino
+              const rolesDestino = newNotification.roles_destino || []
+              if (!Array.isArray(rolesDestino) || !rolesDestino.includes(rolNormalizado)) {
+                return // No es para este rol, ignorar
+              }
+              
+              // Verificar que no es duplicado
+              setNotifications((prev) => {
+                const exists = prev.some(n => n.id === newNotification.id)
+                if (exists) return prev
+                
+                // Filtrar por permisos antes de añadir (usar hooks del contexto)
+                const notification = newNotification as Notification
+                if ((notification.entidad_tipo === "formulario" || notification.entidad_tipo === "mensaje") && !puedeVer("mensajes")) {
+                  return prev
+                }
+                
+                if (notification.entidad_tipo === "solicitud" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                  return prev
+                }
+                
+                return [notification, ...prev]
+              })
+              
+              // Actualizar contador
+              setSistemaNotificacionesCount(prev => prev + 1)
+              
+              // Opcional: mostrar toast/sonido
+              console.log('[Realtime] Nueva notificación recibida:', newNotification.titulo)
+            }
+          )
+          .subscribe()
+        
+        cleanup = () => {
+          supabase.removeChannel(channel)
+        }
+      } catch (error) {
+        console.error('[Realtime] Error configurando suscripción:', error)
+        // Fallback a polling si Realtime falla
+        const interval = setInterval(() => {
+          fetchNotifications()
+          fetchSistemaNotificaciones()
+        }, 15000)
+        cleanup = () => clearInterval(interval)
+      }
+    }
+
+    setupRealtime()
+
+    return () => {
+      if (cleanup) cleanup()
+    }
+  }, [user?.role, user?.rol, puedeVer, tieneFuncionTecnica])
 
   const getInitials = () => {
     if (user?.name) {
@@ -269,10 +361,10 @@ export default function PanelHeader() {
 
       // Actualizar el estado en el backend usando el endpoint de notificaciones
       await fetch(`/api/notificaciones/${notification.id}`, {
-        method: "PATCH",
+          method: "PATCH",
         credentials: "include",
-        cache: 'no-store'
-      })
+          cache: 'no-store'
+        })
     } catch (error) {
       console.error("Error marking notification as read:", error)
     }
@@ -329,7 +421,7 @@ export default function PanelHeader() {
   const handleNotificationClick = (notification: Notification) => {
     // Marcar como leída si no lo está (pero no bloquear navegación)
     if (!notification.leida) {
-      markNotificationAsRead(notification)
+    markNotificationAsRead(notification)
     }
     
     // Construir URL desde entidad_tipo y entidad_id (si no viene en notification.url)

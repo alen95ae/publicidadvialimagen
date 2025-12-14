@@ -131,6 +131,71 @@ export default function MensajesPage() {
 
   useEffect(() => {
     loadNotificaciones()
+
+    // Configurar Realtime después de carga inicial
+    const setupRealtime = async () => {
+      try {
+        // Obtener usuario para saber su rol
+        const userRes = await fetch('/api/auth/me', {
+          credentials: 'include'
+        })
+        if (!userRes.ok) return
+        
+        const userData = await userRes.json()
+        const userRol = userData.user?.role || userData.user?.rol
+        if (!userRol) return
+
+        const rolNormalizado = userRol.toLowerCase()
+        
+        // Importar Supabase client dinámicamente
+        const { createClient } = await import('@supabase/supabase-js')
+        
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        
+        if (!supabaseUrl || !supabaseAnonKey) {
+          console.warn('[Realtime] Variables de entorno faltantes')
+          return
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        
+        // Suscribirse a cambios
+        // Nota: No podemos filtrar por array directamente en Realtime,
+        // así que recibimos todos los INSERTs y filtramos en el handler
+        const channel = supabase
+          .channel(`notificaciones-page:${rolNormalizado}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notificaciones'
+            },
+            (payload) => {
+              const newNotification = payload.new as any
+              
+              // Filtrar por rol: verificar si el rol del usuario está en roles_destino
+              const rolesDestino = newNotification.roles_destino || []
+              if (!Array.isArray(rolesDestino) || !rolesDestino.includes(rolNormalizado)) {
+                return // No es para este rol, ignorar
+              }
+              
+              // Recargar todas las notificaciones para mantener consistencia
+              loadNotificaciones()
+            }
+          )
+          .subscribe()
+        
+        return () => {
+          supabase.removeChannel(channel)
+        }
+      } catch (error) {
+        console.error('[Realtime] Error configurando suscripción:', error)
+      }
+    }
+
+    setupRealtime()
   }, [])
 
   const marcarComoLeida = async (id: string) => {
@@ -298,14 +363,14 @@ export default function MensajesPage() {
                                       </Button>
                                     )}
                                     {!notificacion.leida && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => marcarComoLeida(notificacion.id)}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => marcarComoLeida(notificacion.id)}
                                         title="Marcar como leída"
-                                      >
-                                        <CheckCircle className="w-4 h-4" />
-                                      </Button>
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </Button>
                                     )}
                                     <Button
                                       variant="ghost"
@@ -385,15 +450,15 @@ export default function MensajesPage() {
                                         Ver
                                       </Button>
                                     )}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => eliminarNotificacion(notificacion.id)}
-                                      className="text-red-600 hover:text-red-700"
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarNotificacion(notificacion.id)}
+                                    className="text-red-600 hover:text-red-700"
                                       title="Eliminar notificación"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
                                   </div>
                                 </div>
                               </div>

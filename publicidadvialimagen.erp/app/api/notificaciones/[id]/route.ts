@@ -4,13 +4,17 @@ import { verifySession } from "@/lib/auth/verifySession";
 
 /**
  * PATCH - Marcar notificación como leída
+ * 
+ * MODELO LEGACY:
+ * - Actualiza notificaciones.leida = true
+ * - NO usa notificaciones_leidas
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    // Verificar sesión del usuario
+    // Verificar sesión
     const token = request.cookies.get('session')?.value;
     if (!token) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -27,42 +31,30 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { id } = params instanceof Promise ? await params : params;
+    const { id } = await Promise.resolve(params);
     const supabase = getSupabaseAdmin();
 
-    // Verificar que la notificación pertenece al usuario
-    const { data: notificacion, error: fetchError } = await supabase
-      .from('notificaciones')
-      .select('id, user_id')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (fetchError || !notificacion) {
-      return NextResponse.json({ error: "Notificación no encontrada" }, { status: 404 });
-    }
-
-    // Marcar como leída (NO existe updated_at en la tabla)
+    // Actualizar notificaciones.leida directamente (MODELO LEGACY)
     const { error: updateError } = await supabase
       .from('notificaciones')
       .update({ leida: true })
-      .eq('id', id)
-      .eq('user_id', userId);
+      .eq('id', id);
 
     if (updateError) {
-      console.error("Error actualizando notificación:", updateError);
-      return NextResponse.json({ 
-        error: "Error al actualizar notificación", 
-        details: updateError.message
-      }, { status: 500 });
+      console.error("Error marcando notificación como leída:", updateError);
+      return NextResponse.json(
+        { error: "Error al marcar como leída", details: updateError.message },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: "Notificación marcada como leída" });
   } catch (error) {
     console.error("Error en PATCH /api/notificaciones/[id]:", error);
-    return NextResponse.json({ 
-      error: "Error interno del servidor" 
-    }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }
 
@@ -74,7 +66,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    // Verificar sesión del usuario
     const token = request.cookies.get('session')?.value;
     if (!token) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -91,41 +82,29 @@ export async function DELETE(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { id } = params instanceof Promise ? await params : params;
+    const { id } = await Promise.resolve(params);
     const supabase = getSupabaseAdmin();
 
-    // Verificar que la notificación pertenece al usuario antes de eliminar
-    const { data: notificacion, error: fetchError } = await supabase
-      .from('notificaciones')
-      .select('id, user_id')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (fetchError || !notificacion) {
-      return NextResponse.json({ error: "Notificación no encontrada" }, { status: 404 });
-    }
-
-    // Eliminar notificación
+    // Eliminar la notificación completa (MODELO LEGACY)
     const { error: deleteError } = await supabase
       .from('notificaciones')
       .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
+      .eq('id', id);
 
     if (deleteError) {
       console.error("Error eliminando notificación:", deleteError);
-      return NextResponse.json({ 
-        error: "Error al eliminar notificación", 
-        details: deleteError.message
-      }, { status: 500 });
+      return NextResponse.json(
+        { error: "Error al eliminar", details: deleteError.message },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: "Notificación eliminada" });
   } catch (error) {
     console.error("Error en DELETE /api/notificaciones/[id]:", error);
-    return NextResponse.json({ 
-      error: "Error interno del servidor" 
-    }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }

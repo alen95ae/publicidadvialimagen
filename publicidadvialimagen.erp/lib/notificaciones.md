@@ -8,18 +8,30 @@ El sistema de notificaciones utiliza **únicamente** la tabla `notificaciones` e
 
 ```sql
 CREATE TABLE notificaciones (
-  id UUID PRIMARY KEY,
-  user_id UUID NOT NULL,
-  tipo TEXT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo TEXT NOT NULL CHECK (tipo IN ('info', 'success', 'warning', 'error')),
   titulo TEXT NOT NULL,
   mensaje TEXT NOT NULL,
   entidad_tipo TEXT,
   entidad_id UUID,
-  prioridad TEXT DEFAULT 'media',
-  leida BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  prioridad TEXT NOT NULL DEFAULT 'media' CHECK (prioridad IN ('baja', 'media', 'alta')),
+  roles_destino TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  leida BOOLEAN DEFAULT false, -- Legacy, mantenida por compatibilidad
+  user_id UUID, -- Legacy, mantenida por compatibilidad
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE notificaciones_leidas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  notificacion_id UUID NOT NULL REFERENCES notificaciones(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  leida BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(notificacion_id, user_id)
 );
 ```
+
+**Nota:** Las columnas `user_id` y `leida` en `notificaciones` son legacy y se mantienen por compatibilidad temporal. El sistema actual usa `roles_destino` para visibilidad y `notificaciones_leidas` para tracking de lectura.
 
 ## API Endpoints
 
@@ -59,11 +71,52 @@ CREATE TABLE notificaciones (
 
 ## Helpers de Creación
 
-### `crearNotificacionUsuario(userId, data)`
-Crea una notificación para un usuario específico.
+### `crearNotificacion(data: NotificacionData)`
+Función principal para crear una notificación. Requiere `roles_destino` como array de roles.
 
-### `crearNotificacionPorRol(rolNombre, data)`
-Crea notificaciones para todos los usuarios de un rol.
+**Ejemplo:**
+```typescript
+await crearNotificacion({
+  titulo: 'Nuevo evento',
+  mensaje: 'Se ha creado un nuevo evento',
+  tipo: 'info',
+  entidad_tipo: 'evento',
+  entidad_id: eventoId,
+  prioridad: 'media',
+  roles_destino: ['admin', 'ventas']
+});
+```
+
+### `crearNotificacionUsuario(userId: string, data)`
+Crea una notificación para un usuario específico. Obtiene automáticamente el rol del usuario y crea la notificación dirigida a ese rol.
+
+**Ejemplo:**
+```typescript
+await crearNotificacionUsuario(userId, {
+  titulo: 'Tarea asignada',
+  mensaje: 'Se te ha asignado una nueva tarea',
+  tipo: 'info',
+  entidad_tipo: 'tarea',
+  entidad_id: tareaId,
+  prioridad: 'media'
+});
+```
+
+### `crearNotificacionPorRol(rolNombre: string, data: NotificacionData)`
+Crea una notificación para todos los usuarios de un rol específico. Normaliza el nombre del rol a minúsculas.
+
+**Ejemplo:**
+```typescript
+await crearNotificacionPorRol('admin', {
+  titulo: 'Alerta del sistema',
+  mensaje: 'Se requiere atención inmediata',
+  tipo: 'error',
+  entidad_tipo: 'sistema',
+  entidad_id: alertaId,
+  prioridad: 'alta',
+  roles_destino: ['admin'] // Se sobrescribe con el rol especificado
+});
+```
 
 ### Helpers Específicos
 

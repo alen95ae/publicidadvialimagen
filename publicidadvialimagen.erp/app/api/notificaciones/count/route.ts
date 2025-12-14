@@ -3,7 +3,12 @@ import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { verifySession } from "@/lib/auth/verifySession";
 
 /**
- * GET - Obtener contador de notificaciones no leídas
+ * GET - Contar notificaciones no leídas del usuario actual
+ * 
+ * MODELO LEGACY:
+ * - Obtiene el rol del usuario
+ * - Cuenta notificaciones donde rol ∈ roles_destino
+ * - Filtra por notificaciones.leida === false || null
  */
 export async function GET(request: NextRequest) {
   try {
@@ -24,31 +29,59 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    // Usar admin client pero filtrar por user_id manualmente
     const supabase = getSupabaseAdmin();
 
-    // Contar notificaciones no leídas para este usuario
-    const { count, error } = await supabase
-      .from('notificaciones')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('leida', false);
+    // 1. Obtener el rol del usuario
+    const { data: usuarioData, error: usuarioError } = await supabase
+      .from('usuarios')
+      .select('rol_id')
+      .eq('id', userId)
+      .single();
 
-    if (error) {
-      // Si hay error (tabla no existe, etc.), devolver 0
-      if (error.code === 'PGRST116' || error.code === '42P01') {
-        return NextResponse.json({ count: 0 });
-      }
-      // Para otros errores, loguear pero devolver 0
-      console.error("Error contando notificaciones:", error.message);
+    if (usuarioError || !usuarioData) {
       return NextResponse.json({ count: 0 });
     }
 
-    // Siempre devolver un número válido
-    return NextResponse.json({ count: count || 0 });
+    const { data: rolData, error: rolError } = await supabase
+      .from('roles')
+      .select('nombre')
+      .eq('id', usuarioData.rol_id)
+      .single();
+
+    if (rolError || !rolData) {
+      return NextResponse.json({ count: 0 });
+    }
+
+    const rolUsuario = rolData.nombre.toLowerCase().trim();
+
+    // 2. Contar notificaciones donde el rol está en roles_destino y no están leídas (MODELO LEGACY)
+    // Obtener todas y filtrar manualmente (más confiable que contains)
+    const { data: todasNotificaciones, error: notificacionesError } = await supabase
+      .from('notificaciones')
+      .select('id, roles_destino, leida');
+
+    if (notificacionesError) {
+      console.error("Error contando notificaciones:", notificacionesError);
+      return NextResponse.json({ count: 0 });
+    }
+
+    // Filtrar por rol y estado de lectura (MODELO LEGACY)
+    const count = (todasNotificaciones || []).filter((notif: any) => {
+      const roles = notif.roles_destino || [];
+      
+      // Normalizar roles de forma más robusta
+      const rolesNormalizados = Array.isArray(roles) 
+        ? roles.map((r: any) => String(r).toLowerCase().trim())
+        : [];
+      
+      const tieneRol = rolesNormalizados.includes(rolUsuario);
+      const noLeida = notif.leida === false || notif.leida === null;
+      return tieneRol && noLeida;
+    }).length;
+
+    return NextResponse.json({ count });
   } catch (error) {
-    // En caso de error inesperado, devolver 0 para no romper el header
-    console.error("Error en GET /api/notificaciones/count:", error instanceof Error ? error.message : 'Unknown error');
+    console.error("Error en GET /api/notificaciones/count:", error);
     return NextResponse.json({ count: 0 });
   }
 }

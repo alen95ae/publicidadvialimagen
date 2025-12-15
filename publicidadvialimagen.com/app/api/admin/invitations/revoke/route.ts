@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/server-auth";
 import { updateInvitacion } from "@/lib/supabaseInvitaciones";

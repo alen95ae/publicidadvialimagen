@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { requireRole } from "@/lib/server-auth";

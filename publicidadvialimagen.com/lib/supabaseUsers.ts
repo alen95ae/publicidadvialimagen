@@ -1,6 +1,9 @@
 import { getSupabaseServer } from './supabaseServer'
 
-const supabase = getSupabaseServer()
+// Lazy initialization para evitar dependencias circulares
+function getSupabase() {
+  return getSupabaseServer()
+}
 
 // Interfaz para el usuario en Supabase
 // NOTA: La tabla en Supabase tiene estos campos:
@@ -60,7 +63,7 @@ export async function findUserByEmailSupabase(email: string): Promise<Usuario | 
   const emailNormalized = email.trim().toLowerCase()
   console.log('🔍 [Supabase] Buscando usuario con email:', emailNormalized)
   
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('usuarios')
     .select('*')
     .eq('email', emailNormalized)
@@ -107,7 +110,7 @@ export async function createUserSupabase(
     updated_at: now
   }
   
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('usuarios')
     .insert([userData])
     .select()
@@ -170,7 +173,7 @@ export async function updateUserSupabase(
   // En Supabase el campo se llama "passwordhash" (sin guión bajo)
   if (updates.password_hash !== undefined) updateData.passwordhash = updates.password_hash
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('usuarios')
     .update(updateData)
     .eq('id', userId)
@@ -191,7 +194,7 @@ export async function updateUserSupabase(
  * Obtener usuario por ID
  */
 export async function getUserByIdSupabase(userId: string): Promise<Usuario | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('usuarios')
     .select('*')
     .eq('id', userId)
@@ -214,7 +217,7 @@ export async function getUserByIdSupabase(userId: string): Promise<Usuario | nul
  * Obtener todos los usuarios
  */
 export async function getAllUsersSupabase(): Promise<Usuario[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('usuarios')
     .select('*')
     .order('created_at', { ascending: false })

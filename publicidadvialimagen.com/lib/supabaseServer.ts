@@ -230,8 +230,10 @@ export function getSupabaseServer(): SupabaseClient {
 }
 
 // Exportar como un objeto con un getter para mantener compatibilidad con el código existente
+// Lazy initialization para evitar problemas de dependencias circulares
 export const supabaseServer = new Proxy({} as SupabaseClient, {
   get: (_, prop) => {
+    // Lazy: solo obtener el cliente cuando se accede a una propiedad
     const client = getSupabaseServer()
     const value = (client as any)[prop]
     // Si es una función, bindear el contexto

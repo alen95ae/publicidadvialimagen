@@ -1,6 +1,9 @@
 import { getSupabaseServer } from './supabaseServer'
 
-const supabase = getSupabaseServer()
+// Lazy initialization para evitar dependencias circulares
+function getSupabase() {
+  return getSupabaseServer()
+}
 
 // Interfaz para la invitación en Supabase
 // NOTA: La tabla en Supabase debe tener estos campos:
@@ -53,7 +56,7 @@ function supabaseToInvitacion(record: InvitacionSupabase): Invitacion {
  * Obtener todas las invitaciones con filtro opcional por estado
  */
 export async function getAllInvitaciones(estado?: string): Promise<Invitacion[]> {
-  let query = supabase
+  let query = getSupabase()
     .from('invitaciones')
     .select('*')
     .order('created_at', { ascending: false })
@@ -102,7 +105,7 @@ export async function createInvitacion(
     updated_at: now
   }
   
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('invitaciones')
     .insert([invitacionData])
     .select()
@@ -139,7 +142,7 @@ export async function updateInvitacion(
   if (updates.estado !== undefined) updateData.estado = updates.estado
   if (updates.fecha_uso !== undefined) updateData.fecha_uso = updates.fecha_uso
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('invitaciones')
     .update(updateData)
     .eq('id', id)

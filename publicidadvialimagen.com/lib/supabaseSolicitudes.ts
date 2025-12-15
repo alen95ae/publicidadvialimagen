@@ -1,6 +1,9 @@
 import { getSupabaseServer } from './supabaseServer'
 
-const supabase = getSupabaseServer()
+// Lazy initialization para evitar dependencias circulares
+function getSupabase() {
+  return getSupabaseServer()
+}
 
 // Interfaz para la solicitud en Supabase
 // NOTA: La tabla en Supabase debe tener estos campos:
@@ -72,7 +75,7 @@ function supabaseToSolicitud(record: SolicitudSupabase): Solicitud {
  * Obtener todas las solicitudes
  */
 export async function getAllSolicitudes(): Promise<Solicitud[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('solicitudes')
     .select('*')
     .order('created_at', { ascending: false })
@@ -96,7 +99,7 @@ export async function findSolicitudByCodigoOrId(codigoOrId: string): Promise<Sol
   console.log('🔍 Buscando solicitud por código o ID:', codigoOrId)
   
   // Primero intentar buscar por código
-  let query = supabase
+  let query = getSupabase()
     .from('solicitudes')
     .select('*')
     .eq('codigo', codigoOrId)
@@ -111,7 +114,7 @@ export async function findSolicitudByCodigoOrId(codigoOrId: string): Promise<Sol
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(codigoOrId)
     
     if (isUUID) {
-      query = supabase
+      query = getSupabase()
         .from('solicitudes')
         .select('*')
         .eq('id', codigoOrId)
@@ -142,7 +145,7 @@ export async function findSolicitudByCodigoOrId(codigoOrId: string): Promise<Sol
  * Buscar solicitud por código
  */
 export async function findSolicitudByCodigo(codigo: string): Promise<Solicitud | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('solicitudes')
     .select('*')
     .eq('codigo', codigo)
@@ -166,7 +169,7 @@ export async function findSolicitudByCodigo(codigo: string): Promise<Solicitud |
  */
 export async function generarSiguienteCodigo(): Promise<string> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('solicitudes')
       .select('codigo')
       .like('codigo', 'SC-%')
@@ -249,7 +252,7 @@ export async function createSolicitud(
   console.log('📋 Datos a insertar en Supabase:', JSON.stringify(solicitudData, null, 2))
   console.log('🔍 Estado normalizado:', estadoNormalizado, 'tipo:', typeof estadoNormalizado)
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('solicitudes')
     .insert([solicitudData])
     .select()
@@ -318,7 +321,7 @@ export async function updateSolicitud(
   if (updates.comentarios !== undefined) updateData.comentarios = updates.comentarios
 
   // Actualizar usando el ID
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('solicitudes')
     .update(updateData)
     .eq('id', solicitud.id)
@@ -350,7 +353,7 @@ export async function deleteSolicitud(codigoOrId: string): Promise<boolean> {
   // Eliminar usando el ID (más eficiente que usar código)
   const idToDelete = solicitud.id || codigoOrId
   
-  const { error, count } = await supabase
+  const { error, count } = await getSupabase()
     .from('solicitudes')
     .delete({ count: 'exact' })
     .eq('id', idToDelete)
@@ -392,7 +395,7 @@ export async function updateMultipleSolicitudes(
   }
 
   // Actualizar usando el operador in para múltiples códigos
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('solicitudes')
     .update(updateData)
     .in('codigo', codigos)

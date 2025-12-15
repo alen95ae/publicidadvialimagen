@@ -266,6 +266,8 @@ export default function ProfilePage() {
                 value={formData.nombre}
                 onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                 placeholder="Tu nombre completo"
+                disabled
+                className="bg-muted"
               />
               </div>
 

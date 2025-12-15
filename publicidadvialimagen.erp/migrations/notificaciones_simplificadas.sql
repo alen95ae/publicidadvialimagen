@@ -77,3 +77,4 @@ ON CONFLICT (notificacion_id, user_id) DO NOTHING;
 -- NOTA: Las columnas user_id y leida se mantienen temporalmente para compatibilidad
 -- Se pueden eliminar después de verificar que todo funciona correctamente
 
+

@@ -82,10 +82,12 @@ export function useBillboards() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const fetchAttempted = useRef(false)
+  const retryCount = useRef(0)
+  const maxRetries = 3
 
   useEffect(() => {
     // Prevenir doble fetch en desarrollo (React Strict Mode)
-    if (fetchAttempted.current) return
+    if (fetchAttempted.current && retryCount.current === 0) return
     fetchAttempted.current = true
 
     async function fetchBillboards() {
@@ -93,63 +95,104 @@ export function useBillboards() {
         setLoading(true)
         setError(null)
 
-        const response = await fetch('/api/soportes')
+        // Agregar timestamp para evitar caché
+        const cacheBuster = `?t=${Date.now()}`
+        const response = await fetch(`/api/soportes${cacheBuster}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        })
         
         if (!response.ok) {
+          // Si es error 500 y aún tenemos reintentos, reintentar
+          if (response.status === 500 && retryCount.current < maxRetries) {
+            retryCount.current++
+            console.warn(`⚠️ Error 500, reintentando... (${retryCount.current}/${maxRetries})`)
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount.current)) // Backoff exponencial
+            return fetchBillboards()
+          }
           throw new Error(`Error ${response.status}: ${response.statusText}`)
         }
 
         const result = await response.json()
         
-        console.log('🔍 Respuesta del API soportes:', result)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔍 Respuesta del API soportes:', result)
+        }
         
         if (result.error) {
           throw new Error(result.error)
         }
 
         // Transformar datos de la API al formato esperado
-        console.log('🔄 Transformando datos...', result.data?.length, 'soportes')
-        const transformedData: Billboard[] = (result.data || []).map((soporte: any, index: number) => {
-          if (index < 3) {
-            console.log(`📋 Soporte ${index}:`, {
-              id: soporte.id,
-              name: soporte.name,
-              coordinates: soporte.coordinates,
-              monthlyPrice: soporte.monthlyPrice
-            })
-          }
-          return {
-          id: soporte.id,
-          code: soporte.code || soporte.id, // Usar código real del soporte (ej: "34-LPZ")
-          name: soporte.name,
-          images: soporte.images || [soporte.image], // Usar todas las imágenes disponibles
-          monthlyPrice: soporte.monthlyPrice,
-          location: soporte.location,
-          city: normalizeCityName(soporte.city), // Normalizar ciudad (Pando → Cobija)
-          format: soporte.format,
-          type: soporte.type,
-          dimensions: soporte.dimensions,
-          width: soporte.monthlyPrice > 2000 ? 6 : 4, // Estimar basado en precio
-          height: soporte.monthlyPrice > 2000 ? 3 : 2,
-          visibility: soporte.visibility,
-          traffic: soporte.traffic,
-          lighting: soporte.lighting,
-          resolution: soporte.format === 'Pantallas LED' ? '1920x1080 Full HD' : undefined,
-          material: soporte.format === 'Pantallas LED' ? 'Pantalla LED exterior' : 'Material exterior',
-          status: soporte.status || 'Disponible',
-          available: soporte.available,
-          availableMonths: soporte.availableMonths,
-          features: soporte.features,
-          coordinates: soporte.coordinates && soporte.coordinates.lat && soporte.coordinates.lng 
-            ? { lat: soporte.coordinates.lat, lng: soporte.coordinates.lng } 
-            : undefined,
-          impactos_diarios: soporte.traffic ? parseInt(soporte.traffic.replace(/[^\d]/g, '')) : undefined,
-          description: soporte.description || '',
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Transformando datos...', result.data?.length, 'soportes')
         }
-        })
+        
+        const transformedData: Billboard[] = (result.data || [])
+          .filter((soporte: any) => soporte && soporte.id) // Filtrar datos inválidos
+          .map((soporte: any, index: number) => {
+            try {
+              if (process.env.NODE_ENV === 'development' && index < 3) {
+                console.log(`📋 Soporte ${index}:`, {
+                  id: soporte.id,
+                  name: soporte.name,
+                  coordinates: soporte.coordinates,
+                  monthlyPrice: soporte.monthlyPrice
+                })
+              }
+              
+              return {
+                id: soporte.id || `soporte-${index}`,
+                code: soporte.code || soporte.id || `soporte-${index}`,
+                name: soporte.name || 'Soporte sin nombre',
+                images: soporte.images && Array.isArray(soporte.images) && soporte.images.length > 0
+                  ? soporte.images.filter((img: any) => img)
+                  : soporte.image
+                  ? [soporte.image]
+                  : ['/placeholder.svg?height=400&width=600'],
+                monthlyPrice: soporte.monthlyPrice || 0,
+                location: soporte.location || 'Ubicación no especificada',
+                city: normalizeCityName(soporte.city || ''),
+                format: soporte.format || 'Vallas Publicitarias',
+                type: soporte.type || 'Estándar',
+                dimensions: soporte.dimensions || 'Dimensiones no especificadas',
+                width: soporte.monthlyPrice > 2000 ? 6 : 4,
+                height: soporte.monthlyPrice > 2000 ? 3 : 2,
+                visibility: soporte.visibility || 'Alto tráfico',
+                traffic: soporte.traffic || 'Variable',
+                lighting: soporte.lighting || 'No especificado',
+                resolution: soporte.format === 'Pantallas LED' ? '1920x1080 Full HD' : undefined,
+                material: soporte.format === 'Pantallas LED' ? 'Pantalla LED exterior' : 'Material exterior',
+                status: soporte.status || 'Disponible',
+                available: soporte.available !== undefined ? soporte.available : true,
+                availableMonths: Array.isArray(soporte.availableMonths) ? soporte.availableMonths : [],
+                features: Array.isArray(soporte.features) ? soporte.features : [],
+                coordinates: soporte.coordinates && soporte.coordinates.lat && soporte.coordinates.lng 
+                  ? { lat: soporte.coordinates.lat, lng: soporte.coordinates.lng } 
+                  : undefined,
+                impactos_diarios: soporte.traffic ? parseInt(String(soporte.traffic).replace(/[^\d]/g, '')) || undefined : undefined,
+                description: soporte.description || '',
+              }
+            } catch (err) {
+              console.error(`Error transformando soporte ${soporte?.id}:`, err)
+              return null
+            }
+          })
+          .filter((item: any) => item !== null) // Filtrar items que fallaron en la transformación
 
-        console.log('✅ Datos transformados:', transformedData.length, 'soportes')
-        setBillboards(transformedData)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Datos transformados:', transformedData.length, 'soportes')
+        }
+        
+        // Solo actualizar si tenemos datos válidos
+        if (transformedData.length > 0) {
+          setBillboards(transformedData)
+          retryCount.current = 0 // Resetear contador de reintentos en éxito
+        } else {
+          throw new Error('No se obtuvieron soportes válidos')
+        }
       } catch (err: any) {
         // Ignorar errores de abort
         if (err.name === 'AbortError' || err.message?.includes('aborted')) {
@@ -161,34 +204,45 @@ export function useBillboards() {
           console.error('Error fetching billboards:', err)
         }
         
-        // Fallback a datos mock en caso de error
-        const mockData: Billboard[] = [
-          {
-            id: 'mock-1',
-            code: 'LP-001',
-            name: 'Valla publicitaria centro comercial',
-            images: ['/placeholder.svg?height=400&width=600'],
-            monthlyPrice: 2500,
-            location: 'La Paz',
-            city: 'La Paz',
-            format: 'Vallas Publicitarias',
-            type: 'Estándar',
-            dimensions: '6x3 metros',
-            width: 6,
-            height: 3,
-            visibility: 'Alto tráfico',
-            traffic: '15000 personas/día',
-            lighting: '24/7',
-            material: 'Vinilo exterior',
-            available: true,
-            availableMonths: ['2024-02', '2024-03', '2024-04', '2024-05', '2024-06', '2024-07'],
-            features: ['Ubicación estratégica', 'Alta visibilidad', 'Material resistente', 'Instalación profesional'],
-            impactos_diarios: 15000
-          }
-        ]
-        setBillboards(mockData)
-        // No establecer error si tenemos datos mock - solo silenciar el error
-        // setError(null) // Ya está en null al inicio del try
+        // Si aún tenemos reintentos y no es un error de abort, reintentar
+        if (retryCount.current < maxRetries && err.name !== 'AbortError') {
+          retryCount.current++
+          console.warn(`⚠️ Error al obtener soportes, reintentando... (${retryCount.current}/${maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount.current))
+          return fetchBillboards()
+        }
+        
+        // Si ya agotamos los reintentos, establecer error
+        setError(err.message || 'Error al cargar los soportes')
+        
+        // Fallback a datos mock solo si no hay datos previos
+        if (billboards.length === 0) {
+          const mockData: Billboard[] = [
+            {
+              id: 'mock-1',
+              code: 'LP-001',
+              name: 'Valla publicitaria centro comercial',
+              images: ['/placeholder.svg?height=400&width=600'],
+              monthlyPrice: 2500,
+              location: 'La Paz',
+              city: 'La Paz',
+              format: 'Vallas Publicitarias',
+              type: 'Estándar',
+              dimensions: '6x3 metros',
+              width: 6,
+              height: 3,
+              visibility: 'Alto tráfico',
+              traffic: '15000 personas/día',
+              lighting: '24/7',
+              material: 'Vinilo exterior',
+              available: true,
+              availableMonths: ['2024-02', '2024-03', '2024-04', '2024-05', '2024-06', '2024-07'],
+              features: ['Ubicación estratégica', 'Alta visibilidad', 'Material resistente', 'Instalación profesional'],
+              impactos_diarios: 15000
+            }
+          ]
+          setBillboards(mockData)
+        }
       } finally {
         setLoading(false)
       }

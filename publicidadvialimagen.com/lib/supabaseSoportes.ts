@@ -91,40 +91,89 @@ export function supabaseRowToAirtableFormat(row: SoporteRow): any {
 // Esta función usa getSupabaseAdmin() para bypass RLS ya que es una ruta pública
 export async function getAllSoportes() {
   try {
+    console.log('🔍 [getAllSoportes] Iniciando...')
+    
     // Verificar que Supabase esté configurado
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Supabase no está configurado. Verifica las variables de entorno NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY')
+      const missingVars = []
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missingVars.push('NEXT_PUBLIC_SUPABASE_URL')
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missingVars.push('SUPABASE_SERVICE_ROLE_KEY')
+      throw new Error(`Supabase no está configurado. Variables faltantes: ${missingVars.join(', ')}`)
     }
 
+    console.log('✅ [getAllSoportes] Variables de entorno OK')
+    
     // Usar getSupabaseAdmin() para bypass RLS (ruta pública)
-    const supabase = getSupabaseAdmin()
+    let supabase
+    try {
+      supabase = getSupabaseAdmin()
+      console.log('✅ [getAllSoportes] Cliente Supabase Admin creado')
+    } catch (adminError) {
+      console.error('❌ [getAllSoportes] Error creando cliente Supabase Admin:', adminError)
+      throw new Error(`Error creando cliente Supabase: ${adminError instanceof Error ? adminError.message : String(adminError)}`)
+    }
+
+    console.log('🔍 [getAllSoportes] Ejecutando query...')
     const { data, error } = await supabase
       .from('soportes')
       .select('*')
 
     if (error) {
-      console.error('Error obteniendo soportes de Supabase:', error)
+      console.error('❌ [getAllSoportes] Error obteniendo soportes de Supabase:', error)
       console.error('Error code:', error.code)
       console.error('Error message:', error.message)
       console.error('Error details:', JSON.stringify(error, null, 2))
       throw error
     }
 
+    console.log(`✅ [getAllSoportes] Query completado. Data recibida: ${data ? data.length : 0} registros`)
+
     if (!data) {
-      console.warn('getAllSoportes: data es null o undefined')
+      console.warn('⚠️ [getAllSoportes] data es null o undefined')
       return {
         records: []
       }
     }
-
+    
+    // Validar que data sea un array
+    if (!Array.isArray(data)) {
+      console.warn(`⚠️ [getAllSoportes] data no es un array (tipo: ${typeof data}), retornando array vacío`)
+      return {
+        records: []
+      }
+    }
+    
+    console.log(`🔄 [getAllSoportes] Procesando ${data.length} registros...`)
+    
+    // Filtrar y mapear registros de forma segura
+    const records = data
+      .filter(row => {
+        if (!row || !row.id) {
+          console.warn('⚠️ [getAllSoportes] Registro inválido filtrado:', row)
+          return false
+        }
+        return true
+      })
+      .map(row => {
+        try {
+          return {
+            id: row.id,
+            fields: supabaseRowToAirtableFormat(row as SoporteRow)
+          }
+        } catch (err) {
+          console.error(`❌ [getAllSoportes] Error procesando registro ${row?.id}:`, err)
+          return null
+        }
+      })
+      .filter(record => record !== null) // Filtrar registros que fallaron
+    
+    console.log(`✅ [getAllSoportes] ${records.length} registros procesados correctamente`)
+    
     return {
-      records: data.map(row => ({
-        id: row.id,
-        fields: supabaseRowToAirtableFormat(row as SoporteRow)
-      }))
+      records
     }
   } catch (error) {
-    console.error('Error en getAllSoportes:', error)
+    console.error('❌ [getAllSoportes] Error general:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
     console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error)
     throw error

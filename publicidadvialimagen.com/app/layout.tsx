@@ -15,9 +15,12 @@ export const metadata: Metadata = {
   title: "Publicidad Vial Imagen | Vallas Publicitarias",
   description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca - Multilingual support ES/EN",
   generator: 'v0.app',
+  icons: {
+    icon: '/favicon.ico',
+  },
   openGraph: {
     title: "Publicidad Vial Imagen | Vallas Publicitarias",
-    description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca",
+    description: "Espacios publicitarias premium y servicios de impresión profesional para potenciar tu marca",
     url: 'https://publicidadvialimagen.com',
     siteName: 'Publicidad Vial Imagen',
     images: [

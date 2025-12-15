@@ -14,3 +14,4 @@ COMMENT ON TABLE permisos IS 'Tabla de permisos del sistema. Los permisos técni
 
 
 
+

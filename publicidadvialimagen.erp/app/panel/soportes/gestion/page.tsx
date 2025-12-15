@@ -1357,10 +1357,10 @@ export default function SoportesPage() {
                     <TableHead>Ubicación</TableHead>
                     <TableHead className="text-center">Dimensiones (m)</TableHead>
                     <TableHead>Precio/Mes</TableHead>
+                    <TableHead>Estado</TableHead>
                     {!permisosLoading && puedeReservar && (
                       <TableHead className="text-center">Reservado</TableHead>
                     )}
-                    <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1459,18 +1459,6 @@ export default function SoportesPage() {
                           </div>
                         )}
                       </TableCell>
-                      {!permisosLoading && puedeReservar && (
-                        <TableCell>
-                          <div className="flex items-center justify-center">
-                            <Switch
-                              checked={support.status === 'Reservado'}
-                              onCheckedChange={(checked) => handleToggleReservado(support.id, checked, support.status)}
-                              disabled={!puedeReservar}
-                              className="data-[state=checked]:bg-yellow-500 data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-yellow-600 data-[state=unchecked]:hover:bg-gray-400 transition-colors"
-                            />
-                          </div>
-                        </TableCell>
-                      )}
                       <TableCell>
                         {selected[support.id] && puedeEditar("soportes") ? (
                           <Select 
@@ -1492,6 +1480,18 @@ export default function SoportesPage() {
                           </span>
                         )}
                       </TableCell>
+                      {!permisosLoading && puedeReservar && (
+                        <TableCell>
+                          <div className="flex items-center justify-center">
+                            <Switch
+                              checked={support.status === 'Reservado'}
+                              onCheckedChange={(checked) => handleToggleReservado(support.id, checked, support.status)}
+                              disabled={!puedeReservar}
+                              className="data-[state=checked]:bg-yellow-500 data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-yellow-600 data-[state=unchecked]:hover:bg-gray-400 transition-colors"
+                            />
+                          </div>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="flex gap-1">
                           <Button

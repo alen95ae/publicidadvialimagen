@@ -156,30 +156,46 @@ export async function POST(
           if (fechaMatch) {
             fechaInicio = fechaMatch[1]
             fechaFin = fechaMatch[2]
-            meses = Math.ceil(linea.cantidad || 1)
+            meses = linea.cantidad || 1 // Preservar decimales (0.5 para 15 días)
             if (!linea.cantidad || linea.cantidad === 0) {
               const inicio = new Date(fechaInicio + 'T00:00:00')
               const fin = new Date(fechaFin + 'T00:00:00')
-              const yearDiff = fin.getFullYear() - inicio.getFullYear()
-              const monthDiff = fin.getMonth() - inicio.getMonth()
-              meses = Math.max(1, yearDiff * 12 + monthDiff)
+              const diffMs = fin.getTime() - inicio.getTime()
+              const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+              
+              // Si son exactamente 15 días, es 0.5 meses
+              if (diffDias === 15) {
+                meses = 0.5
+              } else {
+                const yearDiff = fin.getFullYear() - inicio.getFullYear()
+                const monthDiff = fin.getMonth() - inicio.getMonth()
+                meses = Math.max(1, yearDiff * 12 + monthDiff)
+              }
             }
           } else {
-            meses = Math.ceil(linea.cantidad || 1)
+            meses = linea.cantidad || 1 // Preservar decimales
             const inicio = new Date()
             inicio.setHours(0, 0, 0, 0)
             fechaInicio = inicio.toISOString().split('T')[0]
             const fin = new Date(inicio)
-            fin.setMonth(fin.getMonth() + meses)
+            if (meses === 0.5) {
+              fin.setDate(fin.getDate() + 15)
+            } else {
+              fin.setMonth(fin.getMonth() + meses)
+            }
             fechaFin = fin.toISOString().split('T')[0]
           }
         } else {
-          meses = Math.ceil(linea.cantidad || 1)
+          meses = linea.cantidad || 1 // Preservar decimales
           const inicio = new Date()
           inicio.setHours(0, 0, 0, 0)
           fechaInicio = inicio.toISOString().split('T')[0]
           const fin = new Date(inicio)
-          fin.setMonth(fin.getMonth() + meses)
+          if (meses === 0.5) {
+            fin.setDate(fin.getDate() + 15)
+          } else {
+            fin.setMonth(fin.getMonth() + meses)
+          }
           fechaFin = fin.toISOString().split('T')[0]
         }
         

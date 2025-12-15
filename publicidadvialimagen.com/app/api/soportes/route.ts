@@ -114,6 +114,8 @@ function extractCoordinatesFromGoogleMapsLink(link?: string): { latitude: number
 
 export async function GET(req: Request) {
   try {
+    console.log('📥 [GET /api/soportes] Iniciando petición...')
+    
     const { searchParams } = new URL(req.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '25')
@@ -128,12 +130,19 @@ export async function GET(req: Request) {
     // Esta es una ruta pública, no requiere autenticación
     let result
     try {
+      console.log('🔍 [GET /api/soportes] Llamando a getAllSoportes()...')
       result = await getAllSoportes()
+      console.log('✅ [GET /api/soportes] getAllSoportes() completado. Resultado:', {
+        hasResult: !!result,
+        hasRecords: !!(result?.records),
+        recordsLength: result?.records?.length || 0
+      })
     } catch (error: any) {
-      console.error('Error en getAllSoportes:', error)
+      console.error('❌ [GET /api/soportes] Error en getAllSoportes:', error)
       console.error('Error message:', error?.message)
       console.error('Error code:', error?.code)
       console.error('Error hint:', error?.hint)
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
       
       // Si es un error de RLS o permisos, devolver un error más descriptivo
       if (error?.code === '42501' || error?.message?.includes('permission denied') || error?.message?.includes('RLS')) {
@@ -147,58 +156,123 @@ export async function GET(req: Request) {
       throw error
     }
 
-    const soportes = result.records.map(r => {
-      // Extraer coordenadas del enlace de Google Maps
-      const googleMapsLink = r.fields['Enlace Google Maps']
-      const coords = extractCoordinatesFromGoogleMapsLink(googleMapsLink)
-      
-      // Log para debug de tipos de soporte
-      console.log(`🔍 Soporte ${r.fields['Código']}: tipo_soporte = "${r.fields['Tipo de soporte']}"`)
-      
-      // Log para debug de coordenadas
-      const hasStoredCoords = r.fields['Latitud'] && r.fields['Longitud']
-      const hasExtractedCoords = coords.latitude && coords.longitude
-      if (googleMapsLink && !hasStoredCoords && !hasExtractedCoords) {
-        console.warn(`⚠️ Soporte ${r.fields['Código']}: Tiene enlace Google Maps pero no se pudieron extraer coordenadas:`, googleMapsLink.substring(0, 100))
-      } else if (googleMapsLink && !hasStoredCoords && hasExtractedCoords) {
-        console.log(`✅ Soporte ${r.fields['Código']}: Coordenadas extraídas del enlace: ${coords.latitude}, ${coords.longitude}`)
-      }
-      
-      const soporte = {
-        id: r.id,
-        codigo: r.fields['Código'],
-        titulo: r.fields['Título'],
-        tipo_soporte: r.fields['Tipo de soporte'],
-        estado: r.fields['Estado'],
-        ancho: r.fields['Ancho'],
-        alto: r.fields['Alto'],
-        ciudad: r.fields['Ciudad'],
-        precio_mes: r.fields['Precio por mes'],
-        impactos_diarios: r.fields['Impactos diarios'],
-        ubicacion_url: googleMapsLink,
-        latitud: r.fields['Latitud'] ?? coords.latitude,
-        longitud: r.fields['Longitud'] ?? coords.longitude,
-        // Preparado para imágenes: extraer URL del array JSONB
-        foto_url: r.fields['Imagen principal']?.[0]?.url || null,
-        foto_url_2: r.fields['Imagen secundaria 1']?.[0]?.url || null,
-        foto_url_3: r.fields['Imagen secundaria 2']?.[0]?.url || null,
-        notas: r.fields['Dirección / Notas'],
-        propietario: r.fields['Propietario'],
-        descripcion: r.fields['Descripción'],
-        iluminacion: r.fields['Iluminación']
-      }
-      
-      // Log de imágenes para depuración
-      if (soporte.foto_url || soporte.foto_url_2 || soporte.foto_url_3) {
-        console.log(`📸 Imágenes en soporte ${soporte.codigo}:`, {
-          principal: soporte.foto_url ? '✅' : '❌',
-          secundaria1: soporte.foto_url_2 ? '✅' : '❌',
-          secundaria2: soporte.foto_url_3 ? '✅' : '❌'
-        })
-      }
-      
-      return soporte
-    })
+    // Validar que result tenga la estructura esperada
+    if (!result || typeof result !== 'object') {
+      console.error('❌ [GET /api/soportes] getAllSoportes retornó un resultado inválido:', result)
+      return NextResponse.json({ 
+        error: 'Error al obtener los soportes: formato de respuesta inválido',
+        details: process.env.NODE_ENV === 'development' ? 'result no es un objeto' : undefined
+      }, { status: 500 })
+    }
+
+    if (!result.records || !Array.isArray(result.records)) {
+      console.error('❌ [GET /api/soportes] getAllSoportes retornó records inválido:', result.records)
+      return NextResponse.json({ 
+        error: 'Error al obtener los soportes: formato de datos inválido',
+        details: process.env.NODE_ENV === 'development' ? 'result.records no es un array' : undefined
+      }, { status: 500 })
+    }
+
+    console.log(`📊 [GET /api/soportes] Procesando ${result.records.length} registros...`)
+    const soportes = result.records
+      .filter(r => r && r.fields && r.id) // Filtrar registros inválidos
+      .map(r => {
+        try {
+          // Extraer coordenadas del enlace de Google Maps
+          const googleMapsLink = r.fields?.['Enlace Google Maps'] || null
+          const coords = extractCoordinatesFromGoogleMapsLink(googleMapsLink)
+          
+          // Log para debug de tipos de soporte (solo en desarrollo)
+          if (process.env.NODE_ENV === 'development' && r.fields?.['Código']) {
+            console.log(`🔍 Soporte ${r.fields['Código']}: tipo_soporte = "${r.fields['Tipo de soporte']}"`)
+          }
+          
+          // Log para debug de coordenadas (solo en desarrollo)
+          if (process.env.NODE_ENV === 'development') {
+            const hasStoredCoords = r.fields?.['Latitud'] && r.fields?.['Longitud']
+            const hasExtractedCoords = coords.latitude && coords.longitude
+            if (googleMapsLink && !hasStoredCoords && !hasExtractedCoords) {
+              console.warn(`⚠️ Soporte ${r.fields?.['Código']}: Tiene enlace Google Maps pero no se pudieron extraer coordenadas:`, googleMapsLink.substring(0, 100))
+            } else if (googleMapsLink && !hasStoredCoords && hasExtractedCoords) {
+              console.log(`✅ Soporte ${r.fields?.['Código']}: Coordenadas extraídas del enlace: ${coords.latitude}, ${coords.longitude}`)
+            }
+          }
+          
+          // Extraer imágenes de forma segura
+          const extractImageUrl = (imageField: any): string | null => {
+            if (!imageField) return null
+            if (Array.isArray(imageField) && imageField.length > 0) {
+              if (imageField[0]?.url) return imageField[0].url
+              if (typeof imageField[0] === 'string') return imageField[0]
+            }
+            if (typeof imageField === 'string') return imageField
+            return null
+          }
+          
+          const soporte = {
+            id: r.id,
+            codigo: r.fields?.['Código'] || '',
+            titulo: r.fields?.['Título'] || '',
+            tipo_soporte: r.fields?.['Tipo de soporte'] || '',
+            estado: r.fields?.['Estado'] || 'Disponible',
+            ancho: r.fields?.['Ancho'] || null,
+            alto: r.fields?.['Alto'] || null,
+            ciudad: r.fields?.['Ciudad'] || null,
+            precio_mes: r.fields?.['Precio por mes'] || null,
+            impactos_diarios: r.fields?.['Impactos diarios'] || null,
+            ubicacion_url: googleMapsLink,
+            latitud: r.fields?.['Latitud'] ?? coords.latitude ?? null,
+            longitud: r.fields?.['Longitud'] ?? coords.longitude ?? null,
+            // Preparado para imágenes: extraer URL del array JSONB de forma segura
+            foto_url: extractImageUrl(r.fields?.['Imagen principal']),
+            foto_url_2: extractImageUrl(r.fields?.['Imagen secundaria 1']),
+            foto_url_3: extractImageUrl(r.fields?.['Imagen secundaria 2']),
+            notas: r.fields?.['Dirección / Notas'] || null,
+            propietario: r.fields?.['Propietario'] || null,
+            descripcion: r.fields?.['Descripción'] || null,
+            iluminacion: r.fields?.['Iluminación'] ?? false
+          }
+          
+          // Log de imágenes para depuración (solo en desarrollo)
+          if (process.env.NODE_ENV === 'development' && (soporte.foto_url || soporte.foto_url_2 || soporte.foto_url_3)) {
+            console.log(`📸 Imágenes en soporte ${soporte.codigo}:`, {
+              principal: soporte.foto_url ? '✅' : '❌',
+              secundaria1: soporte.foto_url_2 ? '✅' : '❌',
+              secundaria2: soporte.foto_url_3 ? '✅' : '❌'
+            })
+          }
+          
+          return soporte
+        } catch (err) {
+          console.error(`Error procesando soporte ${r.id}:`, err)
+          // Retornar un objeto mínimo válido para no romper el flujo
+          return {
+            id: r.id,
+            codigo: r.fields?.['Código'] || '',
+            titulo: r.fields?.['Título'] || '',
+            tipo_soporte: r.fields?.['Tipo de soporte'] || '',
+            estado: 'Disponible',
+            ancho: null,
+            alto: null,
+            ciudad: null,
+            precio_mes: null,
+            impactos_diarios: null,
+            ubicacion_url: null,
+            latitud: null,
+            longitud: null,
+            foto_url: null,
+            foto_url_2: null,
+            foto_url_3: null,
+            notas: null,
+            propietario: null,
+            descripcion: null,
+            iluminacion: false
+          }
+        }
+      })
+      .filter(s => s && s.id) // Filtrar soportes inválidos después del mapeo
+
+    console.log(`✅ [GET /api/soportes] ${soportes.length} soportes procesados correctamente`)
 
     // Aplicar filtros
     let filteredSoportes = soportes
@@ -222,80 +296,126 @@ export async function GET(req: Request) {
     }
 
     // Transformar datos para el frontend
-    const transformedSoportes = filteredSoportes?.map(soporte => {
-      // Recopilar todas las imágenes disponibles
-      const images = [
-        soporte.foto_url,
-        soporte.foto_url_2,
-        soporte.foto_url_3
-      ].filter(Boolean)
-      
-      console.log(`🖼️ Soporte ${soporte.codigo} - ${images.length} imágenes:`, images.length > 0 ? images : 'Sin imágenes')
-      
-      // Normalizar nombre de ciudad antes de enviarlo al frontend
-      const normalizedCity = normalizeCityName(soporte.ciudad)
-      
-      // Usar coordenadas reales si están disponibles, si no usar las de la ciudad
-      let coordinates: { lat: number, lng: number } | undefined = undefined
-      if (soporte.latitud && soporte.longitud && 
-          !isNaN(soporte.latitud) && !isNaN(soporte.longitud) &&
-          Math.abs(soporte.latitud) <= 90 && Math.abs(soporte.longitud) <= 180) {
-        coordinates = { lat: soporte.latitud, lng: soporte.longitud }
-      } else {
-        // Log si no tiene coordenadas válidas
-        if (soporte.ubicacion_url && !soporte.latitud && !soporte.longitud) {
-          console.warn(`⚠️ Soporte ${soporte.codigo} (${soporte.titulo}): Tiene enlace Google Maps pero no coordenadas válidas. Usando coordenadas de ciudad: ${normalizedCity}`)
+    const transformedSoportes = (filteredSoportes || [])
+      .filter(s => s && s.id) // Filtrar soportes inválidos antes de transformar
+      .map(soporte => {
+        try {
+          // Recopilar todas las imágenes disponibles
+          const images = [
+            soporte.foto_url,
+            soporte.foto_url_2,
+            soporte.foto_url_3
+          ].filter(Boolean)
+          
+          // Log de imágenes solo en desarrollo
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`🖼️ Soporte ${soporte.codigo} - ${images.length} imágenes:`, images.length > 0 ? images : 'Sin imágenes')
+          }
+          
+          // Normalizar nombre de ciudad antes de enviarlo al frontend
+          const normalizedCity = normalizeCityName(soporte.ciudad)
+          
+          // Usar coordenadas reales si están disponibles, si no usar las de la ciudad
+          let coordinates: { lat: number, lng: number } | undefined = undefined
+          try {
+            if (soporte.latitud && soporte.longitud && 
+                !isNaN(Number(soporte.latitud)) && !isNaN(Number(soporte.longitud)) &&
+                Math.abs(Number(soporte.latitud)) <= 90 && Math.abs(Number(soporte.longitud)) <= 180) {
+              coordinates = { lat: Number(soporte.latitud), lng: Number(soporte.longitud) }
+            } else {
+              // Log si no tiene coordenadas válidas (solo en desarrollo)
+              if (process.env.NODE_ENV === 'development' && soporte.ubicacion_url && !soporte.latitud && !soporte.longitud) {
+                console.warn(`⚠️ Soporte ${soporte.codigo} (${soporte.titulo}): Tiene enlace Google Maps pero no coordenadas válidas. Usando coordenadas de ciudad: ${normalizedCity}`)
+              }
+              const cityCoords = getCoordinatesFromCity(normalizedCity)
+              if (cityCoords && Array.isArray(cityCoords) && cityCoords.length >= 2) {
+                coordinates = { lat: cityCoords[0], lng: cityCoords[1] }
+              }
+            }
+          } catch (coordError) {
+            console.error(`Error procesando coordenadas para soporte ${soporte.codigo}:`, coordError)
+            // Continuar sin coordenadas
+          }
+          
+          const finalFormat = soporte.tipo_soporte ? getFormatFromType(soporte.tipo_soporte) : 'Vallas Publicitarias'
+          
+          // Log para debug del format final (solo en desarrollo)
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📋 Soporte ${soporte.codigo}: tipo_soporte="${soporte.tipo_soporte}" → format="${finalFormat}"`)
+          }
+          
+          return {
+            id: soporte.id || '',
+            code: soporte.codigo || soporte.id || '', // Código del soporte (ej: "34-LPZ")
+            name: soporte.titulo || soporte.codigo || 'Soporte sin nombre',
+            image: images[0] || "/placeholder.svg?height=300&width=400",
+            images: images.length > 0 ? images : ["/placeholder.svg?height=300&width=400"],
+            monthlyPrice: soporte.precio_mes || 0,
+            location: soporte.notas || `${normalizedCity}, Bolivia`,
+            city: normalizedCity,
+            format: finalFormat,
+            type: getTypeFromType(soporte.tipo_soporte),
+            dimensions: `${soporte.ancho || 0}m x ${soporte.alto || 0}m`,
+            visibility: getVisibilityFromType(soporte.tipo_soporte),
+            traffic: soporte.impactos_diarios ? `${Number(soporte.impactos_diarios).toLocaleString()} personas/día` : 'Variable',
+            lighting: (() => {
+              try {
+                // El campo Iluminación es un checkbox en Airtable
+                // Marcado (true) = "Sí", Sin marcar (false/null/undefined) = "No"
+                if (typeof soporte.iluminacion === 'boolean') {
+                  return soporte.iluminacion ? 'Sí' : 'No'
+                }
+                // Si el campo no está definido (checkbox sin marcar en Airtable)
+                if (soporte.iluminacion === null || soporte.iluminacion === undefined) {
+                  return 'No'
+                }
+                // Fallback para valores de texto antiguos (por compatibilidad)
+                const ilumStr = String(soporte.iluminacion).toLowerCase().trim()
+                if (ilumStr === 'iluminada' || ilumStr === 'sí' || ilumStr === 'si' || ilumStr === 'true' || ilumStr === '1') {
+                  return 'Sí'
+                }
+                return 'No'
+              } catch {
+                return 'No'
+              }
+            })(),
+            description: soporte.descripcion || '',
+            status: soporte.estado || 'Disponible',
+            available: soporte.estado === 'Disponible',
+            availableMonths: generateAvailableMonths(),
+            features: getFeaturesFromType(soporte.tipo_soporte),
+            coordinates,
+          }
+        } catch (transformError) {
+          console.error(`Error transformando soporte ${soporte?.id}:`, transformError)
+          // Retornar un objeto mínimo válido
+          return {
+            id: soporte?.id || '',
+            code: soporte?.codigo || soporte?.id || '',
+            name: soporte?.titulo || 'Soporte sin nombre',
+            image: "/placeholder.svg?height=300&width=400",
+            images: ["/placeholder.svg?height=300&width=400"],
+            monthlyPrice: 0,
+            location: 'Ubicación no especificada',
+            city: normalizeCityName(soporte?.ciudad),
+            format: 'Vallas Publicitarias',
+            type: 'Estándar',
+            dimensions: '0m x 0m',
+            visibility: 'Alto tráfico',
+            traffic: 'Variable',
+            lighting: 'No',
+            description: '',
+            status: 'Disponible',
+            available: true,
+            availableMonths: generateAvailableMonths(),
+            features: [],
+            coordinates: undefined,
+          }
         }
-        const cityCoords = getCoordinatesFromCity(normalizedCity)
-        if (cityCoords) {
-          coordinates = { lat: cityCoords[0], lng: cityCoords[1] }
-        }
-      }
-      
-      const finalFormat = soporte.tipo_soporte || getFormatFromType(soporte.tipo_soporte)
-      
-      // Log para debug del format final
-      console.log(`📋 Soporte ${soporte.codigo}: tipo_soporte="${soporte.tipo_soporte}" → format="${finalFormat}"`)
-      
-      return {
-        id: soporte.id,
-        code: soporte.codigo || soporte.id, // Código del soporte (ej: "34-LPZ")
-        name: soporte.titulo || soporte.codigo,
-        image: images[0] || "/placeholder.svg?height=300&width=400",
-        images: images.length > 0 ? images : ["/placeholder.svg?height=300&width=400"],
-        monthlyPrice: soporte.precio_mes || 0,
-        location: soporte.notas || `${normalizedCity}, Bolivia`,
-        city: normalizedCity,
-        format: finalFormat,
-        type: getTypeFromType(soporte.tipo_soporte),
-        dimensions: `${soporte.ancho || 0}m x ${soporte.alto || 0}m`,
-        visibility: getVisibilityFromType(soporte.tipo_soporte),
-        traffic: soporte.impactos_diarios ? `${soporte.impactos_diarios.toLocaleString()} personas/día` : 'Variable',
-        lighting: (() => {
-          // El campo Iluminación es un checkbox en Airtable
-          // Marcado (true) = "Sí", Sin marcar (false/null/undefined) = "No"
-          if (typeof soporte.iluminacion === 'boolean') {
-            return soporte.iluminacion ? 'Sí' : 'No'
-          }
-          // Si el campo no está definido (checkbox sin marcar en Airtable)
-          if (soporte.iluminacion === null || soporte.iluminacion === undefined) {
-            return 'No'
-          }
-          // Fallback para valores de texto antiguos (por compatibilidad)
-          const ilumStr = String(soporte.iluminacion).toLowerCase().trim()
-          if (ilumStr === 'iluminada' || ilumStr === 'sí' || ilumStr === 'si' || ilumStr === 'true' || ilumStr === '1') {
-            return 'Sí'
-          }
-          return 'No'
-        })(),
-        description: soporte.descripcion || '',
-        status: soporte.estado || 'Disponible',
-        available: soporte.estado === 'Disponible',
-        availableMonths: generateAvailableMonths(),
-        features: getFeaturesFromType(soporte.tipo_soporte),
-        coordinates,
-      }
-    }) || []
+      })
+      .filter(item => item && item.id) // Filtrar items que fallaron completamente
+
+    console.log(`✅ [GET /api/soportes] ${transformedSoportes.length} soportes transformados. Retornando respuesta...`)
 
     return NextResponse.json({
       data: transformedSoportes,
@@ -309,10 +429,15 @@ export async function GET(req: Request) {
     })
 
   } catch (error: any) {
-    console.error('Error in soportes API:', error)
+    console.error('❌ Error in soportes API:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
     console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error)
-    console.error('Error details:', JSON.stringify(error, null, 2))
+    
+    try {
+      console.error('Error details:', JSON.stringify(error, null, 2))
+    } catch (stringifyError) {
+      console.error('Error al serializar error:', stringifyError)
+    }
     
     // Determinar el código de estado apropiado
     let statusCode = 500
@@ -328,15 +453,28 @@ export async function GET(req: Request) {
       errorMessage = error.message
     }
     
-    return NextResponse.json({ 
-      error: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? {
-        message: error instanceof Error ? error.message : String(error),
-        code: error?.code,
-        hint: error?.hint,
-        stack: error instanceof Error ? error.stack : undefined
-      } : undefined
-    }, { status: statusCode })
+    // Intentar devolver respuesta JSON válida
+    try {
+      return NextResponse.json({ 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? {
+          message: error instanceof Error ? error.message : String(error),
+          code: error?.code,
+          hint: error?.hint,
+          stack: error instanceof Error ? error.stack : undefined
+        } : undefined
+      }, { status: statusCode })
+    } catch (jsonError) {
+      // Si falla la creación de JSON, devolver respuesta simple
+      console.error('Error creando respuesta JSON:', jsonError)
+      return new NextResponse(
+        JSON.stringify({ error: 'Error interno del servidor' }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
   }
 }
 

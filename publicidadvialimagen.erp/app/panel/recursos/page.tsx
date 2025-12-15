@@ -1023,7 +1023,6 @@ export default function RecursosPage() {
                     <TableHead>Categoría</TableHead>
                     <TableHead>Unidad</TableHead>
                     <TableHead>Coste</TableHead>
-                    <TableHead>Stock</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1165,26 +1164,6 @@ export default function RecursosPage() {
                           </div>
                         ) : (
                           `Bs ${item.coste.toFixed(2)}`
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {selected[item.id] ? (
-                          <Input
-                            type="number"
-                            min="0"
-                            value={editedItems[item.id]?.cantidad ?? item.cantidad}
-                            onChange={(e) => handleFieldChange(item.id, 'cantidad', parseInt(e.target.value) || 0)}
-                            className="h-8 w-24"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                handleSaveChanges(item.id)
-                              } else if (e.key === 'Escape') {
-                                handleCancelEdit(item.id)
-                              }
-                            }}
-                          />
-                        ) : (
-                          getStockBadge(item.cantidad)
                         )}
                       </TableCell>
                       <TableCell className="text-center">

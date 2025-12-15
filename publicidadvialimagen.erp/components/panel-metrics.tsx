@@ -49,7 +49,7 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
         finSemana.setHours(23, 59, 59, 999)
 
         if (roleNormalized === 'ventas') {
-          // VENTAS: Ingresos por alquiler, Alquileres activos
+          // VENTAS: Ingresos por alquiler, Alquileres activos, Ventas del mes
           const alquileresRes = await fetch(`/api/alquileres?estado=activo&vendedor=${encodeURIComponent(userName)}&pageSize=1000`, {
             cache: 'no-store',
             credentials: 'include'
@@ -77,10 +77,36 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
             return sum + precioMensual
           }, 0)
 
+          // Obtener ventas aprobadas del mes del usuario
+          const ventasRes = await fetch(
+            `/api/cotizaciones?estado=Aprobada&page=1&pageSize=1000`,
+            {
+              cache: 'no-store',
+              credentials: 'include'
+            }
+          )
+          const ventasData = ventasRes.ok ? await ventasRes.json() : { data: [] }
+          
+          // Filtrar por mes, vendedor y sumar totales
+          const ventasDelMes = Array.isArray(ventasData.data) 
+            ? ventasData.data.filter((cot: any) => {
+                if (!cot.fecha_creacion) return false
+                const fechaCreacion = new Date(cot.fecha_creacion)
+                const fechaValida = fechaCreacion >= inicioMes && fechaCreacion <= finMes
+                const vendedorValido = !userName || !cot.vendedor || cot.vendedor.toLowerCase().includes(userName.toLowerCase())
+                return fechaValida && vendedorValido
+              })
+            : []
+          
+          const totalVentas = ventasDelMes.reduce((sum: number, cot: any) => {
+            return sum + (parseFloat(cot.total_final) || 0)
+          }, 0)
+
           setMetrics(prev => ({
             ...prev,
             ingresosAlquileres,
-            alquileresActivos: alquileresActivos.length
+            alquileresActivos: alquileresActivos.length,
+            ventasAprobadas: totalVentas
           }))
         } else if (roleNormalized === 'produccion') {
           // PRODUCCIÓN: Trabajos pendientes, Instalaciones pendientes, Finalizan esta semana
@@ -190,7 +216,7 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
 
   const renderMetrics = () => {
     if (roleNormalized === 'ventas') {
-      // VENTAS: Alquileres activos (izquierda), Ingresos por alquiler (centro)
+      // VENTAS: Alquileres activos (izquierda), Ingresos por alquiler (centro), Ventas (derecha)
       return (
         <>
           <Card className="hover:shadow-lg transition-shadow">
@@ -219,6 +245,21 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
               </div>
               <p className="text-xs text-muted-foreground">
                 {loading ? "Cargando..." : "Ingresos mensuales"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ventas</CardTitle>
+              <Handshake className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {loading ? "..." : formatCurrency(metrics.ventasAprobadas)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {loading ? "Cargando..." : "Ventas aprobadas este mes"}
               </p>
             </CardContent>
           </Card>

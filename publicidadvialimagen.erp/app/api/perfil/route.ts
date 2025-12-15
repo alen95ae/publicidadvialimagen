@@ -67,9 +67,10 @@ export async function PUT(request: NextRequest) {
       updateData.email = email;
     }
 
-    if (nombre !== undefined) {
-      updateData.nombre = nombre;
-    }
+    // El nombre no es editable desde el perfil, se ignora si se envía
+    // if (nombre !== undefined) {
+    //   updateData.nombre = nombre;
+    // }
 
     if (telefono !== undefined) {
       updateData.numero = telefono;

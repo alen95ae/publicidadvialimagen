@@ -82,17 +82,41 @@ export default async function PanelPage() {
             <CardContent>
               <div className="space-y-3">
                 {roleName.toLowerCase().trim() === 'ventas' ? (
-                  // VENTAS: Nueva cotización
-                  <Link
-                    href="/panel/ventas/nuevo"
-                    className="flex items-center justify-between p-4 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Handshake className="w-5 h-5" />
-                      <span className="font-medium">Nueva Cotización</span>
-                    </div>
-                    <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </Link>
+                  // VENTAS: Nueva cotización, Descargar catálogo, Agregar cliente
+                  <>
+                    <Link
+                      href="/panel/ventas/nuevo"
+                      className="flex items-center justify-between p-4 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Handshake className="w-5 h-5" />
+                        <span className="font-medium">Nueva Cotización</span>
+                      </div>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+
+                    <Link
+                      href="/panel/soportes/gestion"
+                      className="flex items-center justify-between p-4 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Download className="w-5 h-5 text-gray-700" />
+                        <span className="font-medium text-gray-700">Descargar Catálogo</span>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+
+                    <Link
+                      href="/panel/contactos"
+                      className="flex items-center justify-between p-4 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Users className="w-5 h-5 text-gray-700" />
+                        <span className="font-medium text-gray-700">Agregar Cliente</span>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </>
                 ) : roleName.toLowerCase().trim() === 'produccion' ? (
                   // PRODUCCIÓN: Crear OT, Registrar mantenimiento, Registrar stock
                   <>

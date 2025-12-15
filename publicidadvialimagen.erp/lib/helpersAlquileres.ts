@@ -54,48 +54,68 @@ export async function getSoportesParaAlquiler(cotizacionId: string) {
         
         // Usar la cantidad de la línea como meses (es más confiable que calcular desde fechas)
         // La cantidad en líneas de soporte representa los meses seleccionados por el usuario
-        meses = Math.ceil(linea.cantidad || 1)
+        // Puede ser 0.5 (15 días) o un número entero
+        meses = linea.cantidad || 1
         
         // Si la cantidad no está disponible o es 0, calcular desde las fechas como fallback
         if (!linea.cantidad || linea.cantidad === 0) {
           const inicio = new Date(fechaInicio + 'T00:00:00')
           const fin = new Date(fechaFin + 'T00:00:00')
           
-          // Calcular diferencia en meses considerando año y mes
-          const yearDiff = fin.getFullYear() - inicio.getFullYear()
-          const monthDiff = fin.getMonth() - inicio.getMonth()
+          // Calcular diferencia en días
+          const diffMs = fin.getTime() - inicio.getTime()
+          const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
           
-          // Calcular meses base (diferencia de meses)
-          meses = yearDiff * 12 + monthDiff
-          
-          // Si están en el mismo mes (meses === 0), es 1 mes
-          if (meses === 0) {
-            meses = 1
+          // Si son exactamente 15 días, es 0.5 meses
+          if (diffDias === 15) {
+            meses = 0.5
+          } else {
+            // Calcular diferencia en meses considerando año y mes
+            const yearDiff = fin.getFullYear() - inicio.getFullYear()
+            const monthDiff = fin.getMonth() - inicio.getMonth()
+            
+            // Calcular meses base (diferencia de meses)
+            meses = yearDiff * 12 + monthDiff
+            
+            // Si están en el mismo mes (meses === 0), es 1 mes
+            if (meses === 0) {
+              meses = 1
+            }
+            
+            // Asegurar mínimo 1 mes
+            meses = Math.max(1, meses)
           }
-          
-          // Asegurar mínimo 1 mes
-          meses = Math.max(1, meses)
         }
       } else {
         // Si no hay fechas en la descripción, usar cantidad como meses
-        meses = Math.ceil(linea.cantidad || 1)
+        meses = linea.cantidad || 1
         const inicio = new Date()
         inicio.setHours(0, 0, 0, 0)
         fechaInicio = inicio.toISOString().split('T')[0]
         
         const fin = new Date(inicio)
-        fin.setMonth(fin.getMonth() + meses)
+        // Si es 0.5 meses, agregar 15 días; sino, agregar meses completos
+        if (meses === 0.5) {
+          fin.setDate(fin.getDate() + 15)
+        } else {
+          fin.setMonth(fin.getMonth() + meses)
+        }
         fechaFin = fin.toISOString().split('T')[0]
       }
     } else {
       // Si no hay descripción, usar cantidad como meses
-      meses = Math.ceil(linea.cantidad || 1)
+      meses = linea.cantidad || 1
       const inicio = new Date()
       inicio.setHours(0, 0, 0, 0)
       fechaInicio = inicio.toISOString().split('T')[0]
       
       const fin = new Date(inicio)
-      fin.setMonth(fin.getMonth() + meses)
+      // Si es 0.5 meses, agregar 15 días; sino, agregar meses completos
+      if (meses === 0.5) {
+        fin.setDate(fin.getDate() + 15)
+      } else {
+        fin.setMonth(fin.getMonth() + meses)
+      }
       fechaFin = fin.toISOString().split('T')[0]
     }
     

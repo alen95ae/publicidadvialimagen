@@ -1112,7 +1112,13 @@ export default function EditarCotizacionPage() {
     if (!fechaInicio) return ''
 
     const fecha = new Date(fechaInicio)
-    fecha.setMonth(fecha.getMonth() + meses)
+    
+    // Si es 0.5 meses, agregar 15 días
+    if (meses === 0.5) {
+      fecha.setDate(fecha.getDate() + 15)
+    } else {
+      fecha.setMonth(fecha.getMonth() + meses)
+    }
 
     const year = fecha.getFullYear()
     const month = String(fecha.getMonth() + 1).padStart(2, '0')
@@ -2588,6 +2594,7 @@ export default function EditarCotizacionPage() {
                               onChange={(e) => actualizarProducto(producto.id, 'descripcion', e.target.value)}
                               className="w-48 h-16 resize-none text-xs"
                               placeholder="Descripción del producto"
+                              disabled={producto.esSoporte === true}
                             />
                           </td>
 
@@ -2597,13 +2604,14 @@ export default function EditarCotizacionPage() {
                               value={producto.cantidad}
                               onChange={(e) => actualizarProducto(producto.id, 'cantidad', e.target.value === '' ? '' : parseFloat(e.target.value) || 1)}
                               onBlur={(e) => {
-                                if (e.target.value === '' || parseFloat(e.target.value) < 1) {
+                                const valor = parseFloat(e.target.value)
+                                if (e.target.value === '' || (valor < 0.5 && valor !== 0.5)) {
                                   actualizarProducto(producto.id, 'cantidad', 1)
                                 }
                               }}
                               className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              step="0.01"
-                              min="1"
+                              step="0.5"
+                              min="0.5"
                             />
                           </td>
 
@@ -2959,12 +2967,15 @@ export default function EditarCotizacionPage() {
                 <Label htmlFor="meses">Meses</Label>
                 <Select
                   value={modalFechasSoporte.meses.toString()}
-                  onValueChange={(value) => setModalFechasSoporte(prev => ({ ...prev, meses: parseInt(value) }))}
+                  onValueChange={(value) => setModalFechasSoporte(prev => ({ ...prev, meses: parseFloat(value) }))}
                 >
                   <SelectTrigger id="meses">
                     <SelectValue placeholder="Seleccionar meses" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem key="0.5" value="0.5">
+                      15 días
+                    </SelectItem>
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mes) => (
                       <SelectItem key={mes} value={mes.toString()}>
                         {mes} {mes === 1 ? 'Mes' : 'Meses'}
@@ -3109,7 +3120,9 @@ export default function EditarCotizacionPage() {
                               <div className="text-xs">
                                 <div>Inicio: {new Date(info.fechaInicio).toLocaleDateString('es-ES')}</div>
                                 <div>Fin: {new Date(info.fechaFin).toLocaleDateString('es-ES')}</div>
-                                <div className="text-gray-500">({info.meses} mes{info.meses !== 1 ? 'es' : ''})</div>
+                                <div className="text-gray-500">
+                                  ({info.meses === 0.5 ? '15 días' : `${info.meses} mes${info.meses !== 1 ? 'es' : ''}`})
+                                </div>
                               </div>
                             </td>
                             <td className="py-2 px-3 text-right">

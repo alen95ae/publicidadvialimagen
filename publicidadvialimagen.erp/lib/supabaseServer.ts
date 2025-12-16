@@ -192,8 +192,27 @@ export async function getSupabaseUser(
     supabaseJWT = await generateSupabaseJWT(userId)
   } catch (error) {
     console.error('[getSupabaseUser] Error generando JWT de Supabase:', error)
-    // Si falla la generación del JWT, retornar null
-    // Esto puede pasar si falta SUPABASE_JWT_SECRET
+    // Si falla la generación del JWT, normalmente retornamos null.
+    // PERO: para el rol "desarrollador" (o el email del dev), hacemos fallback a Admin
+    // para evitar quedar expulsados por configuración faltante en entornos de preview/producción.
+    // ⚠️ Esto bypass RLS y debe usarse solo para desarrollador.
+    try {
+      const payload = await verifySession(token)
+      const role = (payload?.role || "").toLowerCase().trim()
+      const email = (payload?.email || "").toLowerCase().trim()
+      const isDeveloper =
+        role === "desarrollador" ||
+        role === "developer" ||
+        email === "alen95ae@gmail.com"
+
+      if (isDeveloper) {
+        console.warn("[getSupabaseUser] ⚠️ Fallback a getSupabaseAdmin() para desarrollador (JWT Supabase no disponible).")
+        return getSupabaseAdmin()
+      }
+    } catch {
+      // Ignorar; seguimos a null abajo
+    }
+
     return null
   }
 

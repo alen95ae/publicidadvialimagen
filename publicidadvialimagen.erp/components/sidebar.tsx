@@ -36,7 +36,7 @@ const modules = [
   { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
   { key: "mantenimiento", title: "Mantenimiento", href: "/panel/mantenimiento", icon: Wrench },
   { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad/plan-cuentas", icon: Receipt },
-  { key: "facturas", title: "Facturas", href: "/panel/facturas", icon: FileText },
+  { key: "facturas", title: "Facturas", href: "/panel/contabilidad/facturas/manuales", icon: FileText },
   { key: "metricas", title: "Métricas", href: "/panel/metricas", icon: LineChart },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes/usuarios", icon: Settings },
   { key: "salir", title: "Salir", href: null, icon: Power, isLogout: true },
@@ -231,8 +231,11 @@ export default function Sidebar({ children }: SidebarProps) {
               }
               
               // Para el módulo inventario, también considerar activo cuando estamos en insumos
+              // Para facturas, considerar activo cuando estamos en cualquier ruta de facturas dentro de contabilidad
               const isActive = module.key === 'inventario' 
                 ? (pathname === module.href || pathname === '/panel/insumos')
+                : module.key === 'facturas'
+                ? pathname.startsWith('/panel/contabilidad/facturas')
                 : pathname === module.href || pathname.startsWith(module.href + '/')
               
               return (

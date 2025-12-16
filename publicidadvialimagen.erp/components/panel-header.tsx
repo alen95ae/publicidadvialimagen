@@ -41,6 +41,15 @@ interface ModuleConfig {
   navItems: NavItem[]
   parametrosItems?: NavItem[] // Submenú de Parametros
   informesItems?: NavItem[] // Submenú de Informes
+  activosItems?: NavItem[] // Submenú de Activos
+  activosParametrosItems?: NavItem[] // Submenú de Parámetros dentro de Activos
+  facturasItems?: NavItem[] // Submenú de Facturas
+  facturasInformesItems?: NavItem[] // Submenú de Informes dentro de Facturas
+  planillasItems?: NavItem[] // Submenú de Planillas
+  planillasInformesItems?: NavItem[] // Submenú de Informes dentro de Planillas
+  planillasParametrosItems?: NavItem[] // Submenú de Parámetros dentro de Planillas
+  parametrosGlobalItems?: NavItem[] // Agrupador global de parámetros (Contabilidad + Activos + Planillas)
+  informesGlobalItems?: NavItem[] // Agrupador global de informes (Contabilidad + Facturas + Planillas)
   mainSections?: NavItem[] // Secciones principales con dropdown
 }
 
@@ -110,8 +119,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Asiento de apertura contable", href: "/panel/contabilidad/asiento-apertura" },
       { label: "Ajuste de Saldos A.I.T.B.", href: "/panel/contabilidad/ajuste-aitb" },
       { label: "Conciliacion Bancaria", href: "/panel/contabilidad/conciliacion-bancaria" },
-      { label: "Parametros", href: "/panel/contabilidad/parametros", hasSubmenu: true },
-      { label: "Informes", href: "/panel/contabilidad/informes", hasSubmenu: true },
     ],
     // Submenú de Parametros
     parametrosItems: [
@@ -137,10 +144,87 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     mainSections: [
       { label: "Contabilidad", href: "/panel/contabilidad", hasDropdown: true, dropdownItems: "nav" },
       { label: "Tesorería", href: "/panel/contabilidad/tesoreria" },
-      { label: "Ventas", href: "/panel/contabilidad/ventas" },
+      { label: "Facturas", href: "/panel/contabilidad/facturas/manuales", hasDropdown: true, dropdownItems: "facturas" },
       { label: "Almacenes", href: "/panel/contabilidad/almacenes" },
-      { label: "Activos", href: "/panel/contabilidad/activos" },
-      { label: "Planillas", href: "/panel/contabilidad/planillas" },
+      { label: "Activos", href: "/panel/contabilidad/activos/registro-activos", hasDropdown: true, dropdownItems: "activos" },
+      { label: "Planillas", href: "/panel/contabilidad/planillas", hasDropdown: true, dropdownItems: "planillas" },
+      { label: "Parámetros", href: "/panel/contabilidad/parametros-global", hasDropdown: true, dropdownItems: "parametrosGlobal" },
+      { label: "Informes", href: "/panel/contabilidad/informes-global", hasDropdown: true, dropdownItems: "informesGlobal" },
+    ],
+    // Submenú de Activos
+    activosItems: [
+      { label: "Registro de Activos Fijos", href: "/panel/contabilidad/activos/registro-activos" },
+      { label: "Proceso de Depreciación de Activos", href: "/panel/contabilidad/activos/depreciacion" },
+    ],
+    // Submenú de Parámetros dentro de Activos
+    activosParametrosItems: [
+      { label: "Grupos de Activos Fijos", href: "/panel/contabilidad/activos/parametros/grupos-activos-fijos" },
+      { label: "Gestiones para la Depreciación de Activos", href: "/panel/contabilidad/activos/parametros/gestiones-depreciacion-activos" },
+    ],
+    // Submenú de Facturas
+    facturasItems: [
+      { label: "Facturas Manuales", href: "/panel/contabilidad/facturas/manuales" },
+      { label: "Contabilización", href: "/panel/contabilidad/facturas/contabilizacion" },
+    ],
+    // Submenú de Informes dentro de Facturas
+    facturasInformesItems: [
+      { label: "Libro de Ventas IVA", href: "/panel/contabilidad/facturas/informes/libro-ventas-iva" },
+      { label: "Reporte de Facturación", href: "/panel/contabilidad/facturas/informes/reporte-facturacion" },
+    ],
+    // Submenú de Planillas
+    planillasItems: [
+      { label: "Cálculo de Planillas", href: "/panel/contabilidad/planillas/calculo" },
+      { label: "Registro de Empleados", href: "/panel/contabilidad/planillas/empleados" },
+      { label: "Ingresos Mensuales", href: "/panel/contabilidad/planillas/ingresos-mensuales" },
+      { label: "Descuentos Mensuales", href: "/panel/contabilidad/planillas/descuentos-mensuales" },
+      { label: "Ingresos/Descuentos Varios", href: "/panel/contabilidad/planillas/ingresos-descuentos-varios" },
+      { label: "Justificativos de Inasistencias", href: "/panel/contabilidad/planillas/justificativos-inasistencias" },
+      { label: "Cierre Mensual", href: "/panel/contabilidad/planillas/cierre-mensual" },
+      { label: "Asistencias", href: "/panel/contabilidad/planillas/asistencias" },
+    ],
+    // Submenú de Informes dentro de Planillas
+    planillasInformesItems: [
+      { label: "Planilla de Sueldos", href: "/panel/contabilidad/planillas/informes/planilla-sueldos" },
+      { label: "Boletas de Pago", href: "/panel/contabilidad/planillas/informes/boletas-pago" },
+      { label: "Planilla RC IVA de Sueldos", href: "/panel/contabilidad/planillas/informes/planilla-rc-iva-sueldos" },
+    ],
+    // Submenú de Parámetros dentro de Planillas
+    planillasParametrosItems: [
+      { label: "Datos de Planillas", href: "/panel/contabilidad/planillas/parametros/datos-planillas" },
+    ],
+    // Agrupador global de Parámetros
+    parametrosGlobalItems: [
+      // Parámetros de Contabilidad
+      { label: "Parametros de contabilidad", href: "/panel/contabilidad/parametros/contabilidad" },
+      { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
+      { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
+      { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
+      // Parámetros de Activos
+      { label: "Grupos de Activos Fijos", href: "/panel/contabilidad/activos/parametros/grupos-activos-fijos" },
+      { label: "Gestiones para la Depreciación de Activos", href: "/panel/contabilidad/activos/parametros/gestiones-depreciacion-activos" },
+      // Parámetros de Planillas
+      { label: "Datos de Planillas", href: "/panel/contabilidad/planillas/parametros/datos-planillas" },
+    ],
+    // Agrupador global de Informes
+    informesGlobalItems: [
+      // Informes de Contabilidad
+      { label: "Plan de Cuentas", href: "/panel/contabilidad/informes/plan-cuentas" },
+      { label: "Libro Diario", href: "/panel/contabilidad/informes/libro-diario" },
+      { label: "Libro de Auxiliares", href: "/panel/contabilidad/informes/libro-auxiliares" },
+      { label: "Libro Mayor", href: "/panel/contabilidad/informes/libro-mayor" },
+      { label: "Balance de Sumas y Saldos", href: "/panel/contabilidad/informes/balance-sumas-saldos" },
+      { label: "Balance General", href: "/panel/contabilidad/informes/balance-general" },
+      { label: "Estado de Resultados", href: "/panel/contabilidad/informes/estado-resultados" },
+      { label: "Estado de Auxiliares", href: "/panel/contabilidad/informes/estado-auxiliares" },
+      { label: "Ejecución Presupuestaria", href: "/panel/contabilidad/informes/ejecucion-presupuestaria" },
+      { label: "Libro de Compras I.V.A.", href: "/panel/contabilidad/informes/libro-compras-iva" },
+      // Informes de Facturas
+      { label: "Libro de Ventas IVA", href: "/panel/contabilidad/facturas/informes/libro-ventas-iva" },
+      { label: "Reporte de Facturación", href: "/panel/contabilidad/facturas/informes/reporte-facturacion" },
+      // Informes de Planillas
+      { label: "Planilla de Sueldos", href: "/panel/contabilidad/planillas/informes/planilla-sueldos" },
+      { label: "Boletas de Pago", href: "/panel/contabilidad/planillas/informes/boletas-pago" },
+      { label: "Planilla RC IVA de Sueldos", href: "/panel/contabilidad/planillas/informes/planilla-rc-iva-sueldos" },
     ],
   },
 }
@@ -554,6 +638,18 @@ export default function PanelHeader() {
                       // Determinar qué items usar para el dropdown
                       const dropdownItems = section.dropdownItems === "parametros" 
                         ? (moduleConfig.parametrosItems || [])
+                        : section.dropdownItems === "informes"
+                        ? (moduleConfig.informesItems || [])
+                        : section.dropdownItems === "activos"
+                        ? (moduleConfig.activosItems || [])
+                        : section.dropdownItems === "facturas"
+                        ? (moduleConfig.facturasItems || [])
+                        : section.dropdownItems === "planillas"
+                        ? (moduleConfig.planillasItems || [])
+                        : section.dropdownItems === "parametrosGlobal"
+                        ? (moduleConfig.parametrosGlobalItems || [])
+                        : section.dropdownItems === "informesGlobal"
+                        ? (moduleConfig.informesGlobalItems || [])
                         : moduleConfig.navItems
 
                       // Dropdown para Contabilidad o Parametros
@@ -564,14 +660,28 @@ export default function PanelHeader() {
                               className={`text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
                                 (section.dropdownItems === "parametros" && pathname.startsWith("/panel/contabilidad/parametros")) ||
                                 (section.dropdownItems === "informes" && pathname.startsWith("/panel/contabilidad/informes")) ||
+                                (section.dropdownItems === "activos" && pathname.startsWith("/panel/contabilidad/activos")) ||
+                                (section.dropdownItems === "facturas" && pathname.startsWith("/panel/contabilidad/facturas")) ||
+                                (section.dropdownItems === "planillas" && pathname.startsWith("/panel/contabilidad/planillas")) ||
+                                (section.dropdownItems === "parametrosGlobal" && (
+                                  pathname.startsWith("/panel/contabilidad/parametros") ||
+                                  pathname.startsWith("/panel/contabilidad/activos/parametros") ||
+                                  pathname.startsWith("/panel/contabilidad/planillas/parametros")
+                                )) ||
+                                (section.dropdownItems === "informesGlobal" && (
+                                  pathname.startsWith("/panel/contabilidad/informes") ||
+                                  pathname.startsWith("/panel/contabilidad/facturas/informes") ||
+                                  pathname.startsWith("/panel/contabilidad/planillas/informes")
+                                )) ||
                                 (section.dropdownItems !== "parametros" && section.dropdownItems !== "informes" && pathname.startsWith("/panel/contabilidad") && 
                                 !pathname.startsWith("/panel/contabilidad/tesoreria") &&
-                                !pathname.startsWith("/panel/contabilidad/ventas") &&
+                                !pathname.startsWith("/panel/contabilidad/facturas") &&
                                 !pathname.startsWith("/panel/contabilidad/almacenes") &&
                                 !pathname.startsWith("/panel/contabilidad/activos") &&
                                 !pathname.startsWith("/panel/contabilidad/planillas") &&
                                 !pathname.startsWith("/panel/contabilidad/parametros") &&
-                                !pathname.startsWith("/panel/contabilidad/informes"))
+                                !pathname.startsWith("/panel/contabilidad/informes") &&
+                                !pathname.startsWith("/panel/contabilidad/activos"))
                                   ? "text-[#D54644] hover:text-[#D54644]/80"
                                   : "text-gray-600 hover:text-[#D54644]"
                               }`}
@@ -583,7 +693,7 @@ export default function PanelHeader() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent 
-                            align={(section.dropdownItems === "parametros" || section.dropdownItems === "informes") ? "end" : "start"} 
+                            align={(section.dropdownItems === "parametros" || section.dropdownItems === "informes" || section.dropdownItems === "activos" || section.dropdownItems === "parametrosGlobal" || section.dropdownItems === "informesGlobal") ? "end" : "start"} 
                             className="w-56"
                           >
                             {dropdownItems.map((item) => {
@@ -595,6 +705,14 @@ export default function PanelHeader() {
                                     ? (moduleConfig.parametrosItems || [])
                                     : item.href === "/panel/contabilidad/informes"
                                     ? (moduleConfig.informesItems || [])
+                                    : item.href === "/panel/contabilidad/activos/parametros"
+                                    ? (moduleConfig.activosParametrosItems || [])
+                                    : item.href === "/panel/contabilidad/facturas/informes"
+                                    ? (moduleConfig.facturasInformesItems || [])
+                                    : item.href === "/panel/contabilidad/planillas/informes"
+                                    ? (moduleConfig.planillasInformesItems || [])
+                                    : item.href === "/panel/contabilidad/planillas/parametros"
+                                    ? (moduleConfig.planillasParametrosItems || [])
                                     : []
                                 
                                 if (submenuItems.length > 0) {

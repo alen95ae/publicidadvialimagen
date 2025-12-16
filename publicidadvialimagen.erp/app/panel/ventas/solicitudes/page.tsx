@@ -153,9 +153,9 @@ export default function SolicitudesPage() {
       setLoading(true)
       console.log('🔄 Iniciando carga de solicitudes...')
       
-      // Usar URL absoluta con fallback a localhost
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-      const apiUrl = `${baseUrl}/api/solicitudes`
+      // IMPORTANT: usar URL relativa para evitar problemas de cookies en Vercel (preview vs dominio)
+      // Con URL absoluta, la cookie de sesión puede NO viajar si el host no coincide.
+      const apiUrl = `/api/solicitudes`
       
       console.log('🌐 URL de la API:', apiUrl)
       
@@ -190,9 +190,9 @@ export default function SolicitudesPage() {
         
         // Manejar diferentes tipos de errores
         if (response.status === 401) {
-          console.log('🔒 Error de autenticación, redirigiendo al login')
-          // El middleware debería manejar esto, pero por si acaso
-          window.location.href = '/login'
+          console.log('🔒 No autorizado (401). Manteniendo UI y usando datos de ejemplo.')
+          // No forzar logout aquí: en producción puede ser un tema de permisos/RLS/config.
+          setSolicitudesList(solicitudes)
           return
         } else if (response.status === 500) {
           console.log('⚠️ Error interno del servidor, usando datos de ejemplo')

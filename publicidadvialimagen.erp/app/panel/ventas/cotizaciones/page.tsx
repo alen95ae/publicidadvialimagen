@@ -23,7 +23,8 @@ import {
   AlertCircle,
   Loader2,
   FileText,
-  X
+  X,
+  Copy
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
@@ -162,6 +163,104 @@ export default function CotizacionesPage() {
     } catch (error) {
       console.error('Error deleting cotización:', error)
       toast.error("Error al eliminar cotización")
+    }
+  }
+
+  // Función para duplicar cotización
+  const handleDuplicate = async (id: string) => {
+    try {
+      // Obtener la cotización original con sus líneas
+      const response = await fetch(`/api/cotizaciones/${id}`, {
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar la cotización')
+      }
+      
+      const data = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Error al cargar cotización')
+      }
+      
+      const cotizacionOriginal = data.data.cotizacion
+      const lineasOriginales = data.data.lineas || []
+      
+      // Generar nuevo código
+      const codigoResponse = await fetch('/api/cotizaciones/generar-codigo', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      
+      if (!codigoResponse.ok) {
+        throw new Error('Error al generar código')
+      }
+      
+      const codigoData = await codigoResponse.json()
+      const nuevoCodigo = codigoData.codigo
+      
+      // Preparar datos de la nueva cotización (estado siempre Pendiente)
+      const nuevaCotizacion = {
+        codigo: nuevoCodigo,
+        cliente: cotizacionOriginal.cliente,
+        vendedor: cotizacionOriginal.vendedor,
+        sucursal: cotizacionOriginal.sucursal,
+        estado: 'Pendiente', // Siempre Pendiente aunque la original esté aprobada
+        vigencia_dias: cotizacionOriginal.vigencia || 30,
+        plazo: cotizacionOriginal.plazo || null,
+        total_final: cotizacionOriginal.total_final,
+        lineas: lineasOriginales.map((linea: any, index: number) => ({
+          tipo: linea.tipo,
+          codigo_producto: linea.codigo_producto,
+          nombre_producto: linea.nombre_producto,
+          descripcion: linea.descripcion,
+          cantidad: linea.cantidad || 0,
+          ancho: linea.ancho,
+          alto: linea.alto,
+          total_m2: linea.total_m2,
+          unidad_medida: linea.unidad_medida || 'm²',
+          precio_unitario: linea.precio_unitario || 0,
+          comision_porcentaje: linea.comision || linea.comision_porcentaje || 0,
+          con_iva: linea.con_iva !== undefined ? linea.con_iva : true,
+          con_it: linea.con_it !== undefined ? linea.con_it : true,
+          es_soporte: linea.es_soporte || false,
+          orden: linea.orden || index + 1,
+          imagen: linea.imagen,
+          variantes: linea.variantes,
+          subtotal_linea: linea.subtotal_linea || 0
+        }))
+      }
+      
+      // Crear la nueva cotización
+      const createResponse = await fetch('/api/cotizaciones', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(nuevaCotizacion)
+      })
+      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Error al crear cotización duplicada')
+      }
+      
+      const createData = await createResponse.json()
+      
+      if (createData.success) {
+        toast.success('Cotización duplicada correctamente')
+        // Limpiar selección
+        setSelectedCotizaciones([])
+        // Recargar lista
+        fetchCotizaciones(currentPage)
+      } else {
+        throw new Error(createData.error || 'Error al crear cotización duplicada')
+      }
+    } catch (error) {
+      console.error('Error duplicating cotización:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al duplicar cotización')
     }
   }
 
@@ -828,6 +927,33 @@ export default function CotizacionesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Barra azul de acciones masivas - Solo cuando hay seleccionadas */}
+            {selectedCotizaciones.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-blue-800">
+                      {selectedCotizaciones.length} cotización{selectedCotizaciones.length > 1 ? 'es' : ''} seleccionada{selectedCotizaciones.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {/* Solo mostrar duplicar cuando hay 1 seleccionada */}
+                    {selectedCotizaciones.length === 1 && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDuplicate(selectedCotizaciones[0])}
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Duplicar cotización
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-[#D54644]" />

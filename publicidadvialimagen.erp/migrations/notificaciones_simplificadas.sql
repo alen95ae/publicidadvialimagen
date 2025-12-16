@@ -78,3 +78,4 @@ ON CONFLICT (notificacion_id, user_id) DO NOTHING;
 -- Se pueden eliminar después de verificar que todo funciona correctamente
 
 
+

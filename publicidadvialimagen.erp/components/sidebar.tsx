@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
+  FileText,
 } from "lucide-react"
 import PanelHeader from "@/components/panel-header"
 import { usePermisosContext } from "@/hooks/permisos-provider"
@@ -34,7 +35,8 @@ const modules = [
   { key: "inventario", title: "Inventario", href: "/panel/inventario", icon: Package },
   { key: "produccion", title: "Producción", href: "/panel/produccion", icon: Hammer },
   { key: "mantenimiento", title: "Mantenimiento", href: "/panel/mantenimiento", icon: Wrench },
-  { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad", icon: Receipt },
+  { key: "contabilidad", title: "Contabilidad", href: "/panel/contabilidad/plan-cuentas", icon: Receipt },
+  { key: "facturas", title: "Facturas", href: "/panel/facturas", icon: FileText },
   { key: "metricas", title: "Métricas", href: "/panel/metricas", icon: LineChart },
   { key: "ajustes", title: "Ajustes", href: "/panel/ajustes/usuarios", icon: Settings },
   { key: "salir", title: "Salir", href: null, icon: Power, isLogout: true },

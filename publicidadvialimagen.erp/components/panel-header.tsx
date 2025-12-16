@@ -13,6 +13,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,11 +31,17 @@ interface User {
 interface NavItem {
   label: string
   href: string
+  hasDropdown?: boolean
+  hasSubmenu?: boolean // Para submenús anidados dentro de dropdowns
+  dropdownItems?: string // "parametros" para usar parametrosItems
 }
 
 interface ModuleConfig {
   title: string
   navItems: NavItem[]
+  parametrosItems?: NavItem[] // Submenú de Parametros
+  informesItems?: NavItem[] // Submenú de Informes
+  mainSections?: NavItem[] // Secciones principales con dropdown
 }
 
 // Configuración de navegación por módulo
@@ -90,6 +99,50 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Formularios", href: "/panel/mensajes/formularios" },
     ],
   },
+  contabilidad: {
+    title: "Contabilidad",
+    navItems: [
+      { label: "Plan de Cuentas / Auxiliares", href: "/panel/contabilidad/plan-cuentas" },
+      { label: "Comprobantes", href: "/panel/contabilidad/comprobantes" },
+      { label: "Presupuestos", href: "/panel/contabilidad/presupuestos" },
+      { label: "Ajuste en U.F.V.", href: "/panel/contabilidad/ajuste-ufv" },
+      { label: "Asiento de cierre contable", href: "/panel/contabilidad/asiento-cierre" },
+      { label: "Asiento de apertura contable", href: "/panel/contabilidad/asiento-apertura" },
+      { label: "Ajuste de Saldos A.I.T.B.", href: "/panel/contabilidad/ajuste-aitb" },
+      { label: "Conciliacion Bancaria", href: "/panel/contabilidad/conciliacion-bancaria" },
+      { label: "Parametros", href: "/panel/contabilidad/parametros", hasSubmenu: true },
+      { label: "Informes", href: "/panel/contabilidad/informes", hasSubmenu: true },
+    ],
+    // Submenú de Parametros
+    parametrosItems: [
+      { label: "Parametros de contabilidad", href: "/panel/contabilidad/parametros/contabilidad" },
+      { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
+      { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
+      { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
+    ],
+    // Submenú de Informes
+    informesItems: [
+      { label: "Plan de Cuentas", href: "/panel/contabilidad/informes/plan-cuentas" },
+      { label: "Libro Diario", href: "/panel/contabilidad/informes/libro-diario" },
+      { label: "Libro de Auxiliares", href: "/panel/contabilidad/informes/libro-auxiliares" },
+      { label: "Libro Mayor", href: "/panel/contabilidad/informes/libro-mayor" },
+      { label: "Balance de Sumas y Saldos", href: "/panel/contabilidad/informes/balance-sumas-saldos" },
+      { label: "Balance General", href: "/panel/contabilidad/informes/balance-general" },
+      { label: "Estado de Resultados", href: "/panel/contabilidad/informes/estado-resultados" },
+      { label: "Estado de Auxiliares", href: "/panel/contabilidad/informes/estado-auxiliares" },
+      { label: "Ejecución Presupuestaria", href: "/panel/contabilidad/informes/ejecucion-presupuestaria" },
+      { label: "Libro de Compras I.V.A.", href: "/panel/contabilidad/informes/libro-compras-iva" },
+    ],
+    // Secciones principales del módulo Contabilidad
+    mainSections: [
+      { label: "Contabilidad", href: "/panel/contabilidad", hasDropdown: true, dropdownItems: "nav" },
+      { label: "Tesorería", href: "/panel/contabilidad/tesoreria" },
+      { label: "Ventas", href: "/panel/contabilidad/ventas" },
+      { label: "Almacenes", href: "/panel/contabilidad/almacenes" },
+      { label: "Activos", href: "/panel/contabilidad/activos" },
+      { label: "Planillas", href: "/panel/contabilidad/planillas" },
+    ],
+  },
 }
 
 // Función para detectar el módulo actual basado en el pathname
@@ -121,6 +174,9 @@ function getModuleConfig(pathname: string): ModuleConfig | null {
   }
   if (pathname.startsWith("/panel/mensajes")) {
     return moduleConfigs.mensajes
+  }
+  if (pathname.startsWith("/panel/contabilidad")) {
+    return moduleConfigs.contabilidad
   }
   return null
 }
@@ -490,7 +546,125 @@ export default function PanelHeader() {
               <div className="text-xl font-bold text-slate-800 whitespace-nowrap">
                 {moduleConfig.title}
               </div>
-              {moduleConfig.navItems.length > 0 && (
+              {/* Secciones principales (para Contabilidad) */}
+              {moduleConfig.mainSections && moduleConfig.mainSections.length > 0 && (
+                <div className="flex items-center gap-6 ml-4 overflow-x-auto">
+                  {moduleConfig.mainSections.map((section) => {
+                    if (section.hasDropdown) {
+                      // Determinar qué items usar para el dropdown
+                      const dropdownItems = section.dropdownItems === "parametros" 
+                        ? (moduleConfig.parametrosItems || [])
+                        : moduleConfig.navItems
+
+                      // Dropdown para Contabilidad o Parametros
+                      return (
+                        <DropdownMenu key={section.href}>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className={`text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
+                                (section.dropdownItems === "parametros" && pathname.startsWith("/panel/contabilidad/parametros")) ||
+                                (section.dropdownItems === "informes" && pathname.startsWith("/panel/contabilidad/informes")) ||
+                                (section.dropdownItems !== "parametros" && section.dropdownItems !== "informes" && pathname.startsWith("/panel/contabilidad") && 
+                                !pathname.startsWith("/panel/contabilidad/tesoreria") &&
+                                !pathname.startsWith("/panel/contabilidad/ventas") &&
+                                !pathname.startsWith("/panel/contabilidad/almacenes") &&
+                                !pathname.startsWith("/panel/contabilidad/activos") &&
+                                !pathname.startsWith("/panel/contabilidad/planillas") &&
+                                !pathname.startsWith("/panel/contabilidad/parametros") &&
+                                !pathname.startsWith("/panel/contabilidad/informes"))
+                                  ? "text-[#D54644] hover:text-[#D54644]/80"
+                                  : "text-gray-600 hover:text-[#D54644]"
+                              }`}
+                            >
+                              {section.label}
+                              {(section.dropdownItems === "parametros" || section.dropdownItems === "informes") && (
+                                <span className="text-xs">›</span>
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent 
+                            align={(section.dropdownItems === "parametros" || section.dropdownItems === "informes") ? "end" : "start"} 
+                            className="w-56"
+                          >
+                            {dropdownItems.map((item) => {
+                              // Si tiene submenu (Parametros o Informes), crear un submenu anidado
+                              if (item.hasSubmenu) {
+                                // Determinar qué items usar para el submenu
+                                const submenuItems = 
+                                  item.href === "/panel/contabilidad/parametros" 
+                                    ? (moduleConfig.parametrosItems || [])
+                                    : item.href === "/panel/contabilidad/informes"
+                                    ? (moduleConfig.informesItems || [])
+                                    : []
+                                
+                                if (submenuItems.length > 0) {
+                                  return (
+                                    <DropdownMenuSub key={item.href}>
+                                      <DropdownMenuSubTrigger
+                                        className={isActive(item.href) ? "text-[#D54644] font-semibold" : ""}
+                                      >
+                                        {item.label}
+                                      </DropdownMenuSubTrigger>
+                                      <DropdownMenuSubContent align="end" sideOffset={8} className="w-56">
+                                        {submenuItems.map((subItem) => (
+                                          <DropdownMenuItem key={subItem.href} asChild>
+                                            <Link
+                                              href={subItem.href}
+                                              className={`w-full ${
+                                                isActive(subItem.href)
+                                                  ? "text-[#D54644] font-semibold"
+                                                  : ""
+                                              }`}
+                                            >
+                                              {subItem.label}
+                                            </Link>
+                                          </DropdownMenuItem>
+                                        ))}
+                                      </DropdownMenuSubContent>
+                                    </DropdownMenuSub>
+                                  )
+                                }
+                              }
+                              // Item normal sin submenu
+                              return (
+                                <DropdownMenuItem key={item.href} asChild>
+                                  <Link
+                                    href={item.href}
+                                    className={`w-full ${
+                                      isActive(item.href)
+                                        ? "text-[#D54644] font-semibold"
+                                        : ""
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </Link>
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )
+                    } else {
+                      // Link normal
+                      return (
+                        <Link
+                          key={section.href}
+                          href={section.href}
+                          className={`text-sm font-medium whitespace-nowrap transition-colors ${
+                            isActive(section.href)
+                              ? "text-[#D54644] hover:text-[#D54644]/80"
+                              : "text-gray-600 hover:text-[#D54644]"
+                          }`}
+                        >
+                          {section.label}
+                        </Link>
+                      )
+                    }
+                  })}
+                </div>
+              )}
+              {/* Navegación normal (para otros módulos) */}
+              {!moduleConfig.mainSections && moduleConfig.navItems.length > 0 && (
                 <div className="flex items-center gap-6 ml-4 overflow-x-auto">
                   {moduleConfig.navItems
                     .filter((item) => {

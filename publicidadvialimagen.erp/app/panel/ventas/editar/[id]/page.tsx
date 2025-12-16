@@ -667,12 +667,9 @@ export default function EditarCotizacionPage() {
       // ============================================================================
       if (lineas && lineas.length > 0) {
         const lineasConvertidas: ItemLista[] = lineas.map((linea: any, index: number) => {
-          // Intentar normalizar como producto
-          const productoNormalizado = normalizarLineaImportada(linea, index)
-          if (productoNormalizado) {
-            return productoNormalizado
-          }
-
+          // IMPORTANTE: Verificar primero si es sección o nota ANTES de normalizar como producto
+          // porque las secciones guardan el texto en nombre_producto y podrían ser confundidas con productos
+          
           // Si es nota
           if (linea.tipo === 'Nota' || linea.tipo === 'nota') {
             return {
@@ -689,6 +686,12 @@ export default function EditarCotizacionPage() {
               tipo: 'seccion' as const,
               texto: linea.texto || linea.nombre_producto || ''
             }
+          }
+
+          // Intentar normalizar como producto (solo si no es nota ni sección)
+          const productoNormalizado = normalizarLineaImportada(linea, index)
+          if (productoNormalizado) {
+            return productoNormalizado
           }
 
           // Fallback para formato nuevo (sin campos Odoo)

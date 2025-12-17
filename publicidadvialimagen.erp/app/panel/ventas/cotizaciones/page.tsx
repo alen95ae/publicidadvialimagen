@@ -396,8 +396,10 @@ export default function CotizacionesPage() {
       if (filtroEstado !== 'all') {
         params.set('estado', filtroEstado)
       }
-      if (searchTerm) {
-        params.set('cliente', searchTerm)
+      // Búsqueda general (código/cliente/vendedor) en backend
+      // IMPORTANTE: antes se enviaba como "cliente" y eso impedía buscar por código.
+      if (searchTerm && searchTerm.trim() !== '') {
+        params.set('search', searchTerm.trim())
       }
       // Enviar filtro de vendedor al backend para que la paginación sea correcta
       if (filtroVendedor !== 'all') {

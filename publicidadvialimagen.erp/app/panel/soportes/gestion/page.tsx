@@ -1271,20 +1271,18 @@ export default function SoportesPage() {
                             size="sm"
                             title="Ver"
                             onClick={() => router.push(`/panel/soportes/${support.id}`)}
-                            className="flex-1 text-[10px] h-6 px-1"
+                            className="flex-1 h-6 px-1"
                           >
-                            <Eye className="w-2.5 h-2.5 mr-0.5" />
-                            Ver
+                            <Eye className="w-3 h-3" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             title="Editar"
                             onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
-                            className="flex-1 text-[10px] h-6 px-1"
+                            className="flex-1 h-6 px-1"
                           >
-                            <Edit className="w-2.5 h-2.5 mr-0.5" />
-                            Editar
+                            <Edit className="w-3 h-3" />
                           </Button>
                           <PermisoTecnico accion="ver historial soportes">
                             <Button
@@ -1292,10 +1290,9 @@ export default function SoportesPage() {
                               size="sm"
                               title="Historial"
                               onClick={() => router.push(`/panel/soportes/${support.id}/historial`)}
-                              className="flex-1 text-[10px] h-6 px-1"
+                              className="flex-1 h-6 px-1"
                             >
-                              <FolderClock className="w-2.5 h-2.5 mr-0.5" />
-                              Historial
+                              <FolderClock className="w-3 h-3" />
                             </Button>
                           </PermisoTecnico>
                           <Button
@@ -1303,9 +1300,9 @@ export default function SoportesPage() {
                             size="sm"
                             title="Eliminar"
                             onClick={() => handleDelete(support.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1"
                           >
-                            <Trash2 className="w-2.5 h-2.5" />
+                            <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>

@@ -673,7 +673,9 @@ export default function PanelHeader() {
                                   pathname.startsWith("/panel/contabilidad/facturas/informes") ||
                                   pathname.startsWith("/panel/contabilidad/planillas/informes")
                                 )) ||
-                                (section.dropdownItems !== "parametros" && section.dropdownItems !== "informes" && pathname.startsWith("/panel/contabilidad") && 
+                                // IMPORTANTE: este fallback de "Contabilidad" SOLO debe aplicarse al dropdown principal (nav),
+                                // si no, pinta en rojo Facturas/Activos/Planillas cuando estás en /panel/contabilidad.
+                                (section.dropdownItems === "nav" && pathname.startsWith("/panel/contabilidad") && 
                                 !pathname.startsWith("/panel/contabilidad/tesoreria") &&
                                 !pathname.startsWith("/panel/contabilidad/facturas") &&
                                 !pathname.startsWith("/panel/contabilidad/almacenes") &&

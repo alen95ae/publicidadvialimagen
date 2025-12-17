@@ -44,6 +44,7 @@ export async function getCotizaciones(options?: {
   estado?: string;
   cliente?: string;
   vendedor?: string;
+  search?: string; // Búsqueda general en múltiples campos (código/cliente/vendedor)
   page?: number;
   limit?: number;
 }) {
@@ -76,6 +77,15 @@ export async function getCotizaciones(options?: {
     query = query.ilike("vendedor", `%${options.vendedor}%`);
     if (process.env.NODE_ENV === 'development') {
       console.log('🔍 [getCotizaciones] Filtro vendedor aplicado:', options.vendedor)
+    }
+  }
+  // Búsqueda general en múltiples campos
+  if (options?.search) {
+    query = query.or(
+      `codigo.ilike.%${options.search}%,cliente.ilike.%${options.search}%,vendedor.ilike.%${options.search}%`
+    )
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [getCotizaciones] Búsqueda general aplicada:', options.search)
     }
   }
 

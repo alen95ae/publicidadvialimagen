@@ -28,14 +28,16 @@ export async function GET(request: NextRequest) {
     const estado = searchParams.get('estado') || ''
     const cliente = searchParams.get('cliente') || ''
     const vendedor = searchParams.get('vendedor') || ''
+    const search = searchParams.get('search') || ''
 
-    console.log('🔍 Cotizaciones search params:', { pageSize, page, estado, cliente, vendedor })
+    console.log('🔍 Cotizaciones search params:', { pageSize, page, estado, cliente, vendedor, search })
 
     // Obtener datos de Supabase
     const result = await getCotizaciones({
       estado: estado || undefined,
       cliente: cliente || undefined,
       vendedor: vendedor || undefined,
+      search: search || undefined,
       page,
       limit: pageSize
     })

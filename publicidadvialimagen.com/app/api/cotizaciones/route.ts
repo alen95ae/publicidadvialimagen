@@ -45,7 +45,10 @@ export async function GET() {
     })
 
     console.log(`✅ Se cargaron ${cotizaciones.length} cotizaciones`)
-    return NextResponse.json(cotizaciones)
+    const res = NextResponse.json(cotizaciones)
+    // Cache CDN seguro para endpoint público (reduce CPU). No cambia payload ni lógica.
+    res.headers.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600")
+    return res
 
   } catch (error: any) {
     console.error('❌ === ERROR EN API COTIZACIONES ===')

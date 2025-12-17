@@ -418,7 +418,7 @@ export async function GET(req: Request) {
 
     console.log(`✅ [GET /api/soportes] ${transformedSoportes.length} soportes transformados. Retornando respuesta...`)
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       data: transformedSoportes,
       pagination: {
         page,
@@ -428,6 +428,9 @@ export async function GET(req: Request) {
         hasPrev: page > 1
       }
     })
+    // Cache CDN seguro para endpoint público (reduce CPU). No cambia payload ni lógica.
+    res.headers.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600")
+    return res
 
   } catch (error: any) {
     console.error('❌ Error in soportes API:', error)

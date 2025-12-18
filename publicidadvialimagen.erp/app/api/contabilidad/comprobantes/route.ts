@@ -12,12 +12,8 @@ export async function GET(request: NextRequest) {
       return permiso
     }
 
-    let supabase = await getSupabaseUser(request)
-    if (!supabase) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
-
-    let useAdmin = false
+    // Usar admin directamente para evitar problemas con RLS
+    const supabase = getSupabaseAdmin()
 
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get("page") || "1")
@@ -25,32 +21,13 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     // Obtener comprobantes ordenados por fecha descendente
-    let { data, error, count } = await supabase
+    const { data, error, count } = await supabase
       .from("comprobantes")
-      .select("*", { count: "exact" })
+      .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_id, created_at, updated_at", { count: "exact" })
       .eq("empresa_id", 1)
       .order("fecha", { ascending: false })
       .order("numero", { ascending: false })
       .range(offset, offset + limit - 1)
-
-    // Si hay error, intentar con admin
-    if (error || (!data || data.length === 0)) {
-      const supabaseAdmin = getSupabaseAdmin()
-      const { data: adminData, error: adminError, count: adminCount } = await supabaseAdmin
-        .from("comprobantes")
-        .select("*", { count: "exact" })
-        .eq("empresa_id", 1)
-        .order("fecha", { ascending: false })
-        .order("numero", { ascending: false })
-        .range(offset, offset + limit - 1)
-
-      if (!adminError && adminData && adminData.length > 0) {
-        data = adminData
-        count = adminCount
-        error = null
-        useAdmin = true
-      }
-    }
 
     if (error) {
       console.error("Error fetching comprobantes:", error)
@@ -59,6 +36,7 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       )
     }
+
 
     return NextResponse.json({
       success: true,
@@ -142,9 +120,9 @@ export async function POST(request: NextRequest) {
       fecha: cabecera.fecha,
       periodo: cabecera.periodo,
       gestion: cabecera.gestion,
-      moneda: cabecera.moneda || "BOB",
+      moneda: cabecera.moneda || "BS",
       tipo_cambio: cabecera.tipo_cambio || 1,
-      glosa: cabecera.glosa || null,
+      concepto: cabecera.concepto || null,
       beneficiario: cabecera.beneficiario || null,
       nro_cheque: cabecera.nro_cheque || null,
       estado: cabecera.estado || "BORRADOR",

@@ -46,7 +46,7 @@ export default function ComprobantesList({ onSelect, selectedId }: ComprobantesL
     const search = searchTerm.toLowerCase()
     return (
       comp.numero.toLowerCase().includes(search) ||
-      comp.glosa?.toLowerCase().includes(search) ||
+      comp.concepto?.toLowerCase().includes(search) ||
       comp.beneficiario?.toLowerCase().includes(search)
     )
   })
@@ -63,7 +63,7 @@ export default function ComprobantesList({ onSelect, selectedId }: ComprobantesL
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Buscar por número, glosa o beneficiario..."
+              placeholder="Buscar por número, concepto o beneficiario..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
@@ -83,7 +83,7 @@ export default function ComprobantesList({ onSelect, selectedId }: ComprobantesL
                   <TableHead>Fecha</TableHead>
                   <TableHead>Origen</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead>Glosa</TableHead>
+                  <TableHead>Concepto</TableHead>
                   <TableHead>Estado</TableHead>
                 </TableRow>
               </TableHeader>
@@ -115,8 +115,14 @@ export default function ComprobantesList({ onSelect, selectedId }: ComprobantesL
                       <TableCell>
                         <Badge variant="outline">{comprobante.tipo_comprobante}</Badge>
                       </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {comprobante.glosa || "—"}
+                      <TableCell className="max-w-md">
+                        {comprobante.concepto && String(comprobante.concepto).trim() !== "" ? (
+                          <span className="block truncate" title={String(comprobante.concepto)}>
+                            {String(comprobante.concepto)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {comprobante.estado === "APROBADO" ? (

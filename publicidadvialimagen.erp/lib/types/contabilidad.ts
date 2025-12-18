@@ -70,7 +70,7 @@ export type TipoAuxiliar =
   | "Empleado"
   | "Otro"
 
-export type Moneda = "BOB" | "USD"
+export type Moneda = "BS" | "USD"
 
 export interface PlanCuentasFilters {
   clasificador?: string
@@ -117,7 +117,7 @@ export interface Comprobante {
   gestion: number // año
   moneda: Moneda
   tipo_cambio: number
-  glosa?: string | null
+  concepto?: string | null
   beneficiario?: string | null
   nro_cheque?: string | null
   estado: "BORRADOR" | "APROBADO"

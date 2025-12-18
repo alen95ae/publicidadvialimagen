@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     const empresa = searchParams.get("empresa")
     const regional = searchParams.get("regional")
     const sucursal = searchParams.get("sucursal")
-    const clasificador = searchParams.get("clasificador")
     const fecha_inicial = searchParams.get("fecha_inicial")
     const fecha_final = searchParams.get("fecha_final")
     const tipo_comprobante = searchParams.get("tipo_comprobante")
@@ -37,8 +36,7 @@ export async function GET(request: NextRequest) {
         moneda,
         tipo_cambio,
         estado,
-        empresa_id,
-        clasificador
+        empresa_id
       `
       )
       .eq("empresa_id", 1) // Por ahora usar empresa_id=1
@@ -46,10 +44,6 @@ export async function GET(request: NextRequest) {
       .order("numero", { ascending: true })
 
     // Aplicar filtros opcionales
-    if (clasificador) {
-      query = query.eq("clasificador", clasificador)
-    }
-
     if (fecha_inicial) {
       query = query.gte("fecha", fecha_inicial)
     }
@@ -62,9 +56,11 @@ export async function GET(request: NextRequest) {
       query = query.eq("tipo_comprobante", tipo_comprobante)
     }
 
-    if (estado) {
-      query = query.eq("estado", estado.toUpperCase())
-    }
+    // Filtro de estado: por defecto solo APROBADOS, a menos que se especifique otro estado
+    const estadoFiltro = estado && estado !== "Todos"
+      ? estado.toUpperCase()
+      : "APROBADO"
+    query = query.eq("estado", estadoFiltro)
 
     const { data: comprobantes, error: comprobantesError } = await query
 
@@ -107,9 +103,10 @@ export async function GET(request: NextRequest) {
     // Obtener detalles de comprobantes
     const { data: detalles, error: detallesError } = await supabase
       .from("comprobante_detalle")
-      .select("comprobante_id, cuenta, auxiliar, glosa, debe_bs, haber_bs, debe_usd, haber_usd")
+      .select("comprobante_id, cuenta, auxiliar, glosa, debe_bs, haber_bs, debe_usd, haber_usd, orden")
       .in("comprobante_id", comprobanteIds)
       .order("comprobante_id", { ascending: true })
+      .order("orden", { ascending: true })
 
     if (detallesError) {
       console.error("Error fetching detalles:", detallesError)
@@ -184,7 +181,7 @@ export async function GET(request: NextRequest) {
         tipo_comprobante: comp.tipo_comprobante,
         tipo_asiento: comp.tipo_asiento,
         glosa: comp.glosa || "",
-        moneda: comp.moneda || "BOB",
+        moneda: comp.moneda || "BS",
         tipo_cambio: comp.tipo_cambio || 1,
         estado: comp.estado,
         detalles: detallesComp.map((det: any) => ({

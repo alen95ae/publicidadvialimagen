@@ -144,7 +144,7 @@ export async function PUT(
       gestion: cabecera.gestion,
       moneda: cabecera.moneda,
       tipo_cambio: cabecera.tipo_cambio,
-      glosa: cabecera.glosa || null,
+      concepto: cabecera.concepto || null,
       beneficiario: cabecera.beneficiario || null,
       nro_cheque: cabecera.nro_cheque || null,
       estado: cabecera.estado || "BORRADOR",
@@ -177,26 +177,39 @@ export async function PUT(
     }
 
     // Insertar nuevos detalles
-    const detallesData = detalles.map((det: ComprobanteDetalle, index: number) => ({
-      comprobante_id: parseInt(params.id),
-      cuenta: det.cuenta, // string "111001003"
-      auxiliar: det.auxiliar ?? null, // string o null
-      glosa: det.glosa ?? null,
-      nro_ot: det.nro_ot ?? null,
-      debe_bs: det.debe_bs ?? 0,
-      haber_bs: det.haber_bs ?? 0,
-      debe_usd: det.debe_usd ?? 0,
-      haber_usd: det.haber_usd ?? 0,
-      lc: det.lc ?? false,
-      orden: index + 1,
-    }))
+    const detallesData = detalles.map((det: ComprobanteDetalle, index: number) => {
+      // Normalizar nro_ot: si es string vacío o solo espacios, convertir a null
+      const nroOtNormalized = det.nro_ot && typeof det.nro_ot === 'string' && det.nro_ot.trim() !== "" 
+        ? det.nro_ot.trim() 
+        : null
+      
+      // Normalizar lc: asegurar que sea boolean
+      const lcNormalized = det.lc === true || det.lc === "true" || det.lc === 1 || det.lc === "1"
+      
+      return {
+        comprobante_id: params.id, // UUID string, no necesita parseInt
+        cuenta: det.cuenta, // string "111001003"
+        auxiliar: det.auxiliar ?? null, // string o null
+        glosa: det.glosa ?? null,
+        nro_ot: nroOtNormalized,
+        debe_bs: det.debe_bs ?? 0,
+        haber_bs: det.haber_bs ?? 0,
+        debe_usd: det.debe_usd ?? 0,
+        haber_usd: det.haber_usd ?? 0,
+        lc: lcNormalized,
+        orden: index + 1,
+      }
+    })
+
+    console.log("📝 Insertando detalles:", JSON.stringify(detallesData, null, 2))
 
     const { error: errorDetalles } = await supabase
       .from("comprobante_detalle")
       .insert(detallesData)
 
     if (errorDetalles) {
-      console.error("Error creating detalles:", errorDetalles)
+      console.error("❌ Error creating detalles:", errorDetalles)
+      console.error("❌ Detalles que causaron el error:", JSON.stringify(detallesData, null, 2))
       return NextResponse.json(
         { error: "Error al actualizar los detalles", details: errorDetalles.message },
         { status: 500 }

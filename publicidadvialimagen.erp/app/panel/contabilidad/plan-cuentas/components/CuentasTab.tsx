@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Cuenta, CuentaSaldos, TipoCuenta, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
@@ -21,7 +22,8 @@ interface CuentasTabProps {
 
 const TIPOS_CUENTA: TipoCuenta[] = ["Activo", "Pasivo", "Patrimonio", "Ingresos", "Gastos", "Costos"]
 const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Banco", "Caja", "Empleado", "Otro"]
-const MONEDAS: Moneda[] = ["BOB", "USD"]
+// Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
+const MONEDAS: string[] = ["BS", "USD"]
 
 export default function CuentasTab({ empresaId }: CuentasTabProps) {
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
@@ -70,14 +72,14 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
         tipo_cuenta: selectedCuenta.tipo_cuenta || "",
         moneda: selectedCuenta.moneda || "BS",
         nivel: selectedCuenta.nivel || 1,
-        permite_auxiliar: selectedCuenta.permite_auxiliar || false,
-        cuenta_presupuestaria: selectedCuenta.cuenta_presupuestaria || false,
-        cuenta_patrimonial: selectedCuenta.cuenta_patrimonial || false,
-        efectivo: selectedCuenta.efectivo || false,
-        cuenta_flujo: selectedCuenta.cuenta_flujo || false,
-        aitb: selectedCuenta.aitb || false,
-        transaccional: selectedCuenta.transaccional || false,
-        vigente: selectedCuenta.vigente !== undefined ? selectedCuenta.vigente : true,
+        permite_auxiliar: selectedCuenta.permite_auxiliar ?? false,
+        cuenta_presupuestaria: selectedCuenta.cuenta_presupuestaria ?? false,
+        cuenta_patrimonial: selectedCuenta.cuenta_patrimonial ?? false,
+        efectivo: selectedCuenta.efectivo ?? false,
+        cuenta_flujo: selectedCuenta.cuenta_flujo ?? false,
+        aitb: selectedCuenta.aitb ?? false,
+        transaccional: selectedCuenta.transaccional ?? false,
+        vigente: selectedCuenta.vigente ?? true,
       })
       fetchSaldos(selectedCuenta.id)
     } else {
@@ -281,98 +283,188 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
   }
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Contenedor principal */}
-      <div className="flex-1 flex flex-col gap-4">
-        {/* Tabla superior */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Cuentas</CardTitle>
-            <CardDescription>Lista de cuentas contables</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-8 text-gray-500">Cargando...</div>
-            ) : (
-              <div 
-                className="overflow-x-auto max-h-[600px] overflow-y-auto"
-                data-table-container
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Clasificador</TableHead>
-                      <TableHead>Cuenta</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Moneda</TableHead>
-                      <TableHead>Nivel</TableHead>
-                      <TableHead>Vigencia</TableHead>
-                      <TableHead>Transaccional</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cuentas.length === 0 ? (
+    <div className="flex flex-col gap-4 h-full overflow-hidden">
+      {/* Fila superior: Tabla de cuentas y Panel de saldos */}
+      <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
+        {/* Contenedor principal - Tabla de cuentas */}
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-shrink-0">
+              <CardTitle>Cuentas</CardTitle>
+              <CardDescription>Lista de cuentas contables</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
+              {loading ? (
+                <div className="text-center py-8 text-gray-500">Cargando...</div>
+              ) : (
+                <div 
+                  className="overflow-x-auto max-h-[600px] overflow-y-auto"
+                  data-table-container
+                >
+                  <Table className="min-w-full">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                          No hay cuentas registradas
-                        </TableCell>
+                        <TableHead className="w-24">Cuenta</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead className="w-20 text-center">Moneda</TableHead>
+                        <TableHead className="w-16 text-center">Nivel</TableHead>
+                        <TableHead className="w-24 text-center">Vigencia</TableHead>
+                        <TableHead className="w-20 text-center">AITB</TableHead>
+                        <TableHead className="w-28 text-center">Transaccional</TableHead>
                       </TableRow>
-                    ) : (
-                      cuentas.map((cuenta) => (
-                        <TableRow
-                          key={cuenta.id}
-                          onClick={() => setSelectedCuenta(cuenta)}
-                          className={`cursor-pointer ${
-                            selectedCuenta?.id === cuenta.id ? "bg-blue-50" : ""
-                          }`}
-                        >
-                          <TableCell className="font-mono">{cuenta.clasificador}</TableCell>
-                          <TableCell className="font-mono">{cuenta.cuenta}</TableCell>
-                          <TableCell>{cuenta.descripcion}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{cuenta.moneda}</Badge>
-                          </TableCell>
-                          <TableCell className="text-center">{cuenta.nivel}</TableCell>
-                          <TableCell>
-                            {cuenta.vigente ? (
-                              <Badge className="bg-green-100 text-green-800">Activa</Badge>
-                            ) : (
-                              <Badge variant="secondary">Inactiva</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {cuenta.transaccional ? (
-                              <Badge className="bg-blue-100 text-blue-800">Sí</Badge>
-                            ) : (
-                              <Badge variant="secondary">No</Badge>
-                            )}
+                    </TableHeader>
+                    <TableBody>
+                      {cuentas.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                            No hay cuentas registradas
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        cuentas.map((cuenta) => (
+                          <TableRow
+                            key={cuenta.id}
+                            onClick={() => setSelectedCuenta(cuenta)}
+                            className={`cursor-pointer ${
+                              selectedCuenta?.id === cuenta.id ? "bg-blue-50" : ""
+                            }`}
+                          >
+                            <TableCell className="font-mono">{cuenta.cuenta}</TableCell>
+                            <TableCell>
+                              {cuenta.descripcion && cuenta.descripcion.length > 40 ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger className="text-left">
+                                      {cuenta.descripcion.slice(0, 40) + '…'}
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm">
+                                      <p>{cuenta.descripcion}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                cuenta.descripcion || '—'
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="text-xs">{cuenta.moneda}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center">{cuenta.nivel}</TableCell>
+                            <TableCell className="text-center">
+                              {cuenta.vigente ? (
+                                <Badge className="bg-green-100 text-green-800 text-xs">Activa</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">Inactiva</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {cuenta.aitb ? (
+                                <Badge className="bg-purple-100 text-purple-800 text-xs">Sí</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">No</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {cuenta.transaccional ? (
+                                <Badge className="bg-blue-100 text-blue-800 text-xs">Sí</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">No</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 
-                {/* Indicador de carga más items */}
-                {loadingMore && (
-                  <div className="text-center py-4 text-gray-500">
-                    Cargando más cuentas...
-                  </div>
-                )}
-                
-                {/* Información de paginación */}
-                {!loadingMore && cuentas.length > 0 && (
-                  <div className="text-center py-2 text-sm text-gray-500 border-t">
-                    Mostrando {cuentas.length} de {total} cuentas
-                    {hasMore && " - Desplázate hacia abajo para cargar más"}
-                  </div>
-                )}
+                  {/* Indicador de carga más items */}
+                  {loadingMore && (
+                    <div className="text-center py-4 text-gray-500">
+                      Cargando más cuentas...
+                    </div>
+                  )}
+                  
+                  {/* Información de paginación */}
+                  {!loadingMore && cuentas.length > 0 && (
+                    <div className="text-center py-2 text-sm text-gray-500 border-t">
+                      Mostrando {cuentas.length} de {total} cuentas
+                      {hasMore && " - Desplázate hacia abajo para cargar más"}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Panel lateral de saldos */}
+        <Card className="w-80 flex-shrink-0 overflow-hidden flex flex-col max-h-full">
+          <CardHeader className="flex-shrink-0">
+            <CardTitle>Saldos de Cuenta</CardTitle>
+            <CardDescription>Saldo por gestión</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {!selectedCuenta ? (
+              <div className="text-center text-gray-500 py-8">
+                Seleccione una cuenta para ver sus saldos
+              </div>
+            ) : saldos.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                No hay saldos registrados
+              </div>
+            ) : (
+              <div className="space-y-4 flex-1 overflow-hidden flex flex-col min-h-0">
+                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
+                  <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Gestión</TableHead>
+                        <TableHead className="text-right">Inicial</TableHead>
+                        <TableHead className="text-right">Debe</TableHead>
+                        <TableHead className="text-right">Haber</TableHead>
+                        <TableHead className="text-right">Saldo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {saldos.map((saldo, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{saldo.gestion}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {saldo.inicial.toLocaleString("es-BO", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {saldo.debe.toLocaleString("es-BO", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {saldo.haber.toLocaleString("es-BO", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold">
+                            {saldo.saldo.toLocaleString("es-BO", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
+      </div>
 
-        {/* Formulario inferior */}
+        {/* Formulario inferior - Todo el ancho */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -475,7 +567,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="space-y-2">
                 <Label htmlFor="tipo_cuenta">Tipo de Cuenta</Label>
                 <Select
-                  value={formData.tipo_cuenta || "none"}
+                  value={formData.tipo_cuenta && formData.tipo_cuenta.trim() !== "" ? formData.tipo_cuenta : "none"}
                   onValueChange={(value) =>
                     setFormData({ ...formData, tipo_cuenta: value === "none" ? "" : (value || "") })
                   }
@@ -490,6 +582,12 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
                         {tipo}
                       </SelectItem>
                     ))}
+                    {/* Si hay un tipo que no está en la lista, mostrarlo también */}
+                    {formData.tipo_cuenta && formData.tipo_cuenta.trim() !== "" && !TIPOS_CUENTA.includes(formData.tipo_cuenta as TipoCuenta) && (
+                      <SelectItem value={formData.tipo_cuenta}>
+                        {formData.tipo_cuenta}
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -498,9 +596,9 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="space-y-2">
                 <Label htmlFor="moneda">Moneda</Label>
                 <Select
-                  value={formData.moneda || "BOB"}
+                  value={formData.moneda || "BS"}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, moneda: value as Moneda })
+                    setFormData({ ...formData, moneda: value })
                   }
                 >
                   <SelectTrigger>
@@ -512,6 +610,12 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
                         {moneda}
                       </SelectItem>
                     ))}
+                    {/* Si hay una moneda que no está en la lista, mostrarla también */}
+                    {formData.moneda && !MONEDAS.includes(formData.moneda) && (
+                      <SelectItem value={formData.moneda}>
+                        {formData.moneda}
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -535,11 +639,24 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
             <Separator className="my-4" />
 
             {/* Checkboxes */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="permite_auxiliar"
+                  checked={formData.permite_auxiliar ?? false}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, permite_auxiliar: !!checked })
+                  }
+                />
+                <Label htmlFor="permite_auxiliar" className="cursor-pointer">
+                  Permite Auxiliar
+                </Label>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="cuenta_presupuestaria"
-                  checked={formData.cuenta_presupuestaria || false}
+                  checked={formData.cuenta_presupuestaria ?? false}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, cuenta_presupuestaria: !!checked })
                   }
@@ -552,7 +669,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="cuenta_patrimonial"
-                  checked={formData.cuenta_patrimonial || false}
+                  checked={formData.cuenta_patrimonial ?? false}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, cuenta_patrimonial: !!checked })
                   }
@@ -565,7 +682,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="efectivo"
-                  checked={formData.efectivo || false}
+                  checked={formData.efectivo ?? false}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, efectivo: !!checked })
                   }
@@ -578,7 +695,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="cuenta_flujo"
-                  checked={formData.cuenta_flujo || false}
+                  checked={formData.cuenta_flujo ?? false}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, cuenta_flujo: !!checked })
                   }
@@ -591,7 +708,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="aitb"
-                  checked={formData.aitb || false}
+                  checked={formData.aitb ?? false}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, aitb: !!checked })
                   }
@@ -604,7 +721,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="transaccional"
-                  checked={formData.transaccional || false}
+                  checked={formData.transaccional ?? false}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, transaccional: !!checked })
                   }
@@ -617,7 +734,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="vigente"
-                  checked={formData.vigente !== undefined ? formData.vigente : true}
+                  checked={formData.vigente ?? true}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, vigente: !!checked })
                   }
@@ -629,71 +746,6 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Panel lateral de saldos */}
-      {selectedCuenta && (
-        <Card className="w-80 flex-shrink-0">
-          <CardHeader>
-            <CardTitle>Saldos de Cuenta</CardTitle>
-            <CardDescription>Saldo por gestión</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {saldos.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                No hay saldos registrados
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Gestión</TableHead>
-                        <TableHead className="text-right">Inicial</TableHead>
-                        <TableHead className="text-right">Debe</TableHead>
-                        <TableHead className="text-right">Haber</TableHead>
-                        <TableHead className="text-right">Saldo</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {saldos.map((saldo, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{saldo.gestion}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {saldo.inicial.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {saldo.debe.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {saldo.haber.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold">
-                            {saldo.saldo.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

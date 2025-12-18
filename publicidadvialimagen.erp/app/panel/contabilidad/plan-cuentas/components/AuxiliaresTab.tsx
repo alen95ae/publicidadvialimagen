@@ -11,11 +11,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Auxiliar, AuxiliarSaldos, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
 const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Banco", "Caja", "Empleado", "Otro"]
-const MONEDAS: Moneda[] = ["BOB", "USD"]
+// Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
+const MONEDAS: string[] = ["BS", "USD"]
 
 export default function AuxiliaresTab() {
   const [auxiliares, setAuxiliares] = useState<Auxiliar[]>([])
@@ -25,20 +27,20 @@ export default function AuxiliaresTab() {
   const [saldos, setSaldos] = useState<AuxiliarSaldos[]>([])
   
   // Estado del formulario
-  const [formData, setFormData] = useState<Partial<Auxiliar>>({
+  const [formData, setFormData] = useState<any>({
     tipo_auxiliar: "",
     codigo: "",
     nombre: "",
-    cuenta_asociada: "",
-    moneda: "BOB",
-    cuenta_bancaria_o_caja: false,
+    cuenta_id: null,
+    moneda: "BS",
+    es_cuenta_bancaria: false,
     departamento: "",
     direccion: "",
     telefono: "",
     email: "",
     nit: "",
     autorizacion: "",
-    vigencia: true,
+    vigente: true,
   })
 
   useEffect(() => {
@@ -51,16 +53,16 @@ export default function AuxiliaresTab() {
         tipo_auxiliar: selectedAuxiliar.tipo_auxiliar || "",
         codigo: selectedAuxiliar.codigo || "",
         nombre: selectedAuxiliar.nombre || "",
-        cuenta_asociada: selectedAuxiliar.cuenta_asociada || "",
-        moneda: selectedAuxiliar.moneda || "BOB",
-        cuenta_bancaria_o_caja: selectedAuxiliar.cuenta_bancaria_o_caja || false,
+        cuenta_id: (selectedAuxiliar as any).cuenta_id || null,
+        moneda: selectedAuxiliar.moneda || "BS",
+        es_cuenta_bancaria: (selectedAuxiliar as any).es_cuenta_bancaria ?? false,
         departamento: selectedAuxiliar.departamento || "",
         direccion: selectedAuxiliar.direccion || "",
         telefono: selectedAuxiliar.telefono || "",
         email: selectedAuxiliar.email || "",
         nit: selectedAuxiliar.nit || "",
         autorizacion: selectedAuxiliar.autorizacion || "",
-        vigencia: selectedAuxiliar.vigencia !== undefined ? selectedAuxiliar.vigencia : true,
+        vigente: (selectedAuxiliar as any).vigente ?? true,
       })
       fetchSaldos(selectedAuxiliar.id)
     } else {
@@ -103,16 +105,16 @@ export default function AuxiliaresTab() {
       tipo_auxiliar: "",
       codigo: "",
       nombre: "",
-      cuenta_asociada: "",
-      moneda: "BOB",
-      cuenta_bancaria_o_caja: false,
+      cuenta_id: null,
+      moneda: "BS",
+      es_cuenta_bancaria: false,
       departamento: "",
       direccion: "",
       telefono: "",
       email: "",
       nit: "",
       autorizacion: "",
-      vigencia: true,
+      vigente: true,
     })
     setSaldos([])
   }
@@ -194,202 +196,282 @@ export default function AuxiliaresTab() {
   }
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Contenedor principal */}
-      <div className="flex-1 flex flex-col gap-4">
-        {/* Tabla */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Auxiliares</CardTitle>
-            <CardDescription>Lista de auxiliares contables</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-8 text-gray-500">Cargando...</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tipo Auxiliar</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Moneda</TableHead>
-                      <TableHead>Vigencia</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {auxiliares.length === 0 ? (
+    <div className="flex flex-col gap-4 h-full overflow-hidden">
+      {/* Fila superior: Tabla de auxiliares y Panel de saldos */}
+      <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
+        {/* Contenedor principal - Tabla de auxiliares */}
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-shrink-0">
+              <CardTitle>Auxiliares</CardTitle>
+              <CardDescription>Lista de auxiliares contables</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
+              {loading ? (
+                <div className="text-center py-8 text-gray-500">Cargando...</div>
+              ) : (
+                <div 
+                  className="overflow-x-auto max-h-[600px] overflow-y-auto"
+                  data-table-container
+                >
+                  <Table className="min-w-full">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-gray-500 py-8">
-                          No hay auxiliares registrados
-                        </TableCell>
+                        <TableHead className="w-32">Tipo</TableHead>
+                        <TableHead className="w-24">Código</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead className="w-20 text-center">Moneda</TableHead>
+                        <TableHead className="w-24 text-center">Vigencia</TableHead>
                       </TableRow>
-                    ) : (
-                      auxiliares.map((auxiliar) => (
-                        <TableRow
-                          key={auxiliar.id}
-                          onClick={() => setSelectedAuxiliar(auxiliar)}
-                          className={`cursor-pointer ${
-                            selectedAuxiliar?.id === auxiliar.id ? "bg-blue-50" : ""
-                          }`}
-                        >
-                          <TableCell>
-                            <Badge variant="outline">{auxiliar.tipo_auxiliar}</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono">{auxiliar.codigo}</TableCell>
-                          <TableCell>{auxiliar.nombre}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{auxiliar.moneda}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {auxiliar.vigencia ? (
-                              <Badge className="bg-green-100 text-green-800">Activo</Badge>
-                            ) : (
-                              <Badge variant="secondary">Inactivo</Badge>
-                            )}
+                    </TableHeader>
+                    <TableBody>
+                      {auxiliares.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                            No hay auxiliares registrados
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        auxiliares.map((auxiliar) => (
+                          <TableRow
+                            key={auxiliar.id}
+                            onClick={() => setSelectedAuxiliar(auxiliar)}
+                            className={`cursor-pointer ${
+                              selectedAuxiliar?.id === auxiliar.id ? "bg-blue-50" : ""
+                            }`}
+                          >
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{auxiliar.tipo_auxiliar}</Badge>
+                            </TableCell>
+                            <TableCell className="font-mono">{auxiliar.codigo}</TableCell>
+                            <TableCell>
+                              {auxiliar.nombre && auxiliar.nombre.length > 40 ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger className="text-left">
+                                      {auxiliar.nombre.slice(0, 40) + '…'}
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm">
+                                      <p>{auxiliar.nombre}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                auxiliar.nombre || '—'
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="text-xs">{auxiliar.moneda}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {((auxiliar as any).vigente ?? true) ? (
+                                <Badge className="bg-green-100 text-green-800 text-xs">Activo</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">Inactivo</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Panel lateral de saldos */}
+        <Card className="w-80 flex-shrink-0 overflow-hidden flex flex-col max-h-full">
+          <CardHeader className="flex-shrink-0">
+            <CardTitle>Saldos por Gestión</CardTitle>
+            <CardDescription>Saldo del auxiliar por gestión</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {!selectedAuxiliar ? (
+              <div className="text-center text-gray-500 py-8">
+                Seleccione un auxiliar para ver sus saldos
+              </div>
+            ) : saldos.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                No hay saldos registrados
+              </div>
+            ) : (
+              <div className="space-y-4 flex-1 overflow-hidden flex flex-col min-h-0">
+                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
+                  <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Gestión</TableHead>
+                        <TableHead className="text-right">Saldo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {saldos.map((saldo, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{saldo.gestion}</TableCell>
+                          <TableCell className="text-right font-mono font-semibold">
+                            {saldo.saldo.toLocaleString("es-BO", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
+      </div>
 
-        {/* Formulario inferior */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>
-                  {selectedAuxiliar ? "Editar Auxiliar" : "Nuevo Auxiliar"}
-                </CardTitle>
-                <CardDescription>
-                  {selectedAuxiliar
-                    ? "Modifica la información del auxiliar seleccionado"
-                    : "Complete la información para crear un nuevo auxiliar"}
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleNew}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nuevo
+      {/* Formulario inferior - Todo el ancho */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                {selectedAuxiliar ? "Editar Auxiliar" : "Nuevo Auxiliar"}
+              </CardTitle>
+              <CardDescription>
+                {selectedAuxiliar
+                  ? "Modifica la información del auxiliar seleccionado"
+                  : "Complete la información para crear un nuevo auxiliar"}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleNew}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo
+              </Button>
+              {selectedAuxiliar && (
+                <Button variant="outline" size="sm" onClick={handleDelete} className="border-gray-300">
+                  <Trash2 className="w-4 h-4 mr-2 text-red-600" />
+                  <span className="text-gray-700">Eliminar</span>
                 </Button>
-                {selectedAuxiliar && (
-                  <Button variant="outline" size="sm" onClick={handleDelete}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Eliminar
-                  </Button>
-                )}
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {saving ? "Guardando..." : "Guardar"}
-                </Button>
+              )}
+              <Button size="sm" onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? "Guardando..." : "Guardar"}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Tipo Auxiliar */}
+            <div className="space-y-2">
+              <Label htmlFor="tipo_auxiliar">Tipo Auxiliar *</Label>
+              <Select
+                value={formData.tipo_auxiliar || ""}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, tipo_auxiliar: value as TipoAuxiliar })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_AUXILIAR.map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                  {/* Si hay un tipo que no está en la lista, mostrarlo también */}
+                  {formData.tipo_auxiliar && formData.tipo_auxiliar.trim() !== "" && !TIPOS_AUXILIAR.includes(formData.tipo_auxiliar as TipoAuxiliar) && (
+                    <SelectItem value={formData.tipo_auxiliar}>
+                      {formData.tipo_auxiliar}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Código Auxiliar */}
+            <div className="space-y-2">
+              <Label htmlFor="codigo">Código Auxiliar *</Label>
+              <Input
+                id="codigo"
+                value={formData.codigo || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, codigo: e.target.value })
+                }
+                className="font-mono"
+              />
+            </div>
+
+            {/* Nombre */}
+            <div className="space-y-2 md:col-span-2 lg:col-span-1">
+              <Label htmlFor="nombre">Nombre *</Label>
+              <Input
+                id="nombre"
+                value={formData.nombre || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, nombre: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Cuenta ID (cuenta_id) */}
+            <div className="space-y-2">
+              <Label htmlFor="cuenta_id">Cuenta ID</Label>
+              <Input
+                id="cuenta_id"
+                type="number"
+                value={formData.cuenta_id || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, cuenta_id: e.target.value ? parseInt(e.target.value) : null })
+                }
+                className="font-mono"
+                placeholder="ID de cuenta"
+              />
+            </div>
+
+            {/* Moneda */}
+            <div className="space-y-2">
+              <Label htmlFor="moneda">Moneda</Label>
+              <Select
+                value={formData.moneda || "BS"}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, moneda: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONEDAS.map((moneda) => (
+                    <SelectItem key={moneda} value={moneda}>
+                      {moneda}
+                    </SelectItem>
+                  ))}
+                  {/* Si hay una moneda que no está en la lista, mostrarla también */}
+                  {formData.moneda && !MONEDAS.includes(formData.moneda) && (
+                    <SelectItem value={formData.moneda}>
+                      {formData.moneda}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Es Cuenta Bancaria */}
+            <div className="space-y-2 md:col-span-2 lg:col-span-1">
+              <div className="flex items-center space-x-2 pt-6">
+                <Checkbox
+                  id="es_cuenta_bancaria"
+                  checked={formData.es_cuenta_bancaria ?? false}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, es_cuenta_bancaria: !!checked })
+                  }
+                />
+                <Label htmlFor="es_cuenta_bancaria" className="cursor-pointer">
+                  Es Cuenta Bancaria
+                </Label>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Tipo Auxiliar */}
-              <div className="space-y-2">
-                <Label htmlFor="tipo_auxiliar">Tipo Auxiliar *</Label>
-                <Select
-                  value={formData.tipo_auxiliar || ""}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, tipo_auxiliar: value as TipoAuxiliar })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPOS_AUXILIAR.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {tipo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Código Auxiliar */}
-              <div className="space-y-2">
-                <Label htmlFor="codigo">Código Auxiliar *</Label>
-                <Input
-                  id="codigo"
-                  value={formData.codigo || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, codigo: e.target.value })
-                  }
-                  className="font-mono"
-                />
-              </div>
-
-              {/* Nombre */}
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="nombre">Nombre *</Label>
-                <Input
-                  id="nombre"
-                  value={formData.nombre || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nombre: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* Cuenta asociada */}
-              <div className="space-y-2">
-                <Label htmlFor="cuenta_asociada">Cuenta asociada</Label>
-                <Input
-                  id="cuenta_asociada"
-                  value={formData.cuenta_asociada || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, cuenta_asociada: e.target.value })
-                  }
-                  className="font-mono"
-                />
-              </div>
-
-              {/* Moneda */}
-              <div className="space-y-2">
-                <Label htmlFor="moneda">Moneda</Label>
-                <Select
-                  value={formData.moneda || "BOB"}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, moneda: value as Moneda })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONEDAS.map((moneda) => (
-                      <SelectItem key={moneda} value={moneda}>
-                        {moneda}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Cuenta Bancaria o Caja */}
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="cuenta_bancaria_o_caja"
-                    checked={formData.cuenta_bancaria_o_caja || false}
-                    onCheckedChange={(checked) =>
-                      setFormData({ ...formData, cuenta_bancaria_o_caja: !!checked })
-                    }
-                  />
-                  <Label htmlFor="cuenta_bancaria_o_caja" className="cursor-pointer">
-                    Cuenta Bancaria o Caja
-                  </Label>
-                </div>
-              </div>
 
               {/* Departamento */}
               <div className="space-y-2">
@@ -454,64 +536,36 @@ export default function AuxiliaresTab() {
                 />
               </div>
 
-              {/* Autorización */}
-              <div className="space-y-2">
-                <Label htmlFor="autorizacion">Autorización</Label>
-                <Input
-                  id="autorizacion"
-                  value={formData.autorizacion || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, autorizacion: e.target.value })
+            {/* Autorización */}
+            <div className="space-y-2">
+              <Label htmlFor="autorizacion">Autorización</Label>
+              <Input
+                id="autorizacion"
+                value={formData.autorizacion || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, autorizacion: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Vigente */}
+            <div className="space-y-2 md:col-span-2 lg:col-span-1">
+              <div className="flex items-center space-x-2 pt-6">
+                <Checkbox
+                  id="vigente"
+                  checked={formData.vigente ?? true}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, vigente: !!checked })
                   }
                 />
+                <Label htmlFor="vigente" className="cursor-pointer">
+                  Vigente
+                </Label>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Panel lateral de saldos */}
-      {selectedAuxiliar && (
-        <Card className="w-80 flex-shrink-0">
-          <CardHeader>
-            <CardTitle>Saldos por Gestión</CardTitle>
-            <CardDescription>Saldo del auxiliar por gestión</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {saldos.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                No hay saldos registrados
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Gestión</TableHead>
-                        <TableHead className="text-right">Saldo</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {saldos.map((saldo, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{saldo.gestion}</TableCell>
-                          <TableCell className="text-right font-mono font-semibold">
-                            {saldo.saldo.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

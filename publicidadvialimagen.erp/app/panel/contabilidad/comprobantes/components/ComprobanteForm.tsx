@@ -9,8 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Save, Trash2, CheckCircle } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
 import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta } from "@/lib/types/contabilidad"
 
@@ -23,7 +26,7 @@ interface ComprobanteFormProps {
 const ORIGENES: OrigenComprobante[] = ["Contabilidad", "Ventas", "Tesorería", "Activos", "Planillas"]
 const TIPOS_COMPROBANTE: TipoComprobante[] = ["Ingreso", "Egreso", "Diario", "Traspaso", "Ctas por Pagar"]
 const TIPOS_ASIENTO: TipoAsiento[] = ["Normal", "Apertura", "Cierre", "Ajuste"]
-const MONEDAS: Moneda[] = ["BOB", "USD"]
+const MONEDAS: Moneda[] = ["BS", "USD"]
 const MESES = [
   { value: 1, label: "Enero" },
   { value: 2, label: "Febrero" },
@@ -44,6 +47,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
   const [saving, setSaving] = useState(false)
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
   const [loadingCuentas, setLoadingCuentas] = useState(false)
+  const [openCuentaCombobox, setOpenCuentaCombobox] = useState<Record<number, boolean>>({})
+  const [filteredCuentas, setFilteredCuentas] = useState<Record<number, Cuenta[]>>({})
 
   // Estado del formulario
   const [formData, setFormData] = useState<Partial<Comprobante>>({
@@ -53,7 +58,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
     fecha: new Date().toISOString().split("T")[0],
     periodo: new Date().getMonth() + 1,
     gestion: new Date().getFullYear(),
-    moneda: "BOB",
+    moneda: "BS",
     tipo_cambio: 1,
     estado: "BORRADOR",
   })
@@ -65,9 +70,27 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
     fetchCuentasTransaccionales()
   }, [])
 
+  // Inicializar filtros cuando se cargan las cuentas y hay detalles
+  useEffect(() => {
+    if (cuentas.length > 0 && detalles.length > 0) {
+      const initialFilters: Record<number, Cuenta[]> = {}
+      detalles.forEach((_, idx) => {
+        // Solo inicializar si no existe ya un filtro para este índice
+        if (!(idx in filteredCuentas)) {
+          initialFilters[idx] = cuentas.slice(0, 20)
+        }
+      })
+      if (Object.keys(initialFilters).length > 0) {
+        setFilteredCuentas(prev => ({ ...prev, ...initialFilters }))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentas.length, detalles.length])
+
   // Sincronizar formulario cuando cambia comprobante seleccionado
   useEffect(() => {
     if (comprobante) {
+      console.log("🔄 Cargando comprobante:", comprobante)
       setFormData({
         numero: comprobante.numero,
         origen: comprobante.origen,
@@ -78,16 +101,30 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
         gestion: comprobante.gestion,
         moneda: comprobante.moneda,
         tipo_cambio: comprobante.tipo_cambio,
-        glosa: comprobante.glosa || "",
+        concepto: comprobante.concepto || "",
         beneficiario: comprobante.beneficiario || "",
         nro_cheque: comprobante.nro_cheque || "",
         estado: comprobante.estado,
         empresa_id: comprobante.empresa_id,
       })
       
-      // Cargar detalles
-      if (comprobante.id) {
+      // Si el comprobante ya tiene detalles (viene del listado), usarlos directamente
+      if (comprobante.detalles && Array.isArray(comprobante.detalles) && comprobante.detalles.length > 0) {
+        console.log("✅ Usando detalles del comprobante:", comprobante.detalles)
+        setDetalles(comprobante.detalles)
+        // Inicializar filtros
+        const initialFilters: Record<number, Cuenta[]> = {}
+        comprobante.detalles.forEach((_, idx) => {
+          initialFilters[idx] = cuentas.slice(0, 20)
+        })
+        setFilteredCuentas(initialFilters)
+      } else if (comprobante.id) {
+        // Si no tiene detalles, cargarlos desde el API
+        console.log("📡 Cargando detalles desde API para comprobante:", comprobante.id)
         fetchDetalles(comprobante.id)
+      } else {
+        setDetalles([])
+        setFilteredCuentas({})
       }
     } else {
       resetForm()
@@ -115,13 +152,47 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
 
   const fetchDetalles = async (comprobanteId: number) => {
     try {
+      console.log("📡 Fetching detalles para comprobante:", comprobanteId)
       const response = await api(`/api/contabilidad/comprobantes/${comprobanteId}`)
       if (response.ok) {
-        const data = await response.json()
-        setDetalles(data.data?.detalles || [])
+        const result = await response.json()
+        console.log("📋 Respuesta completa:", result)
+        
+        // El endpoint devuelve { success: true, data: { detalles: [...] } }
+        let detallesData = []
+        if (result.data) {
+          // Si data es un objeto con detalles
+          if (Array.isArray(result.data.detalles)) {
+            detallesData = result.data.detalles
+          } else if (Array.isArray(result.data)) {
+            // Si data es directamente un array
+            detallesData = result.data
+          } else if (result.detalles && Array.isArray(result.detalles)) {
+            detallesData = result.detalles
+          }
+        } else if (Array.isArray(result.detalles)) {
+          detallesData = result.detalles
+        }
+        
+        console.log("✅ Detalles procesados y establecidos:", detallesData)
+        setDetalles(detallesData)
+        
+        // Inicializar filtros para cada detalle (solo si las cuentas ya están cargadas)
+        if (cuentas.length > 0) {
+          const initialFilters: Record<number, Cuenta[]> = {}
+          detallesData.forEach((_, idx) => {
+            initialFilters[idx] = cuentas.slice(0, 20)
+          })
+          setFilteredCuentas(initialFilters)
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("❌ Error en respuesta:", response.status, errorData)
+        setDetalles([])
       }
     } catch (error) {
-      console.error("Error fetching detalles:", error)
+      console.error("❌ Error fetching detalles:", error)
+      setDetalles([])
     }
   }
 
@@ -133,7 +204,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
       fecha: new Date().toISOString().split("T")[0],
       periodo: new Date().getMonth() + 1,
       gestion: new Date().getFullYear(),
-      moneda: "BOB",
+      moneda: "BS",
       tipo_cambio: 1,
       estado: "BORRADOR",
     })
@@ -153,17 +224,71 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
       haber_usd: 0,
       orden: detalles.length + 1,
     }
+    const newIndex = detalles.length
     setDetalles([...detalles, newDetalle])
+    // Inicializar filtro para el nuevo detalle
+    setFilteredCuentas(prev => ({ ...prev, [newIndex]: cuentas.slice(0, 20) }))
   }
 
   const handleRemoveDetalle = (index: number) => {
-    setDetalles(detalles.filter((_, i) => i !== index))
+    const newDetalles = detalles.filter((_, i) => i !== index)
+    setDetalles(newDetalles)
+    // Reindexar filtros después de eliminar
+    const newFilters: Record<number, Cuenta[]> = {}
+    newDetalles.forEach((_, idx) => {
+      newFilters[idx] = filteredCuentas[idx + 1] || cuentas.slice(0, 20)
+    })
+    setFilteredCuentas(newFilters)
+    // Cerrar combobox si estaba abierto
+    const newOpenState: Record<number, boolean> = {}
+    Object.keys(openCuentaCombobox).forEach(key => {
+      const keyNum = parseInt(key)
+      if (keyNum < index) {
+        newOpenState[keyNum] = openCuentaCombobox[keyNum]
+      } else if (keyNum > index) {
+        newOpenState[keyNum - 1] = openCuentaCombobox[keyNum]
+      }
+    })
+    setOpenCuentaCombobox(newOpenState)
   }
 
   const handleDetalleChange = (index: number, field: keyof ComprobanteDetalle, value: any) => {
     const updated = [...detalles]
     updated[index] = { ...updated[index], [field]: value }
     setDetalles(updated)
+  }
+
+  // Función de filtrado para cuentas
+  const filtrarCuentas = (detalleIndex: number, searchValue: string) => {
+    if (!searchValue || searchValue.trim() === '') {
+      setFilteredCuentas(prev => ({ ...prev, [detalleIndex]: cuentas.slice(0, 20) }))
+      return
+    }
+
+    const search = searchValue.toLowerCase().trim()
+    const filtered = cuentas.filter((cuenta) => {
+      const codigo = (cuenta.cuenta || '').toLowerCase()
+      const descripcion = (cuenta.descripcion || '').toLowerCase()
+      return codigo.startsWith(search) || descripcion.includes(search)
+    }).slice(0, 20)
+
+    setFilteredCuentas(prev => ({ ...prev, [detalleIndex]: filtered }))
+  }
+
+  // Función para seleccionar cuenta
+  const seleccionarCuenta = (detalleIndex: number, cuenta: Cuenta) => {
+    handleDetalleChange(detalleIndex, "cuenta", cuenta.cuenta)
+    setOpenCuentaCombobox(prev => ({ ...prev, [detalleIndex]: false }))
+  }
+
+  // Obtener el texto a mostrar para la cuenta seleccionada
+  const getCuentaDisplayText = (cuentaCodigo: string) => {
+    if (!cuentaCodigo) return "Seleccionar cuenta..."
+    const cuenta = cuentas.find(c => c.cuenta === cuentaCodigo)
+    if (cuenta) {
+      return `${cuenta.cuenta} - ${cuenta.descripcion}`
+    }
+    return cuentaCodigo
   }
 
   // Calcular totales
@@ -215,7 +340,16 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
         })
 
         if (response.ok) {
+          const result = await response.json()
           toast.success("Comprobante actualizado correctamente")
+          // Recargar detalles después de guardar
+          if (result.data?.detalles) {
+            console.log("✅ Detalles actualizados después de guardar:", result.data.detalles)
+            setDetalles(result.data.detalles)
+          } else if (comprobante.id) {
+            // Si no vienen en la respuesta, recargarlos
+            await fetchDetalles(comprobante.id)
+          }
           onSave()
         } else {
           const error = await response.json()
@@ -230,8 +364,12 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
         })
 
         if (response.ok) {
-          toast.success("Comprobante creado correctamente")
           const newComp = await response.json()
+          toast.success("Comprobante creado correctamente")
+          // Si el nuevo comprobante tiene detalles, mantenerlos
+          if (newComp.data?.detalles) {
+            setDetalles(newComp.data.detalles)
+          }
           resetForm()
           onSave()
         } else {
@@ -304,9 +442,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={onNew} disabled={isReadOnly}>
-                Nuevo
-              </Button>
               <Button
                 size="sm"
                 onClick={handleSave}
@@ -467,7 +602,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
             <div className="space-y-2">
               <Label htmlFor="moneda">Moneda</Label>
               <Select
-                value={formData.moneda || "BOB"}
+                value={formData.moneda || "BS"}
                 onValueChange={(value) =>
                   setFormData({ ...formData, moneda: value as Moneda })
                 }
@@ -502,13 +637,13 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
               />
             </div>
 
-            {/* Glosa */}
+            {/* Concepto */}
             <div className="space-y-2 col-span-2">
-              <Label htmlFor="glosa">Glosa</Label>
+              <Label htmlFor="concepto">Concepto</Label>
               <Input
-                id="glosa"
-                value={formData.glosa || ""}
-                onChange={(e) => setFormData({ ...formData, glosa: e.target.value })}
+                id="concepto"
+                value={formData.concepto || ""}
+                onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
                 disabled={isReadOnly}
                 placeholder="Descripción general del comprobante"
               />
@@ -575,7 +710,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-32">Cuenta</TableHead>
+                  <TableHead className="w-[250px]">Cuenta</TableHead>
                   <TableHead className="w-24">Auxiliar</TableHead>
                   <TableHead className="w-12">LC</TableHead>
                   <TableHead>Glosa</TableHead>
@@ -597,25 +732,71 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
                 ) : (
                   detalles.map((detalle, index) => (
                     <TableRow key={index}>
-                      <TableCell>
-                        <Select
-                          value={detalle.cuenta || ""}
-                          onValueChange={(value) =>
-                            handleDetalleChange(index, "cuenta", value)
-                          }
-                          disabled={isReadOnly}
+                      <TableCell className="w-[250px]">
+                        <Popover
+                          open={openCuentaCombobox[index] || false}
+                          onOpenChange={(open) => {
+                            setOpenCuentaCombobox(prev => ({ ...prev, [index]: open }))
+                            if (open) {
+                              // Al abrir, mostrar las primeras 20 cuentas
+                              setFilteredCuentas(prev => ({ ...prev, [index]: cuentas.slice(0, 20) }))
+                            }
+                          }}
                         >
-                          <SelectTrigger className="w-32">
-                            <SelectValue placeholder="Cuenta" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cuentas.map((cuenta) => (
-                              <SelectItem key={cuenta.id} value={cuenta.cuenta}>
-                                {cuenta.cuenta} - {cuenta.descripcion}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              disabled={isReadOnly}
+                              className={cn(
+                                "w-[250px] h-9 justify-between font-mono text-sm overflow-hidden",
+                                !detalle.cuenta && "text-muted-foreground"
+                              )}
+                            >
+                              <span className="truncate block text-left">
+                                {getCuentaDisplayText(detalle.cuenta || "")}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-0" align="start">
+                            <Command shouldFilter={false} className="overflow-visible">
+                              <CommandInput
+                                placeholder="Buscar por código o descripción..."
+                                className="h-9 border-0 focus:ring-0"
+                                onValueChange={(value) => filtrarCuentas(index, value)}
+                              />
+                              <CommandList>
+                                <CommandEmpty>
+                                  {loadingCuentas ? "Cargando..." : "No se encontraron cuentas."}
+                                </CommandEmpty>
+                                {(filteredCuentas[index] || []).length > 0 && (
+                                  <CommandGroup>
+                                    {(filteredCuentas[index] || []).map((cuenta) => (
+                                      <CommandItem
+                                        key={cuenta.id}
+                                        value={`${cuenta.cuenta} ${cuenta.descripcion}`}
+                                        onSelect={() => seleccionarCuenta(index, cuenta)}
+                                        className="cursor-pointer"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            detalle.cuenta === cuenta.cuenta ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono font-medium">{cuenta.cuenta}</span>
+                                          <span className="text-gray-600 truncate">{cuenta.descripcion}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -747,28 +928,28 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
           {/* Totales */}
           <Separator className="my-4" />
           <div className="grid grid-cols-4 gap-4 text-sm">
-            <div className="space-y-2">
+            <div className="space-y-2 text-center">
               <div className="font-semibold">Total Debe Bs</div>
-              <div className="text-lg font-mono text-right">
+              <div className="text-lg font-mono">
                 {totales.debe_bs.toLocaleString("es-BO", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 text-center">
               <div className="font-semibold">Total Haber Bs</div>
-              <div className="text-lg font-mono text-right">
+              <div className="text-lg font-mono">
                 {totales.haber_bs.toLocaleString("es-BO", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 text-center">
               <div className="font-semibold">Diferencia Bs</div>
               <div
-                className={`text-lg font-mono text-right ${
+                className={`text-lg font-mono ${
                   Math.abs(diferenciaBs) < 0.01
                     ? "text-green-600"
                     : "text-red-600 font-bold"
@@ -780,10 +961,10 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
                 })}
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 text-center">
               <div className="font-semibold">Diferencia USD</div>
               <div
-                className={`text-lg font-mono text-right ${
+                className={`text-lg font-mono ${
                   Math.abs(diferenciaUsd) < 0.01
                     ? "text-green-600"
                     : "text-red-600 font-bold"

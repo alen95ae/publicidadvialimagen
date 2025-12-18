@@ -89,14 +89,13 @@ export default function LibroDiarioInforme() {
       if (filters.empresa) params.append("empresa", filters.empresa)
       if (filters.regional) params.append("regional", filters.regional)
       if (filters.sucursal) params.append("sucursal", filters.sucursal)
-      if (filters.clasificador) params.append("clasificador", filters.clasificador)
       if (filters.fecha_inicial) params.append("fecha_inicial", filters.fecha_inicial)
       if (filters.fecha_final) params.append("fecha_final", filters.fecha_final)
       if (filters.tipo_comprobante && filters.tipo_comprobante !== "Todos") {
         params.append("tipo_comprobante", filters.tipo_comprobante)
       }
       if (filters.estado && filters.estado !== "Todos") {
-        params.append("estado", filters.estado)
+        params.append("estado", filters.estado.toUpperCase())
       }
 
       const response = await api(`/api/contabilidad/informes/libro-diario?${params.toString()}`)
@@ -130,13 +129,20 @@ export default function LibroDiarioInforme() {
   }
 
   const getEstadoBadge = (estado: string) => {
+    const estadoUpper = estado.toUpperCase()
+    if (estadoUpper === "APROBADO") {
+      return (
+        <span className="inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-green-100 text-green-800">
+          {estado}
+        </span>
+      )
+    }
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      APROBADO: "default",
       BORRADOR: "secondary",
       REVERTIDO: "destructive",
     }
     return (
-      <Badge variant={variants[estado.toUpperCase()] || "outline"}>
+      <Badge variant={variants[estadoUpper] || "outline"}>
         {estado}
       </Badge>
     )
@@ -287,7 +293,7 @@ export default function LibroDiarioInforme() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button onClick={handleBuscar} size="sm">
+            <Button onClick={handleBuscar} size="sm" className="bg-red-600 hover:bg-red-700 text-white">
               <Search className="w-4 h-4 mr-2" />
               Buscar
             </Button>

@@ -365,7 +365,21 @@ export default function SolicitudesPage() {
     try {
       setSavingChanges(true)
       const codigos = Object.keys(editedSolicitudes)
-      const updates = Object.values(editedSolicitudes)[0] // Todos tienen el mismo estado
+      
+      if (codigos.length === 0) {
+        toast.warning('No hay cambios para guardar')
+        return
+      }
+
+      // Obtener el estado del primer elemento (todos deberían tener el mismo estado en edición masiva)
+      const updates = Object.values(editedSolicitudes)[0]
+      
+      if (!updates || !updates.estado) {
+        toast.error('No se puede guardar: estado no especificado')
+        return
+      }
+
+      console.log('[handleSaveChanges] Guardando cambios:', { codigos, updates })
 
       const response = await fetch('/api/solicitudes/bulk', {
         method: 'POST',
@@ -379,16 +393,19 @@ export default function SolicitudesPage() {
 
       if (response.ok) {
         const result = await response.json()
+        console.log('[handleSaveChanges] ✅ Cambios guardados:', result)
         toast.success(`${result.count} solicitud(es) actualizada(s)`)
         setEditedSolicitudes({})
         setSelectedSolicitudes([])
         await loadSolicitudes()
       } else {
-        toast.error('Error al guardar los cambios')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('[handleSaveChanges] ❌ Error del servidor:', errorData)
+        toast.error(errorData.error || 'Error al guardar los cambios')
       }
     } catch (error) {
-      console.error('Error guardando cambios:', error)
-      toast.error('Error al guardar los cambios')
+      console.error('[handleSaveChanges] ❌ Error inesperado:', error)
+      toast.error('Error de conexión al guardar los cambios')
     } finally {
       setSavingChanges(false)
     }
@@ -543,9 +560,26 @@ export default function SolicitudesPage() {
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                   {selectedSolicitudes.length === 1 ? (
-                    <p className="text-sm text-blue-900 font-medium">
-                      1 solicitud seleccionada
-                    </p>
+                    <>
+                      <p className="text-sm text-blue-900 font-medium">
+                        1 solicitud seleccionada
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-blue-900">Cambiar estado a:</span>
+                        <Select
+                          onValueChange={(value) => handleBulkEstadoChange(value)}
+                        >
+                          <SelectTrigger className="w-[140px] h-8 bg-white">
+                            <SelectValue placeholder="Seleccionar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Nueva">Nueva</SelectItem>
+                            <SelectItem value="Pendiente">Pendiente</SelectItem>
+                            <SelectItem value="Cotizada">Cotizada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
                   ) : selectedSolicitudes.length > 1 ? (
                     <>
                       <p className="text-sm text-blue-900 font-medium">

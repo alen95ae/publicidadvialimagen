@@ -79,6 +79,27 @@ function formatearNumero(numero: number): string {
   return `${parteEnteraConSeparador},${parteDecimal} Bs`
 }
 
+// Función para obtener el email a mostrar en el footer
+// Si el email pertenece a ciertos usuarios, se muestra el email comercial
+function obtenerEmailFooter(email?: string): string | undefined {
+  if (!email) return undefined
+  
+  // Lista de emails que deben mostrar el email comercial
+  const emailsPersonales = [
+    'alen95ae@gmail.com',
+    'alen_ae@hotmail.com',
+    'alen_ae@outlook.com'
+  ]
+  
+  // Si el email está en la lista, retornar el email comercial
+  if (emailsPersonales.includes(email.toLowerCase().trim())) {
+    return 'comercial@publicidadvialimagen.com'
+  }
+  
+  // Si no, retornar el email original
+  return email
+}
+
 export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4')
   const primaryColor: [number, number, number] = [190, 8, 18] // #be0812
@@ -533,9 +554,10 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
     
     // Email y número del usuario que descarga (si existen)
     let rightContentX = separator2X + 5
-    if (datos.vendedorEmail) {
-      pdf.text(datos.vendedorEmail, rightContentX, footerTextY)
-      rightContentX += pdf.getTextWidth(datos.vendedorEmail) + 5
+    const emailFooter = obtenerEmailFooter(datos.vendedorEmail)
+    if (emailFooter) {
+      pdf.text(emailFooter, rightContentX, footerTextY)
+      rightContentX += pdf.getTextWidth(emailFooter) + 5
       
       // Separador entre email y número
       if (datos.vendedorNumero) {
@@ -916,12 +938,13 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
     pdf.text('|', 140, footerTextY)
     
     // Derecha (antes de la paginación): email (si existe)
-    if (datos.vendedorEmail) {
-      pdf.text(datos.vendedorEmail, 145, footerTextY)
+    const emailFooter = obtenerEmailFooter(datos.vendedorEmail)
+    if (emailFooter) {
+      pdf.text(emailFooter, 145, footerTextY)
     }
     
     // Separador 3 (entre email y paginación)
-    if (datos.vendedorEmail) {
+    if (emailFooter) {
       pdf.text('|', 190, footerTextY)
     }
     

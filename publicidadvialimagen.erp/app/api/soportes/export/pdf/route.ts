@@ -421,9 +421,32 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Función para obtener el email a mostrar en el footer
+// Si el email pertenece a ciertos usuarios, se muestra el email comercial
+function obtenerEmailFooter(email?: string): string | undefined {
+  if (!email) return undefined
+  
+  // Lista de emails que deben mostrar el email comercial
+  const emailsPersonales = [
+    'alen95ae@gmail.com',
+    'alen_ae@hotmail.com',
+    'alen_ae@outlook.com'
+  ]
+  
+  // Si el email está en la lista, retornar el email comercial
+  if (emailsPersonales.includes(email.toLowerCase().trim())) {
+    return 'comercial@publicidadvialimagen.com'
+  }
+  
+  // Si no, retornar el email original
+  return email
+}
+
 async function generatePDF(supports: any[], userEmail?: string, userNumero?: string): Promise<Buffer> {
   try {
-    console.log('📄 Generando PDF catálogo con email:', userEmail, 'y número:', userNumero)
+    // Obtener el email a mostrar en el footer
+    const emailFooter = obtenerEmailFooter(userEmail)
+    console.log('📄 Generando PDF catálogo con email:', emailFooter, 'y número:', userNumero)
     const currentDate = new Date().toLocaleDateString('es-ES')
     const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
@@ -855,9 +878,10 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       pdf.text('|', separator1X, footerY + 7)
       
       // Calcular espacio para el contenido derecho (email, número, paginación)
+      const emailFooter = obtenerEmailFooter(userEmail)
       let rightContentWidth = 0
-      if (userEmail && userEmail.trim() !== '') {
-        rightContentWidth += pdf.getTextWidth(userEmail) + 5
+      if (emailFooter && emailFooter.trim() !== '') {
+        rightContentWidth += pdf.getTextWidth(emailFooter) + 5
         if (userNumero && userNumero.trim() !== '') {
           rightContentWidth += 5 + pdf.getTextWidth('|') + 5 // Separador entre email y número
         }
@@ -867,7 +891,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       }
       const paginationText = `${i}/${totalPages}`
       rightContentWidth += pdf.getTextWidth(paginationText) + 5
-      if ((userEmail && userEmail.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
+      if ((emailFooter && emailFooter.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
         rightContentWidth += 5 + pdf.getTextWidth('|') // Separador final antes de paginación
       }
       
@@ -883,9 +907,9 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       
       // Derecha (antes de la paginación): email y número (si existen)
       let rightContentX = separator2X + 5
-      if (userEmail && userEmail.trim() !== '') {
-        pdf.text(userEmail, rightContentX, footerY + 7)
-        rightContentX += pdf.getTextWidth(userEmail) + 5
+      if (emailFooter && emailFooter.trim() !== '') {
+        pdf.text(emailFooter, rightContentX, footerY + 7)
+        rightContentX += pdf.getTextWidth(emailFooter) + 5
         
         // Separador entre email y número
         if (userNumero && userNumero.trim() !== '') {
@@ -901,7 +925,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       }
       
       // Separador final (antes de paginación) si hay email o número
-      if ((userEmail && userEmail.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
+      if ((emailFooter && emailFooter.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
         pdf.text('|', rightContentX, footerY + 7)
       }
       

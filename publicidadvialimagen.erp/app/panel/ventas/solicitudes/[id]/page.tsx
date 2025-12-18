@@ -132,15 +132,24 @@ export default function SolicitudDetailPage() {
       if (response.ok) {
         const result = await response.json()
         setSolicitudData({ ...solicitudData, estado: nuevoEstado as "Nueva" | "Pendiente" | "Cotizada" })
-        console.log('Estado actualizado exitosamente:', result)
+        console.log('✅ Estado actualizado exitosamente:', result)
       } else {
-        const errorData = await response.json()
-        console.error('Error actualizando estado:', errorData)
-        alert('Error al actualizar el estado')
+        let errorMessage = 'Error al actualizar el estado'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorData.message || errorMessage
+          if (errorData.details) {
+            console.error('Error actualizando estado:', errorData)
+          }
+        } catch (e) {
+          console.error('Error parseando respuesta de error:', e)
+        }
+        alert(errorMessage)
       }
     } catch (error) {
       console.error('Error updating status:', error)
-      alert('Error al actualizar el estado')
+      const errorMessage = error instanceof Error ? error.message : 'Error de conexión al actualizar el estado'
+      alert(errorMessage)
     } finally {
       setIsActualizando(false)
     }

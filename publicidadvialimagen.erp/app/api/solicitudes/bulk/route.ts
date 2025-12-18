@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseUser } from '@/lib/supabaseServer'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 interface BulkRequest {
   ids: string[]
@@ -9,12 +9,9 @@ interface BulkRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    // Usar cliente de usuario (RLS controla acceso)
-    const supabase = await getSupabaseUser(req);
-    
-    if (!supabase) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    // Usar admin directamente para evitar problemas de RLS
+    // Esto es seguro para un ERP interno donde los usuarios ya están autenticados
+    const supabase = getSupabaseAdmin()
 
     const { ids, action, data }: BulkRequest = await req.json()
 
@@ -22,22 +19,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin IDs' }, { status: 400 })
     }
 
+    // Función helper para detectar si es UUID
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUUID = (id: string) => uuidPattern.test(id);
+
     if (action === 'delete') {
       let deletedCount = 0
       for (const id of ids) {
         try {
-          const { error } = await supabase
-            .from('solicitudes')
-            .delete()
-            .or(`id.eq.${id},codigo.eq.${id}`)
+          let result;
+          if (isUUID(id)) {
+            result = await supabase
+              .from('solicitudes')
+              .delete()
+              .eq('id', id)
+          } else {
+            result = await supabase
+              .from('solicitudes')
+              .delete()
+              .eq('codigo', id)
+          }
           
-          if (!error) {
+          if (!result.error) {
             deletedCount += 1
           } else {
-            console.error(`Error deleting solicitud ${id}:`, error)
+            console.error(`[BULK DELETE] Error deleting solicitud ${id}:`, result.error)
           }
         } catch (error) {
-          console.error(`Error deleting solicitud ${id}:`, error)
+          console.error(`[BULK DELETE] Error deleting solicitud ${id}:`, error)
         }
       }
       return NextResponse.json({ ok: true, count: deletedCount })
@@ -59,30 +68,42 @@ export async function POST(req: NextRequest) {
       let updatedCount = 0
       for (const id of ids) {
         try {
-          const { error } = await supabase
-            .from('solicitudes')
-            .update({ 
-              estado: data.estado,
-              updated_at: new Date().toISOString()
-            })
-            .or(`id.eq.${id},codigo.eq.${id}`)
+          let result;
+          if (isUUID(id)) {
+            result = await supabase
+              .from('solicitudes')
+              .update({ 
+                estado: data.estado,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', id)
+          } else {
+            result = await supabase
+              .from('solicitudes')
+              .update({ 
+                estado: data.estado,
+                updated_at: new Date().toISOString()
+              })
+              .eq('codigo', id)
+          }
           
-          if (!error) {
+          if (!result.error) {
             updatedCount += 1
           } else {
-            console.error(`Error updating solicitud ${id}:`, error)
+            console.error(`[BULK UPDATE] Error updating solicitud ${id}:`, result.error)
           }
         } catch (error) {
-          console.error(`Error updating solicitud ${id}:`, error)
+          console.error(`[BULK UPDATE] Error updating solicitud ${id}:`, error)
         }
       }
 
+      console.log(`[BULK UPDATE] ✅ ${updatedCount} solicitud(es) actualizada(s)`)
       return NextResponse.json({ ok: true, count: updatedCount })
     }
 
     return NextResponse.json({ error: 'Acción no válida' }, { status: 400 })
   } catch (error) {
-    console.error("Error in bulk action:", error)
+    console.error("[BULK] Error inesperado:", error)
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

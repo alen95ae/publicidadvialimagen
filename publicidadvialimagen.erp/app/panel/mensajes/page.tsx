@@ -76,22 +76,31 @@ const getNotificationUrl = (entidadTipo?: string | null, entidadId?: string | nu
   
   switch (entidadTipo.toLowerCase()) {
     case 'formulario':
+      // La página de formularios usa query param para filtrar
       return `/panel/mensajes/formularios?id=${entidadId}`;
     case 'cotizacion':
-      return `/panel/ventas/cotizaciones/${entidadId}`;
+      // La ruta correcta es /panel/ventas/editar/[id] para ver/editar cotizaciones
+      return `/panel/ventas/editar/${entidadId}`;
     case 'alquiler':
+      // La página de alquileres usa query param
       return `/panel/soportes/alquileres?id=${entidadId}`;
     case 'mantenimiento':
+      // La página de mantenimiento usa query param
       return `/panel/soportes/mantenimiento?id=${entidadId}`;
     case 'solicitud':
+      // La ruta correcta es /panel/ventas/solicitudes/[id]
       return `/panel/ventas/solicitudes/${entidadId}`;
     case 'soporte':
-      return `/panel/soportes/gestion/${entidadId}`;
+      // La ruta correcta es /panel/soportes/[id] para ver un soporte específico
+      return `/panel/soportes/${entidadId}`;
     case 'producto':
+      // La página de inventario usa query param
       return `/panel/inventario?id=${entidadId}`;
     case 'factura':
-      return `/panel/contabilidad/facturas/${entidadId}`;
+      // No existe una página de detalle de factura individual, redirigir a la lista
+      return `/panel/contabilidad/facturas/manuales`;
     case 'evento':
+      // La página de calendario usa query param
       return `/panel/calendario?evento=${entidadId}`;
     default:
       return null;
@@ -259,12 +268,24 @@ export default function MensajesPage() {
   }
 
   const handleNavegar = (notificacion: Notificacion) => {
-    const url = getNotificationUrl(notificacion.entidad_tipo, notificacion.entidad_id)
+    // Priorizar getNotificationUrl() sobre notificacion.url para evitar URLs incorrectas almacenadas
+    // Solo usar notificacion.url como fallback si getNotificationUrl() no devuelve nada
+    const urlGenerada = getNotificationUrl(notificacion.entidad_tipo, notificacion.entidad_id)
+    const url = urlGenerada || notificacion.url
+    
     if (url) {
-      router.push(url)
-    }
-    if (!notificacion.leida) {
-      marcarComoLeida(notificacion.id)
+      try {
+        router.push(url)
+        // Marcar como leída después de navegar
+        if (!notificacion.leida) {
+          marcarComoLeida(notificacion.id)
+        }
+      } catch (error) {
+        console.error('Error navegando a:', url, error)
+        toast.error('Error al navegar a la notificación')
+      }
+    } else {
+      toast.warning('No se puede navegar a esta notificación: URL no disponible')
     }
   }
 

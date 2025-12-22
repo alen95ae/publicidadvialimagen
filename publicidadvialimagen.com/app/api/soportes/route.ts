@@ -485,18 +485,30 @@ export async function GET(req: Request) {
 // Funciones auxiliares para transformar datos (adaptadas para Airtable)
 function getFormatFromType(tipo?: string): string {
   if (!tipo) return 'Vallas Publicitarias'
-  const tipoLower = tipo.toLowerCase()
+  const tipoLower = tipo.toLowerCase().trim()
   
   const formatMap: Record<string, string> = {
+    // Pantallas LED
     'pantallas led': 'Pantallas LED',
     'pantalla led': 'Pantallas LED',
+    // Vallas Publicitarias (Unipolar, Bipolar, Tripolar, Mega Valla, Cartelera, Paleta)
     'vallas publicitarias': 'Vallas Publicitarias',
     'valla': 'Vallas Publicitarias',
-    'mural': 'Murales',           // Singular desde Airtable
-    'murales': 'Murales',          // Plural desde web
+    'unipolar': 'Unipolar',
+    'bipolar': 'Bipolar',
+    'tripolar': 'Tripolar',
+    'mega valla': 'Mega Valla',
+    'megavalla': 'Mega Valla',
+    'cartelera': 'Cartelera',
+    'paleta': 'Paleta',
+    'monoposte': 'Vallas Publicitarias',
+    // Murales
+    'mural': 'Mural',
+    'murales': 'Mural',
+    'marquesina': 'Mural',
+    // Publicidad Móvil
     'publicidad móvil': 'Publicidad Móvil',
-    'marquesina': 'Murales',
-    'monoposte': 'Vallas Publicitarias'
+    'publicidad movil': 'Publicidad Móvil',
   }
   return formatMap[tipoLower] || 'Vallas Publicitarias'
 }

@@ -96,17 +96,19 @@ export async function GET(request: NextRequest) {
     const notificaciones = notificacionesFiltradas
       .map((notif: any) => {
         // Construir URL desde entidad_tipo y entidad_id
+        // IMPORTANTE: Usar las mismas rutas que getNotificationUrl() en el frontend
         let url = null;
         if (notif.entidad_tipo && notif.entidad_id) {
           switch (notif.entidad_tipo.toLowerCase()) {
             case 'formulario':
-              url = `/panel/mensajes`;
+              url = `/panel/mensajes/formularios?id=${notif.entidad_id}`;
               break;
             case 'mensaje':
               url = `/panel/mensajes`;
               break;
             case 'cotizacion':
-              url = `/panel/ventas/cotizaciones/${notif.entidad_id}`;
+              // La ruta correcta es /panel/ventas/editar/[id] para ver/editar cotizaciones
+              url = `/panel/ventas/editar/${notif.entidad_id}`;
               break;
             case 'alquiler':
               url = `/panel/soportes/alquileres?id=${notif.entidad_id}`;
@@ -115,16 +117,19 @@ export async function GET(request: NextRequest) {
               url = `/panel/soportes/mantenimiento?id=${notif.entidad_id}`;
               break;
             case 'solicitud':
-              url = `/panel/ventas/solicitudes`;
+              // La ruta correcta es /panel/ventas/solicitudes/[id]
+              url = `/panel/ventas/solicitudes/${notif.entidad_id}`;
               break;
             case 'soporte':
-              url = `/panel/soportes/gestion/${notif.entidad_id}`;
+              // La ruta correcta es /panel/soportes/[id] para ver un soporte específico
+              url = `/panel/soportes/${notif.entidad_id}`;
               break;
             case 'producto':
               url = `/panel/inventario?id=${notif.entidad_id}`;
               break;
             case 'factura':
-              url = `/panel/contabilidad/facturas/${notif.entidad_id}`;
+              // No existe una página de detalle de factura individual, redirigir a la lista
+              url = `/panel/contabilidad/facturas/manuales`;
               break;
             case 'evento':
               url = `/panel/calendario?evento=${notif.entidad_id}`;

@@ -98,6 +98,13 @@ export interface ComprobanteDetalle {
   auxiliar?: string | null
   lc?: boolean
   glosa?: string | null
+  // Campos de plantilla (solo en frontend, no se guardan en BD)
+  rol?: string // GASTO, INGRESO, IVA_CREDITO, IVA_DEBITO, PROVEEDOR, CLIENTE, CAJA_BANCO
+  lado?: "DEBE" | "HABER"
+  porcentaje?: number | null
+  permite_seleccionar_cuenta?: boolean
+  permite_auxiliar?: boolean
+  esCalculado?: boolean // true para IVA y totales (no editables)
   nro_ot?: string | null
   debe_bs: number
   haber_bs: number

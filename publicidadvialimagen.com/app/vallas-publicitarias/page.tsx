@@ -239,26 +239,51 @@ function normalizeCityName(city: string): string {
 }
 
 // Función para normalizar tipos de soporte
+// Esta función normaliza los formatos para comparación, mapeando a los valores estándar del filtro
 function normalizeFormatName(format: string, t: (key: string) => string): string {
+  if (!format) return format
+  
+  const formatLower = format.toLowerCase().trim()
+  
+  // Mapeo de todos los posibles valores a los valores estándar del filtro
   const formatMap: Record<string, string> = {
-    // Mapear variantes a los nombres estándar
-    'Unipolar': t('billboards.categories.unipolar'),
-    'unipolar': t('billboards.categories.unipolar'),
-    'Bipolar': t('billboards.categories.bipolar'),
-    'bipolar': t('billboards.categories.bipolar'),
-    'Tripolar': t('billboards.categories.tripolar'),
-    'tripolar': t('billboards.categories.tripolar'),
-    'Mural': t('billboards.categories.mural'),
-    'mural': t('billboards.categories.mural'),
-    'Mega Valla': t('billboards.categories.megaValla'),
-    'mega valla': t('billboards.categories.megaValla'),
-    'megavalla': t('billboards.categories.megaValla'),
-    'Cartelera': t('billboards.categories.cartelera'),
-    'cartelera': t('billboards.categories.cartelera'),
-    'Paleta': t('billboards.categories.paleta'),
-    'paleta': t('billboards.categories.paleta'),
+    // Unipolar
+    'unipolar': 'Unipolar',
+    // Bipolar
+    'bipolar': 'Bipolar',
+    // Tripolar
+    'tripolar': 'Tripolar',
+    // Mural
+    'mural': 'Mural',
+    'murales': 'Mural',
+    'marquesina': 'Mural',
+    // Mega Valla
+    'mega valla': 'Mega Valla',
+    'megavalla': 'Mega Valla',
+    // Cartelera
+    'cartelera': 'Cartelera',
+    // Paleta
+    'paleta': 'Paleta',
+    // Pantallas LED
+    'pantallas led': 'Pantallas LED',
+    'pantalla led': 'Pantallas LED',
+    // Publicidad Móvil
+    'publicidad móvil': 'Publicidad Móvil',
+    'publicidad movil': 'Publicidad Móvil',
+    // Vallas Publicitarias (genérico - se mantiene como está)
+    'vallas publicitarias': 'Vallas Publicitarias',
+    'valla': 'Vallas Publicitarias',
+    'monoposte': 'Vallas Publicitarias',
   }
-  return formatMap[format] || format
+  
+  // Si encontramos un mapeo, devolver el valor normalizado
+  const normalized = formatMap[formatLower]
+  if (normalized) {
+    return normalized
+  }
+  
+  // Si no hay mapeo, devolver el formato original (puede ser un valor ya normalizado)
+  return format
 }
 
 // Función para comparar ciudades considerando variantes
@@ -497,9 +522,12 @@ export default function VallasPublicitariasPage() {
 
     if (selectedFilters.formats.length > 0) {
       const matchesFormat = selectedFilters.formats.some(filterFormat => {
+        // Normalizar ambos valores para comparación
         const normalizedFilter = normalizeFormatName(filterFormat, t)
-        const normalizedBillboard = normalizeFormatName(billboard.format, t)
-        const matches = normalizedFilter === normalizedBillboard
+        const normalizedBillboard = normalizeFormatName(billboard.format || '', t)
+        
+        // Comparación directa (case-insensitive)
+        const matches = normalizedFilter.toLowerCase() === normalizedBillboard.toLowerCase()
         
         return matches
       })

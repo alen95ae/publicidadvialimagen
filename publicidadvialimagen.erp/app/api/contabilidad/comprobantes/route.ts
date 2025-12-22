@@ -81,20 +81,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!detalles || !Array.isArray(detalles) || detalles.length === 0) {
+    // Permitir comprobantes sin detalles (se usarán para aplicar plantillas)
+    if (!detalles || !Array.isArray(detalles)) {
       return NextResponse.json(
-        { error: "Debe agregar al menos un detalle al comprobante" },
+        { error: "Detalles debe ser un array" },
         { status: 400 }
       )
     }
-
-    // Validar que todos los detalles tengan cuenta
-    const detallesInvalidos = detalles.some((d: ComprobanteDetalle) => !d.cuenta)
-    if (detallesInvalidos) {
-      return NextResponse.json(
-        { error: "Todos los detalles deben tener una cuenta asignada" },
-        { status: 400 }
-      )
+    
+    // Solo validar detalles si hay alguno
+    if (detalles.length > 0) {
+      // Validar que todos los detalles tengan cuenta
+      const detallesInvalidos = detalles.some((d: ComprobanteDetalle) => !d.cuenta)
+      if (detallesInvalidos) {
+        return NextResponse.json(
+          { error: "Todos los detalles deben tener una cuenta asignada" },
+          { status: 400 }
+        )
+      }
     }
 
     // Preparar datos de cabecera
@@ -133,31 +137,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insertar detalles
-    const detallesData = detalles.map((det: ComprobanteDetalle, index: number) => ({
-      comprobante_id: comprobanteCreado.id,
-      cuenta: det.cuenta, // string "111001003"
-      auxiliar: det.auxiliar ?? null, // string o null
-      glosa: det.glosa ?? null,
-      debe_bs: det.debe_bs ?? 0,
-      haber_bs: det.haber_bs ?? 0,
-      debe_usd: det.debe_usd ?? 0,
-      haber_usd: det.haber_usd ?? 0,
-      orden: index + 1,
-    }))
+    // Insertar detalles solo si hay alguno
+    if (detalles.length > 0) {
+      const detallesData = detalles.map((det: ComprobanteDetalle, index: number) => ({
+        comprobante_id: comprobanteCreado.id,
+        cuenta: det.cuenta, // string "111001003"
+        auxiliar: det.auxiliar ?? null, // string o null
+        glosa: det.glosa ?? null,
+        debe_bs: det.debe_bs ?? 0,
+        haber_bs: det.haber_bs ?? 0,
+        debe_usd: det.debe_usd ?? 0,
+        haber_usd: det.haber_usd ?? 0,
+        orden: index + 1,
+      }))
 
-    const { error: errorDetalles } = await supabase
-      .from("comprobante_detalle")
-      .insert(detallesData)
+      const { error: errorDetalles } = await supabase
+        .from("comprobante_detalle")
+        .insert(detallesData)
 
-    if (errorDetalles) {
-      console.error("Error creating detalles:", errorDetalles)
-      // Intentar eliminar el comprobante creado
-      await supabase.from("comprobantes").delete().eq("id", comprobanteCreado.id)
-      return NextResponse.json(
-        { error: "Error al crear los detalles", details: errorDetalles.message },
-        { status: 500 }
-      )
+      if (errorDetalles) {
+        console.error("Error creating detalles:", errorDetalles)
+        // Intentar eliminar el comprobante creado
+        await supabase.from("comprobantes").delete().eq("id", comprobanteCreado.id)
+        return NextResponse.json(
+          { error: "Error al crear los detalles", details: errorDetalles.message },
+          { status: 500 }
+        )
+      }
     }
 
     // Obtener el comprobante completo con detalles

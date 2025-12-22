@@ -70,10 +70,40 @@ export async function POST(
       )
     }
 
-    // Actualizar estado a APROBADO
+    // Generar número correlativo por tipo_comprobante
+    // Solo contar comprobantes APROBADOS del mismo tipo
+    const { data: ultimoComprobante, error: errorUltimo } = await supabase
+      .from("comprobantes")
+      .select("numero")
+      .eq("empresa_id", comprobante.empresa_id)
+      .eq("tipo_comprobante", comprobante.tipo_comprobante)
+      .eq("estado", "APROBADO")
+      .order("numero", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (errorUltimo) {
+      console.error("Error obteniendo último comprobante aprobado:", errorUltimo)
+      return NextResponse.json(
+        { error: "Error al generar el número de comprobante", details: errorUltimo.message },
+        { status: 500 }
+      )
+    }
+
+    // Calcular siguiente número correlativo
+    let siguienteNumero = "001"
+    if (ultimoComprobante?.numero) {
+      const ultimoNum = parseInt(ultimoComprobante.numero) || 0
+      siguienteNumero = String(ultimoNum + 1).padStart(3, "0")
+    }
+
+    // Actualizar estado a APROBADO y asignar número en una única operación
     const { data: comprobanteAprobado, error: errorAprobar } = await supabase
       .from("comprobantes")
-      .update({ estado: "APROBADO" })
+      .update({ 
+        estado: "APROBADO",
+        numero: siguienteNumero
+      })
       .eq("id", params.id)
       .eq("empresa_id", 1)
       .select(`

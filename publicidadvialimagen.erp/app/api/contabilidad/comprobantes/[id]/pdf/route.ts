@@ -256,25 +256,23 @@ export async function GET(
 
     yPosition = 30
 
-    // Tipo de comprobante y fecha
+    // Formatear tipo de comprobante: primera letra mayúscula, resto minúscula
+    const tipoComprobante = comprobante.tipo_comprobante || "Diario"
+    const tipoFormateado = tipoComprobante.charAt(0).toUpperCase() + tipoComprobante.slice(1).toLowerCase()
+    
+    // Comprobante de [Tipo] N° X centrado
     pdf.setFontSize(12)
     pdf.setFont('helvetica', 'bold')
     pdf.setTextColor(0, 0, 0)
-    const tipoComprobante = comprobante.tipo_comprobante?.toUpperCase() || "DIARIO"
-    pdf.text(tipoComprobante, 15, yPosition)
+    const comprobanteText = `Comprobante de ${tipoFormateado} N° ${comprobante.numero}`
+    const comprobanteTextWidth = pdf.getTextWidth(comprobanteText)
+    pdf.text(comprobanteText, (pageWidth - comprobanteTextWidth) / 2, yPosition)
     
     // Fecha alineada a la derecha
     pdf.setFont('helvetica', 'normal')
     pdf.setFontSize(10)
     const fechaFormateada = new Date(comprobante.fecha).toLocaleDateString('es-ES')
     pdf.text(`Fecha: ${fechaFormateada}`, pageWidth - 15, yPosition, { align: 'right' })
-
-    // Comprobante N° X centrado
-    pdf.setFontSize(12)
-    pdf.setFont('helvetica', 'bold')
-    const comprobanteText = `Comprobante N° ${comprobante.numero}`
-    const comprobanteTextWidth = pdf.getTextWidth(comprobanteText)
-    pdf.text(comprobanteText, (pageWidth - comprobanteTextWidth) / 2, yPosition)
 
     yPosition += 12
 
@@ -587,8 +585,8 @@ export async function GET(
       const leftTextWidth = pdf.getTextWidth(leftText)
       pdf.text(leftText, 5, footerTextY)
       
-      // Calcular posiciones para centrar web y NIT
-      const webText = 'publicidadvialimagen.com'
+      // Calcular posiciones para centrar email y NIT
+      const webText = 'contabilidad@publicidadvialimagen.com'
       const nitText = 'NIT: 164692025'
       const webTextWidth = pdf.getTextWidth(webText)
       const nitTextWidth = pdf.getTextWidth(nitText)
@@ -610,7 +608,7 @@ export async function GET(
       const paginationWidth = pdf.getTextWidth(paginationText)
       rightContentWidth += paginationWidth + 10
       
-      // Espacio disponible para centrar web y NIT
+      // Espacio disponible para centrar email y NIT
       const leftEndX = 5 + leftTextWidth + 5
       const rightStartX = pageWidth - 15 - rightContentWidth
       const availableWidth = rightStartX - leftEndX
@@ -621,7 +619,7 @@ export async function GET(
       const separator1X = leftEndX + spacing
       pdf.text('|', separator1X, footerTextY)
       
-      // Web (centrada)
+      // Email de contabilidad (centrado)
       const webX = separator1X + 5
       pdf.text(webText, webX, footerTextY)
       

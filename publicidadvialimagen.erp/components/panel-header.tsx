@@ -221,10 +221,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       // Informes de Facturas
       { label: "Libro de Ventas IVA", href: "/panel/contabilidad/facturas/informes/libro-ventas-iva" },
       { label: "Reporte de Facturación", href: "/panel/contabilidad/facturas/informes/reporte-facturacion" },
-      // Informes de Planillas
-      { label: "Planilla de Sueldos", href: "/panel/contabilidad/planillas/informes/planilla-sueldos" },
-      { label: "Boletas de Pago", href: "/panel/contabilidad/planillas/informes/boletas-pago" },
-      { label: "Planilla RC IVA de Sueldos", href: "/panel/contabilidad/planillas/informes/planilla-rc-iva-sueldos" },
     ],
   },
 }

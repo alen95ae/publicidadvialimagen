@@ -61,44 +61,44 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Solo protegemos /panel/*
-  if (pathname.startsWith(PROTECTED_PREFIX)) {
-    const token = req.cookies.get("session")?.value;
+    // Solo protegemos /panel/*
+    if (pathname.startsWith(PROTECTED_PREFIX)) {
+      const token = req.cookies.get("session")?.value;
 
-    // Si NO hay cookie, entonces sí → login
-    if (!token) {
-      console.log("🔒 No token found, redirecting to login");
-      const loginUrl = req.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.search = "";
-      return NextResponse.redirect(loginUrl);
-    }
-
-    // Headers anti-cache para rutas del panel
-    const response = NextResponse.next();
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-
-    // Verificar que el token sea válido
-    try {
-      const payload = await verify(token);
-      if (!payload) {
-        console.log("🔒 Invalid token, redirecting to login");
+      // Si NO hay cookie, entonces sí → login
+      if (!token) {
+        console.log("🔒 No token found, redirecting to login");
         const loginUrl = req.nextUrl.clone();
         loginUrl.pathname = "/login";
         loginUrl.search = "";
         return NextResponse.redirect(loginUrl);
       }
-      
-      // Verificar que el token no haya expirado
-      if (payload.exp && payload.exp < Date.now() / 1000) {
-        console.log("🔒 Token expired, redirecting to login");
-        const loginUrl = req.nextUrl.clone();
-        loginUrl.pathname = "/login";
-        loginUrl.search = "";
-        return NextResponse.redirect(loginUrl);
-      }
+
+      // Headers anti-cache para rutas del panel
+      const response = NextResponse.next();
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
+
+      // Verificar que el token sea válido
+      try {
+        const payload = await verify(token);
+        if (!payload) {
+          console.log("🔒 Invalid token, redirecting to login");
+          const loginUrl = req.nextUrl.clone();
+          loginUrl.pathname = "/login";
+          loginUrl.search = "";
+          return NextResponse.redirect(loginUrl);
+        }
+        
+        // Verificar que el token no haya expirado
+        if (payload.exp && payload.exp < Date.now() / 1000) {
+          console.log("🔒 Token expired, redirecting to login");
+          const loginUrl = req.nextUrl.clone();
+          loginUrl.pathname = "/login";
+          loginUrl.search = "";
+          return NextResponse.redirect(loginUrl);
+        }
       
       // 🔒 Verificación especial para módulo de ajustes - verificar permiso admin en ajustes
       // NOTA: ajustes-inventario NO es parte de ajustes, es parte de inventario
@@ -137,30 +137,44 @@ export async function middleware(req: NextRequest) {
       }
       
       console.log("✅ Token valid for user:", payload.email);
+      
+      // 🔒 Hay cookie: NO mandes al login por rutas inexistentes.
+      // Si la ruta no es conocida, reescribimos a una página WIP
+      if (!startsWithAny(pathname, KNOWN_MODULES)) {
+        const wipUrl = req.nextUrl.clone();
+        wipUrl.pathname = "/panel/__wip";
+        wipUrl.search = "";
+        const wipResponse = NextResponse.rewrite(wipUrl);
+        // Headers anti-cache también para rewrite
+        wipResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        wipResponse.headers.set('Pragma', 'no-cache');
+        wipResponse.headers.set('Expires', '0');
+        return wipResponse;
+      }
+
+      // Retornar response con headers anti-cache
+      return response;
     } catch (error: any) {
-      console.log("🔒 Token verification failed:", error.message);
-      const loginUrl = req.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.search = "";
-      return NextResponse.redirect(loginUrl);
+      // Solo redirigir si es un error de verificación del token, no errores de red
+      if (error.message && (
+        error.message.includes('invalid') || 
+        error.message.includes('expired') ||
+        error.message.includes('malformed') ||
+        error.message.includes('signature')
+      )) {
+        console.log("🔒 Token verification failed:", error.message);
+        const loginUrl = req.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        return NextResponse.redirect(loginUrl);
+      } else {
+        // Error de red o temporal - permitir continuar pero loguear
+        console.warn("⚠️ Error temporal verificando token:", error.message);
+        // Continuar con la request - puede ser un error temporal
+        // Retornar response con headers anti-cache incluso en caso de error temporal
+        return response;
+      }
     }
-
-    // 🔒 Hay cookie: NO mandes al login por rutas inexistentes.
-    // Si la ruta no es conocida, reescribimos a una página WIP
-    if (!startsWithAny(pathname, KNOWN_MODULES)) {
-      const wipUrl = req.nextUrl.clone();
-      wipUrl.pathname = "/panel/__wip";
-      wipUrl.search = "";
-      const wipResponse = NextResponse.rewrite(wipUrl);
-      // Headers anti-cache también para rewrite
-      wipResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      wipResponse.headers.set('Pragma', 'no-cache');
-      wipResponse.headers.set('Expires', '0');
-      return wipResponse;
-    }
-
-    // Retornar response con headers anti-cache
-    return response;
   }
 
   // Headers anti-cache para rutas /api/* del ERP

@@ -21,12 +21,13 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     // Obtener comprobantes ordenados por fecha descendente
+    // Ordenar por numero nulls last para que los borradores (sin número) aparezcan al final
     const { data, error, count } = await supabase
       .from("comprobantes")
       .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_id, created_at, updated_at", { count: "exact" })
       .eq("empresa_id", 1)
       .order("fecha", { ascending: false })
-      .order("numero", { ascending: false })
+      .order("numero", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1)
 
     if (error) {
@@ -96,24 +97,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generar número de comprobante
-    const { data: ultimoComprobante } = await supabase
-      .from("comprobantes")
-      .select("numero")
-      .eq("empresa_id", 1)
-      .order("id", { ascending: false })
-      .limit(1)
-      .single()
-
-    let siguienteNumero = "001"
-    if (ultimoComprobante?.numero) {
-      const ultimoNum = parseInt(ultimoComprobante.numero) || 0
-      siguienteNumero = String(ultimoNum + 1).padStart(3, "0")
-    }
-
     // Preparar datos de cabecera
+    // El número se asignará únicamente al aprobar el comprobante
+    // No incluimos el campo numero en borradores (será NULL por defecto en BD)
     const comprobanteData: any = {
-      numero: siguienteNumero,
       origen: cabecera.origen || "Contabilidad",
       tipo_comprobante: cabecera.tipo_comprobante || "Diario",
       tipo_asiento: cabecera.tipo_asiento || "Normal",
@@ -130,6 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insertar cabecera
+    console.log("📝 Insertando comprobante con datos:", JSON.stringify(comprobanteData, null, 2))
     const { data: comprobanteCreado, error: errorCabecera } = await supabase
       .from("comprobantes")
       .insert(comprobanteData)
@@ -137,9 +125,10 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (errorCabecera) {
-      console.error("Error creating comprobante:", errorCabecera)
+      console.error("❌ Error creating comprobante:", errorCabecera)
+      console.error("❌ Error details:", JSON.stringify(errorCabecera, null, 2))
       return NextResponse.json(
-        { error: "Error al crear el comprobante", details: errorCabecera.message },
+        { error: "Error al crear el comprobante", details: errorCabecera.message, code: errorCabecera.code },
         { status: 500 }
       )
     }
@@ -150,12 +139,10 @@ export async function POST(request: NextRequest) {
       cuenta: det.cuenta, // string "111001003"
       auxiliar: det.auxiliar ?? null, // string o null
       glosa: det.glosa ?? null,
-      nro_ot: det.nro_ot ?? null,
       debe_bs: det.debe_bs ?? 0,
       haber_bs: det.haber_bs ?? 0,
       debe_usd: det.debe_usd ?? 0,
       haber_usd: det.haber_usd ?? 0,
-      lc: det.lc ?? false,
       orden: index + 1,
     }))
 

@@ -47,12 +47,12 @@ export async function POST(request: NextRequest) {
     const empresaId = userData.empresa_id || 1
 
     const body = await request.json()
-    const { fecha_desde, fecha_hasta, cotizacion_usd, glosa } = body
+    const { fecha_desde, fecha_hasta, cotizacion_usd, concepto } = body
 
     // Validaciones básicas
-    if (!fecha_desde || !fecha_hasta || !glosa) {
+    if (!fecha_desde || !fecha_hasta || !concepto) {
       return NextResponse.json(
-        { error: "Fechas y glosa son requeridos" },
+        { error: "Fechas y concepto son requeridos" },
         { status: 400 }
       )
     }
@@ -79,25 +79,11 @@ export async function POST(request: NextRequest) {
     const gestion = fechaHastaObj.getFullYear()
     const periodo = fechaHastaObj.getMonth() + 1 // 1-12
 
-    // Generar número de comprobante
-    const { data: ultimoComprobante } = await supabase
-      .from("comprobantes")
-      .select("numero")
-      .eq("empresa_id", empresaId)
-      .order("id", { ascending: false })
-      .limit(1)
-      .single()
-
-    let siguienteNumero = "001"
-    if (ultimoComprobante?.numero) {
-      const ultimoNum = parseInt(ultimoComprobante.numero) || 0
-      siguienteNumero = String(ultimoNum + 1).padStart(3, "0")
-    }
-
     // Preparar datos del comprobante
+    // El número se asignará únicamente al aprobar el comprobante
     const comprobanteData: any = {
       empresa_id: empresaId,
-      numero: siguienteNumero,
+      numero: null, // Borradores siempre tienen numero = null
       gestion: gestion,
       periodo: periodo,
       origen: "Contabilidad",
@@ -106,7 +92,7 @@ export async function POST(request: NextRequest) {
       fecha: fecha_hasta,
       moneda: "BOB",
       tipo_cambio: cotizacion_usd,
-      glosa: glosa.trim(),
+      concepto: concepto.trim(),
       beneficiario: null,
       nro_cheque: null,
       estado: "BORRADOR",

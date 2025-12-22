@@ -101,25 +101,11 @@ export async function POST(request: NextRequest) {
       // Continuar si el error es "no encontrado" (PGRST116)
     }
 
-    // Generar número de comprobante
-    const { data: ultimoComprobante } = await supabase
-      .from("comprobantes")
-      .select("numero")
-      .eq("empresa_id", empresaId)
-      .order("id", { ascending: false })
-      .limit(1)
-      .single()
-
-    let siguienteNumero = "001"
-    if (ultimoComprobante?.numero) {
-      const ultimoNum = parseInt(ultimoComprobante.numero) || 0
-      siguienteNumero = String(ultimoNum + 1).padStart(3, "0")
-    }
-
     // Preparar datos del comprobante
+    // El número se asignará únicamente al aprobar el comprobante
     const comprobanteData: any = {
       empresa_id: empresaId,
-      numero: siguienteNumero,
+      numero: null, // Borradores siempre tienen numero = null
       gestion: parseInt(gestion),
       periodo: parseInt(periodo),
       origen: "Tesorería", // Mapeado desde 'TESORERIA'
@@ -128,7 +114,7 @@ export async function POST(request: NextRequest) {
       fecha: fecha_hasta,
       moneda: "BOB",
       tipo_cambio: tipo_cambio,
-      glosa: "Ajuste de saldos AITB",
+      concepto: "Ajuste de saldos AITB",
       beneficiario: null,
       nro_cheque: null,
       estado: "BORRADOR",

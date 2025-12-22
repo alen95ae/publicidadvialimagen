@@ -1,7 +1,9 @@
 import { serialize } from 'cookie';
 
 const isProd = process.env.NODE_ENV === 'production';
-const domain = process.env.COOKIE_DOMAIN || undefined;
+// En producción de Vercel, NO usar domain para que funcione en el dominio de Vercel
+// Solo usar domain si está explícitamente configurado y es necesario
+const domain = process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN !== '' ? process.env.COOKIE_DOMAIN : undefined;
 
 export function createAuthCookie(name: string, token: string, maxAgeSec: number) {
   return serialize(name, token, {
@@ -9,7 +11,7 @@ export function createAuthCookie(name: string, token: string, maxAgeSec: number)
     secure: isProd,
     sameSite: 'lax',
     path: '/',
-    domain,
+    ...(domain ? { domain } : {}), // Solo incluir domain si está definido
     maxAge: maxAgeSec,
   });
 }
@@ -20,7 +22,7 @@ export function clearAuthCookie(name: string) {
     secure: isProd,
     sameSite: 'lax',
     path: '/',
-    domain,
+    ...(domain ? { domain } : {}), // Solo incluir domain si está definido
     maxAge: 0,
   });
 }

@@ -49,6 +49,13 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
   const [loadingCuentas, setLoadingCuentas] = useState(false)
   const [openCuentaCombobox, setOpenCuentaCombobox] = useState<Record<number, boolean>>({})
   const [filteredCuentas, setFilteredCuentas] = useState<Record<number, Cuenta[]>>({})
+  
+  // Estados para el combobox de beneficiario (contactos)
+  const [openBeneficiarioCombobox, setOpenBeneficiarioCombobox] = useState(false)
+  const [todosLosContactos, setTodosLosContactos] = useState<any[]>([])
+  const [filteredContactos, setFilteredContactos] = useState<any[]>([])
+  const [cargandoContactos, setCargandoContactos] = useState(false)
+  const [beneficiarioId, setBeneficiarioId] = useState<string | null>(null)
 
   // Estado del formulario
   const [formData, setFormData] = useState<Partial<Comprobante>>({
@@ -69,6 +76,43 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
   useEffect(() => {
     fetchCuentasTransaccionales()
   }, [])
+
+  // Cargar todos los contactos al inicio
+  useEffect(() => {
+    const cargarContactos = async () => {
+      setCargandoContactos(true)
+      try {
+        const response = await fetch('/api/contactos')
+        const data = await response.json()
+        setTodosLosContactos(data.data || [])
+        setFilteredContactos((data.data || []).slice(0, 50))
+      } catch (error) {
+        console.error('Error cargando contactos:', error)
+      } finally {
+        setCargandoContactos(false)
+      }
+    }
+
+    cargarContactos()
+  }, [])
+
+  // Sincronizar beneficiarioId cuando se cargan los contactos y hay un comprobante con beneficiario
+  useEffect(() => {
+    if (comprobante?.beneficiario && todosLosContactos.length > 0) {
+      const contactoEncontrado = todosLosContactos.find(
+        (c: any) => 
+          (c.displayName || c.nombre) === comprobante.beneficiario ||
+          c.legalName === comprobante.beneficiario
+      )
+      if (contactoEncontrado) {
+        setBeneficiarioId(contactoEncontrado.id)
+      } else {
+        setBeneficiarioId(null)
+      }
+    } else if (!comprobante?.beneficiario) {
+      setBeneficiarioId(null)
+    }
+  }, [comprobante?.beneficiario, todosLosContactos.length])
 
   // Inicializar filtros cuando se cargan las cuentas y hay detalles
   useEffect(() => {
@@ -107,6 +151,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
         estado: comprobante.estado,
         empresa_id: comprobante.empresa_id,
       })
+      
+      // Buscar el contacto por nombre si existe beneficiario (se hará cuando se carguen los contactos)
       
       // Si el comprobante ya tiene detalles (viene del listado), usarlos directamente
       if (comprobante.detalles && Array.isArray(comprobante.detalles) && comprobante.detalles.length > 0) {
@@ -254,7 +300,53 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
 
   const handleDetalleChange = (index: number, field: keyof ComprobanteDetalle, value: any) => {
     const updated = [...detalles]
-    updated[index] = { ...updated[index], [field]: value }
+    const tipoCambio = formData.tipo_cambio || 6.96
+    
+    // Si se cambia debe_bs, calcular debe_usd automáticamente
+    if (field === "debe_bs") {
+      const valorBs = parseFloat(value) || 0
+      const valorUsd = valorBs / tipoCambio
+      updated[index] = { 
+        ...updated[index], 
+        [field]: valorBs,
+        debe_usd: Math.round(valorUsd * 100) / 100 // Redondear a 2 decimales
+      }
+    }
+    // Si se cambia haber_bs, calcular haber_usd automáticamente
+    else if (field === "haber_bs") {
+      const valorBs = parseFloat(value) || 0
+      const valorUsd = valorBs / tipoCambio
+      updated[index] = { 
+        ...updated[index], 
+        [field]: valorBs,
+        haber_usd: Math.round(valorUsd * 100) / 100 // Redondear a 2 decimales
+      }
+    }
+    // Si se cambia debe_usd, calcular debe_bs automáticamente
+    else if (field === "debe_usd") {
+      const valorUsd = parseFloat(value) || 0
+      const valorBs = valorUsd * tipoCambio
+      updated[index] = { 
+        ...updated[index], 
+        [field]: valorUsd,
+        debe_bs: Math.round(valorBs * 100) / 100 // Redondear a 2 decimales
+      }
+    }
+    // Si se cambia haber_usd, calcular haber_bs automáticamente
+    else if (field === "haber_usd") {
+      const valorUsd = parseFloat(value) || 0
+      const valorBs = valorUsd * tipoCambio
+      updated[index] = { 
+        ...updated[index], 
+        [field]: valorUsd,
+        haber_bs: Math.round(valorBs * 100) / 100 // Redondear a 2 decimales
+      }
+    }
+    // Para cualquier otro campo, solo actualizar ese campo
+    else {
+      updated[index] = { ...updated[index], [field]: value }
+    }
+    
     setDetalles(updated)
   }
 
@@ -273,6 +365,26 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
     }).slice(0, 20)
 
     setFilteredCuentas(prev => ({ ...prev, [detalleIndex]: filtered }))
+  }
+
+  // Función de filtrado para contactos (beneficiario)
+  const filtrarContactos = (query: string) => {
+    if (!query || query.trim() === '') {
+      setFilteredContactos(todosLosContactos.slice(0, 50))
+      return
+    }
+
+    const search = query.toLowerCase().trim()
+    const filtered = todosLosContactos.filter((contacto: any) => {
+      const nombre = (contacto.displayName || contacto.nombre || '').toLowerCase()
+      const empresa = (contacto.legalName || contacto.empresa || '').toLowerCase()
+      const email = (contacto.email || '').toLowerCase()
+
+      // Buscar en cualquier parte del nombre, empresa o email
+      return nombre.includes(search) || empresa.includes(search) || email.includes(search)
+    }).slice(0, 100)
+
+    setFilteredContactos(filtered)
   }
 
   // Función para seleccionar cuenta
@@ -603,9 +715,12 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
               <Label htmlFor="moneda">Moneda</Label>
               <Select
                 value={formData.moneda || "BS"}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, moneda: value as Moneda })
-                }
+                onValueChange={(value) => {
+                  const nuevaMoneda = value as Moneda
+                  // Si se selecciona USD, establecer tipo de cambio a 6.96
+                  const nuevoTipoCambio = nuevaMoneda === "USD" ? 6.96 : (formData.tipo_cambio || 1)
+                  setFormData({ ...formData, moneda: nuevaMoneda, tipo_cambio: nuevoTipoCambio })
+                }}
                 disabled={isReadOnly}
               >
                 <SelectTrigger>
@@ -629,10 +744,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
                 type="number"
                 step="0.0001"
                 min="0"
-                value={formData.tipo_cambio || 1}
-                onChange={(e) =>
-                  setFormData({ ...formData, tipo_cambio: parseFloat(e.target.value) || 1 })
-                }
+                value={formData.tipo_cambio || (formData.moneda === "USD" ? 6.96 : 1)}
+                onChange={(e) => {
+                  const nuevoTipoCambio = parseFloat(e.target.value) || (formData.moneda === "USD" ? 6.96 : 1)
+                  setFormData({ ...formData, tipo_cambio: nuevoTipoCambio })
+                }}
                 disabled={isReadOnly}
               />
             </div>
@@ -652,12 +768,77 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
             {/* Beneficiario */}
             <div className="space-y-2">
               <Label htmlFor="beneficiario">Beneficiario</Label>
-              <Input
-                id="beneficiario"
-                value={formData.beneficiario || ""}
-                onChange={(e) => setFormData({ ...formData, beneficiario: e.target.value })}
-                disabled={isReadOnly}
-              />
+              <Popover
+                open={openBeneficiarioCombobox}
+                onOpenChange={(open) => {
+                  setOpenBeneficiarioCombobox(open)
+                  if (open) {
+                    setFilteredContactos(todosLosContactos.slice(0, 50))
+                  }
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    disabled={isReadOnly}
+                    className={cn(
+                      "w-full justify-between",
+                      !beneficiarioId && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate">
+                      {beneficiarioId
+                        ? todosLosContactos.find(c => c.id === beneficiarioId)?.displayName || 
+                          todosLosContactos.find(c => c.id === beneficiarioId)?.nombre || 
+                          formData.beneficiario || 
+                          "Seleccionar beneficiario"
+                        : formData.beneficiario || "Seleccionar beneficiario"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command shouldFilter={false} className="overflow-visible">
+                    <CommandInput
+                      placeholder="Buscar beneficiario..."
+                      className="h-9 border-0 focus:ring-0"
+                      onValueChange={filtrarContactos}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {cargandoContactos ? "Cargando..." : "No se encontraron contactos."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {filteredContactos.map((contacto: any) => (
+                          <CommandItem
+                            key={contacto.id}
+                            value={contacto.displayName || contacto.nombre}
+                            onSelect={() => {
+                              const contactoSeleccionado = todosLosContactos.find(c => c.id === contacto.id)
+                              if (contactoSeleccionado) {
+                                setBeneficiarioId(contacto.id)
+                                setFormData({ 
+                                  ...formData, 
+                                  beneficiario: contactoSeleccionado.displayName || contactoSeleccionado.nombre || contactoSeleccionado.legalName || "" 
+                                })
+                              }
+                              setOpenBeneficiarioCombobox(false)
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", beneficiarioId === contacto.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{contacto.displayName || contacto.nombre}</span>
+                              {contacto.legalName && <span className="text-xs text-gray-500">{contacto.legalName}</span>}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Nro. Cheque */}
@@ -712,9 +893,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
                 <TableRow>
                   <TableHead className="w-[250px]">Cuenta</TableHead>
                   <TableHead className="w-24">Auxiliar</TableHead>
-                  <TableHead className="w-12">LC</TableHead>
                   <TableHead>Glosa</TableHead>
-                  <TableHead className="w-20">Nro OT</TableHead>
                   <TableHead className="w-24 text-right">Debe Bs</TableHead>
                   <TableHead className="w-24 text-right">Haber Bs</TableHead>
                   <TableHead className="w-24 text-right">Debe USD</TableHead>
@@ -725,7 +904,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
               <TableBody>
                 {detalles.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                       No hay líneas agregadas. Click en "Agregar Línea" para comenzar.
                     </TableCell>
                   </TableRow>
@@ -810,15 +989,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
                         />
                       </TableCell>
                       <TableCell>
-                        <Checkbox
-                          checked={detalle.lc || false}
-                          onCheckedChange={(checked) =>
-                            handleDetalleChange(index, "lc", !!checked)
-                          }
-                          disabled={isReadOnly}
-                        />
-                      </TableCell>
-                      <TableCell>
                         <Input
                           value={detalle.glosa || ""}
                           onChange={(e) =>
@@ -826,17 +996,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave }: Comproba
                           }
                           disabled={isReadOnly}
                           placeholder="Glosa línea"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={detalle.nro_ot || ""}
-                          onChange={(e) =>
-                            handleDetalleChange(index, "nro_ot", e.target.value || null)
-                          }
-                          disabled={isReadOnly}
-                          className="w-20 font-mono"
-                          placeholder="OT"
                         />
                       </TableCell>
                       <TableCell>

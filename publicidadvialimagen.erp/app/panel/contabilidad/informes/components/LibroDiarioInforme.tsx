@@ -8,15 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { FileDown, Search } from "lucide-react"
+import { FileDown, Search, FileSpreadsheet } from "lucide-react"
 import { api } from "@/lib/fetcher"
 import { toast } from "sonner"
 
 interface LibroDiarioFilters {
-  empresa?: string
-  regional?: string
-  sucursal?: string
-  clasificador?: string
+  gestion?: number
+  periodo?: number
+  tipo_asiento?: string
   fecha_inicial?: string
   fecha_final?: string
   tipo_comprobante?: string
@@ -57,21 +56,37 @@ const TIPOS_COMPROBANTE = [
   "Egreso",
   "Traspaso",
   "Ctas por Pagar",
-  "Ajuste",
-  "Apertura",
-  "Cierre",
+]
+
+const TIPOS_ASIENTO = ["Todos", "Normal", "Apertura", "Cierre", "Ajuste"]
+
+const MESES = [
+  { value: 0, label: "Todos" },
+  { value: 1, label: "Enero" },
+  { value: 2, label: "Febrero" },
+  { value: 3, label: "Marzo" },
+  { value: 4, label: "Abril" },
+  { value: 5, label: "Mayo" },
+  { value: 6, label: "Junio" },
+  { value: 7, label: "Julio" },
+  { value: 8, label: "Agosto" },
+  { value: 9, label: "Septiembre" },
+  { value: 10, label: "Octubre" },
+  { value: 11, label: "Noviembre" },
+  { value: 12, label: "Diciembre" },
 ]
 
 const ESTADOS = ["Todos", "Aprobado", "Borrador", "Revertido"]
 
 export default function LibroDiarioInforme() {
   const [loading, setLoading] = useState(false)
+  const [exportingPDF, setExportingPDF] = useState(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
   const [comprobantes, setComprobantes] = useState<ComprobanteInforme[]>([])
   const [filters, setFilters] = useState<LibroDiarioFilters>({
-    empresa: "",
-    regional: "",
-    sucursal: "",
-    clasificador: "",
+    gestion: new Date().getFullYear(),
+    periodo: 0, // 0 = Todos
+    tipo_asiento: "Todos",
     fecha_inicial: new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0],
     fecha_final: new Date().toISOString().split("T")[0],
     tipo_comprobante: "Todos",
@@ -86,9 +101,11 @@ export default function LibroDiarioInforme() {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (filters.empresa) params.append("empresa", filters.empresa)
-      if (filters.regional) params.append("regional", filters.regional)
-      if (filters.sucursal) params.append("sucursal", filters.sucursal)
+      if (filters.gestion) params.append("gestion", filters.gestion.toString())
+      if (filters.periodo && filters.periodo !== 0) params.append("periodo", filters.periodo.toString())
+      if (filters.tipo_asiento && filters.tipo_asiento !== "Todos") {
+        params.append("tipo_asiento", filters.tipo_asiento)
+      }
       if (filters.fecha_inicial) params.append("fecha_inicial", filters.fecha_inicial)
       if (filters.fecha_final) params.append("fecha_final", filters.fecha_final)
       if (filters.tipo_comprobante && filters.tipo_comprobante !== "Todos") {
@@ -115,7 +132,7 @@ export default function LibroDiarioInforme() {
     }
   }
 
-  const handleFilterChange = (field: keyof LibroDiarioFilters, value: string) => {
+  const handleFilterChange = (field: keyof LibroDiarioFilters, value: string | number) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -123,9 +140,136 @@ export default function LibroDiarioInforme() {
     fetchLibroDiario()
   }
 
-  const handleExportarPDF = () => {
-    // Placeholder para exportación PDF
-    toast.info("Funcionalidad de exportación PDF en desarrollo")
+  const construirParams = () => {
+    const params = new URLSearchParams()
+    if (filters.gestion) params.append("gestion", filters.gestion.toString())
+    if (filters.periodo && filters.periodo !== 0) params.append("periodo", filters.periodo.toString())
+    if (filters.tipo_asiento && filters.tipo_asiento !== "Todos") {
+      params.append("tipo_asiento", filters.tipo_asiento)
+    }
+    if (filters.fecha_inicial) params.append("fecha_inicial", filters.fecha_inicial)
+    if (filters.fecha_final) params.append("fecha_final", filters.fecha_final)
+    if (filters.tipo_comprobante && filters.tipo_comprobante !== "Todos") {
+      params.append("tipo_comprobante", filters.tipo_comprobante)
+    }
+    if (filters.estado && filters.estado !== "Todos") {
+      params.append("estado", filters.estado.toUpperCase())
+    }
+    return params
+  }
+
+  const handleExportarPDF = async () => {
+    if (exportingPDF || exportingExcel) return
+    
+    try {
+      setExportingPDF(true)
+      
+      const params = construirParams()
+      const url = `/api/contabilidad/informes/libro-diario/pdf?${params.toString()}`
+      console.log("📄 Exportando PDF desde:", url)
+
+      // Descargar PDF
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        let errorMessage = "Error al exportar el PDF"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+          console.error("❌ Error del servidor:", errorData)
+        } catch (e) {
+          console.error("❌ Error al parsear respuesta:", e)
+        }
+        toast.error(errorMessage)
+        return
+      }
+
+      // Verificar que sea un PDF
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/pdf")) {
+        console.error("❌ La respuesta no es un PDF:", contentType)
+        toast.error("Error: La respuesta del servidor no es un PDF")
+        return
+      }
+
+      // Obtener blob y crear descarga
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      
+      // Formato de fecha DD-MM-YYYY
+      const hoy = new Date()
+      const dia = String(hoy.getDate()).padStart(2, '0')
+      const mes = String(hoy.getMonth() + 1).padStart(2, '0')
+      const año = hoy.getFullYear()
+      a.download = `libro_diario_${dia}-${mes}-${año}.pdf`
+      
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+      
+      toast.success("PDF exportado correctamente")
+    } catch (error: any) {
+      console.error("❌ Error exporting PDF:", error)
+      toast.error(error?.message || "Error al exportar el PDF")
+    } finally {
+      setExportingPDF(false)
+    }
+  }
+
+  const handleExportarExcel = async () => {
+    if (exportingPDF || exportingExcel) return
+    
+    try {
+      setExportingExcel(true)
+      
+      const params = construirParams()
+      const url = `/api/contabilidad/informes/libro-diario/excel?${params.toString()}`
+      console.log("📊 Exportando Excel desde:", url)
+
+      // Descargar Excel
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        let errorMessage = "Error al exportar el Excel"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+          console.error("❌ Error del servidor:", errorData)
+        } catch (e) {
+          console.error("❌ Error al parsear respuesta:", e)
+        }
+        toast.error(errorMessage)
+        return
+      }
+
+      // Obtener blob y crear descarga
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      
+      // Formato de fecha DD-MM-YYYY
+      const hoy = new Date()
+      const dia = String(hoy.getDate()).padStart(2, '0')
+      const mes = String(hoy.getMonth() + 1).padStart(2, '0')
+      const año = hoy.getFullYear()
+      a.download = `libro_diario_${dia}-${mes}-${año}.xlsx`
+      
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+      
+      toast.success("Excel exportado correctamente")
+    } catch (error: any) {
+      console.error("❌ Error exporting Excel:", error)
+      toast.error(error?.message || "Error al exportar el Excel")
+    } finally {
+      setExportingExcel(false)
+    }
   }
 
   const getEstadoBadge = (estado: string) => {
@@ -169,10 +313,26 @@ export default function LibroDiarioInforme() {
               Configure los filtros y visualice el libro diario
             </CardDescription>
           </div>
-          <Button onClick={handleExportarPDF} variant="outline" size="sm">
-            <FileDown className="w-4 h-4 mr-2" />
-            Exportar PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleExportarExcel} 
+              variant="outline" 
+              size="sm"
+              disabled={exportingPDF || exportingExcel || comprobantes.length === 0}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              {exportingExcel ? "Exportando..." : "Exportar Excel"}
+            </Button>
+            <Button 
+              onClick={handleExportarPDF} 
+              variant="outline" 
+              size="sm"
+              disabled={exportingPDF || exportingExcel || comprobantes.length === 0}
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              {exportingPDF ? "Exportando..." : "Exportar PDF"}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -180,76 +340,58 @@ export default function LibroDiarioInforme() {
         <div className="mb-6 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
             <div>
-              <Label htmlFor="empresa" className="text-xs text-gray-600">
-                Empresa
+              <Label htmlFor="gestion" className="text-xs text-gray-600">
+                Gestión
               </Label>
               <Input
-                id="empresa"
-                value={filters.empresa || ""}
-                onChange={(e) => handleFilterChange("empresa", e.target.value)}
-                placeholder="Empresa"
+                id="gestion"
+                type="number"
+                min="2000"
+                max="2100"
+                value={filters.gestion || new Date().getFullYear()}
+                onChange={(e) => handleFilterChange("gestion", parseInt(e.target.value) || new Date().getFullYear())}
                 className="mt-1"
               />
             </div>
             <div>
-              <Label htmlFor="regional" className="text-xs text-gray-600">
-                Regional
+              <Label htmlFor="periodo" className="text-xs text-gray-600">
+                Periodo
               </Label>
-              <Input
-                id="regional"
-                value={filters.regional || ""}
-                onChange={(e) => handleFilterChange("regional", e.target.value)}
-                placeholder="Regional"
-                className="mt-1"
-              />
+              <Select
+                value={filters.periodo?.toString() || "0"}
+                onValueChange={(value) => handleFilterChange("periodo", parseInt(value))}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MESES.map((mes) => (
+                    <SelectItem key={mes.value} value={mes.value.toString()}>
+                      {mes.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <Label htmlFor="sucursal" className="text-xs text-gray-600">
-                Sucursal
+              <Label htmlFor="tipo_asiento" className="text-xs text-gray-600">
+                Tipo Asiento
               </Label>
-              <Input
-                id="sucursal"
-                value={filters.sucursal || ""}
-                onChange={(e) => handleFilterChange("sucursal", e.target.value)}
-                placeholder="Sucursal"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="clasificador" className="text-xs text-gray-600">
-                Clasificador
-              </Label>
-              <Input
-                id="clasificador"
-                value={filters.clasificador || ""}
-                onChange={(e) => handleFilterChange("clasificador", e.target.value)}
-                placeholder="Clasificador"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="fecha_inicial" className="text-xs text-gray-600">
-                Fecha Inicial
-              </Label>
-              <Input
-                id="fecha_inicial"
-                type="date"
-                value={filters.fecha_inicial || ""}
-                onChange={(e) => handleFilterChange("fecha_inicial", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="fecha_final" className="text-xs text-gray-600">
-                Fecha Final
-              </Label>
-              <Input
-                id="fecha_final"
-                type="date"
-                value={filters.fecha_final || ""}
-                onChange={(e) => handleFilterChange("fecha_final", e.target.value)}
-                className="mt-1"
-              />
+              <Select
+                value={filters.tipo_asiento || "Todos"}
+                onValueChange={(value) => handleFilterChange("tipo_asiento", value)}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_ASIENTO.map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="tipo_comprobante" className="text-xs text-gray-600">
@@ -290,6 +432,30 @@ export default function LibroDiarioInforme() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label htmlFor="fecha_inicial" className="text-xs text-gray-600">
+                Fecha Inicial
+              </Label>
+              <Input
+                id="fecha_inicial"
+                type="date"
+                value={filters.fecha_inicial || ""}
+                onChange={(e) => handleFilterChange("fecha_inicial", e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fecha_final" className="text-xs text-gray-600">
+                Fecha Final
+              </Label>
+              <Input
+                id="fecha_final"
+                type="date"
+                value={filters.fecha_final || ""}
+                onChange={(e) => handleFilterChange("fecha_final", e.target.value)}
+                className="mt-1"
+              />
             </div>
           </div>
           <div className="flex justify-end">
@@ -426,29 +592,30 @@ export default function LibroDiarioInforme() {
                   <div className="mt-4 p-4 bg-blue-50 rounded border-2 border-blue-200">
                     <Table>
                       <TableBody>
-                        <TableRow className="font-bold text-lg">
-                          <TableCell colSpan={2} className="text-right">
+                        <TableRow className="font-bold text-base">
+                          <TableCell className="w-32"></TableCell>
+                          <TableCell className="text-right">
                             TOTALES GENERALES:
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="w-32 text-right font-mono">
                             {totalesGenerales.debe_bs.toLocaleString("es-ES", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="w-32 text-right font-mono">
                             {totalesGenerales.haber_bs.toLocaleString("es-ES", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="w-32 text-right font-mono">
                             {totalesGenerales.debe_usd.toLocaleString("es-ES", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="w-32 text-right font-mono">
                             {totalesGenerales.haber_usd.toLocaleString("es-ES", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,

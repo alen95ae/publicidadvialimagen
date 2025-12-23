@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Paso 1: Obtener comprobantes filtrados
     let comprobantesQuery = supabase
       .from("comprobantes")
-      .select("id, numero, fecha, tipo_asiento, glosa, estado")
+      .select("id, numero, fecha, tipo_asiento, concepto, estado")
       .eq("empresa_id", parseInt(empresa_id))
 
     // Filtrar por estado (por defecto APROBADO)
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
           fecha: comprobante.fecha || "",
           numero_comprobante: comprobante.numero || "",
           tipo_asiento: comprobante.tipo_asiento || "",
-          glosa_comprobante: comprobante.glosa || "",
+          glosa_comprobante: comprobante.concepto || "",
           glosa_detalle: det.glosa || "",
           debe: debe,
           haber: haber,

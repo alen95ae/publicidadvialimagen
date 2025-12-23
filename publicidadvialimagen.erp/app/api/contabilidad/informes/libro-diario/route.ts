@@ -14,9 +14,9 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin()
 
     const { searchParams } = new URL(request.url)
-    const empresa = searchParams.get("empresa")
-    const regional = searchParams.get("regional")
-    const sucursal = searchParams.get("sucursal")
+    const gestion = searchParams.get("gestion")
+    const periodo = searchParams.get("periodo")
+    const tipo_asiento = searchParams.get("tipo_asiento")
     const fecha_inicial = searchParams.get("fecha_inicial")
     const fecha_final = searchParams.get("fecha_final")
     const tipo_comprobante = searchParams.get("tipo_comprobante")
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         fecha,
         tipo_comprobante,
         tipo_asiento,
-        glosa,
+        concepto,
         moneda,
         tipo_cambio,
         estado,
@@ -44,6 +44,18 @@ export async function GET(request: NextRequest) {
       .order("numero", { ascending: true })
 
     // Aplicar filtros opcionales
+    if (gestion) {
+      query = query.eq("gestion", parseInt(gestion))
+    }
+
+    if (periodo) {
+      query = query.eq("periodo", parseInt(periodo))
+    }
+
+    if (tipo_asiento) {
+      query = query.eq("tipo_asiento", tipo_asiento)
+    }
+
     if (fecha_inicial) {
       query = query.gte("fecha", fecha_inicial)
     }
@@ -180,7 +192,7 @@ export async function GET(request: NextRequest) {
         fecha: comp.fecha,
         tipo_comprobante: comp.tipo_comprobante,
         tipo_asiento: comp.tipo_asiento,
-        glosa: comp.glosa || "",
+        glosa: comp.concepto || "",
         moneda: comp.moneda || "BS",
         tipo_cambio: comp.tipo_cambio || 1,
         estado: comp.estado,

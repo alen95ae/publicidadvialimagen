@@ -604,74 +604,28 @@ export async function GET(request: NextRequest) {
       const leftTextWidth = pdf.getTextWidth(leftText)
       pdf.text(leftText, 5, footerTextY)
       
-      // Calcular posiciones para centrar email y NIT
-      const webText = 'contabilidad@publicidadvialimagen.com'
-      const nitText = 'NIT: 164692025'
-      const webTextWidth = pdf.getTextWidth(webText)
-      const nitTextWidth = pdf.getTextWidth(nitText)
+      // Separador 1 (entre izquierda y centro)
+      pdf.text('|', 65, footerTextY)
       
-      // Email y número del usuario (derecha)
-      const emailFooter = obtenerEmailFooter(userEmail)
-      let rightContentWidth = 0
-      if (emailFooter) {
-        rightContentWidth += pdf.getTextWidth(emailFooter) + 5
-        if (userNumero) {
-          rightContentWidth += 5 + pdf.getTextWidth(userNumero) + 5
-        }
-      } else if (userNumero) {
-        rightContentWidth += pdf.getTextWidth(userNumero) + 5
-      }
+      // Centro: contabilidad@publicidadvialimagen.com
+      pdf.text('contabilidad@publicidadvialimagen.com', 70, footerTextY)
+      
+      // Separador 2 (entre email y NIT)
+      const webTextWidth = pdf.getTextWidth('contabilidad@publicidadvialimagen.com')
+      const separator2X = 70 + webTextWidth + 5
+      pdf.text('|', separator2X, footerTextY)
+      
+      // NIT
+      const nitX = separator2X + 5
+      pdf.text('NIT: 164692025', nitX, footerTextY)
+      
+      // Separador 3 (antes de paginación)
+      const nitTextWidth = pdf.getTextWidth('NIT: 164692025')
+      const separator3X = nitX + nitTextWidth + 5
+      pdf.text('|', separator3X, footerTextY)
       
       // Paginación (derecha)
       const paginationText = `${i}/${totalPages}`
-      const paginationWidth = pdf.getTextWidth(paginationText)
-      rightContentWidth += paginationWidth + 10
-      
-      // Espacio disponible para centrar email y NIT
-      const leftEndX = 5 + leftTextWidth + 5
-      const rightStartX = pageWidth - 15 - rightContentWidth
-      const availableWidth = rightStartX - leftEndX
-      const centerContentWidth = webTextWidth + 5 + nitTextWidth
-      const spacing = (availableWidth - centerContentWidth) / 3
-      
-      // Separador 1
-      const separator1X = leftEndX + spacing
-      pdf.text('|', separator1X, footerTextY)
-      
-      // Email de contabilidad (centrado)
-      const webX = separator1X + 5
-      pdf.text(webText, webX, footerTextY)
-      
-      // Separador 2
-      const separator2X = webX + webTextWidth + 5
-      pdf.text('|', separator2X, footerTextY)
-      
-      // NIT (centrado)
-      const nitX = separator2X + 5
-      pdf.text(nitText, nitX, footerTextY)
-      
-      // Separador 3
-      const separator3X = nitX + nitTextWidth + spacing
-      pdf.text('|', separator3X, footerTextY)
-      
-      // Email y número del usuario
-      let rightContentX = separator3X + 5
-      if (emailFooter) {
-        pdf.text(emailFooter, rightContentX, footerTextY)
-        rightContentX += pdf.getTextWidth(emailFooter) + 5
-        
-        if (userNumero) {
-          pdf.text('|', rightContentX, footerTextY)
-          rightContentX += 5
-        }
-      }
-      
-      if (userNumero) {
-        pdf.text(userNumero, rightContentX, footerTextY)
-        rightContentX += pdf.getTextWidth(userNumero) + 5
-      }
-      
-      // Paginación
       const paginationX = pageWidth - 15
       pdf.text(paginationText, paginationX, footerTextY, { align: 'right' })
     }

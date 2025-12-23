@@ -100,6 +100,33 @@ async function compressImage(imageBuffer: Buffer, maxWidth: number = 800, qualit
 }
 
 /**
+ * Función para normalizar URLs de imágenes (convertir relativas a absolutas)
+ */
+function normalizeImageUrl(imageUrl: string): string {
+  if (!imageUrl) return ''
+  
+  // Si ya es base64, retornar tal cual
+  if (imageUrl.startsWith('data:')) {
+    return imageUrl
+  }
+  
+  // Si ya es una URL absoluta, retornar tal cual
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  
+  // Si es una URL relativa, convertirla a absoluta usando la URL base del sitio
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://publicidadvialimagen.com'
+  
+  // Si la URL relativa no empieza con /, agregarlo
+  if (!imageUrl.startsWith('/')) {
+    imageUrl = '/' + imageUrl
+  }
+  
+  return `${baseUrl}${imageUrl}`
+}
+
+/**
  * Función para cargar y comprimir una imagen desde URL
  */
 async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string | null; format: string }> {
@@ -107,10 +134,13 @@ async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string 
     return { base64: null, format: 'JPEG' }
   }
 
+  // Normalizar la URL (convertir relativas a absolutas)
+  const normalizedUrl = normalizeImageUrl(imageUrl)
+
   // Si ya es base64, comprimirla
-  if (imageUrl.startsWith('data:')) {
+  if (normalizedUrl.startsWith('data:')) {
     try {
-      const base64Data = imageUrl.split(',')[1] || imageUrl
+      const base64Data = normalizedUrl.split(',')[1] || normalizedUrl
       const imageBuffer = Buffer.from(base64Data, 'base64')
       const compressedBuffer = await compressImage(imageBuffer, 800, 80)
       return {
@@ -119,23 +149,26 @@ async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string 
       }
     } catch (error) {
       console.error('❌ Error comprimiendo imagen base64:', error)
-      return { base64: imageUrl, format: 'JPEG' }
+      return { base64: normalizedUrl, format: 'JPEG' }
     }
   }
 
   // Si es una URL externa, cargarla y comprimirla
   try {
-    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-      throw new Error(`URL inválida: ${imageUrl}`)
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      console.error('❌ URL inválida después de normalización:', normalizedUrl)
+      return { base64: null, format: 'JPEG' }
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // Reducido de 30s a 10s
+    // Aumentar timeout a 20s para producción (Vercel tiene límite de 10s en funciones serverless, pero intentamos)
+    const timeoutId = setTimeout(() => controller.abort(), 20000)
 
-    const response = await fetch(imageUrl, {
+    const response = await fetch(normalizedUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)',
-        'Accept': 'image/*'
+        'Accept': 'image/*',
+        'Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://publicidadvialimagen.com'
       },
       signal: controller.signal
     })
@@ -160,7 +193,8 @@ async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string 
     }
   } catch (error) {
     console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
-    console.error('   URL:', imageUrl.substring(0, 150))
+    console.error('   URL original:', imageUrl.substring(0, 150))
+    console.error('   URL normalizada:', normalizedUrl.substring(0, 150))
     return { base64: null, format: 'JPEG' }
   }
 }
@@ -196,11 +230,19 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
         const col = dx + 1
         const row = dy + 1
 
-        // Descargar todos los tiles en paralelo (sin pausas)
+        // Descargar todos los tiles en paralelo con timeout aumentado
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 15000)
+        
         const tilePromise = fetch(tileUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)' }
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)',
+            'Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://publicidadvialimagen.com'
+          },
+          signal: controller.signal
         })
           .then(async (tileResponse) => {
+            clearTimeout(timeoutId)
             if (tileResponse.ok) {
               const tileBuffer = Buffer.from(await tileResponse.arrayBuffer())
               return { buffer: tileBuffer, col, row }
@@ -210,7 +252,8 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
             }
           })
           .catch((err) => {
-            console.warn(`⚠️ Error descargando tile ${tx},${ty}:`, err)
+            clearTimeout(timeoutId)
+            console.warn(`⚠️ Error descargando tile ${tx},${ty}:`, err instanceof Error ? err.message : err)
             return null
           })
 
@@ -218,8 +261,9 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
       }
     }
 
-    // Esperar todas las descargas en paralelo
+    // Esperar todas las descargas en paralelo (con timeout implícito en cada fetch)
     const tileResults = await Promise.all(tilePromises)
+    
     const composites = tileResults
       .filter((result): result is { buffer: Buffer; col: number; row: number } => result !== null)
       .map((result) => ({
@@ -229,7 +273,8 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
       }))
 
     if (composites.length === 0) {
-      throw new Error('No se pudo descargar ningún tile')
+      console.warn('⚠️ No se pudo descargar ningún tile del mapa')
+      return null
     }
 
     // Crear canvas base y componer tiles
@@ -284,7 +329,9 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
 
     return `data:image/png;base64,${finalBuffer.toString('base64')}`
   } catch (error) {
-    console.error('❌ Error generando mapa OSM:', error)
+    console.error('❌ Error generando mapa OSM:', error instanceof Error ? error.message : error)
+    // En producción, si falla la generación del mapa, retornar null en lugar de lanzar error
+    // para que el PDF se genere sin el mapa pero con el resto del contenido
     return null
   }
 }
@@ -354,13 +401,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "IDs de soportes requeridos" }, { status: 400 })
     }
 
-    const supportIds = ids.split(',')
+    const supportIds = ids.split(',').filter(id => id && id.trim() !== '')
+    
+    console.log(`📋 Generando PDF para ${supportIds.length} soporte(s):`, supportIds)
 
     // Obtener los soportes específicos
     const supports = []
     for (const id of supportIds) {
       try {
-        const record = await getSoporteById(id)
+        const record = await getSoporteById(id.trim())
         if (record) {
           // getSoporteById devuelve un Soporte directamente, no con .fields
           const support = rowToSupport({
@@ -391,15 +440,21 @@ export async function GET(request: NextRequest) {
           }
           
           supports.push(support)
+          console.log(`✅ Soporte ${id} cargado: ${support.title}`)
+        } else {
+          console.warn(`⚠️ Soporte ${id} no encontrado`)
         }
       } catch (error) {
-        console.error(`Error fetching support ${id}:`, error)
+        console.error(`❌ Error fetching support ${id}:`, error)
       }
     }
 
     if (supports.length === 0) {
+      console.error('❌ No se encontraron soportes para generar PDF')
       return NextResponse.json({ error: "No se encontraron soportes" }, { status: 404 })
     }
+    
+    console.log(`✅ ${supports.length} soporte(s) listo(s) para generar PDF`)
 
     // Generar PDF
     const pdf = await generatePDF(supports, userEmail, userNumero)

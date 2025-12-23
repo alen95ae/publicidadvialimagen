@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server"
 import { getSoporteById } from "@/lib/supabaseSoportes"
@@ -7,7 +8,19 @@ import { rowToSupport, getSustratoDefaultId } from "../../helpers"
 import jsPDF from 'jspdf'
 import fs from 'fs'
 import path from 'path'
-import sharp from 'sharp'
+
+/**
+ * Función helper para cargar sharp dinámicamente (evita problemas en build time)
+ * Sharp solo se carga cuando se ejecuta el handler, no durante el build
+ */
+let sharpInstance: typeof import("sharp") | null = null
+
+async function getSharp() {
+  if (!sharpInstance) {
+    sharpInstance = (await import("sharp")).default
+  }
+  return sharpInstance
+}
 
 /**
  * Construye el nombre del archivo PDF según los filtros y selección
@@ -481,6 +494,7 @@ async function generatePDF(supports: any[], userEmail?: string): Promise<Buffer>
             
             // Crear canvas base y componer tiles
             const gridSize = 3 * tileSize
+            const sharp = await getSharp()
             const baseCanvas = sharp({
               create: {
                 width: gridSize,

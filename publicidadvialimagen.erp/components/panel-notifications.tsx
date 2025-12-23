@@ -72,18 +72,10 @@ export default function PanelNotifications() {
 
         const rolNormalizado = userRol.toLowerCase()
         
-        // Importar Supabase client dinámicamente
-        const { createClient } = await import('@supabase/supabase-js')
+        // Usar el cliente Supabase singleton del browser
+        const { getSupabaseBrowserClient } = await import('@/lib/supabase/client')
         
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        
-        if (!supabaseUrl || !supabaseAnonKey) {
-          console.warn('[Realtime] Variables de entorno faltantes')
-          return
-        }
-        
-        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        const supabase = getSupabaseBrowserClient()
         
         // Suscribirse a cambios
         // Nota: No podemos filtrar por array directamente en Realtime,

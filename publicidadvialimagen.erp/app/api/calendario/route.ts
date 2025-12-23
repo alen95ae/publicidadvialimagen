@@ -5,6 +5,7 @@ import { getEvents, addEvent, EventFormData } from "@/lib/calendar-api"
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const runtime = "nodejs";
 
 // GET - Obtener todos los eventos
 export async function GET() {

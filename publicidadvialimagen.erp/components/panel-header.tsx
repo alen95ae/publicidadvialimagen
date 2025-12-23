@@ -323,14 +323,14 @@ export default function PanelHeader() {
 
     const setupRealtime = async () => {
       try {
-        // Importar Supabase client dinámicamente
-        const { createClient } = await import('@supabase/supabase-js')
+        // Usar el cliente Supabase singleton del browser
+        const { getSupabaseBrowserClient } = await import('@/lib/supabase/client')
         
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        
-        if (!supabaseUrl || !supabaseAnonKey) {
-          console.warn('[Realtime] Variables de entorno faltantes, usando polling como fallback')
+        let supabase: ReturnType<typeof getSupabaseBrowserClient>
+        try {
+          supabase = getSupabaseBrowserClient()
+        } catch (error) {
+          console.warn('[Realtime] Error obteniendo cliente Supabase, usando polling como fallback:', error)
           // Fallback a polling si no hay variables de entorno
           const interval = setInterval(() => {
             fetchNotifications()
@@ -339,8 +339,6 @@ export default function PanelHeader() {
           cleanup = () => clearInterval(interval)
           return
         }
-        
-        const supabase = createClient(supabaseUrl, supabaseAnonKey)
         
         // Suscribirse a cambios en notificaciones
         // Nota: No podemos filtrar por array directamente en Realtime, 

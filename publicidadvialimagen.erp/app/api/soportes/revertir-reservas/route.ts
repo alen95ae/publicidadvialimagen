@@ -4,6 +4,7 @@ import { updateSoporte, getSoporteById } from "@/lib/supabaseSoportes"
 import { addHistorialEvento } from "@/lib/supabaseHistorial"
 
 export const dynamic = 'force-dynamic'
+export const runtime = "nodejs";
 
 /**
  * Endpoint para revertir automáticamente las reservas expiradas (más de 48h)

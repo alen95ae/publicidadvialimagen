@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -28,6 +29,41 @@ const ORIGENES: OrigenComprobante[] = ["Contabilidad", "Ventas", "Tesorería", "
 const TIPOS_COMPROBANTE: TipoComprobante[] = ["Ingreso", "Egreso", "Diario", "Traspaso", "Ctas por Pagar"]
 const TIPOS_ASIENTO: TipoAsiento[] = ["Normal", "Apertura", "Cierre", "Ajuste"]
 const MONEDAS: Moneda[] = ["BS", "USD"]
+
+// Componente para detectar truncado y mostrar tooltip
+// Muestra tooltip cuando hay descripción completa de cuenta (formato: "codigo - descripcion")
+function TruncatedTextWithTooltip({ 
+  text, 
+  fullText, 
+  className = ""
+}: { 
+  text: string
+  fullText: string
+  className?: string
+}) {
+  // Mostrar tooltip si hay una descripción (contiene " - ")
+  // Esto significa que hay una cuenta con descripción que puede estar truncada
+  const shouldShowTooltip = fullText.includes(" - ")
+  
+  if (shouldShowTooltip) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={`truncate cursor-help ${className}`}>
+              {text}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm">
+            <p className="font-mono">{fullText}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+  return <span className={`truncate ${className}`}>{text}</span>
+}
+
 const MESES = [
   { value: 1, label: "Enero" },
   { value: 2, label: "Febrero" },
@@ -832,19 +868,30 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
 
       // Cargar detalles con información de plantilla
       if (data.data?.detalles) {
+        // Asegurar que las cuentas estén cargadas antes de mostrar los detalles
+        if (cuentas.length === 0) {
+          await fetchCuentasTransaccionales()
+          // Esperar un pequeño delay para asegurar que el estado se actualice
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        
         const detallesConPlantilla = data.data.detalles.map((det: any) => ({
           ...det,
           esCalculado: det.rol === "IVA_CREDITO" || det.rol === "IVA_DEBITO" || 
                        det.rol === "PROVEEDOR" || det.rol === "CLIENTE" || det.rol === "CAJA_BANCO",
+          // Preservar cuenta_sugerida y cuenta_es_fija del backend
+          cuenta_sugerida: det.cuenta_sugerida || "",
+          cuenta_es_fija: det.cuenta_es_fija === true,
         }))
         console.log("📋 Detalles cargados de plantilla:", detallesConPlantilla)
         console.log("📊 Total de líneas:", detallesConPlantilla.length)
+        
         setDetalles(detallesConPlantilla)
         
-        // Inicializar filtros para las nuevas líneas
+        // Inicializar filtros para las nuevas líneas (usar cuentas actualizadas)
         const initialFilters: Record<number, Cuenta[]> = {}
         detallesConPlantilla.forEach((_, idx) => {
-          initialFilters[idx] = cuentas.slice(0, 20)
+          initialFilters[idx] = cuentas.length > 0 ? cuentas.slice(0, 20) : []
         })
         setFilteredCuentas(initialFilters)
       } else if (comprobanteId) {
@@ -1427,41 +1474,101 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                   detalles.map((detalle, index) => (
                     <TableRow key={index}>
                       <TableCell className="w-[250px]">
-                        {/* Cuenta: bloqueada si es IVA_CREDITO o IVA_DEBITO */}
-                        {detalle.rol === "IVA_CREDITO" || detalle.rol === "IVA_DEBITO" ? (
-                          <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
-                            <span className="truncate">
-                              {getCuentaDisplayText(detalle.cuenta || "")}
-                            </span>
-                            <span className="ml-2 text-xs text-gray-500">(Fija)</span>
-                          </div>
-                        ) : (
+                        {/* Cuenta: bloqueada si cuenta_es_fija === true */}
+                        {(() => {
+                          const cuentaEsFija = (detalle as any).cuenta_es_fija === true
+                          
+                          if (cuentaEsFija) {
+                            // Renderizar cuenta fija bloqueada
+                            if (detalle.cuenta && detalle.cuenta.trim() !== "") {
+                              const cuenta = cuentas.find(c => c.cuenta === detalle.cuenta)
+                              if (cuenta) {
+                                const displayText = `${cuenta.cuenta} - ${cuenta.descripcion}`
+                                const fullText = displayText
+                                return (
+                                  <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
+                                    <TruncatedTextWithTooltip 
+                                      text={displayText} 
+                                      fullText={fullText}
+                                      className="block"
+                                    />
+                                    <span className="ml-2 text-xs text-gray-500">(Fija)</span>
+                                  </div>
+                                )
+                              } else {
+                                // Cuenta no encontrada, mostrar solo código
+                                return (
+                                  <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
+                                    <span className="truncate block">{detalle.cuenta}</span>
+                                    <span className="ml-2 text-xs text-gray-500">(Fija)</span>
+                                  </div>
+                                )
+                              }
+                            } else {
+                              // Cuenta fija pero sin código (no debería pasar)
+                              return (
+                                <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
+                                  <span className="truncate block text-muted-foreground">Cuenta fija</span>
+                                  <span className="ml-2 text-xs text-gray-500">(Fija)</span>
+                                </div>
+                              )
+                            }
+                          }
+                          
+                          // No es cuenta fija, renderizar selector normal
+                          return (
                           <Popover
                             open={openCuentaCombobox[index] || false}
                             onOpenChange={(open) => {
                               setOpenCuentaCombobox(prev => ({ ...prev, [index]: open }))
                               if (open) {
-                                // Al abrir, mostrar las primeras 20 cuentas
-                                setFilteredCuentas(prev => ({ ...prev, [index]: cuentas.slice(0, 20) }))
+                                // Si no hay cuenta seleccionada pero hay cuenta_sugerida, precargarla
+                                const cuentaSugerida = (detalle as any).cuenta_sugerida
+                                if (!detalle.cuenta && cuentaSugerida) {
+                                  const cuentaEncontrada = cuentas.find(c => c.cuenta === cuentaSugerida)
+                                  if (cuentaEncontrada) {
+                                    // Precargar la cuenta sugerida en el selector
+                                    setFilteredCuentas(prev => ({ 
+                                      ...prev, 
+                                      [index]: [cuentaEncontrada, ...cuentas.filter(c => c.cuenta !== cuentaSugerida).slice(0, 19)]
+                                    }))
+                                  } else {
+                                    // Si no se encuentra, mostrar las primeras 20
+                                    setFilteredCuentas(prev => ({ ...prev, [index]: cuentas.slice(0, 20) }))
+                                  }
+                                } else {
+                                  // Al abrir, mostrar las primeras 20 cuentas
+                                  setFilteredCuentas(prev => ({ ...prev, [index]: cuentas.slice(0, 20) }))
+                                }
                               }
                             }}
                           >
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                disabled={isReadOnly}
-                                className={cn(
-                                  "w-[250px] h-9 justify-between font-mono text-sm overflow-hidden",
-                                  !detalle.cuenta && "text-muted-foreground"
-                                )}
-                              >
-                                <span className="truncate block text-left">
-                                  {getCuentaDisplayText(detalle.cuenta || "")}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </PopoverTrigger>
+                            {(() => {
+                              const displayText = getCuentaDisplayText(detalle.cuenta || "")
+                              const cuenta = cuentas.find(c => c.cuenta === detalle.cuenta)
+                              const fullText = cuenta ? `${cuenta.cuenta} - ${cuenta.descripcion}` : displayText
+                              
+                              return (
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    disabled={isReadOnly}
+                                    className={cn(
+                                      "w-[250px] h-9 justify-between font-mono text-sm overflow-hidden",
+                                      !detalle.cuenta && "text-muted-foreground"
+                                    )}
+                                  >
+                                    <TruncatedTextWithTooltip 
+                                      text={displayText} 
+                                      fullText={fullText}
+                                      className="block text-left flex-1"
+                                    />
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                              )
+                            })()}
                             <PopoverContent className="w-[400px] p-0" align="start">
                               <Command shouldFilter={false} className="overflow-visible">
                                 <CommandInput
@@ -1500,7 +1607,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                               </Command>
                             </PopoverContent>
                           </Popover>
-                        )}
+                          )
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Input

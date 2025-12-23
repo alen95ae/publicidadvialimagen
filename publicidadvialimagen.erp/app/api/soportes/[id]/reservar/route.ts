@@ -7,6 +7,7 @@ import { verifySession } from "@/lib/auth"
 import { getSupabaseServer } from "@/lib/supabaseServer"
 
 export const dynamic = 'force-dynamic'
+export const runtime = "nodejs";
 
 export async function POST(
   req: NextRequest,

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseUser } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"

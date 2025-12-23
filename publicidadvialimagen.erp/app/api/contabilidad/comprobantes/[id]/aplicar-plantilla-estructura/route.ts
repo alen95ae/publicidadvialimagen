@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
@@ -81,17 +83,6 @@ export async function POST(
       )
     }
 
-    // Cargar configuración de cuentas IVA
-    const { data: configIVA } = await supabase
-      .from("contabilidad_config")
-      .select("key, value")
-      .in("key", ["IVA_CREDITO_CUENTA", "IVA_DEBITO_CUENTA"])
-
-    const configMap: Record<string, string> = {}
-    configIVA?.forEach((item) => {
-      configMap[item.key] = item.value
-    })
-
     // Eliminar detalles existentes del comprobante
     const { error: errorEliminar } = await supabase
       .from("comprobante_detalle")
@@ -108,45 +99,20 @@ export async function POST(
     // Construir líneas de comprobante_detalle con estructura (montos en 0)
     const detallesData: any[] = []
 
-    // Cuentas por defecto según rol (OBLIGATORIO: cuenta es NOT NULL)
-    // IMPORTANTE: IVA_CREDITO debe usar la cuenta exacta 116001001 (no 116001)
-    const cuentasPorDefectoPorRol: Record<string, string> = {
-      GASTO: "600",           // Cuenta de gastos genérica (editable)
-      INGRESO: "500",         // Cuenta de ingresos genérica (editable)
-      IVA_CREDITO: configMap["IVA_CREDITO_CUENTA"] || "116001001",  // Fija, no editable
-      IVA_DEBITO: configMap["IVA_DEBITO_CUENTA"] || "213001001",    // Fija, no editable
-      PROVEEDOR: "400",       // Cuentas por pagar (editable)
-      CLIENTE: "700",         // Cuentas por cobrar (editable)
-      CAJA_BANCO: "110",      // Disponibilidades (editable)
-    }
-
+    // REGLA: cuenta SOLO se rellena automáticamente si cuenta_es_fija === true
+    // Si NO es fija → cuenta debe ir vacía ("") al crear el comprobante
     detallesPlantilla.forEach((detPlantilla, index) => {
-      let cuentaResuelta: string
+      const cuentaEsFija = detPlantilla.cuenta_es_fija === true
+      const cuentaSugerida = detPlantilla.cuenta_sugerida || ""
+      
+      // Si es fija, usar cuenta_sugerida; si no, dejar vacía
+      const cuenta = cuentaEsFija ? cuentaSugerida : ""
 
-      // 1. Si tiene cuenta_fija configurada en la plantilla, usar esa
-      if (detPlantilla.cuenta_fija) {
-        cuentaResuelta = detPlantilla.cuenta_fija
-      }
-      // 2. Si es IVA, usar la cuenta de configuración
-      else if (detPlantilla.rol === "IVA_CREDITO" && configMap["IVA_CREDITO_CUENTA"]) {
-        cuentaResuelta = configMap["IVA_CREDITO_CUENTA"]
-      } else if (detPlantilla.rol === "IVA_DEBITO" && configMap["IVA_DEBITO_CUENTA"]) {
-        cuentaResuelta = configMap["IVA_DEBITO_CUENTA"]
-      }
-      // 3. Usar cuenta por defecto según rol
-      else if (cuentasPorDefectoPorRol[detPlantilla.rol]) {
-        cuentaResuelta = cuentasPorDefectoPorRol[detPlantilla.rol]
-      }
-      // 4. Fallback general (no debería llegar aquí)
-      else {
-        cuentaResuelta = "100" // Cuenta genérica de activo
-      }
-
-      console.log(`📝 Línea ${index + 1}: Rol=${detPlantilla.rol}, Cuenta=${cuentaResuelta}`)
+      console.log(`📝 Línea ${index + 1}: Rol=${detPlantilla.rol}, Cuenta=${cuenta || "(vacía - seleccionar)"}, EsFija=${cuentaEsFija}, Sugerida=${cuentaSugerida}`)
 
       detallesData.push({
         comprobante_id: resolvedParams.id,
-        cuenta: cuentaResuelta,  // ✅ NUNCA NULL
+        cuenta: cuenta,
         auxiliar: null,
         glosa: null,
         debe_bs: 0,
@@ -193,6 +159,9 @@ export async function POST(
       porcentaje: detallesPlantilla[index].porcentaje,
       permite_seleccionar_cuenta: detallesPlantilla[index].permite_seleccionar_cuenta,
       permite_auxiliar: detallesPlantilla[index].permite_auxiliar,
+      // Enviar siempre cuenta_sugerida y cuenta_es_fija
+      cuenta_sugerida: detallesPlantilla[index].cuenta_sugerida || "",
+      cuenta_es_fija: detallesPlantilla[index].cuenta_es_fija === true,
     }))
 
     return NextResponse.json({

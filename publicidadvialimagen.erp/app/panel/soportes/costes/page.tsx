@@ -503,7 +503,26 @@ export default function CostesPage() {
           const result = await response.json()
           const supportsData = result.data || result
           const allData = Array.isArray(supportsData) ? supportsData : []
-          const ciudades = Array.from(new Set(allData.map((s: Support) => s.city).filter(Boolean))) as string[]
+          
+          // Normalizar ciudades: capitalizar primera letra, resto minúsculas
+          const normalizeCity = (city: string): string => {
+            if (!city) return ''
+            return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase()
+          }
+          
+          // Obtener ciudades únicas normalizadas
+          const ciudadesMap = new Map<string, string>()
+          allData.forEach((s: Support) => {
+            if (s.city) {
+              const normalized = normalizeCity(s.city)
+              // Evitar duplicados: si ya existe una versión normalizada, usar esa
+              if (!ciudadesMap.has(normalized)) {
+                ciudadesMap.set(normalized, normalized)
+              }
+            }
+          })
+          
+          const ciudades = Array.from(ciudadesMap.values())
           setCiudadesUnicas(ciudades.sort())
         }
       } catch (error) {

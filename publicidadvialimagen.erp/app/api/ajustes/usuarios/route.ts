@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
 import { getAllUsersSupabase, createUserSupabase, updateUserSupabase, getUserByIdSupabase, findUserByEmailSupabase } from "@/lib/supabaseUsers";

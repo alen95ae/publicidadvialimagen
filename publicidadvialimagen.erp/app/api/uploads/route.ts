@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 import { NextResponse } from 'next/server'
 import { readdirSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'

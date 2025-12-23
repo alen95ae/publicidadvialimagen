@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server"
 import { getSoporteById } from "@/lib/supabaseSoportes"

@@ -64,17 +64,6 @@ export async function GET(request: NextRequest) {
       console.log("⚠️ [GET /api/contabilidad/cuentas] Error o sin datos, probando con admin...")
       const supabaseAdmin = getSupabaseAdmin()
       
-      // Primero ver qué empresa_id tienen los datos
-      const { data: sampleData } = await supabaseAdmin
-        .from("plan_cuentas")
-        .select("empresa_id, cuenta, descripcion")
-        .limit(5)
-      
-        sampleCount: sampleData?.length || 0,
-        empresaIds: sampleData?.map((c: any) => c.empresa_id),
-        cuentas: sampleData?.map((c: any) => ({ empresa_id: c.empresa_id, cuenta: c.cuenta }))
-      })
-      
       // Intentar obtener con admin
       const { data: adminData, error: adminError, count: adminCount } = await supabaseAdmin
         .from("plan_cuentas")
@@ -92,12 +81,6 @@ export async function GET(request: NextRequest) {
         console.log("⚠️ [GET /api/contabilidad/cuentas] Admin también sin datos con empresa_id=1")
       }
     }
-
-      dataLength: data?.length || 0,
-      count,
-      useAdmin,
-      error: error ? { message: error.message, code: error.code } : null
-    })
 
     if (error) {
       console.error("❌ Error fetching cuentas:", error)
@@ -138,10 +121,6 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((count || 0) / limit),
       },
     }
-    
-      dataCount: responseData.data.length,
-      total: responseData.pagination.total
-    })
     
     return NextResponse.json(responseData)
   } catch (error: any) {

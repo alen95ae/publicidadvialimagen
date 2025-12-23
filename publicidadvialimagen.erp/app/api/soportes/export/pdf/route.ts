@@ -10,31 +10,6 @@ import fs from 'fs'
 import path from 'path'
 
 /**
- * Función helper para cargar sharp dinámicamente (evita problemas en build time)
- * Sharp solo se carga cuando se ejecuta el handler, no durante el build
- */
-let sharpInstance: any = null
-
-async function getSharp() {
-  if (!sharpInstance) {
-    try {
-      // Intento 1: Import dinámico (ESM)
-      const sharpModule = await import("sharp")
-      sharpInstance = sharpModule.default || sharpModule
-    } catch (esmError) {
-      try {
-        // Intento 2: Require dinámico (CommonJS) - más compatible con Vercel
-        sharpInstance = require("sharp")
-      } catch (cjsError) {
-        console.error("❌ No se pudo cargar sharp:", esmError, cjsError)
-        throw new Error("Sharp no disponible en este entorno")
-      }
-    }
-  }
-  return sharpInstance
-}
-
-/**
  * Función para crear slug SEO-friendly (igual que en la web)
  */
 function createSlug(text: string | undefined | null): string {
@@ -94,60 +69,28 @@ function getSoporteWebUrl(soporteTitle: string, soporteId?: string, soporteCode?
 }
 
 /**
- * Función para comprimir imágenes usando sharp
- * Redimensiona a máximo 800px de ancho y convierte a JPEG con calidad 80%
+ * Función para cargar imagen desde URL (sin compresión)
+ * Retorna la URL directamente o la convierte a base64 si es necesario
  */
-async function compressImage(imageBuffer: Buffer, maxWidth: number = 800, quality: number = 80): Promise<Buffer> {
-  try {
-    const sharp = await getSharp()
-    const compressed = await sharp(imageBuffer)
-      .resize(maxWidth, null, {
-        fit: 'inside',
-        withoutEnlargement: true
-      })
-      .jpeg({ quality, mozjpeg: true })
-      .toBuffer()
-    
-    return compressed
-  } catch (error) {
-    console.error('❌ Error comprimiendo imagen:', error)
-    // Si falla la compresión, retornar el buffer original
-    return imageBuffer
-  }
-}
-
-/**
- * Función para cargar y comprimir una imagen desde URL
- */
-async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string | null; format: string }> {
+async function loadImage(imageUrl: string): Promise<string | null> {
   if (!imageUrl) {
-    return { base64: null, format: 'JPEG' }
+    return null
   }
 
-  // Si ya es base64, comprimirla
+  // Si ya es base64, retornarla directamente
   if (imageUrl.startsWith('data:')) {
-    try {
-      const base64Data = imageUrl.split(',')[1] || imageUrl
-      const imageBuffer = Buffer.from(base64Data, 'base64')
-      const compressedBuffer = await compressImage(imageBuffer, 800, 80)
-      return {
-        base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
-        format: 'JPEG'
-      }
-    } catch (error) {
-      console.error('❌ Error comprimiendo imagen base64:', error)
-      return { base64: imageUrl, format: 'JPEG' }
-    }
+    return imageUrl
   }
 
-  // Si es una URL externa, cargarla y comprimirla
+  // Si es una URL externa, intentar cargarla y convertirla a base64
   try {
     if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-      throw new Error(`URL inválida: ${imageUrl}`)
+      console.error(`URL inválida: ${imageUrl}`)
+      return null
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // Reducido de 30s a 10s
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
 
     const response = await fetch(imageUrl, {
       headers: {
@@ -160,180 +103,29 @@ async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string 
     clearTimeout(timeoutId)
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      console.error(`Error cargando imagen: HTTP ${response.status}`)
+      return null
     }
 
     const imageBuffer = await response.arrayBuffer()
     if (imageBuffer.byteLength === 0) {
-      throw new Error('Imagen vacía recibida')
+      console.error('Imagen vacía recibida')
+      return null
     }
 
-    const buffer = Buffer.from(imageBuffer)
-    const compressedBuffer = await compressImage(buffer, 800, 80)
-
-    return {
-      base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
-      format: 'JPEG'
+    // Detectar formato
+    const contentType = response.headers.get('content-type') || ''
+    let format = 'JPEG'
+    if (contentType.includes('png')) {
+      format = 'PNG'
+    } else if (contentType.includes('webp')) {
+      format = 'WEBP'
     }
+
+    const base64 = Buffer.from(imageBuffer).toString('base64')
+    return `data:image/${format.toLowerCase()};base64,${base64}`
   } catch (error) {
-    console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
-    console.error('   URL:', imageUrl.substring(0, 150))
-    return { base64: null, format: 'JPEG' }
-  }
-}
-
-/**
- * Función para generar mapa OSM respetando políticas de rate limiting
- * Concurrencia limitada a 2 requests simultáneas + delays entre tiles
- */
-async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapHeightPx: number): Promise<string | null> {
-  try {
-    const zoom = 17
-    const tileSize = 256
-
-    // Calcular el tile central
-    const n = Math.pow(2, zoom)
-    const centerX = (lng + 180) / 360 * n
-    const centerY = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n
-
-    const tileX = Math.floor(centerX)
-    const tileY = Math.floor(centerY)
-
-    // Calcular la posición del marcador dentro del grid completo (3x3 tiles)
-    const pixelX = (centerX - tileX) * tileSize + tileSize
-    const pixelY = (centerY - tileY) * tileSize + tileSize
-
-    // Construir lista de tiles a descargar
-    const tilesToDownload: Array<{ tx: number; ty: number; col: number; row: number }> = []
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        tilesToDownload.push({
-          tx: tileX + dx,
-          ty: tileY + dy,
-          col: dx + 1,
-          row: dy + 1
-        })
-      }
-    }
-
-    // Pool de concurrencia: máximo 2 requests simultáneas
-    const MAX_CONCURRENT = 2
-    const DELAY_BETWEEN_TILES = 120 // ms
-    const composites: Array<{ input: Buffer; left: number; top: number }> = []
-
-    for (let i = 0; i < tilesToDownload.length; i += MAX_CONCURRENT) {
-      const batch = tilesToDownload.slice(i, i + MAX_CONCURRENT)
-      
-      const batchPromises = batch.map(async ({ tx, ty, col, row }) => {
-        const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`
-        
-        try {
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
-          
-          const tileResponse = await fetch(tileUrl, {
-            headers: {
-              'User-Agent': 'PublicidadVialImagen/1.0 (+https://publicidadvialimagen.com; contacto@publicidadvialimagen.com)',
-              'Accept': 'image/png,image/*',
-              'Referer': 'https://publicidadvialimagen.com'
-            },
-            signal: controller.signal
-          })
-          
-          clearTimeout(timeoutId)
-          
-          if (tileResponse.ok) {
-            const tileBuffer = Buffer.from(await tileResponse.arrayBuffer())
-            return {
-              input: tileBuffer,
-              left: col * tileSize,
-              top: row * tileSize
-            }
-          } else {
-            console.error(`Tile ${tx},${ty} falló: HTTP ${tileResponse.status} - ${tileUrl}`)
-            return null
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-          console.error(`Tile ${tx},${ty} error: ${errorMsg} - ${tileUrl}`)
-          return null
-        }
-      })
-      
-      // Esperar el batch actual
-      const batchResults = await Promise.all(batchPromises)
-      
-      // Agregar tiles exitosos
-      batchResults.forEach(result => {
-        if (result !== null) {
-          composites.push(result)
-        }
-      })
-      
-      // Delay entre batches (excepto después del último)
-      if (i + MAX_CONCURRENT < tilesToDownload.length) {
-        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_TILES))
-      }
-    }
-
-    // Continuar si tenemos AL MENOS 1 tile (no exigir todos)
-    if (composites.length === 0) {
-      throw new Error('No se pudo descargar ningún tile de OSM')
-    }
-
-    // Crear canvas base y componer tiles
-    const gridSize = 3 * tileSize
-    const sharp = await getSharp()
-    const baseCanvas = sharp({
-      create: {
-        width: gridSize,
-        height: gridSize,
-        channels: 4,
-        background: { r: 200, g: 200, b: 200, alpha: 1 }
-      }
-    })
-
-    const mapWithTiles = await baseCanvas.composite(composites).png().toBuffer()
-
-    // Agregar icono del billboard
-    const iconPath = path.join(process.cwd(), 'public', 'icons', 'billboard.svg')
-    let finalMapBuffer = mapWithTiles
-
-    if (fs.existsSync(iconPath)) {
-      const iconSize = 40
-      const iconBuffer = await sharp(iconPath)
-        .resize(iconSize, iconSize, { fit: 'contain' })
-        .png()
-        .toBuffer()
-
-      finalMapBuffer = await sharp(mapWithTiles)
-        .composite([{
-          input: iconBuffer,
-          left: Math.floor(pixelX - iconSize / 2),
-          top: Math.floor(pixelY - iconSize)
-        }])
-        .png()
-        .toBuffer()
-    }
-
-    // Recortar al tamaño deseado (centrado en el marcador)
-    const cropLeft = Math.max(0, Math.min(gridSize - mapWidthPx, Math.floor(pixelX - mapWidthPx / 2)))
-    const cropTop = Math.max(0, Math.min(gridSize - mapHeightPx, Math.floor(pixelY - mapHeightPx / 2)))
-
-    const finalBuffer = await sharp(finalMapBuffer)
-      .extract({
-        left: cropLeft,
-        top: cropTop,
-        width: Math.min(mapWidthPx, gridSize - cropLeft),
-        height: Math.min(mapHeightPx, gridSize - cropTop)
-      })
-      .resize(mapWidthPx, mapHeightPx, { fit: 'fill' })
-      .png()
-      .toBuffer()
-
-    return `data:image/png;base64,${finalBuffer.toString('base64')}`
-  } catch (error) {
-    console.error('❌ Error generando mapa OSM:', error)
+    console.error('Error cargando imagen:', error instanceof Error ? error.message : error)
     return null
   }
 }
@@ -533,49 +325,37 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       }
     }
 
-    // Cargar el logo para la marca de agua y header (una sola vez) - comprimido
+    // Cargar el logo para la marca de agua y header (una sola vez - SIN compresión)
     let logoBase64Watermark: string | null = null
     let logoBase64Header: string | null = null
     try {
       const logoPath = path.join(process.cwd(), 'public', 'logo.jpg')
       const logoBuffer = fs.readFileSync(logoPath)
-      // Comprimir el logo también para reducir el tamaño del PDF
-      const compressedLogo = await compressImage(logoBuffer, 400, 85)
-      const logoBase64 = `data:image/jpeg;base64,${compressedLogo.toString('base64')}`
+      const logoBase64 = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
       logoBase64Watermark = logoBase64
       logoBase64Header = logoBase64
     } catch (error) {
       // Logo no disponible, continuar sin marca de agua
     }
 
-    // Pre-procesar todas las imágenes y mapas en paralelo ANTES del loop (optimización)
-    console.log('🔄 Pre-procesando imágenes y mapas en paralelo...')
-    const mapWidth = 130 // mm
-    const mapHeight = 90 // mm
-    const mapWidthPx = Math.round(mapWidth * 3.7795)
-    const mapHeightPx = Math.round(mapHeight * 3.7795)
-
-    const preprocessPromises = supports.map(async (support, index) => {
-      const processed: { image: { base64: string | null; format: string } | null; map: string | null } = {
-        image: null,
-        map: null
+    // Pre-cargar todas las imágenes en paralelo ANTES del loop
+    console.log('🔄 Pre-cargando imágenes...')
+    
+    const preprocessPromises = supports.map(async (support) => {
+      const processed: { image: string | null } = {
+        image: null
       }
 
-      // Pre-cargar imagen en paralelo
+      // Pre-cargar imagen en paralelo (sin compresión, sin mapas)
       if (support.images && support.images.length > 0) {
-        processed.image = await loadAndCompressImage(support.images[0])
-      }
-
-      // Pre-generar mapa en paralelo
-      if (support.latitude && support.longitude) {
-        processed.map = await generateOSMMap(support.latitude, support.longitude, mapWidthPx, mapHeightPx)
+        processed.image = await loadImage(support.images[0])
       }
 
       return processed
     })
 
     const preprocessedData = await Promise.all(preprocessPromises)
-    console.log('✅ Pre-procesamiento completado')
+    console.log('✅ Pre-carga completada')
 
     // Agregar cada soporte (una página por soporte)
     for (let index = 0; index < supports.length; index++) {
@@ -587,10 +367,10 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       
       yPosition = 10
       
-      // Logo de la empresa (esquina superior derecha) - Con proporciones exactas 24x5.5
+      // Logo de la empresa (esquina superior izquierda)
       const addLogo = () => {
         try {
-          // Usar el logo comprimido que ya se cargó antes del loop
+          // Usar el logo que ya se cargó antes del loop
           if (logoBase64Header) {
             // Proporciones exactas 24x5.5 (aspectRatio = 24/5.5 ≈ 4.36) - Tamaño reducido a la mitad
             const aspectRatio = 24 / 5.5
@@ -605,56 +385,10 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
             pdf.addImage(logoBase64Header, 'JPEG', logoX, logoY, logoWidth, logoHeight)
             return true
           }
-          
-          // Fallback: intentar cargar sin comprimir (solo si no se cargó antes)
-          const logoPath = path.join(process.cwd(), 'public', 'logo.jpg')
-          const logoBuffer = fs.readFileSync(logoPath)
-          const logoBase64 = `data:image/jpeg;base64,${logoBuffer.toString('base64')}`
-          
-          // Proporciones exactas 24x5.5 (aspectRatio = 24/5.5 ≈ 4.36) - Tamaño reducido a la mitad
-          const aspectRatio = 24 / 5.5
-          const maxHeight = 7.5 // Altura reducida a la mitad (15/2)
-          const calculatedWidth = maxHeight * aspectRatio
-          const logoWidth = Math.min(calculatedWidth, 35) // Ancho reducido a la mitad (70/2)
-          const logoHeight = logoWidth / aspectRatio // Altura calculada para mantener proporción exacta
-          
-          const logoX = 20 // Posición a la izquierda del título
-          const logoY = yPosition - 1
-          
-          pdf.addImage(logoBase64, 'JPEG', logoX, logoY, logoWidth, logoHeight)
-          return true
+          return false
         } catch (error) {
-          try {
-            // Fallback 1: Captura de pantalla
-            const logoPath = path.join(process.cwd(), 'public', 'Captura de pantalla 2025-10-27 a la(s) 7.12.41 p.m..png')
-            const logoBuffer = fs.readFileSync(logoPath)
-            const logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`
-            
-            const logoWidth = 30 // Reducido a la mitad
-            const logoHeight = 7.5 // Reducido a la mitad
-            const logoX = 20 // Posición a la izquierda del título
-            const logoY = yPosition - 1
-            
-            pdf.addImage(logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight)
-            return true
-          } catch (pngError) {
-            try {
-              // Fallback 2: Logo SVG del ERP
-              const logoPath = path.join(process.cwd(), 'public', 'logo-publicidad-vial-imagen.svg')
-              const logoBuffer = fs.readFileSync(logoPath)
-              const logoBase64 = `data:image/svg+xml;base64,${logoBuffer.toString('base64')}`
-              
-              const logoWidth = 30 // Reducido a la mitad
-              const logoHeight = 7.5 // Reducido a la mitad
-              const logoX = 20 // Posición a la izquierda del título
-              const logoY = yPosition - 1
-              
-              pdf.addImage(logoBase64, 'SVG', logoX, logoY, logoWidth, logoHeight)
-              return true
-            } catch (finalError) {
-              return false
-            }
-          }
+          console.error('Error agregando logo:', error)
+          return false
         }
       }
       
@@ -669,31 +403,35 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       
       yPosition += 20
       
-      // Imagen principal del soporte (usar datos pre-procesados)
+      // Imagen principal del soporte (usar datos pre-cargados)
       const preprocessedImage = preprocessedData[index]?.image
-      if (preprocessedImage && preprocessedImage.base64) {
+      if (preprocessedImage) {
         try {
           const imageX = 15
           const imageY = yPosition
           const imageWidth = 130
           const imageHeight = 90
           
-          pdf.addImage(preprocessedImage.base64, preprocessedImage.format, imageX, imageY, imageWidth, imageHeight)
+          // Detectar formato de la imagen
+          let imageFormat = 'JPEG'
+          if (preprocessedImage.includes('data:image/png')) {
+            imageFormat = 'PNG'
+          } else if (preprocessedImage.includes('data:image/webp')) {
+            imageFormat = 'WEBP'
+          }
           
-          // Agregar enlace clickeable a la imagen para abrir en página web
-          const webUrl = getSoporteWebUrl(support.title, support.id, support.code)
-          pdf.link(imageX, imageY, imageWidth, imageHeight, { url: webUrl })
+          pdf.addImage(preprocessedImage, imageFormat, imageX, imageY, imageWidth, imageHeight)
           
-          // Agregar marca de agua sobre la imagen (más grande y que salga de la imagen)
+          // Agregar marca de agua sobre la imagen
           if (logoBase64Watermark) {
             pdf.saveGraphicsState()
-            pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
+            pdf.setGState(new pdf.GState({ opacity: 0.08 }))
             
             const aspectRatio = 24 / 5.5
-            const watermarkWidth = 120 // El triple de grande (40 * 3)
+            const watermarkWidth = 120
             const watermarkHeight = watermarkWidth / aspectRatio
             
-            // Centrar sobre la imagen pero que salga un poco
+            // Centrar sobre la imagen
             const imageCenterX = imageX + imageWidth / 2
             const imageCenterY = imageY + imageHeight / 2
             
@@ -713,41 +451,55 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
             pdf.restoreGraphicsState()
           }
           
-          // Agregar indicador visual de que es clickeable (debajo de la imagen)
+          // Agregar indicador de que es clickeable (debajo de la imagen)
           pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
           pdf.setFontSize(6)
           pdf.setFont('helvetica', 'normal')
           pdf.text('Clic para abrir en página web', imageX + imageWidth/2, imageY + imageHeight + 3, { align: 'center' })
+          
+          // Hacer la imagen clickeable
+          const webUrl = getSoporteWebUrl(support.title, support.id, support.code)
+          pdf.link(imageX, imageY, imageWidth, imageHeight, { url: webUrl })
         } catch (pdfError) {
-          console.error('❌ Error agregando imagen al PDF:', pdfError)
+          console.error('Error agregando imagen al PDF:', pdfError)
         }
       }
       
-      // Mapa de ubicación (derecha) - Usar datos pre-procesados
-      const preprocessedMap = preprocessedData[index]?.map
-      if (preprocessedMap) {
+      // PLACEHOLDER para mapa (lado derecho) - sin generar mapa real
+      if (support.latitude && support.longitude) {
         try {
-          const mapWidth = 130 // mm
-          const mapHeight = 90 // mm
-          const mapX = 155  // Más cerca de la imagen principal (15 + 130 + 10 = 155)
+          const mapWidth = 130
+          const mapHeight = 90
+          const mapX = 155
           const mapY = yPosition
           
-          pdf.addImage(preprocessedMap, 'PNG', mapX, mapY, mapWidth, mapHeight)
+          // Dibujar rectángulo gris como placeholder
+          pdf.setFillColor(240, 240, 240)
+          pdf.rect(mapX, mapY, mapWidth, mapHeight, 'F')
           
-          // Agregar marca de agua sobre el mapa (más grande y que salga del mapa)
+          // Texto de placeholder
+          pdf.setTextColor(150, 150, 150)
+          pdf.setFontSize(10)
+          pdf.setFont('helvetica', 'normal')
+          pdf.text('Mapa no disponible', mapX + mapWidth/2, mapY + mapHeight/2 - 5, { align: 'center' })
+          
+          // Mostrar coordenadas
+          pdf.setFontSize(8)
+          pdf.text(`Lat: ${support.latitude}`, mapX + mapWidth/2, mapY + mapHeight/2 + 5, { align: 'center' })
+          pdf.text(`Lng: ${support.longitude}`, mapX + mapWidth/2, mapY + mapHeight/2 + 10, { align: 'center' })
+          
+          // Agregar marca de agua sobre el placeholder del mapa
           if (logoBase64Watermark) {
             pdf.saveGraphicsState()
-            pdf.setGState(new pdf.GState({ opacity: 0.08 })) // Más apagada
+            pdf.setGState(new pdf.GState({ opacity: 0.08 }))
             
             const aspectRatio = 24 / 5.5
-            const watermarkWidth = 120 // El triple de grande (40 * 3)
+            const watermarkWidth = 120
             const watermarkHeight = watermarkWidth / aspectRatio
             
-            // Centrar sobre el mapa pero que salga un poco
             const mapCenterX = mapX + mapWidth / 2
             const mapCenterY = mapY + mapHeight / 2
             
-            // Rotar 45 grados
             pdf.addImage(
               logoBase64Watermark,
               'JPEG',
@@ -762,239 +514,232 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
             
             pdf.restoreGraphicsState()
           }
-          
-          // Agregar enlace clickeable al mapa para Google Maps
-          if (support.latitude && support.longitude) {
-            const googleMapsUrl = `https://www.google.com/maps?q=${support.latitude},${support.longitude}`
-            pdf.link(mapX, mapY, mapWidth, mapHeight, { url: googleMapsUrl })
-          }
-          
-          // Agregar indicador visual de que es clickeable
-          pdf.setTextColor(0, 0, 255) // Azul para indicar enlace
-          pdf.setFontSize(6)
-          pdf.setFont('helvetica', 'normal')
-          pdf.text('Clic para abrir en Google Maps', mapX + mapWidth/2, mapY + mapHeight + 3, { align: 'center' })
-        } catch (pdfError) {
-          console.error('❌ Error agregando mapa al PDF:', pdfError)
-        }
-      } else if (support.latitude && support.longitude) {
-        // Fallback: mostrar coordenadas sin mapa
-        pdf.setTextColor(0, 0, 0)
-        pdf.setFontSize(8)
-        pdf.setFont('helvetica', 'bold')
-        pdf.text('UBICACIÓN', 220, yPosition + 5, { align: 'center' })
-        pdf.setFontSize(6)
-        pdf.setFont('helvetica', 'normal')
-        pdf.text(`Lat: ${support.latitude.toFixed(4)}`, 200, yPosition + 15)
-        pdf.text(`Lng: ${support.longitude.toFixed(4)}`, 200, yPosition + 20)
-      }
-      
-      yPosition += 100 // Aumentado de 90 a 100 para bajar la línea roja
-      
-      // Línea separadora
-      pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.line(15, yPosition, 282, yPosition)
-      yPosition += 15 // Aumentado de 10 a 15 para más espacio
-      
-      // Tabla con 4 columnas y 3 filas (más grande)
-      const tableX = 15
-      const tableWidth = 267 // 297 - 30 (márgenes más pequeños)
-      const tableY = yPosition
-      const colWidths = [66, 66, 66, 69] // 4 columnas más anchas
-      const rowHeight = 16 // Altura de cada fila más grande
-      const numRows = 3
-      
-      // Configurar estilos de tabla
-      pdf.setLineWidth(0.2)
-      pdf.setDrawColor(180, 180, 180)
-      
-      // Preparar datos para la tabla (4 columnas x 3 filas)
-      // Cada celda tiene un objeto con label (en negrita) y value (normal)
-      const tableData = [
-        [
-          { label: 'Código:', value: support.code || 'N/A' },
-          { label: 'Tipo de soporte:', value: support.type || 'N/A' },
-          { label: 'Sustrato de impresión:', value: 'Lona' },
-          { label: 'Período de alquiler:', value: 'Mensual' }
-        ],
-        [
-          { label: 'Ciudad:', value: support.city || 'N/A' },
-          { label: 'Medidas:', value: `${support.widthM || 'N/A'}m × ${support.heightM || 'N/A'}m` },
-          { label: 'Divisa:', value: 'Bs' },
-          { label: 'Precio de Lona:', value: `${(() => {
-            // SIEMPRE recalcular área desde ancho × alto (ignorar valor guardado)
-            const areaCalculada = (support.widthM || 0) * (support.heightM || 0)
-            const areaFinal = areaCalculada > 0 ? areaCalculada : (support.areaM2 || 0)
-            if (support.sustrato_precio_venta && areaFinal > 0) {
-              return (support.sustrato_precio_venta * areaFinal).toLocaleString('es-ES', { maximumFractionDigits: 2 })
-            }
-            return 'N/A'
-          })()} Bs` }
-        ],
-        [
-          { label: 'Zona:', value: support.zona || 'N/A' },
-          { label: 'Iluminación:', value: support.lighting || 'No' },
-          { label: 'Impactos diarios:', value: support.impactosDiarios?.toLocaleString() || 'N/A' },
-          { label: 'Precio de alquiler:', value: `${support.priceMonth?.toLocaleString() || 'N/A'} Bs` }
-        ]
-      ]
-      
-      // Dibujar tabla con bordes
-      for (let row = 0; row < numRows; row++) {
-        let currentX = tableX
-        
-        for (let col = 0; col < 4; col++) {
-          const cellX = currentX
-          const cellY = tableY + row * rowHeight
-          
-          // Fondo blanco y borde en una sola operación
-          pdf.setFillColor(255, 255, 255)
-          pdf.setDrawColor(180, 180, 180)
-          pdf.setLineWidth(0.2)
-          pdf.rect(cellX, cellY, colWidths[col], rowHeight, 'FD') // FD = Fill and Draw
-          
-          // Texto con label en negrita y value en normal
-          pdf.setTextColor(0, 0, 0)
-          pdf.setFontSize(11) // Aumentado de 9 a 11
-          
-          const cellData = tableData[row][col]
-          const label = cellData.label
-          const value = cellData.value
-          
-          // Ajustar texto si es muy largo
-          const maxWidth = colWidths[col] - 4
-          const textY = cellY + (rowHeight / 2) + 3 // Ajustado para centrar mejor
-          const startX = cellX + 3
-          
-          // Escribir label en negrita
-          pdf.setFont('helvetica', 'bold')
-          const labelWidth = pdf.getTextWidth(label)
-          pdf.text(label, startX, textY)
-          
-          // Escribir value en normal (con ajuste de texto si es necesario)
-          pdf.setFont('helvetica', 'normal')
-          const valueMaxWidth = maxWidth - labelWidth - 1 // Espacio disponible para el valor
-          const valueLines = pdf.splitTextToSize(value, valueMaxWidth)
-          
-          // Si el valor cabe en una línea, escribirlo en la misma línea
-          if (valueLines.length === 1) {
-            pdf.text(value, startX + labelWidth + 1, textY)
-          } else {
-            // Si necesita múltiples líneas, escribir la primera línea
-            pdf.text(valueLines[0], startX + labelWidth + 1, textY)
-            // Las líneas adicionales se escribirían debajo, pero por simplicidad solo mostramos la primera
-          }
-          
-          currentX += colWidths[col]
+        } catch (mapError) {
+          console.error('Error agregando placeholder de mapa:', mapError)
         }
       }
       
-      yPosition += numRows * rowHeight + 15
+      yPosition += 100
       
-      // Información adicional si hay espacio
-      if (yPosition < 150) {
-        // Coordenadas si están disponibles
-        if (support.latitude && support.longitude) {
-          pdf.setFontSize(10)
-          pdf.setTextColor(100, 100, 100)
-          pdf.text(`Coordenadas: ${support.latitude.toFixed(6)}, ${support.longitude.toFixed(6)}`, 20, yPosition)
-          yPosition += 10
-        }
-        
-        // Fecha de creación si está disponible
-        if (support.createdTime) {
-          const createdDate = new Date(support.createdTime).toLocaleDateString('es-ES')
-          pdf.text(`Creado: ${createdDate}`, 20, yPosition)
-        }
-      }
-    }
-    
-    // Agregar footers con paginación y marca de agua a todas las páginas
-    const totalPages = pdf.getNumberOfPages()
-    const footerY = 200 // Para formato landscape (210mm - 10mm)
-    const pageWidth = 297 // Ancho de página landscape
-    
-    for (let i = 1; i <= totalPages; i++) {
-      pdf.setPage(i)
-      
-      // Fondo rojo del footer
-      pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.rect(0, footerY, pageWidth, 12, 'F')
-      
-      // Texto en blanco
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(9)
+      // Sección de información del soporte (4 columnas)
+      pdf.setFontSize(10)
       pdf.setFont('helvetica', 'normal')
+      pdf.setTextColor(0, 0, 0)
       
-      // Distribuir el footer con separadores (igual que en cotización)
-      // Izquierda: © 2025 Publicidad Vial Imagen
-      const leftText = `© ${currentYear} Publicidad Vial Imagen`
-      pdf.text(leftText, 5, footerY + 7)
+      // Primera fila
+      const col1X = 15
+      const col2X = 85
+      const col3X = 155
+      const col4X = 225
       
-      // Separador 1 (después del texto izquierdo)
-      const leftTextWidth = pdf.getTextWidth(leftText)
-      const separator1X = 5 + leftTextWidth + 5
-      pdf.text('|', separator1X, footerY + 7)
+      // Código
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Código:', col1X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(support.code || 'N/A', col1X + 15, yPosition)
       
-      // Calcular espacio para el contenido derecho (email, número, paginación)
-      const emailFooter = obtenerEmailFooter(userEmail)
-      let rightContentWidth = 0
-      if (emailFooter && emailFooter.trim() !== '') {
-        rightContentWidth += pdf.getTextWidth(emailFooter) + 5
-        if (userNumero && userNumero.trim() !== '') {
-          rightContentWidth += 5 + pdf.getTextWidth('|') + 5 // Separador entre email y número
-        }
+      // Ubicación
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Ubicación:', col2X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      const ubicacionText = support.ubicacion || 'N/A'
+      const maxWidth = 60
+      const ubicacionLines = pdf.splitTextToSize(ubicacionText, maxWidth)
+      pdf.text(ubicacionLines[0], col2X + 20, yPosition)
+      
+      // Ciudad
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Ciudad:', col3X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(support.ciudad || 'N/A', col3X + 15, yPosition)
+      
+      // Estado
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Estado:', col4X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      const estado = support.estado || 'N/A'
+      const statusColors = getStatusColors(estado)
+      
+      // Dibujar badge de estado
+      const badgeX = col4X + 15
+      const badgeY = yPosition - 3
+      const badgeWidth = 28
+      const badgeHeight = 5
+      
+      pdf.setFillColor(statusColors.bg[0], statusColors.bg[1], statusColors.bg[2])
+      pdf.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1, 1, 'F')
+      
+      pdf.setTextColor(statusColors.text[0], statusColors.text[1], statusColors.text[2])
+      pdf.setFontSize(8)
+      pdf.text(estado, badgeX + badgeWidth/2, yPosition, { align: 'center' })
+      
+      yPosition += 8
+      pdf.setTextColor(0, 0, 0)
+      pdf.setFontSize(10)
+      
+      // Segunda fila
+      // Propietario
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Propietario:', col1X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      const propietario = support.owner || 'N/A'
+      const propietarioLines = pdf.splitTextToSize(propietario, 50)
+      pdf.text(propietarioLines[0], col1X + 23, yPosition)
+      
+      // Zona
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Zona:', col2X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(support.zona || 'N/A', col2X + 12, yPosition)
+      
+      // Tipo
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Tipo:', col3X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(support.formato || 'N/A', col3X + 10, yPosition)
+      
+      // Disponibilidad (si ocupado, mostrar fecha)
+      if (estado === 'Ocupado' && support.fechaDisponible) {
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('Disponible:', col4X, yPosition)
+        pdf.setFont('helvetica', 'normal')
+        const fechaDisp = new Date(support.fechaDisponible).toLocaleDateString('es-ES')
+        pdf.text(fechaDisp, col4X + 22, yPosition)
       }
-      if (userNumero && userNumero.trim() !== '') {
-        rightContentWidth += pdf.getTextWidth(userNumero) + 5
+      
+      yPosition += 8
+      
+      // Tercera fila
+      // Dimensiones
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Dimensiones:', col1X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      const dimensiones = support.medidas || 'N/A'
+      pdf.text(dimensiones, col1X + 26, yPosition)
+      
+      // Área
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Área:', col2X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      const area = support.area ? `${support.area} m²` : 'N/A'
+      pdf.text(area, col2X + 11, yPosition)
+      
+      // Tráfico
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Tráfico:', col3X, yPosition)
+      pdf.setFont('helvetica', 'normal')
+      const trafico = support.trafico || 'N/A'
+      pdf.text(trafico, col3X + 16, yPosition)
+      
+      yPosition += 10
+      
+      // Sección de precios (tabla)
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(11)
+      pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      pdf.text('PRECIOS', 15, yPosition)
+      
+      yPosition += 5
+      
+      // Tabla de precios
+      pdf.setFontSize(9)
+      pdf.setTextColor(0, 0, 0)
+      
+      // Headers
+      const tableStartX = 15
+      const colWidths = [60, 35, 35, 35, 35, 35]
+      let currentX = tableStartX
+      
+      pdf.setFillColor(240, 240, 240)
+      pdf.rect(currentX, yPosition - 3, colWidths.reduce((a, b) => a + b, 0), 6, 'F')
+      
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('Concepto', currentX + 2, yPosition)
+      currentX += colWidths[0]
+      pdf.text('1 Mes', currentX + 2, yPosition)
+      currentX += colWidths[1]
+      pdf.text('3 Meses', currentX + 2, yPosition)
+      currentX += colWidths[2]
+      pdf.text('6 Meses', currentX + 2, yPosition)
+      currentX += colWidths[3]
+      pdf.text('12 Meses', currentX + 2, yPosition)
+      currentX += colWidths[4]
+      pdf.text('Impresión', currentX + 2, yPosition)
+      
+      yPosition += 5
+      
+      // Fila de alquiler
+      currentX = tableStartX
+      pdf.setFont('helvetica', 'normal')
+      pdf.text('Alquiler Publicidad', currentX + 2, yPosition)
+      currentX += colWidths[0]
+      pdf.text(support.precio_1_mes ? `Bs. ${support.precio_1_mes.toLocaleString()}` : '-', currentX + 2, yPosition)
+      currentX += colWidths[1]
+      pdf.text(support.precio_3_meses ? `Bs. ${support.precio_3_meses.toLocaleString()}` : '-', currentX + 2, yPosition)
+      currentX += colWidths[2]
+      pdf.text(support.precio_6_meses ? `Bs. ${support.precio_6_meses.toLocaleString()}` : '-', currentX + 2, yPosition)
+      currentX += colWidths[3]
+      pdf.text(support.precio_12_meses ? `Bs. ${support.precio_12_meses.toLocaleString()}` : '-', currentX + 2, yPosition)
+      currentX += colWidths[4]
+      
+      const precioSustrato = support.sustrato_precio_venta || 0
+      const areaNum = support.area || 0
+      const precioImpresion = precioSustrato * areaNum
+      pdf.text(precioImpresion > 0 ? `Bs. ${precioImpresion.toLocaleString()}` : '-', currentX + 2, yPosition)
+      
+      yPosition += 5
+      
+      // Línea de sustrato
+      if (support.sustrato_nombre) {
+        pdf.setFontSize(7)
+        pdf.setTextColor(100, 100, 100)
+        pdf.text(`Sustrato: ${support.sustrato_nombre}`, tableStartX + 2, yPosition)
+        yPosition += 3
       }
-      const paginationText = `${i}/${totalPages}`
-      rightContentWidth += pdf.getTextWidth(paginationText) + 5
-      if ((emailFooter && emailFooter.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
-        rightContentWidth += 5 + pdf.getTextWidth('|') // Separador final antes de paginación
-      }
       
-      // Separador 2 (antes del contenido derecho) - incluyendo espacio para el separador mismo
-      const separatorWidth = pdf.getTextWidth('|')
-      const separator2X = pageWidth - 5 - rightContentWidth - separatorWidth
-      pdf.text('|', separator2X, footerY + 7)
-      
-      // Centro: publicidadvialimagen.com (centrado entre los dos separadores)
-      const webText = 'publicidadvialimagen.com'
-      const centerX = (separator1X + separator2X) / 2
-      pdf.text(webText, centerX, footerY + 7, { align: 'center' })
-      
-      // Derecha (antes de la paginación): email y número (si existen)
-      let rightContentX = separator2X + 5
-      if (emailFooter && emailFooter.trim() !== '') {
-        pdf.text(emailFooter, rightContentX, footerY + 7)
-        rightContentX += pdf.getTextWidth(emailFooter) + 5
+      // Notas (si existen)
+      if (support.notas) {
+        yPosition += 5
+        pdf.setFontSize(9)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setTextColor(0, 0, 0)
+        pdf.text('Notas:', 15, yPosition)
         
-        // Separador entre email y número
-        if (userNumero && userNumero.trim() !== '') {
-          pdf.text('|', rightContentX, footerY + 7)
-          rightContentX += 5
-        }
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(8)
+        const notasLines = pdf.splitTextToSize(support.notas, 260)
+        yPosition += 4
+        notasLines.forEach((line: string) => {
+          pdf.text(line, 15, yPosition)
+          yPosition += 3
+        })
       }
       
-      // Número de teléfono (si existe)
-      if (userNumero && userNumero.trim() !== '') {
-        pdf.text(userNumero, rightContentX, footerY + 7)
-        rightContentX += pdf.getTextWidth(userNumero) + 5
+      // Footer de la página
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const footerY = pageHeight - 10
+      
+      pdf.setFontSize(7)
+      pdf.setTextColor(100, 100, 100)
+      
+      // Contacto del vendedor (solo si hay email)
+      if (emailFooter) {
+        pdf.text(`Contacto: ${emailFooter}${userNumero ? ' | Tel: ' + userNumero : ''}`, 15, footerY)
       }
       
-      // Separador final (antes de paginación) si hay email o número
-      if ((emailFooter && emailFooter.trim() !== '') || (userNumero && userNumero.trim() !== '')) {
-        pdf.text('|', rightContentX, footerY + 7)
-      }
+      // Información de la empresa (derecha)
+      pdf.text('contabilidad@publicidadvialimagen.com | NIT: 164692025', 150, footerY)
       
-      // Extremo derecho: Paginación
-      pdf.text(`${i}/${totalPages}`, pageWidth - 5, footerY + 7, { align: 'right' })
+      // Número de página (centro)
+      pdf.text(`Página ${index + 1} de ${supports.length}`, pdf.internal.pageSize.getWidth() / 2, footerY, { align: 'center' })
     }
     
-    return Buffer.from(pdf.output('arraybuffer'))
+    // Retornar el PDF como Buffer
+    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
+    console.log('✅ PDF generado exitosamente')
+    return pdfBuffer
   } catch (error) {
-    console.error('Error en generatePDF:', error)
+    console.error('❌ Error generando PDF:', error)
     throw error
   }
 }

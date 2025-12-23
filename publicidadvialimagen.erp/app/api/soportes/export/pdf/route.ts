@@ -8,7 +8,6 @@ import { rowToSupport, getSustratoDefaultId } from "../../helpers"
 import jsPDF from 'jspdf'
 import fs from 'fs'
 import path from 'path'
-import sharp from 'sharp'
 
 /**
  * Función para crear slug SEO-friendly (igual que en la web)
@@ -70,11 +69,20 @@ function getSoporteWebUrl(soporteTitle: string, soporteId?: string, soporteCode?
 }
 
 /**
+ * Función helper para cargar sharp dinámicamente (evita problemas en build time)
+ */
+async function getSharp() {
+  const sharp = (await import("sharp")).default
+  return sharp
+}
+
+/**
  * Función para comprimir imágenes usando sharp
  * Redimensiona a máximo 800px de ancho y convierte a JPEG con calidad 80%
  */
 async function compressImage(imageBuffer: Buffer, maxWidth: number = 800, quality: number = 80): Promise<Buffer> {
   try {
+    const sharp = await getSharp()
     const compressed = await sharp(imageBuffer)
       .resize(maxWidth, null, {
         fit: 'inside',
@@ -225,6 +233,7 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
     }
 
     // Crear canvas base y componer tiles
+    const sharp = await getSharp()
     const gridSize = 3 * tileSize
     const baseCanvas = sharp({
       create: {

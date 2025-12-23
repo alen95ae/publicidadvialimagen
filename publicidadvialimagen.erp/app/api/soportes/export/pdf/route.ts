@@ -171,7 +171,8 @@ async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string 
 }
 
 /**
- * Función para generar mapa OSM optimizado (tiles en paralelo)
+ * Función para generar mapa OSM respetando políticas de rate limiting
+ * Concurrencia limitada a 2 requests simultáneas + delays entre tiles
  */
 async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapHeightPx: number): Promise<string | null> {
   try {
@@ -190,51 +191,82 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
     const pixelX = (centerX - tileX) * tileSize + tileSize
     const pixelY = (centerY - tileY) * tileSize + tileSize
 
-    // Crear array de promesas para descargar todos los tiles en paralelo
-    const tilePromises: Promise<{ buffer: Buffer; col: number; row: number } | null>[] = []
-
+    // Construir lista de tiles a descargar
+    const tilesToDownload: Array<{ tx: number; ty: number; col: number; row: number }> = []
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
-        const tx = tileX + dx
-        const ty = tileY + dy
-        const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`
-        const col = dx + 1
-        const row = dy + 1
-
-        // Descargar todos los tiles en paralelo (sin pausas)
-        const tilePromise = fetch(tileUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PublicidadVialImagen/1.0)' }
+        tilesToDownload.push({
+          tx: tileX + dx,
+          ty: tileY + dy,
+          col: dx + 1,
+          row: dy + 1
         })
-          .then(async (tileResponse) => {
-            if (tileResponse.ok) {
-              const tileBuffer = Buffer.from(await tileResponse.arrayBuffer())
-              return { buffer: tileBuffer, col, row }
-            } else {
-              console.warn(`⚠️ Tile ${tx},${ty} falló: ${tileResponse.status}`)
-              return null
-            }
-          })
-          .catch((err) => {
-            console.warn(`⚠️ Error descargando tile ${tx},${ty}:`, err)
-            return null
-          })
-
-        tilePromises.push(tilePromise)
       }
     }
 
-    // Esperar todas las descargas en paralelo
-    const tileResults = await Promise.all(tilePromises)
-    const composites = tileResults
-      .filter((result): result is { buffer: Buffer; col: number; row: number } => result !== null)
-      .map((result) => ({
-        input: result.buffer,
-        left: result.col * tileSize,
-        top: result.row * tileSize
-      }))
+    // Pool de concurrencia: máximo 2 requests simultáneas
+    const MAX_CONCURRENT = 2
+    const DELAY_BETWEEN_TILES = 120 // ms
+    const composites: Array<{ input: Buffer; left: number; top: number }> = []
 
+    for (let i = 0; i < tilesToDownload.length; i += MAX_CONCURRENT) {
+      const batch = tilesToDownload.slice(i, i + MAX_CONCURRENT)
+      
+      const batchPromises = batch.map(async ({ tx, ty, col, row }) => {
+        const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`
+        
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+          
+          const tileResponse = await fetch(tileUrl, {
+            headers: {
+              'User-Agent': 'PublicidadVialImagen/1.0 (+https://publicidadvialimagen.com; contacto@publicidadvialimagen.com)',
+              'Accept': 'image/png,image/*',
+              'Referer': 'https://publicidadvialimagen.com'
+            },
+            signal: controller.signal
+          })
+          
+          clearTimeout(timeoutId)
+          
+          if (tileResponse.ok) {
+            const tileBuffer = Buffer.from(await tileResponse.arrayBuffer())
+            return {
+              input: tileBuffer,
+              left: col * tileSize,
+              top: row * tileSize
+            }
+          } else {
+            console.error(`Tile ${tx},${ty} falló: HTTP ${tileResponse.status} - ${tileUrl}`)
+            return null
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+          console.error(`Tile ${tx},${ty} error: ${errorMsg} - ${tileUrl}`)
+          return null
+        }
+      })
+      
+      // Esperar el batch actual
+      const batchResults = await Promise.all(batchPromises)
+      
+      // Agregar tiles exitosos
+      batchResults.forEach(result => {
+        if (result !== null) {
+          composites.push(result)
+        }
+      })
+      
+      // Delay entre batches (excepto después del último)
+      if (i + MAX_CONCURRENT < tilesToDownload.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_TILES))
+      }
+    }
+
+    // Continuar si tenemos AL MENOS 1 tile (no exigir todos)
     if (composites.length === 0) {
-      throw new Error('No se pudo descargar ningún tile')
+      throw new Error('No se pudo descargar ningún tile de OSM')
     }
 
     // Crear canvas base y componer tiles

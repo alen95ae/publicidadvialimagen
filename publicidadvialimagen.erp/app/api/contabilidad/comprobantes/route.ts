@@ -123,7 +123,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Insertar cabecera
-    console.log("📝 Insertando comprobante con datos:", JSON.stringify(comprobanteData, null, 2))
     const { data: comprobanteCreado, error: errorCabecera } = await supabase
       .from("comprobantes")
       .insert(comprobanteData)

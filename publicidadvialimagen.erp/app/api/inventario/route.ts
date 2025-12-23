@@ -38,11 +38,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log('📝 Creando nuevo producto:', JSON.stringify(body, null, 2))
 
     const nuevoProducto = await createProducto(body)
     
-    console.log('✅ Producto creado correctamente:', nuevoProducto.id)
 
     return NextResponse.json({
       success: true,

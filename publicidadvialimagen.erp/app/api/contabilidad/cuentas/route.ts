@@ -50,7 +50,6 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     // Obtener cuentas ordenadas por cuenta
-    console.log("🔍 [GET /api/contabilidad/cuentas] Consultando plan_cuentas")
     
     // Primero intentar con empresa_id=1
     let { data, error, count } = await supabase
@@ -71,7 +70,6 @@ export async function GET(request: NextRequest) {
         .select("empresa_id, cuenta, descripcion")
         .limit(5)
       
-      console.log("🔍 [GET /api/contabilidad/cuentas] Muestra de datos (admin):", {
         sampleCount: sampleData?.length || 0,
         empresaIds: sampleData?.map((c: any) => c.empresa_id),
         cuentas: sampleData?.map((c: any) => ({ empresa_id: c.empresa_id, cuenta: c.cuenta }))
@@ -86,7 +84,6 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + limit - 1)
       
       if (!adminError && adminData && adminData.length > 0) {
-        console.log("✅ [GET /api/contabilidad/cuentas] Datos encontrados con admin, usando esos")
         data = adminData
         count = adminCount
         error = null
@@ -96,7 +93,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log("🔍 [GET /api/contabilidad/cuentas] Resultado final:", {
       dataLength: data?.length || 0,
       count,
       useAdmin,
@@ -143,7 +139,6 @@ export async function GET(request: NextRequest) {
       },
     }
     
-    console.log("✅ [GET /api/contabilidad/cuentas] Enviando respuesta:", {
       dataCount: responseData.data.length,
       total: responseData.pagination.total
     })

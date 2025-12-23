@@ -26,7 +26,6 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '25')
 
-    console.log('🔍 Search params:', { query, statusFilter, cityFilter, page, limit })
 
     // Obtener datos directamente de Supabase (sin conversiones Airtable)
     const result = await getSoportes({
@@ -203,7 +202,6 @@ export async function POST(req: Request) {
         }
       })
       
-      console.log('✅ Evento de creación registrado en historial')
     } catch (historialError) {
       console.error('⚠️ Error registrando historial de creación (no crítico):', historialError)
     }

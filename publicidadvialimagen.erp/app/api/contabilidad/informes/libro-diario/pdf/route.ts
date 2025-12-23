@@ -48,7 +48,6 @@ function formatearNumero(numero: number): string {
 // GET - Generar PDF del Libro Diario
 export async function GET(request: NextRequest) {
   try {
-    console.log("📄 Iniciando generación de PDF del Libro Diario")
     
     // Verificar permisos
     const permiso = await requirePermiso("contabilidad", "ver")
@@ -143,7 +142,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log(`✅ Encontrados ${comprobantes.length} comprobantes para exportar`)
 
     // Obtener IDs de comprobantes
     const comprobanteIds = comprobantes.map((c: any) => c.id)
@@ -202,18 +200,16 @@ export async function GET(request: NextRequest) {
     let userNumero: string | undefined
     
     try {
-      const supabaseUser = await getSupabaseUser(request)
-      if (supabaseUser) {
-        const { data: { user } } = await supabaseUser.auth.getUser()
-        if (user?.email) {
-          userEmail = user.email
-          const { data: usuarioData } = await supabaseUser
-            .from("usuarios")
-            .select("numero")
-            .eq("id", user.id)
-            .single()
-          if (usuarioData?.numero) {
-            userNumero = usuarioData.numero
+      const token = request.cookies.get("session")?.value
+      if (token) {
+        const { verifySession } = await import("@/lib/auth")
+        const payload = await verifySession(token)
+        if (payload?.sub) {
+          const { getUserByIdSupabase } = await import("@/lib/supabaseUsers")
+          const user = await getUserByIdSupabase(payload.sub)
+          if (user) {
+            userEmail = user.email || undefined
+            userNumero = user.numero || undefined
           }
         }
       }
@@ -221,8 +217,6 @@ export async function GET(request: NextRequest) {
       console.error("Error obteniendo datos del usuario:", error)
     }
 
-    console.log("📝 Generando PDF...")
-    
     // Generar PDF
     const pdf = new jsPDF('p', 'mm', 'a4')
     const primaryColor: [number, number, number] = [190, 8, 18] // #be0812
@@ -307,7 +301,6 @@ export async function GET(request: NextRequest) {
           continue
         }
 
-        console.log(`📄 Procesando comprobante ${comprobante.id} con ${detallesComp.length} detalles`)
 
         // Nueva página si es necesario
         if (yPosition > 240) {
@@ -585,7 +578,6 @@ export async function GET(request: NextRequest) {
     xPos += totalColWidths.debeUsd
     pdf.text(formatearNumero(totalHaberUsd), xPos + totalColWidths.haberUsd / 2, yPosition, { align: 'center' })
     
-    console.log(`✅ Totales generales calculados: Debe Bs=${totalDebeBs}, Haber Bs=${totalHaberBs}, Debe USD=${totalDebeUsd}, Haber USD=${totalHaberUsd}`)
 
     // Footer (igual que comprobantes)
     const totalPages = pdf.getNumberOfPages()
@@ -691,7 +683,6 @@ export async function GET(request: NextRequest) {
     const año = hoy.getFullYear()
     const nombreArchivo = `libro_diario_${dia}-${mes}-${año}.pdf`
 
-    console.log("✅ PDF generado correctamente, tamaño:", pdf.getNumberOfPages(), "páginas")
 
     // Devolver PDF como buffer
     const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))

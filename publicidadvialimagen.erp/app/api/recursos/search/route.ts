@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('query') || ''
     const limit = 20 // Máximo 20 resultados para búsqueda asíncrona
 
-    console.log('🔍 Búsqueda de recursos:', { query, limit })
 
     // Si no hay query, devolver array vacío
     if (!query || query.trim() === '') {

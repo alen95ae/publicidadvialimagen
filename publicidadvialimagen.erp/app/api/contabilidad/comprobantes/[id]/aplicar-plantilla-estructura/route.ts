@@ -108,8 +108,6 @@ export async function POST(
       // Si es fija, usar cuenta_sugerida; si no, dejar vacía
       const cuenta = cuentaEsFija ? cuentaSugerida : ""
 
-      console.log(`📝 Línea ${index + 1}: Rol=${detPlantilla.rol}, Cuenta=${cuenta || "(vacía - seleccionar)"}, EsFija=${cuentaEsFija}, Sugerida=${cuentaSugerida}`)
-
       detallesData.push({
         comprobante_id: resolvedParams.id,
         cuenta: cuenta,
@@ -149,7 +147,6 @@ export async function POST(
       )
     }
 
-    console.log("✅ Detalles insertados correctamente:", detallesInsertados.length)
 
     // Devolver detalles con información de la plantilla para el frontend
     const detallesConPlantilla = detallesInsertados.map((det, index) => ({

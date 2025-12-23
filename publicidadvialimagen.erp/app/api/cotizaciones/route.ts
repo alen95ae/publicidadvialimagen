@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
     const vendedor = searchParams.get('vendedor') || ''
     const search = searchParams.get('search') || ''
 
-    console.log('🔍 Cotizaciones search params:', { pageSize, page, estado, cliente, vendedor, search })
 
     // Obtener datos de Supabase
     const result = await getCotizaciones({
@@ -106,7 +105,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    console.log('📝 [POST /api/cotizaciones] Creando nueva cotización')
 
     // ============================================================================
     // C6: VALIDACIÓN Y NORMALIZACIÓN DE LÍNEAS
@@ -203,7 +201,6 @@ export async function POST(request: NextRequest) {
         lineas_cotizacion: lineasNormalizadas.length
       })
 
-      console.log('✅ [POST /api/cotizaciones] Cotización creada correctamente:', nuevaCotizacion.id)
 
       // Crear notificación OBLIGATORIA de cotización creada
       // Si falla, loguear pero NO fallar la creación de la cotización
@@ -215,7 +212,6 @@ export async function POST(request: NextRequest) {
       try {
         const { notificarCotizacion } = await import('@/lib/notificaciones')
         await notificarCotizacion(nuevaCotizacion.id, 'creada', usuario.id)
-        console.log('[POST /api/cotizaciones] ✅ Notificación creada para cotización:', nuevaCotizacion.id)
       } catch (notifError) {
         // Log error pero NO fallar la creación de la cotización
         console.error('[POST /api/cotizaciones] ❌ ERROR creando notificación (continuando):', notifError);
@@ -247,7 +243,6 @@ export async function POST(request: NextRequest) {
         }))
 
         lineasCreadas = await createMultipleLineas(lineasData)
-        console.log('✅ [POST /api/cotizaciones] Líneas creadas correctamente:', lineasCreadas.length)
 
         // Actualizar lineas_cotizacion en el encabezado con el número real de líneas creadas
         if (lineasCreadas.length > 0) {
@@ -273,7 +268,6 @@ export async function POST(request: NextRequest) {
         console.error('❌ [POST /api/cotizaciones] Error creando líneas, eliminando cotización:', errorCrear)
         try {
           await deleteCotizacion(nuevaCotizacion.id)
-          console.log('✅ [POST /api/cotizaciones] Cotización eliminada (rollback)')
         } catch (deleteError) {
           console.error('❌ [POST /api/cotizaciones] Error eliminando cotización después de fallo:', deleteError)
         }

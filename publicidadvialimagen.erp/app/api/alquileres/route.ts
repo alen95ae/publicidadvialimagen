@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
     const fecha_fin = searchParams.get('fecha_fin') || undefined
     const cotizacion_id = searchParams.get('cotizacion_id') || undefined
 
-    console.log('🔍 Alquileres search params:', { pageSize, page, estado, cliente, vendedor, search, soporte_id, fecha_inicio, fecha_fin, cotizacion_id })
 
     // Si se filtra por cotizacion_id, usar función específica
     let result
@@ -78,7 +77,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log('📝 Creando alquiler:', body)
 
     const alquiler = await createAlquiler(body)
 

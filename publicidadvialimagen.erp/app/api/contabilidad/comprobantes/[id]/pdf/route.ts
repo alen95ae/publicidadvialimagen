@@ -204,19 +204,16 @@ export async function GET(
     let userNumero: string | undefined
     
     try {
-      const supabaseUser = await getSupabaseUser(request)
-      if (supabaseUser) {
-        const { data: { user } } = await supabaseUser.auth.getUser()
-        if (user?.email) {
-          userEmail = user.email
-          // Obtener número del usuario desde la tabla usuarios
-          const { data: usuarioData } = await supabaseUser
-            .from("usuarios")
-            .select("numero")
-            .eq("id", user.id)
-            .single()
-          if (usuarioData?.numero) {
-            userNumero = usuarioData.numero
+      const token = request.cookies.get("session")?.value
+      if (token) {
+        const { verifySession } = await import("@/lib/auth")
+        const payload = await verifySession(token)
+        if (payload?.sub) {
+          const { getUserByIdSupabase } = await import("@/lib/supabaseUsers")
+          const user = await getUserByIdSupabase(payload.sub)
+          if (user) {
+            userEmail = user.email || undefined
+            userNumero = user.numero || undefined
           }
         }
       }

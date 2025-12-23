@@ -456,7 +456,6 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
   try {
     // Obtener el email a mostrar en el footer
     const emailFooter = obtenerEmailFooter(userEmail)
-    console.log('📄 Generando PDF catálogo con email:', emailFooter, 'y número:', userNumero)
     const currentDate = new Date().toLocaleDateString('es-ES')
     const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
@@ -500,7 +499,6 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
     }
 
     // Pre-procesar todas las imágenes y mapas en paralelo ANTES del loop (optimización)
-    console.log('🔄 Pre-procesando imágenes y mapas en paralelo...')
     const mapWidth = 130 // mm
     const mapHeight = 90 // mm
     const mapWidthPx = Math.round(mapWidth * 3.7795)
@@ -526,7 +524,6 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
     })
 
     const preprocessedData = await Promise.all(preprocessPromises)
-    console.log('✅ Pre-procesamiento completado')
 
     // Agregar cada soporte (una página por soporte)
     for (let index = 0; index < supports.length; index++) {

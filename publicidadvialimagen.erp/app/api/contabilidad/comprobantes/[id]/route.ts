@@ -191,8 +191,6 @@ export async function PUT(
       orden: index + 1,
     }))
 
-    console.log("📝 Insertando detalles:", JSON.stringify(detallesData, null, 2))
-
     const { error: errorDetalles } = await supabase
       .from("comprobante_detalle")
       .insert(detallesData)

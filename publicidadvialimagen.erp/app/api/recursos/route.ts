@@ -45,11 +45,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log('📝 Creando nuevo recurso:', JSON.stringify(body, null, 2))
 
     const nuevoRecurso = await createRecurso(body)
     
-    console.log('✅ Recurso creado correctamente:', nuevoRecurso.id)
 
     return NextResponse.json({
       success: true,

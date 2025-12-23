@@ -26,15 +26,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    console.log('🔍 Obteniendo cotización con ID:', id)
 
     // Obtener la cotización
     const cotizacion = await getCotizacionById(id)
-    console.log('✅ Cotización encontrada:', cotizacion.codigo)
 
     // Obtener las líneas asociadas
     const lineas = await getLineasByCotizacionId(id)
-    console.log('✅ Líneas encontradas:', lineas.length)
 
     return NextResponse.json({
       success: true,
@@ -61,8 +58,6 @@ export async function PATCH(
 ) {
   const { id } = await params
 
-  console.log("\n========== PATCH COTIZACION ==========")
-  console.log("ID:", id)
 
   // ============================================================================
   // C1, C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
@@ -78,7 +73,6 @@ export async function PATCH(
   try {
     // Leer body como texto primero para debug
     const bodyText = await request.text()
-    console.log("BODY RAW:", bodyText)
 
     // Parsear JSON de forma segura
     let body: CotizacionPayload & { regenerar_alquileres?: boolean }
@@ -87,10 +81,6 @@ export async function PATCH(
     } catch {
       body = {} as CotizacionPayload & { regenerar_alquileres?: boolean }
     }
-    
-    console.log("BODY PARSEADO:", JSON.stringify(body, null, 2))
-    console.log("regenerar_alquileres:", body.regenerar_alquileres)
-    console.log("==========================================")
     
     // lineas siempre seguro
     const lineasPayload = body.lineas ?? []
@@ -164,10 +154,8 @@ export async function PATCH(
       // Si no, usar la suma de subtotal_linea (que ya son totales finales)
       if (totalFinalManual !== undefined && totalFinalManual !== null) {
         camposLimpios.total_final = totalFinalManual
-        console.log('💰 [PATCH /api/cotizaciones/[id]] Usando total_final manual (NO recalcula):', totalFinalManual)
       } else {
         camposLimpios.total_final = calcularTotalFinalDesdeLineas(lineasNormalizadas)
-        console.log('💰 [PATCH /api/cotizaciones/[id]] Usando suma de subtotal_linea (ya son totales finales):', camposLimpios.total_final)
       }
       
       camposLimpios.cantidad_items = lineasNormalizadas.length
@@ -188,10 +176,6 @@ export async function PATCH(
     const tieneAlquileres = esAprobada && Array.isArray(lineasPayload) && lineasPayload.length > 0
     let hayCambiosEnSoportes = false
     
-    console.log("🔍 Detectando cambios...")
-    console.log("  - esAprobada:", esAprobada)
-    console.log("  - tieneAlquileres:", tieneAlquileres)
-    console.log("  - regenerarAlquileres recibido:", regenerarAlquileres)
     
     if (tieneAlquileres) {
       // Obtener líneas actuales de la BD
@@ -199,13 +183,10 @@ export async function PATCH(
       const soportesActuales = lineasActuales.filter(l => l.es_soporte === true)
       const soportesNuevos = lineasNormalizadas.filter((l: any) => l.es_soporte === true)
       
-      console.log("  - soportesActuales.length:", soportesActuales.length)
-      console.log("  - soportesNuevos.length:", soportesNuevos.length)
       
       // Comparar cantidad de soportes
       if (soportesActuales.length !== soportesNuevos.length) {
         hayCambiosEnSoportes = true
-        console.log("  ✅ HAY CAMBIOS: Diferente cantidad de soportes")
       } else {
         // Comparar códigos y fechas de soportes
         const actualesMap = new Map(soportesActuales.map(l => [
@@ -217,13 +198,11 @@ export async function PATCH(
           const actual = actualesMap.get(nuevo.codigo_producto)
           if (!actual || actual.descripcion !== (nuevo.descripcion || '')) {
             hayCambiosEnSoportes = true
-            console.log("  ✅ HAY CAMBIOS: Diferente código o descripción en soporte:", nuevo.codigo_producto)
             break
           }
         }
       }
       
-      console.log("  - hayCambiosEnSoportes:", hayCambiosEnSoportes)
     }
     
     // Si se está rechazando una cotización aprobada, cancelar alquileres
@@ -238,12 +217,8 @@ export async function PATCH(
     
     // 🔥 LÓGICA DE REGENERACIÓN DE ALQUILERES
     if (esAprobada && hayCambiosEnSoportes) {
-      console.log("🔍 Evaluando regeneración de alquileres...")
-      console.log("  - regenerarAlquileres:", regenerarAlquileres)
-      
       if (!regenerarAlquileres) {
         // Si hay cambios pero el usuario NO aceptó, rechazar la actualización
-        console.log("❌ REQUIERE_CONFIRMACION: Hay cambios pero no se recibió regenerar_alquileres")
         return NextResponse.json({
           success: false,
           error: 'REQUIERE_CONFIRMACION',
@@ -252,23 +227,18 @@ export async function PATCH(
       }
       
       // Si SÍ recibe regenerar_alquileres: true
-      console.log("✅ Regeneración confirmada, procediendo...")
       try {
         // Verificar que realmente hay alquileres
         const alquileresExistentes = await getAlquileresPorCotizacion(id)
-        console.log(`  - alquileresExistentes encontrados: ${alquileresExistentes.length}`)
         
         if (alquileresExistentes.length > 0) {
-          console.log(`🔄 Cancelando alquileres antiguos para cotización ${id}...`)
           // Cancelar alquileres antiguos (con historial)
           await cancelarAlquileresCotizacion(id, true)
-          console.log(`✅ Alquileres antiguos cancelados exitosamente`)
         }
         
         // Cambiar estado a Pendiente y marcar requiere_nueva_aprobacion
         camposLimpios.estado = 'Pendiente'
         camposLimpios.requiere_nueva_aprobacion = true
-        console.log(`✅ Cotización marcada como Pendiente y requiere_nueva_aprobacion=true`)
       } catch (errorAlquileres) {
         console.error(`❌ Error en proceso de regeneración de alquileres:`, errorAlquileres)
         console.error(`   Error stack:`, errorAlquileres instanceof Error ? errorAlquileres.stack : 'No stack available')
@@ -283,7 +253,6 @@ export async function PATCH(
       // Paso 1: Actualizar la cotización (encabezado) - Solo campos que existen en Supabase
       const cotizacionActualizada = await updateCotizacion(id, camposLimpios)
 
-      console.log('✅ [PATCH /api/cotizaciones/[id]] Cotización actualizada:', cotizacionActualizada.codigo)
 
       // Detectar cambios de estado
       const seEstaAprobando = estadoAnterior !== 'Aprobada' && nuevoEstado === 'Aprobada'
@@ -292,31 +261,16 @@ export async function PATCH(
 
       // Crear notificación OBLIGATORIA según el cambio de estado
       // Si falla, loguear pero NO fallar la actualización de la cotización
-      console.log('[PATCH /api/cotizaciones/[id]] ==========================================')
-      console.log('[PATCH /api/cotizaciones/[id]] LLAMANDO A notificarCotizacion()')
-      console.log('[PATCH /api/cotizaciones/[id]] Estado:', {
-        seEstaAprobando,
-        seEstaRechazando,
-        hayCambioEstado
-      })
-      console.log('[PATCH /api/cotizaciones/[id]] ==========================================')
-      
       try {
         const { notificarCotizacion } = await import('@/lib/notificaciones')
         
         if (seEstaAprobando) {
-          console.log('[PATCH /api/cotizaciones/[id]] Notificando aprobada...');
           await notificarCotizacion(id, 'aprobada', usuario.id)
-          console.log('[PATCH /api/cotizaciones/[id]] ✅ Notificación aprobada creada');
         } else if (seEstaRechazando) {
-          console.log('[PATCH /api/cotizaciones/[id]] Notificando rechazada...');
           await notificarCotizacion(id, 'rechazada', usuario.id)
-          console.log('[PATCH /api/cotizaciones/[id]] ✅ Notificación rechazada creada');
         } else if (hayCambioEstado) {
           // Si hay cambio de estado pero no es aprobada/rechazada, notificar como actualizada
-          console.log('[PATCH /api/cotizaciones/[id]] Notificando actualizada...');
           await notificarCotizacion(id, 'actualizada', usuario.id)
-          console.log('[PATCH /api/cotizaciones/[id]] ✅ Notificación actualizada creada');
         }
         // Si no hay cambio de estado, no notificar (solo cambios de campos)
       } catch (notifError) {
@@ -327,7 +281,6 @@ export async function PATCH(
       
       // Si se está aprobando, descontar stock de los productos (con idempotencia)
       if (seEstaAprobando) {
-        console.log('📦 [PATCH /api/cotizaciones/[id]] Descontando stock por aprobación de cotización...')
         try {
           // Verificar si ya se descontó stock para esta cotización (idempotencia)
           // Por ahora, asumimos que si la cotización ya estaba aprobada, el stock ya fue descontado
@@ -339,11 +292,9 @@ export async function PATCH(
             // Si no se enviaron líneas en el body, obtenerlas de la BD
             let lineasParaDescuento = lineasNormalizadas
             if (lineasParaDescuento.length === 0) {
-              console.log('📦 [PATCH /api/cotizaciones/[id]] No se enviaron líneas en el body, obteniendo de BD...')
               const lineasBD = await getLineasByCotizacionId(id)
               if (lineasBD && lineasBD.length > 0) {
                 lineasParaDescuento = lineasBD
-                console.log(`📦 [PATCH /api/cotizaciones/[id]] Líneas obtenidas de BD: ${lineasParaDescuento.length}`)
               } else {
                 console.warn('⚠️ [PATCH /api/cotizaciones/[id]] No se encontraron líneas en BD')
               }
@@ -360,7 +311,6 @@ export async function PATCH(
                 sucursal: sucursal
               })
               
-              console.log('✅ [PATCH /api/cotizaciones/[id]] Stock descontado correctamente')
             } else {
               console.warn('⚠️ [PATCH /api/cotizaciones/[id]] No hay líneas para descontar stock')
             }
@@ -401,7 +351,6 @@ export async function PATCH(
         }))
 
         await createMultipleLineas(lineasData)
-        console.log('✅ [PATCH /api/cotizaciones/[id]] Líneas actualizadas correctamente')
         
         // Actualizar lineas_cotizacion en el encabezado con el número real de líneas
         await updateCotizacion(id, {
@@ -416,7 +365,6 @@ export async function PATCH(
         try {
           const { crearAlquileresDesdeCotizacion } = await import('@/lib/helpersAlquileres')
           const resultado = await crearAlquileresDesdeCotizacion(id)
-          console.log(`✅ [PATCH /api/cotizaciones/[id]] ${resultado.alquileresCreados.length} nuevo(s) alquiler(es) creado(s)`)
           
           // Actualizar el estado de la cotización a Aprobada después de crear los alquileres
           console.log(`🔄 [PATCH /api/cotizaciones/[id]] Actualizando estado de cotización a Aprobada...`)
@@ -424,7 +372,6 @@ export async function PATCH(
             estado: 'Aprobada',
             requiere_nueva_aprobacion: false
           })
-          console.log(`✅ [PATCH /api/cotizaciones/[id]] Estado actualizado a Aprobada`)
           
           // Actualizar cotizacionActualizada para devolver el estado correcto
           cotizacionActualizada.estado = cotizacionActualizadaFinal.estado
@@ -437,7 +384,6 @@ export async function PATCH(
         }
       }
 
-      console.log("✅ [PATCH /api/cotizaciones/[id]] PATCH completado exitosamente")
       console.log("==========================================")
       
       return NextResponse.json({
@@ -513,7 +459,6 @@ export async function DELETE(
     // Eliminar la cotización
     await deleteCotizacion(id)
 
-    console.log('✅ Cotización eliminada correctamente')
 
     return NextResponse.json({
       success: true,

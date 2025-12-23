@@ -42,7 +42,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ users: [] }, { status: 500 });
     }
 
-    console.log(`✅ [API Comerciales] Retornando ${data?.length || 0} comerciales`);
 
     return NextResponse.json({ users: data || [] });
   } catch (error) {

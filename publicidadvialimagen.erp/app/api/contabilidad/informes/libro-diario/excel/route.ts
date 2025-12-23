@@ -112,7 +112,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log(`✅ Encontrados ${comprobantes.length} comprobantes para exportar`)
 
     // Obtener IDs de comprobantes
     const comprobanteIds = comprobantes.map((c: any) => c.id)
@@ -302,7 +301,6 @@ export async function GET(request: NextRequest) {
     // Generar buffer del archivo Excel
     const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 
-    console.log(`✅ Excel generado correctamente, ${comprobantes.length} comprobantes`)
 
     // Generar nombre del archivo con formato DD-MM-YYYY
     const hoy = new Date()

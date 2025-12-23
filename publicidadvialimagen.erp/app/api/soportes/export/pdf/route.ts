@@ -13,11 +13,23 @@ import path from 'path'
  * Función helper para cargar sharp dinámicamente (evita problemas en build time)
  * Sharp solo se carga cuando se ejecuta el handler, no durante el build
  */
-let sharpInstance: typeof import("sharp") | null = null
+let sharpInstance: any = null
 
 async function getSharp() {
   if (!sharpInstance) {
-    sharpInstance = (await import("sharp")).default
+    try {
+      // Intento 1: Import dinámico (ESM)
+      const sharpModule = await import("sharp")
+      sharpInstance = sharpModule.default || sharpModule
+    } catch (esmError) {
+      try {
+        // Intento 2: Require dinámico (CommonJS) - más compatible con Vercel
+        sharpInstance = require("sharp")
+      } catch (cjsError) {
+        console.error("❌ No se pudo cargar sharp:", esmError, cjsError)
+        throw new Error("Sharp no disponible en este entorno")
+      }
+    }
   }
   return sharpInstance
 }

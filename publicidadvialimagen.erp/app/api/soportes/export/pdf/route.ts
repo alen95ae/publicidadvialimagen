@@ -265,9 +265,15 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
           const iconImg = await loadImage(iconPath)
           const iconSizeMm = 20 // 20mm en el PDF final
           const iconSizePx = Math.round(iconSizeMm * mapWidthPx / 130)
+          
+          // Desplazamiento: 10mm hacia abajo en el PDF final
+          // Convertir 10mm a píxeles del canvas: 10mm * (mapHeightPx / 90mm)
+          const offsetDownMm = 10
+          const offsetDownPx = Math.round(offsetDownMm * mapHeightPx / 90)
+          
           // Posición exacta: pixelX es el centro horizontal, pixelY es la base vertical
-          // El icono se centra en pixelX y se coloca con su base en pixelY
-          ctx.drawImage(iconImg, pixelX - iconSizePx / 2, pixelY - iconSizePx, iconSizePx, iconSizePx)
+          // El icono se centra en pixelX y se coloca con su base en pixelY + offsetDownPx
+          ctx.drawImage(iconImg, pixelX - iconSizePx / 2, pixelY - iconSizePx + offsetDownPx, iconSizePx, iconSizePx)
         }
       } catch (iconError) {
         // Si falla el icono, continuar sin él

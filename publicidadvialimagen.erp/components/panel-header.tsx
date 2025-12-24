@@ -559,7 +559,7 @@ export default function PanelHeader() {
     // Construir URL desde entidad_tipo y entidad_id (si no viene en notification.url)
     const url = notification.url || getNotificationUrl(notification.entidad_tipo, notification.entidad_id)
     if (url) {
-      router.push(url)
+      router.push(url, { scroll: false })
     }
   }
 
@@ -724,6 +724,7 @@ export default function PanelHeader() {
                                           <DropdownMenuItem key={subItem.href} asChild>
                                             <Link
                                               href={subItem.href}
+                                              scroll={false}
                                               className={`w-full ${
                                                 isActive(subItem.href)
                                                   ? "text-[#D54644] font-semibold"
@@ -744,6 +745,7 @@ export default function PanelHeader() {
                                 <DropdownMenuItem key={item.href} asChild>
                                   <Link
                                     href={item.href}
+                                    scroll={false}
                                     className={`w-full ${
                                       isActive(item.href)
                                         ? "text-[#D54644] font-semibold"
@@ -764,6 +766,7 @@ export default function PanelHeader() {
                         <Link
                           key={section.href}
                           href={section.href}
+                          scroll={false}
                           className={`text-sm font-medium whitespace-nowrap transition-colors ${
                             isActive(section.href)
                               ? "text-[#D54644] hover:text-[#D54644]/80"
@@ -801,6 +804,7 @@ export default function PanelHeader() {
                       <Link
                         key={item.href}
                         href={item.href}
+                        scroll={false}
                         className={`text-sm font-medium whitespace-nowrap transition-colors ${
                           isActive(item.href)
                             ? "text-[#D54644] hover:text-[#D54644]/80"
@@ -847,7 +851,7 @@ export default function PanelHeader() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/panel/mensajes" className="cursor-pointer">
+                <Link href="/panel/mensajes" scroll={false} className="cursor-pointer">
                   Ver todas las notificaciones
                 </Link>
               </DropdownMenuItem>
@@ -932,7 +936,7 @@ export default function PanelHeader() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push("/panel/perfil")}>
+                  <DropdownMenuItem onClick={() => router.push("/panel/perfil", { scroll: false })}>
                     <User className="mr-2 h-4 w-4" />
                     Perfil
                   </DropdownMenuItem>

@@ -230,13 +230,67 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
       throw new Error('No se pudo descargar ningún tile de OSM')
     }
 
-    // Sin sharp: retornar el primer tile disponible (tile central preferiblemente)
-    // Buscar el tile central (col=1, row=1) o el primero disponible
-    const centralTile = composites.find(c => c.left === tileSize && c.top === tileSize)
-    const selectedTile = centralTile || composites[0]
+    // Componer grid 3x3 (768x768px) sin sharp usando Canvas API
+    const gridSize = 3 * tileSize // 768px
     
-    // Convertir el tile a base64 y retornarlo
-    return `data:image/png;base64,${selectedTile.input.toString('base64')}`
+    try {
+      // Intentar usar Canvas API si está disponible (import dinámico)
+      const canvasModule = await import('canvas')
+      const { createCanvas, loadImage } = canvasModule
+      const canvas = createCanvas(gridSize, gridSize)
+      const ctx = canvas.getContext('2d')
+      
+      // Fondo gris para tiles faltantes
+      ctx.fillStyle = '#c8c8c8'
+      ctx.fillRect(0, 0, gridSize, gridSize)
+      
+      // Componer todos los tiles en sus posiciones exactas
+      for (const composite of composites) {
+        const img = await loadImage(composite.input)
+        ctx.drawImage(img, composite.left, composite.top)
+      }
+      
+      // Recortar centrado en el marcador (exactamente como antes)
+      const cropLeft = Math.max(0, Math.min(gridSize - mapWidthPx, Math.floor(pixelX - mapWidthPx / 2)))
+      const cropTop = Math.max(0, Math.min(gridSize - mapHeightPx, Math.floor(pixelY - mapHeightPx / 2)))
+      
+      // Agregar icono del billboard en la posición exacta (pixelX, pixelY)
+      // Tamaño: 20mm en el PDF final
+      // Cálculo: El mapa recortado (mapWidthPx) se redimensiona a 130mm en el PDF
+      // Escala: mapWidthPx píxeles = 130mm → 1mm = mapWidthPx/130 píxeles
+      // Para 20mm: iconSizePx = 20 * (mapWidthPx / 130)
+      try {
+        const iconPath = path.join(process.cwd(), 'public', 'billboard.png')
+        if (fs.existsSync(iconPath)) {
+          const iconImg = await loadImage(iconPath)
+          const iconSizeMm = 20 // 20mm en el PDF final
+          const iconSizePx = Math.round(iconSizeMm * mapWidthPx / 130)
+          // Posición exacta: pixelX es el centro horizontal, pixelY es la base vertical
+          // El icono se centra en pixelX y se coloca con su base en pixelY
+          ctx.drawImage(iconImg, pixelX - iconSizePx / 2, pixelY - iconSizePx, iconSizePx, iconSizePx)
+        }
+      } catch (iconError) {
+        // Si falla el icono, continuar sin él
+        console.error('Error agregando icono en composición:', iconError)
+      }
+      
+      // Crear canvas recortado y redimensionado
+      const croppedCanvas = createCanvas(mapWidthPx, mapHeightPx)
+      const croppedCtx = croppedCanvas.getContext('2d')
+      croppedCtx.drawImage(
+        canvas,
+        cropLeft, cropTop, mapWidthPx, mapHeightPx,
+        0, 0, mapWidthPx, mapHeightPx
+      )
+      
+      const finalMapBuffer = croppedCanvas.toBuffer('image/png')
+      return `data:image/png;base64,${finalMapBuffer.toString('base64')}`
+    } catch (canvasError) {
+      // Fallback: si Canvas no está disponible, retornar tile central
+      console.error('Canvas no disponible, usando tile central:', canvasError)
+      const centralTile = composites.find(c => c.left === tileSize && c.top === tileSize) || composites[0]
+      return `data:image/png;base64,${centralTile.input.toString('base64')}`
+    }
   } catch (error) {
     console.error('❌ Error generando mapa OSM:', error)
     return null
@@ -636,28 +690,6 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
           const mapY = yPosition
           
           pdf.addImage(preprocessedMap, 'PNG', mapX, mapY, mapWidth, mapHeight)
-          
-          // Agregar icono del billboard en el centro del mapa
-          try {
-            const iconPath = path.join(process.cwd(), 'public', 'billboard.png')
-            if (fs.existsSync(iconPath)) {
-              const iconBuffer = fs.readFileSync(iconPath)
-              const iconBase64 = `data:image/png;base64,${iconBuffer.toString('base64')}`
-              
-              // Tamaño del icono en mm
-              const iconSizeMm = 20
-              
-              // Centrar el icono en el mapa
-              const iconX = mapX + mapWidth / 2 - iconSizeMm / 2
-              const iconY = mapY + mapHeight / 2 - iconSizeMm / 2
-              
-              pdf.addImage(iconBase64, 'PNG', iconX, iconY, iconSizeMm, iconSizeMm)
-              console.error('🧷 Billboard icon rendered on map')
-            }
-          } catch (iconError) {
-            // Si falla el icono, continuar sin él (no romper el PDF)
-            console.error('Error agregando icono del billboard:', iconError)
-          }
           
           // Agregar marca de agua sobre el mapa (más grande y que salga del mapa)
           if (logoBase64Watermark) {

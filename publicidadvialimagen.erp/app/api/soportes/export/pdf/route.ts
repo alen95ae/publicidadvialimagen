@@ -637,6 +637,28 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
           
           pdf.addImage(preprocessedMap, 'PNG', mapX, mapY, mapWidth, mapHeight)
           
+          // Agregar icono del billboard en el centro del mapa
+          try {
+            const iconPath = path.join(process.cwd(), 'public', 'billboard.png')
+            if (fs.existsSync(iconPath)) {
+              const iconBuffer = fs.readFileSync(iconPath)
+              const iconBase64 = `data:image/png;base64,${iconBuffer.toString('base64')}`
+              
+              // Tamaño del icono en mm
+              const iconSizeMm = 20
+              
+              // Centrar el icono en el mapa
+              const iconX = mapX + mapWidth / 2 - iconSizeMm / 2
+              const iconY = mapY + mapHeight / 2 - iconSizeMm / 2
+              
+              pdf.addImage(iconBase64, 'PNG', iconX, iconY, iconSizeMm, iconSizeMm)
+              console.error('🧷 Billboard icon rendered on map')
+            }
+          } catch (iconError) {
+            // Si falla el icono, continuar sin él (no romper el PDF)
+            console.error('Error agregando icono del billboard:', iconError)
+          }
+          
           // Agregar marca de agua sobre el mapa (más grande y que salga del mapa)
           if (logoBase64Watermark) {
             pdf.saveGraphicsState()

@@ -20,7 +20,7 @@ interface CuentasTabProps {
   empresaId?: string
 }
 
-const TIPOS_CUENTA: TipoCuenta[] = ["Activo", "Pasivo", "Patrimonio", "Ingresos", "Gastos", "Costos"]
+const TIPOS_CUENTA: TipoCuenta[] = ["Activo", "Pasivo", "Patrimonio", "Ingreso", "Gasto"]
 const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Banco", "Caja", "Empleado", "Otro"]
 // Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
 const MONEDAS: string[] = ["BS", "USD"]

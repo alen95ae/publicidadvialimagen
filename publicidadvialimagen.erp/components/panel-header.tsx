@@ -144,7 +144,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     // Secciones principales del módulo Contabilidad
     mainSections: [
       { label: "Contabilidad", href: "/panel/contabilidad", hasDropdown: true, dropdownItems: "nav" },
-      { label: "Tesorería", href: "/panel/contabilidad/tesoreria" },
       { label: "Facturas", href: "/panel/contabilidad/facturas/manuales", hasDropdown: true, dropdownItems: "facturas" },
       { label: "Almacenes", href: "/panel/contabilidad/almacenes" },
       { label: "Activos", href: "/panel/contabilidad/activos/registro-activos", hasDropdown: true, dropdownItems: "activos" },
@@ -672,7 +671,6 @@ export default function PanelHeader() {
                                 // IMPORTANTE: este fallback de "Contabilidad" SOLO debe aplicarse al dropdown principal (nav),
                                 // si no, pinta en rojo Facturas/Activos/Planillas cuando estás en /panel/contabilidad.
                                 (section.dropdownItems === "nav" && pathname.startsWith("/panel/contabilidad") && 
-                                !pathname.startsWith("/panel/contabilidad/tesoreria") &&
                                 !pathname.startsWith("/panel/contabilidad/facturas") &&
                                 !pathname.startsWith("/panel/contabilidad/almacenes") &&
                                 !pathname.startsWith("/panel/contabilidad/activos") &&

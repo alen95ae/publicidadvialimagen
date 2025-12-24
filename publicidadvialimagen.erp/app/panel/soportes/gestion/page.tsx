@@ -508,7 +508,21 @@ export default function SoportesPage() {
       })
 
       if (response.ok) {
-        toast.success(checked ? "Soporte marcado como reservado" : "Reserva cancelada")
+        const data = await response.json()
+        if (checked && data.fecha_expiracion) {
+          // Formatear fecha y hora en español
+          const fechaExpiracion = new Date(data.fecha_expiracion)
+          const fechaFormateada = fechaExpiracion.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+          toast.success(`Soporte marcado como reservado hasta el ${fechaFormateada}`)
+        } else {
+          toast.success(checked ? "Soporte marcado como reservado" : "Reserva cancelada")
+        }
         fetchSupports()
       } else {
         const errorData = await response.json()
@@ -1351,7 +1365,7 @@ export default function SoportesPage() {
                       </div>
                     </TableHead>
                     <TableHead>Tipo de soporte</TableHead>
-                    <TableHead>Ubicación</TableHead>
+                    <TableHead>Ciudad</TableHead>
                     <TableHead className="text-center">Dimensiones (m)</TableHead>
                     <TableHead>Precio/Mes</TableHead>
                     <TableHead>Estado</TableHead>
@@ -1429,7 +1443,7 @@ export default function SoportesPage() {
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
                           <MapPin className="w-3 h-3" />
-                          {support.city}{support.country ? `, ${support.country}` : ', BO'}
+                          {support.city || '—'}
                         </div>
                       </TableCell>
                       <TableCell className="text-center">

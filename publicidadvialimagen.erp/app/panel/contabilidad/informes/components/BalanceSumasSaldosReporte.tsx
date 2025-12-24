@@ -5,50 +5,268 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Play } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Play, Loader2, FileDown, FileSpreadsheet } from "lucide-react"
+import { api } from "@/lib/fetcher"
+import { toast } from "sonner"
 
 interface BalanceSumasSaldosFilters {
-  // Sección Identificación
-  empresa: string
-  regional: string
-  sucursal: string
-  // Sección Filtros Contables
-  clasificador: string
+  gestion: number
+  periodo: number
+  estado: string
   desde_cuenta: string
   hasta_cuenta: string
-  // Sección Parámetros
-  a_fecha: string
-  moneda: string
-  estado: string
+  incluir_sin_movimiento: boolean
+  nivel: string
+  tipo_cuenta: string
 }
 
+interface BalanceSumasSaldosRow {
+  cuenta: string
+  descripcion: string
+  nivel: number
+  tipo_cuenta: string
+  debe_bs: number
+  haber_bs: number
+  debe_usd: number
+  haber_usd: number
+  saldo_bs: number
+  saldo_usd: number
+}
+
+const MESES = [
+  { value: 1, label: "Enero" },
+  { value: 2, label: "Febrero" },
+  { value: 3, label: "Marzo" },
+  { value: 4, label: "Abril" },
+  { value: 5, label: "Mayo" },
+  { value: 6, label: "Junio" },
+  { value: 7, label: "Julio" },
+  { value: 8, label: "Agosto" },
+  { value: 9, label: "Septiembre" },
+  { value: 10, label: "Octubre" },
+  { value: 11, label: "Noviembre" },
+  { value: 12, label: "Diciembre" },
+]
+
 export default function BalanceSumasSaldosReporte() {
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1
+
+  const [loading, setLoading] = useState(false)
+  const [exportingPDF, setExportingPDF] = useState(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
+  const [data, setData] = useState<BalanceSumasSaldosRow[]>([])
   const [filters, setFilters] = useState<BalanceSumasSaldosFilters>({
-    empresa: "",
-    regional: "",
-    sucursal: "",
-    clasificador: "",
+    gestion: currentYear,
+    periodo: currentMonth,
+    estado: "Todos",
     desde_cuenta: "",
     hasta_cuenta: "",
-    a_fecha: new Date().toISOString().split("T")[0],
-    moneda: "BOB",
-    estado: "Todos",
+    incluir_sin_movimiento: false,
+    nivel: "",
+    tipo_cuenta: "",
   })
 
-  const handleFilterChange = (field: keyof BalanceSumasSaldosFilters, value: string) => {
+  const handleFilterChange = (field: keyof BalanceSumasSaldosFilters, value: string | number | boolean) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleGenerarReporte = () => {
-    // TODO: implementar lógica contable real
-    // TODO: generar PDF del balance
-    // Aquí irá la generación del PDF
+  const handleGenerarReporte = async () => {
+    try {
+      setLoading(true)
+
+      const params = new URLSearchParams()
+      params.append("empresa_id", "1") // Hardcoded según especificación
+      params.append("gestion", filters.gestion.toString())
+      params.append("periodo", filters.periodo.toString())
+      
+      // Estado: solo enviar si no es "Todos"
+      if (filters.estado !== "Todos") {
+        params.append("estado", filters.estado)
+      }
+      
+      if (filters.desde_cuenta) {
+        params.append("desde_cuenta", filters.desde_cuenta)
+      }
+      if (filters.hasta_cuenta) {
+        params.append("hasta_cuenta", filters.hasta_cuenta)
+      }
+      if (!filters.incluir_sin_movimiento) {
+        params.append("incluir_sin_movimiento", "false")
+      }
+      if (filters.nivel) {
+        params.append("nivel", filters.nivel)
+      }
+      if (filters.tipo_cuenta) {
+        params.append("tipo_cuenta", filters.tipo_cuenta)
+      }
+
+      const response = await api(`/api/contabilidad/balance-sumas-saldos?${params.toString()}`)
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setData(result.data || [])
+          toast.success(`Balance generado: ${result.data?.length || 0} cuentas`)
+        } else {
+          toast.error(result.error || "Error al generar el balance")
+          setData([])
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Error al generar el balance")
+        setData([])
+      }
+    } catch (error) {
+      console.error("Error generating balance:", error)
+      toast.error("Error de conexión al generar el balance")
+      setData([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const construirParams = () => {
+    const params = new URLSearchParams()
+    params.append("empresa_id", "1")
+    params.append("gestion", filters.gestion.toString())
+    params.append("periodo", filters.periodo.toString())
     
-    console.log("Balance de Sumas y Saldos", filters)
-    alert("Reporte generado (mock)")
+    if (filters.estado !== "Todos") {
+      params.append("estado", filters.estado)
+    }
+    
+    if (filters.desde_cuenta) {
+      params.append("desde_cuenta", filters.desde_cuenta)
+    }
+    if (filters.hasta_cuenta) {
+      params.append("hasta_cuenta", filters.hasta_cuenta)
+    }
+    if (!filters.incluir_sin_movimiento) {
+      params.append("incluir_sin_movimiento", "false")
+    }
+    if (filters.nivel) {
+      params.append("nivel", filters.nivel)
+    }
+    if (filters.tipo_cuenta) {
+      params.append("tipo_cuenta", filters.tipo_cuenta)
+    }
+    
+    return params
+  }
+
+  const handleExportarPDF = async () => {
+    if (exportingPDF || exportingExcel) return
+    
+    try {
+      setExportingPDF(true)
+      
+      const params = construirParams()
+      const url = `/api/contabilidad/informes/balance-sumas-saldos/pdf?${params.toString()}`
+      console.log("📄 Exportando PDF desde:", url)
+
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        let errorMessage = "Error al exportar el PDF"
+        try {
+          // Verificar si la respuesta es JSON antes de parsear
+          const contentType = response.headers.get("content-type")
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorData.details || errorMessage
+            console.error("❌ Error del servidor:", errorData)
+          } else {
+            // Si no es JSON, intentar leer como texto
+            const errorText = await response.text()
+            console.error("❌ Error del servidor (texto):", errorText)
+            errorMessage = errorText || errorMessage
+          }
+        } catch (e) {
+          console.error("❌ Error al parsear respuesta:", e)
+          errorMessage = `Error ${response.status}: ${response.statusText}`
+        }
+        toast.error(errorMessage)
+        return
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      
+      const hoy = new Date()
+      const dia = String(hoy.getDate()).padStart(2, '0')
+      const mes = String(hoy.getMonth() + 1).padStart(2, '0')
+      const año = hoy.getFullYear()
+      a.download = `balance_sumas_saldos_${dia}-${mes}-${año}.pdf`
+      
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+      
+      toast.success("PDF exportado correctamente")
+    } catch (error: any) {
+      console.error("❌ Error exporting PDF:", error)
+      toast.error(error?.message || "Error al exportar el PDF")
+    } finally {
+      setExportingPDF(false)
+    }
+  }
+
+  const handleExportarExcel = async () => {
+    if (exportingPDF || exportingExcel) return
+    
+    try {
+      setExportingExcel(true)
+      
+      const params = construirParams()
+      const url = `/api/contabilidad/informes/balance-sumas-saldos/excel?${params.toString()}`
+      console.log("📊 Exportando Excel desde:", url)
+
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        let errorMessage = "Error al exportar el Excel"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+          console.error("❌ Error del servidor:", errorData)
+        } catch (e) {
+          console.error("❌ Error al parsear respuesta:", e)
+        }
+        toast.error(errorMessage)
+        return
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      
+      const hoy = new Date()
+      const dia = String(hoy.getDate()).padStart(2, '0')
+      const mes = String(hoy.getMonth() + 1).padStart(2, '0')
+      const año = hoy.getFullYear()
+      a.download = `balance_sumas_saldos_${dia}-${mes}-${año}.xlsx`
+      
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+      
+      toast.success("Excel exportado correctamente")
+    } catch (error: any) {
+      console.error("❌ Error exporting Excel:", error)
+      toast.error(error?.message || "Error al exportar el Excel")
+    } finally {
+      setExportingExcel(false)
+    }
   }
 
   return (
@@ -60,61 +278,60 @@ export default function BalanceSumasSaldosReporte() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Sección Identificación */}
+        {/* Filtros Principales */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700">Sección Identificación</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Filtros Principales</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label htmlFor="empresa" className="text-xs text-gray-600">
-                Empresa
+              <Label htmlFor="gestion" className="text-xs text-gray-600">
+                Gestión
+              </Label>
+              <Input
+                id="gestion"
+                type="number"
+                value={filters.gestion}
+                onChange={(e) => handleFilterChange("gestion", parseInt(e.target.value) || currentYear)}
+                className="mt-1"
+                min="2000"
+                max="2100"
+              />
+            </div>
+            <div>
+              <Label htmlFor="periodo" className="text-xs text-gray-600">
+                Período
               </Label>
               <Select
-                value={filters.empresa}
-                onValueChange={(value) => handleFilterChange("empresa", value)}
+                value={filters.periodo.toString()}
+                onValueChange={(value) => handleFilterChange("periodo", parseInt(value))}
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar empresa" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="001">Empresa 001</SelectItem>
-                  <SelectItem value="002">Empresa 002</SelectItem>
-                  <SelectItem value="003">Empresa 003</SelectItem>
+                  {MESES.map((mes) => (
+                    <SelectItem key={mes.value} value={mes.value.toString()}>
+                      {mes.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="regional" className="text-xs text-gray-600">
-                Regional
+              <Label htmlFor="estado" className="text-xs text-gray-600">
+                Estado
               </Label>
               <Select
-                value={filters.regional}
-                onValueChange={(value) => handleFilterChange("regional", value)}
+                value={filters.estado}
+                onValueChange={(value) => handleFilterChange("estado", value)}
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar regional" />
+                  <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="01">Regional 01</SelectItem>
-                  <SelectItem value="02">Regional 02</SelectItem>
-                  <SelectItem value="03">Regional 03</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="sucursal" className="text-xs text-gray-600">
-                Sucursal
-              </Label>
-              <Select
-                value={filters.sucursal}
-                onValueChange={(value) => handleFilterChange("sucursal", value)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="001">Sucursal 001</SelectItem>
-                  <SelectItem value="002">Sucursal 002</SelectItem>
-                  <SelectItem value="003">Sucursal 003</SelectItem>
+                  <SelectItem value="Aprobado">Aprobado</SelectItem>
+                  <SelectItem value="Borrador">Borrador</SelectItem>
+                  <SelectItem value="Revertido">Revertido</SelectItem>
+                  <SelectItem value="Todos">Todos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -123,28 +340,10 @@ export default function BalanceSumasSaldosReporte() {
 
         <Separator />
 
-        {/* Sección Filtros Contables */}
+        {/* Filtros de Cuentas */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700">Sección Filtros Contables</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="clasificador" className="text-xs text-gray-600">
-                Clasificador
-              </Label>
-              <Select
-                value={filters.clasificador}
-                onValueChange={(value) => handleFilterChange("clasificador", value)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar clasificador" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CONTABILIDAD">CONTABILIDAD</SelectItem>
-                  <SelectItem value="VENTAS">VENTAS</SelectItem>
-                  <SelectItem value="TESORERIA">TESORERIA</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <h3 className="text-sm font-semibold text-gray-700">Filtros de Cuentas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="desde_cuenta" className="text-xs text-gray-600">
                 Desde la Cuenta
@@ -153,7 +352,7 @@ export default function BalanceSumasSaldosReporte() {
                 id="desde_cuenta"
                 value={filters.desde_cuenta}
                 onChange={(e) => handleFilterChange("desde_cuenta", e.target.value)}
-                placeholder="Ej: 1.1.1.001"
+                placeholder="Ej: 111001"
                 className="mt-1 font-mono"
               />
             </div>
@@ -165,83 +364,64 @@ export default function BalanceSumasSaldosReporte() {
                 id="hasta_cuenta"
                 value={filters.hasta_cuenta}
                 onChange={(e) => handleFilterChange("hasta_cuenta", e.target.value)}
-                placeholder="Ej: 1.1.1.999"
+                placeholder="Ej: 111999"
                 className="mt-1 font-mono"
               />
             </div>
           </div>
-        </div>
-
-        <Separator />
-
-        {/* Sección Parámetros */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700">Sección Parámetros</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label htmlFor="a_fecha" className="text-xs text-gray-600">
-                A Fecha
-              </Label>
-              <Input
-                id="a_fecha"
-                type="date"
-                value={filters.a_fecha}
-                onChange={(e) => handleFilterChange("a_fecha", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="moneda" className="text-xs text-gray-600">
-                Moneda
+              <Label htmlFor="nivel" className="text-xs text-gray-600">
+                Nivel de Cuenta
               </Label>
               <Select
-                value={filters.moneda}
-                onValueChange={(value) => handleFilterChange("moneda", value)}
+                value={filters.nivel || undefined}
+                onValueChange={(value) => handleFilterChange("nivel", value === "all" ? "" : value)}
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder="Todos los niveles" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BOB">Bolivianos</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="all">Todos los niveles</SelectItem>
+                  <SelectItem value="1">Nivel 1</SelectItem>
+                  <SelectItem value="2">Nivel 2</SelectItem>
+                  <SelectItem value="3">Nivel 3</SelectItem>
+                  <SelectItem value="4">Nivel 4</SelectItem>
+                  <SelectItem value="5">Nivel 5</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          
-          {/* Estado */}
-          <div>
-            <Label className="text-xs text-gray-600 mb-2 block">Estado</Label>
-            <RadioGroup
-              value={filters.estado}
-              onValueChange={(value) => handleFilterChange("estado", value)}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="Aprobado" id="estado-aprobado" />
-                <Label htmlFor="estado-aprobado" className="text-sm font-normal cursor-pointer">
-                  Aprobado
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="Borrador" id="estado-borrador" />
-                <Label htmlFor="estado-borrador" className="text-sm font-normal cursor-pointer">
-                  Borrador
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="Revertido" id="estado-revertido" />
-                <Label htmlFor="estado-revertido" className="text-sm font-normal cursor-pointer">
-                  Revertido
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="Todos" id="estado-todos" />
-                <Label htmlFor="estado-todos" className="text-sm font-normal cursor-pointer">
-                  Todos
-                </Label>
-              </div>
-            </RadioGroup>
+            <div>
+              <Label htmlFor="tipo_cuenta" className="text-xs text-gray-600">
+                Tipo de Cuenta
+              </Label>
+              <Select
+                value={filters.tipo_cuenta || undefined}
+                onValueChange={(value) => handleFilterChange("tipo_cuenta", value === "all" ? "" : value)}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Todos los tipos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los tipos</SelectItem>
+                  <SelectItem value="Activo">Activo</SelectItem>
+                  <SelectItem value="Pasivo">Pasivo</SelectItem>
+                  <SelectItem value="Patrimonio">Patrimonio</SelectItem>
+                  <SelectItem value="Ingreso">Ingreso</SelectItem>
+                  <SelectItem value="Gasto">Gasto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2 pt-8">
+              <Checkbox
+                id="incluir_sin_movimiento"
+                checked={filters.incluir_sin_movimiento}
+                onCheckedChange={(checked) => handleFilterChange("incluir_sin_movimiento", checked === true)}
+              />
+              <Label htmlFor="incluir_sin_movimiento" className="text-sm font-normal cursor-pointer">
+                Incluir cuentas sin movimiento
+              </Label>
+            </div>
           </div>
         </div>
 
@@ -250,15 +430,103 @@ export default function BalanceSumasSaldosReporte() {
         {/* Acciones */}
         <div className="flex justify-end gap-4 pt-4">
           <Button
+            onClick={handleExportarPDF}
+            disabled={exportingPDF || exportingExcel}
+            variant="outline"
+            className="border-red-600 text-red-600 hover:bg-red-50"
+          >
+            {exportingPDF ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <FileDown className="w-4 h-4 mr-2" />
+            )}
+            Exportar PDF
+          </Button>
+          <Button
+            onClick={handleExportarExcel}
+            disabled={exportingPDF || exportingExcel}
+            variant="outline"
+            className="border-green-600 text-green-600 hover:bg-green-50"
+          >
+            {exportingExcel ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+            )}
+            Exportar Excel
+          </Button>
+          <Button
             onClick={handleGenerarReporte}
+            disabled={loading || exportingPDF || exportingExcel}
             className="bg-red-600 hover:bg-red-700 text-white"
           >
-            <Play className="w-4 h-4 mr-2" />
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Play className="w-4 h-4 mr-2" />
+            )}
             Generar Reporte
           </Button>
         </div>
+
+        {/* Tabla de Resultados */}
+        {data.length > 0 && (
+          <div className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Resultados del Balance de Sumas y Saldos</CardTitle>
+                <CardDescription>
+                  {data.length} cuentas encontradas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="font-mono">Cuenta</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead className="text-right">Debe BS</TableHead>
+                        <TableHead className="text-right">Haber BS</TableHead>
+                        <TableHead className="text-right">Saldo BS</TableHead>
+                        <TableHead className="text-right">Debe USD</TableHead>
+                        <TableHead className="text-right">Haber USD</TableHead>
+                        <TableHead className="text-right">Saldo USD</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.map((row, index) => (
+                        <TableRow key={`${row.cuenta}-${index}`}>
+                          <TableCell className="font-mono">{row.cuenta}</TableCell>
+                          <TableCell>{row.descripcion}</TableCell>
+                          <TableCell className="text-right">
+                            {row.debe_bs.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.haber_bs.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {row.saldo_bs.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.debe_usd.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.haber_usd.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {row.saldo_usd.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
-

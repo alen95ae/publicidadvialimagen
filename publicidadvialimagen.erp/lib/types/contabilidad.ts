@@ -58,9 +58,8 @@ export type TipoCuenta =
   | "Activo"
   | "Pasivo"
   | "Patrimonio"
-  | "Ingresos"
-  | "Gastos"
-  | "Costos"
+  | "Ingreso"
+  | "Gasto"
 
 export type TipoAuxiliar = 
   | "Cliente"

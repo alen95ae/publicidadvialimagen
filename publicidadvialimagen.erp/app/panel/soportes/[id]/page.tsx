@@ -33,6 +33,9 @@ const TYPE_OPTIONS = [
   'Unipolar', 'Bipolar', 'Tripolar', 'Mural', 'Mega Valla', 'Cartelera', 'Paleta'
 ] as const
 
+// Lista fija de ciudades (las mismas que en el filtro del listado)
+const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosi", "Tarija", "Oruro", "Beni", "Pando"]
+
 const STATUS_META = {
   'Disponible':     { label: 'Disponible',    className: 'bg-green-100 text-green-800' },
   'Reservado':      { label: 'Reservado',     className: 'bg-yellow-100 text-yellow-800' },
@@ -112,7 +115,7 @@ export default function SoporteDetailPage() {
     address: "",
     city: "",
     zona: "",
-    country: "",
+    country: "Bolivia",
     impactosDiarios: "",
     priceMonth: "",
     sustrato_id: null as string | null,
@@ -204,7 +207,7 @@ export default function SoporteDetailPage() {
           address: data.address || "",
           city: data.city || "",
           zona: data.zona || "",
-          country: data.country || "",
+          country: "Bolivia",
           impactosDiarios: data.impactosDiarios?.toString() || "",
           priceMonth: data.priceMonth?.toString() || "",
           sustrato_id: data.sustrato_id || null,
@@ -447,7 +450,7 @@ export default function SoporteDetailPage() {
         address: formData.address || null,
         city: formData.city || null,
         zona: formData.zona || null,
-        country: formData.country || null,
+        country: "Bolivia",
         owner: formData.owner || null,
         sustrato_id: formData.sustrato_id || null,
       }
@@ -662,7 +665,7 @@ export default function SoporteDetailPage() {
                       longitude: support.longitude || null,
                       address: support.address || "",
                       city: support.city || "",
-                      country: support.country || "",
+                      country: "Bolivia",
                       impactosDiarios: support.impactosDiarios?.toString() || "",
                       priceMonth: support.priceMonth?.toString() || "",
                       available: support.available ?? true
@@ -1005,19 +1008,30 @@ export default function SoporteDetailPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="city">Ciudad</Label>
-                      <Input
-                        id="city"
+                      <Select
                         value={formData.city}
-                        onChange={(e) => handleChange("city", e.target.value)}
-                      />
+                        onValueChange={(value) => handleChange("city", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar ciudad" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[200px]">
+                          {ciudadesBolivia.map((ciudad) => (
+                            <SelectItem key={ciudad} value={ciudad}>
+                              {ciudad}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="country">País</Label>
                       <Input
                         id="country"
-                        value={formData.country}
-                        onChange={(e) => handleChange("country", e.target.value)}
+                        value="Bolivia"
+                        disabled
+                        className="bg-gray-100 cursor-not-allowed"
                       />
                     </div>
                   </div>

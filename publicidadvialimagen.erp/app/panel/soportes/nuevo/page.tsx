@@ -83,6 +83,7 @@ export default function NuevoSoportePage() {
   
   // Estado para el buscador de sustrato
   const [openSustrato, setOpenSustrato] = useState(false)
+  const [openCiudad, setOpenCiudad] = useState(false)
   const [todosLosProductos, setTodosLosProductos] = useState<any[]>([])
   const [cargandoProductos, setCargandoProductos] = useState(false)
   const [filteredProductos, setFilteredProductos] = useState<any[]>([])
@@ -489,7 +490,7 @@ export default function NuevoSoportePage() {
 
   return (
     <div className="p-6">
-      <div className="min-h-screen bg-gray-50">
+      <div className="bg-gray-50">
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
@@ -727,21 +728,36 @@ export default function NuevoSoportePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="city">Ciudad</Label>
-                    <Select
-                      value={formData.city}
-                      onValueChange={(value) => handleChange("city", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar ciudad" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[200px]">
-                        {ciudadesBolivia.map((ciudad) => (
-                          <SelectItem key={ciudad} value={ciudad}>
-                            {ciudad}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openCiudad} onOpenChange={setOpenCiudad}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openCiudad}
+                          className="w-full justify-between"
+                        >
+                          {formData.city || "Seleccionar ciudad"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start" side="top">
+                        <div className="max-h-[300px] overflow-y-auto">
+                          {ciudadesBolivia.map((ciudad) => (
+                            <div
+                              key={ciudad}
+                              className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${
+                                formData.city === ciudad ? 'bg-accent font-medium' : ''
+                              }`}
+                              onClick={() => {
+                                handleChange("city", ciudad)
+                                setOpenCiudad(false)
+                              }}
+                            >
+                              {ciudad}
+                            </div>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   
                   <div className="space-y-2">

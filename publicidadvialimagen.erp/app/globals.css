@@ -81,3 +81,8 @@
 .custom-billboard-icon svg {
   filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
 }
+
+/* Regla defensiva para Radix Select - Previene problemas de scroll y viewport */
+[data-radix-select-content] {
+  max-height: min(var(--radix-select-content-available-height), 300px);
+}

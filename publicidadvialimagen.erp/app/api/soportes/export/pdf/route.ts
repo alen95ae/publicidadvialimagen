@@ -114,15 +114,79 @@ async function loadImage(imageUrl: string): Promise<{ base64: string | null; for
     // Detectar formato
     const contentType = response.headers.get('content-type') || ''
     let format = 'JPEG'
+    let isPNG = false
+    let isWEBP = false
+    
     if (contentType.includes('png')) {
       format = 'PNG'
+      isPNG = true
     } else if (contentType.includes('webp')) {
       format = 'WEBP'
+      isWEBP = true
     }
 
-    return {
-      base64: `data:image/${format.toLowerCase()};base64,${buffer.toString('base64')}`,
-      format
+    // Optimización conservadora: comprimir imágenes grandes manteniendo calidad visual
+    try {
+      const canvasModule = await import('canvas')
+      const { createCanvas, loadImage: canvasLoadImage } = canvasModule
+      
+      // Cargar imagen en canvas
+      const img = await canvasLoadImage(buffer)
+      const imgCanvas = createCanvas(img.width, img.height)
+      const imgCtx = imgCanvas.getContext('2d')
+      imgCtx.drawImage(img, 0, 0)
+      
+      // Verificar si PNG tiene transparencia real (canal alfa usado)
+      let hasAlpha = false
+      if (isPNG) {
+        const imageData = imgCtx.getImageData(0, 0, img.width, img.height)
+        const data = imageData.data
+        // Verificar si algún pixel tiene alpha < 255
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] < 255) {
+            hasAlpha = true
+            break
+          }
+        }
+      }
+      
+      // Estrategia de compresión conservadora
+      if (isPNG && !hasAlpha) {
+        // PNG sin transparencia → JPEG progresivo 89%
+        const compressedBuffer = imgCanvas.toBuffer('image/jpeg', { 
+          quality: 0.89, 
+          progressive: true,
+          chromaSubsampling: false 
+        })
+        return {
+          base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
+          format: 'JPEG'
+        }
+      } else if (format === 'JPEG' || isWEBP) {
+        // JPEG/WEBP → recomprimir a JPEG progresivo 89%
+        const compressedBuffer = imgCanvas.toBuffer('image/jpeg', { 
+          quality: 0.89, 
+          progressive: true,
+          chromaSubsampling: false 
+        })
+        return {
+          base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
+          format: 'JPEG'
+        }
+      } else {
+        // PNG con transparencia → mantener sin comprimir
+        return {
+          base64: `data:image/${format.toLowerCase()};base64,${buffer.toString('base64')}`,
+          format
+        }
+      }
+    } catch (compressionError) {
+      // Si falla la compresión, retornar imagen original sin comprimir
+      console.error('No se pudo comprimir imagen, usando original:', compressionError)
+      return {
+        base64: `data:image/${format.toLowerCase()};base64,${buffer.toString('base64')}`,
+        format
+      }
     }
   } catch (error) {
     console.error('❌ Error cargando imagen del soporte:', error instanceof Error ? error.message : error)
@@ -289,8 +353,13 @@ async function generateOSMMap(lat: number, lng: number, mapWidthPx: number, mapH
         0, 0, mapWidthPx, mapHeightPx
       )
       
-      const finalMapBuffer = croppedCanvas.toBuffer('image/png')
-      return `data:image/png;base64,${finalMapBuffer.toString('base64')}`
+      // Optimización de peso: JPEG progresivo 91% sin cambiar lógica de generación
+      const finalMapBuffer = croppedCanvas.toBuffer('image/jpeg', { 
+        quality: 0.91, 
+        progressive: true,
+        chromaSubsampling: false // Mantener calidad de color
+      })
+      return `data:image/jpeg;base64,${finalMapBuffer.toString('base64')}`
     } catch (canvasError) {
       // Fallback: si Canvas no está disponible, retornar tile central
       console.error('Canvas no disponible, usando tile central:', canvasError)
@@ -954,6 +1023,16 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       // Extremo derecho: Paginación
       pdf.text(`${i}/${totalPages}`, pageWidth - 5, footerY + 7, { align: 'right' })
     }
+    
+    // Post-proceso del PDF (limitaciones de jsPDF)
+    // NOTA: jsPDF no soporta nativamente:
+    // - Deduplicación de imágenes idénticas
+    // - Optimización de estructura (streams, object streams, linearización)
+    // - Subsetting y deduplicación de fuentes
+    // - Eliminación de metadatos y thumbnails
+    // Estas optimizaciones requerirían pdf-lib u otra librería de post-procesamiento,
+    // lo cual añadiría complejidad y dependencias. La reducción de peso ya se logra
+    // mediante la compresión controlada de imágenes y mapas (JPEG progresivo 89-91%).
     
     return Buffer.from(pdf.output('arraybuffer'))
   } catch (error) {

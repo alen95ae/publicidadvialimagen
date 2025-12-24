@@ -664,40 +664,42 @@ export default function NuevoSoportePage() {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[400px] p-0" align="start">
-                      <Command shouldFilter={false}>
-                        <CommandInput 
-                          placeholder="Escribe código o nombre..."
-                          className="h-9 border-0 focus:ring-0"
-                          onValueChange={filtrarProductos}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {cargandoProductos ? "Cargando..." : "No se encontraron productos."}
-                          </CommandEmpty>
-                          {filteredProductos.length > 0 && (
-                            <CommandGroup heading="Productos">
-                              {filteredProductos.map((producto: any) => (
-                                <CommandItem
-                                  key={producto.id}
-                                  value={`${producto.codigo} ${producto.nombre}`}
-                                  onSelect={() => seleccionarSustrato(producto)}
-                                  className="cursor-pointer"
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      formData.sustrato_id === producto.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <span className="text-xs truncate">
-                                    [{producto.codigo}] {producto.nombre}
-                                  </span>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          )}
-                        </CommandList>
-                      </Command>
+                      {openSustrato && (
+                        <Command shouldFilter={false}>
+                          <CommandInput 
+                            placeholder="Escribe código o nombre..."
+                            className="h-9 border-0 focus:ring-0"
+                            onValueChange={filtrarProductos}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {cargandoProductos ? "Cargando..." : "No se encontraron productos."}
+                            </CommandEmpty>
+                            {filteredProductos.length > 0 && (
+                              <CommandGroup heading="Productos">
+                                {filteredProductos.map((producto: any) => (
+                                  <CommandItem
+                                    key={producto.id}
+                                    value={`${producto.codigo} ${producto.nombre}`}
+                                    onSelect={() => seleccionarSustrato(producto)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.sustrato_id === producto.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span className="text-xs truncate">
+                                      [{producto.codigo}] {producto.nombre}
+                                    </span>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      )}
                     </PopoverContent>
                   </Popover>
                 </div>

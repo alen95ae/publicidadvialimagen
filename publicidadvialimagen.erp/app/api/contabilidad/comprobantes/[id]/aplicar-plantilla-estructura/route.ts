@@ -83,6 +83,23 @@ export async function POST(
       )
     }
 
+    // Cargar códigos de cuentas para las líneas con cuenta_id
+    const cuentasMap = new Map<number, string>()
+    const cuentasIds = detallesPlantilla
+      .filter(d => d.cuenta_id)
+      .map(d => d.cuenta_id)
+    
+    if (cuentasIds.length > 0) {
+      const { data: cuentasData } = await supabase
+        .from("plan_cuentas")
+        .select("id, cuenta")
+        .in("id", cuentasIds)
+      
+      if (cuentasData) {
+        cuentasData.forEach(c => cuentasMap.set(c.id, c.cuenta))
+      }
+    }
+
     // Eliminar detalles existentes del comprobante
     const { error: errorEliminar } = await supabase
       .from("comprobante_detalle")
@@ -99,18 +116,19 @@ export async function POST(
     // Construir líneas de comprobante_detalle con estructura (montos en 0)
     const detallesData: any[] = []
 
-    // REGLA: cuenta SOLO se rellena automáticamente si cuenta_es_fija === true
-    // Si NO es fija → cuenta debe ir vacía ("") al crear el comprobante
+    // Si cuenta_es_fija === true Y tiene cuenta_id, cargar el código de cuenta
     detallesPlantilla.forEach((detPlantilla, index) => {
       const cuentaEsFija = detPlantilla.cuenta_es_fija === true
-      const cuentaSugerida = detPlantilla.cuenta_sugerida || ""
+      let codigoCuenta = ""
       
-      // Si es fija, usar cuenta_sugerida; si no, dejar vacía
-      const cuenta = cuentaEsFija ? cuentaSugerida : ""
+      // Si es fija y tiene cuenta_id, buscar el código
+      if (cuentaEsFija && detPlantilla.cuenta_id) {
+        codigoCuenta = cuentasMap.get(detPlantilla.cuenta_id) || ""
+      }
 
       detallesData.push({
         comprobante_id: resolvedParams.id,
-        cuenta: cuenta,
+        cuenta: codigoCuenta,
         auxiliar: null,
         glosa: null,
         debe_bs: 0,
@@ -122,6 +140,7 @@ export async function POST(
     })
 
     console.log("📊 Total líneas a insertar:", detallesData.length)
+    console.log("📋 Detalles a insertar:", JSON.stringify(detallesData, null, 2))
 
     // Insertar detalles
     const { data: detallesInsertados, error: errorInsertar } = await supabase
@@ -149,17 +168,36 @@ export async function POST(
 
 
     // Devolver detalles con información de la plantilla para el frontend
-    const detallesConPlantilla = detallesInsertados.map((det, index) => ({
-      ...det,
-      rol: detallesPlantilla[index].rol,
-      lado: detallesPlantilla[index].lado,
-      porcentaje: detallesPlantilla[index].porcentaje,
-      permite_seleccionar_cuenta: detallesPlantilla[index].permite_seleccionar_cuenta,
-      permite_auxiliar: detallesPlantilla[index].permite_auxiliar,
-      // Enviar siempre cuenta_sugerida y cuenta_es_fija
-      cuenta_sugerida: detallesPlantilla[index].cuenta_sugerida || "",
-      cuenta_es_fija: detallesPlantilla[index].cuenta_es_fija === true,
-    }))
+    const detallesConPlantilla = detallesInsertados.map((det, index) => {
+      const detPlantilla = detallesPlantilla[index]
+      const codigoCuenta = detPlantilla.cuenta_id ? cuentasMap.get(detPlantilla.cuenta_id) || "" : ""
+      
+      return {
+        ...det,
+        lado: detPlantilla.lado,
+        porcentaje: detPlantilla.porcentaje,
+        bloqueado: detPlantilla.bloqueado === true,
+        cuenta_es_fija: detPlantilla.cuenta_es_fija === true,
+        permite_auxiliar: detPlantilla.permite_auxiliar === true,
+        // Enviar el código de cuenta como referencia
+        cuenta_sugerida: codigoCuenta,
+      }
+    })
+
+    // 🧠 LOG DE DIAGNÓSTICO: Verificar qué se está enviando al frontend
+    console.log("🧠 BACKEND aplicar-plantilla-estructura RESULT", {
+      plantilla_codigo: body.plantilla_codigo,
+      total_detalles: detallesConPlantilla.length,
+      detalles: detallesConPlantilla.map(d => ({
+        cuenta: d.cuenta,
+        cuenta_sugerida: d.cuenta_sugerida,
+        porcentaje: d.porcentaje,
+        lado: d.lado,
+        bloqueado: d.bloqueado,
+        cuenta_es_fija: d.cuenta_es_fija,
+        permite_auxiliar: d.permite_auxiliar
+      }))
+    })
 
     return NextResponse.json({
       success: true,

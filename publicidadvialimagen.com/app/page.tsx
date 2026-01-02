@@ -20,6 +20,10 @@ import {
   ChevronRight,
   Ruler,
   FileText,
+  TrendingUp,
+  Brain,
+  DollarSign,
+  Send,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -191,7 +195,7 @@ function ServicesCarousel({ t }: { t: (key: string) => string }) {
                 href={`/vallas-publicitarias?formats=${encodeURIComponent(category.name)}`} 
                 className="text-center group block"
               >
-                <div className="relative w-40 h-40 mx-auto mb-3 rounded-lg overflow-hidden shadow-md group-hover:shadow-lg transition-all">
+                <div className="relative w-40 h-40 mx-auto mb-3 rounded-full overflow-hidden shadow-md group-hover:shadow-lg transition-all">
                   <Image
                     src={category.image || "/placeholder.svg"}
                     alt={category.name}
@@ -200,7 +204,7 @@ function ServicesCarousel({ t }: { t: (key: string) => string }) {
                     sizes="160px"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent rounded-full" />
                 </div>
                 <p className="text-sm font-medium text-muted-foreground group-hover:text-red-600 transition-colors">
                   {category.name}
@@ -340,6 +344,76 @@ function FeaturedBillboardsCarousel({ billboards, t, locale }: { billboards: Bil
   )
 }
 
+function WhyOutdoorSection({ t }: { t: (key: string) => string }) {
+  const stats = [
+    {
+      icon: TrendingUp,
+      value: t('home.whyOutdoor.reach.value'),
+      title: t('home.whyOutdoor.reach.title'),
+      description: t('home.whyOutdoor.reach.description'),
+    },
+    {
+      icon: Eye,
+      value: t('home.whyOutdoor.visibility.value'),
+      title: t('home.whyOutdoor.visibility.title'),
+      description: t('home.whyOutdoor.visibility.description'),
+    },
+    {
+      icon: Brain,
+      value: t('home.whyOutdoor.recall.value'),
+      title: t('home.whyOutdoor.recall.title'),
+      description: t('home.whyOutdoor.recall.description'),
+    },
+    {
+      icon: DollarSign,
+      value: t('home.whyOutdoor.roi.value'),
+      title: t('home.whyOutdoor.roi.title'),
+      description: t('home.whyOutdoor.roi.description'),
+    },
+  ]
+
+  return (
+    <section className="py-12 md:py-16">
+      <div className="container px-4 md:px-6">
+        <div className="text-center mb-8 md:mb-10">
+          <h2 className="text-2xl font-bold tracking-tight text-center mb-3 md:text-3xl text-balance">
+            <span>{t('home.whyOutdoor.title').split(' ').slice(0, -2).join(' ')} </span>
+            <span className="text-primary">{t('home.whyOutdoor.title').split(' ').slice(-2).join(' ')}</span>
+          </h2>
+          <p className="text-muted-foreground md:text-lg text-pretty max-w-2xl mx-auto">
+            {t('home.whyOutdoor.subtitle')}
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+          {stats.map((stat, index) => {
+            const IconComponent = stat.icon
+            return (
+              <div
+                key={index}
+                className="flex flex-col items-center text-center"
+              >
+                <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                  <IconComponent className="w-8 h-8 text-primary" />
+                </div>
+                <div className="text-4xl md:text-5xl font-bold text-primary mb-2">
+                  {stat.value}
+                </div>
+                <h3 className="text-lg font-bold tracking-tight mb-2">
+                  {stat.title}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+                  {stat.description}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [formSubmitted, setFormSubmitted] = useState(false)
@@ -473,6 +547,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <WhyOutdoorSection t={t} />
+
       {/* Cities Carousel Section */}
       <section className="py-12 md:py-16 bg-background overflow-hidden">
         <div className="container px-4 md:px-6">
@@ -557,7 +633,7 @@ export default function HomePage() {
             </div>
             <div className="relative h-[300px] sm:h-[400px] rounded-xl overflow-hidden">
               <Image
-                src="/impresion_digital_imagen.png"
+                src="/impresion_digital_bolivia.png"
                 alt="Servicios de impresión profesional"
                 fill
                 className="object-cover"
@@ -768,141 +844,169 @@ export default function HomePage() {
       </section>
 
       {/* Contact Form Section */}
-      <section className="py-16 md:py-20 bg-gradient-to-b from-muted/30 to-background">
-        <div className="container px-4 md:px-6 max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight mb-4 md:text-3xl text-balance">
-              {t('contact.title')}
-            </h2>
-            <p className="text-muted-foreground md:text-lg text-pretty mb-2">
-              {t('contact.subtitle')}
-            </p>
-          </div>
-          
+      <section className="py-16 md:py-20 bg-white">
+        <div className="container px-4 md:px-6 max-w-6xl mx-auto">
           {formSubmitted ? (
-            <div className="bg-primary/10 text-primary p-4 rounded-lg mb-6">
+            <div className="bg-primary/10 text-primary p-6 rounded-lg text-center">
               <h3 className="font-semibold text-lg mb-2">¡Gracias!</h3>
               <p>Tu mensaje ha sido enviado exitosamente. Te responderemos lo antes posible.</p>
             </div>
           ) : (
-            <form id="contact-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Anti-spam hidden fields: do not alter layout */}
-              {/* Honeypot: visible to bots, offscreen for users */}
-              <input
-                type="text"
-                name="website"
-                value={antiSpam.website}
-                onChange={(e) => setAntiSpam(s => ({ ...s, website: e.target.value }))}
-                autoComplete="off"
-                tabIndex={-1}
-                aria-hidden="true"
-                style={{ position: 'absolute', left: '-9999px' }}
-              />
-              {/* Timestamp and JS execution markers */}
-              <input type="hidden" name="ts" value={antiSpam.ts} readOnly />
-              <input type="hidden" name="js" value={antiSpam.js} readOnly />
-              {/* Left Column */}
+            <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-start">
+              {/* Left Column - Promotional Content */}
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="nombre" className="block text-sm font-medium text-foreground mb-2">
-                    {t('contact.form.name')}
-                  </label>
-                  <Input
-                    id="nombre"
-                    name="nombre"
-                    type="text"
-                    placeholder={t('contact.form.name')}
-                    value={formData.nombre}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                  />
+                  <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+                    <span>{t('contact.quote.title').split(' ').slice(0, -2).join(' ')} </span>
+                    <span className="text-primary">{t('contact.quote.titleHighlight')}</span>
+                    <span> {t('contact.quote.title').split(' ').slice(-1).join(' ')}</span>
+                  </h2>
+                  <p className="text-muted-foreground md:text-lg text-pretty">
+                    {t('contact.quote.subtitle')}
+                  </p>
                 </div>
                 
-                <div>
-                  <label htmlFor="telefono" className="block text-sm font-medium text-foreground mb-2">
-                    {t('contact.form.phone')}
-                  </label>
-                  <Input
-                    id="telefono"
-                    name="telefono"
-                    type="tel"
-                    placeholder={t('contact.form.phone')}
-                    value={formData.telefono}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                  />
-                </div>
+                <ul className="space-y-3">
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary text-xl font-bold mt-1">•</span>
+                    <span className="text-foreground">{t('contact.quote.benefits.consultation')}</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary text-xl font-bold mt-1">•</span>
+                    <span className="text-foreground">{t('contact.quote.benefits.proposal')}</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-primary text-xl font-bold mt-1">•</span>
+                    <span className="text-foreground">{t('contact.quote.benefits.prices')}</span>
+                  </li>
+                </ul>
               </div>
               
-              {/* Right Column */}
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
-                    {t('contact.form.email')}
-                  </label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder={t('contact.form.email')}
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
-                  />
-                </div>
+              {/* Right Column - Form */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6 md:p-8">
+                <h3 className="text-xl font-bold tracking-tight mb-6">
+                  {t('contact.quote.formTitle')}
+                </h3>
                 
-                <div>
-                  <label htmlFor="empresa" className="block text-sm font-medium text-foreground mb-2">
-                    {t('contact.form.company')}
-                  </label>
-                  <Input
-                    id="empresa"
-                    name="empresa"
+                <form id="contact-form" onSubmit={handleSubmit} className="space-y-4">
+                  {/* Anti-spam hidden fields */}
+                  <input
                     type="text"
-                    placeholder={t('contact.form.company')}
-                    value={formData.empresa}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full rounded-lg border-gray-300 focus:border-primary focus:ring-primary"
+                    name="website"
+                    value={antiSpam.website}
+                    onChange={(e) => setAntiSpam(s => ({ ...s, website: e.target.value }))}
+                    autoComplete="off"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    style={{ position: 'absolute', left: '-9999px' }}
                   />
-                </div>
+                  <input type="hidden" name="ts" value={antiSpam.ts} readOnly />
+                  <input type="hidden" name="js" value={antiSpam.js} readOnly />
+                  
+                  {/* Two Column Grid for Name and Company */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="nombre" className="block text-sm font-medium text-foreground mb-2">
+                        {t('contact.form.name')}
+                      </label>
+                      <Input
+                        id="nombre"
+                        name="nombre"
+                        type="text"
+                        placeholder={t('contact.form.namePlaceholder')}
+                        value={formData.nombre}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full rounded-lg bg-gray-50 border-gray-300 focus:border-primary focus:ring-primary"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="empresa" className="block text-sm font-medium text-foreground mb-2">
+                        {t('contact.form.company')}
+                      </label>
+                      <Input
+                        id="empresa"
+                        name="empresa"
+                        type="text"
+                        placeholder={t('contact.form.companyPlaceholder')}
+                        value={formData.empresa}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full rounded-lg bg-gray-50 border-gray-300 focus:border-primary focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Two Column Grid for Email and Phone */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                        {t('contact.form.email')}
+                      </label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder={t('contact.form.emailPlaceholder')}
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full rounded-lg bg-gray-50 border-gray-300 focus:border-primary focus:ring-primary"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="telefono" className="block text-sm font-medium text-foreground mb-2">
+                        {t('contact.form.phone')}
+                      </label>
+                      <Input
+                        id="telefono"
+                        name="telefono"
+                        type="tel"
+                        placeholder={t('contact.form.phonePlaceholder')}
+                        value={formData.telefono}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full rounded-lg bg-gray-50 border-gray-300 focus:border-primary focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Message Field */}
+                  <div>
+                    <label htmlFor="mensaje" className="block text-sm font-medium text-foreground mb-2">
+                      {t('contact.form.message')}
+                    </label>
+                    <textarea
+                      id="mensaje"
+                      name="mensaje"
+                      rows={4}
+                      placeholder={t('contact.form.messagePlaceholder')}
+                      maxLength={500}
+                      value={formData.mensaje}
+                      onChange={handleInputChange}
+                      className="w-full rounded-lg bg-gray-50 border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-primary resize-none"
+                    />
+                  </div>
+                  
+                  {/* Submit Button */}
+                  <Button
+                    type="submit"
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-base font-medium rounded-lg"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      t('common.loading')
+                    ) : (
+                      <>
+                        {t('contact.quote.send')}
+                        <Send className="ml-2 h-5 w-5" />
+                      </>
+                    )}
+                  </Button>
+                </form>
               </div>
-              
-              {/* Full Width Message */}
-              <div className="col-span-1 md:col-span-2">
-                <div>
-                  <label htmlFor="mensaje" className="block text-sm font-medium text-foreground mb-2">
-                    {t('contact.form.message')}
-                  </label>
-                  <textarea
-                    id="mensaje"
-                    name="mensaje"
-                    rows={6}
-                    placeholder={t('contact.form.message')}
-                    maxLength={500}
-                    value={formData.mensaje}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-primary resize-none"
-                  />
-                </div>
-              </div>
-            </form>
-          )}
-          
-          {!formSubmitted && (
-            <div className="flex justify-end mt-8">
-              <Button
-                type="submit"
-                form="contact-form"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-lg font-medium"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? t('common.loading') : t('contact.form.send')}
-              </Button>
             </div>
           )}
         </div>

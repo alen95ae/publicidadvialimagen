@@ -47,6 +47,13 @@ export interface Auxiliar {
   vigencia: boolean
   created_at?: string
   updated_at?: string
+  // Relación con contactos (opcional, puede venir del JOIN)
+  contactos?: {
+    nombre?: string | null
+    telefono?: string | null
+    email?: string | null
+    nit?: string | null
+  } | null
 }
 
 export interface AuxiliarSaldos {

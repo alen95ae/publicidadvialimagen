@@ -8,6 +8,12 @@
   "env": {
     "NEXT_PUBLIC_BASE_URL": "https://erp.publicidadvialimagen.com"
   },
+  "crons": [
+    {
+      "path": "/api/soportes/actualizar-estados",
+      "schedule": "0 0 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

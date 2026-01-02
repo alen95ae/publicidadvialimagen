@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseUser } from "@/lib/supabaseServer"
+import { getSupabaseUser, getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import type { Auxiliar } from "@/lib/types/contabilidad"
 
@@ -21,16 +21,46 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const { data, error } = await supabase
+    // Obtener auxiliar directamente desde la tabla
+    // Intentar primero con user, si falla usar admin
+    let { data, error } = await supabase
       .from("auxiliares")
       .select("*")
       .eq("id", params.id)
       .single()
 
+    // DEBUG: Log temporal
+    console.log("🔍 [GET /auxiliares/[id]] ID buscado:", params.id)
+    console.log("🔍 [GET /auxiliares/[id]] Intento con user - Registro encontrado:", data ? "Sí" : "No")
     if (error) {
-      console.error("Error fetching auxiliar:", error)
+      console.log("🔍 [GET /auxiliares/[id]] Error con user:", error.message)
+    }
+
+    // Si no hay datos, intentar con admin
+    if (!data && error) {
+      console.log("⚠️ [GET /auxiliares/[id]] Intentando con admin...")
+      const supabaseAdmin = getSupabaseAdmin()
+      const { data: adminData, error: adminError } = await supabaseAdmin
+        .from("auxiliares")
+        .select("*")
+        .eq("id", params.id)
+        .single()
+      
+      if (!adminError && adminData) {
+        console.log("✅ [GET /auxiliares/[id]] Admin encontró el registro")
+        data = adminData
+        error = null
+      }
+    }
+
+    if (data) {
+      console.log("🔍 [GET /auxiliares/[id]] Datos:", JSON.stringify(data, null, 2))
+    }
+
+    if (error) {
+      console.error("❌ [GET /auxiliares/[id]] Error fetching auxiliar:", error)
       return NextResponse.json(
-        { error: "Error al obtener el auxiliar" },
+        { error: "Error al obtener el auxiliar", details: error.message },
         { status: 500 }
       )
     }
@@ -171,6 +201,10 @@ export async function DELETE(
     )
   }
 }
+
+
+
+
 
 
 

@@ -126,7 +126,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
       { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
       { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
-      { label: "Plantillas Contables", href: "/panel/contabilidad/parametros/plantillas" },
+      { label: "Plantillas de Comprobantes", href: "/panel/contabilidad/parametros/plantillas" },
     ],
     // Submenú de Informes
     informesItems: [
@@ -199,7 +199,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
       { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
       { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
-      { label: "Plantillas Contables", href: "/panel/contabilidad/parametros/plantillas" },
+      { label: "Plantillas de Comprobantes", href: "/panel/contabilidad/parametros/plantillas" },
       // Parámetros de Activos
       { label: "Grupos de Activos Fijos", href: "/panel/contabilidad/activos/parametros/grupos-activos-fijos" },
       { label: "Gestiones para la Depreciación de Activos", href: "/panel/contabilidad/activos/parametros/gestiones-depreciacion-activos" },

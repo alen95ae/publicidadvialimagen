@@ -108,209 +108,6 @@ export default function ContactPage() {
   return (
     <div className="container px-4 py-8 md:px-6 md:py-12">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold tracking-tight mb-4 md:text-4xl">{t('contact.page.title')}</h1>
-          <p className="text-muted-foreground md:text-lg">
-            {t('contact.page.subtitle')}
-          </p>
-        </div>
-
-        {/* Formulario de Contacto Completo */}
-        <div className="mb-12">
-          <Card className="shadow-lg">
-            <CardContent className="p-8">
-              <h2 className="text-2xl font-semibold mb-6 text-center">{t('contact.page.sendMessage')}</h2>
-
-              {formSubmitted ? (
-                <div className="bg-primary/10 text-primary p-4 rounded-lg mb-6">
-                  <h3 className="font-semibold text-lg mb-2">{t('contact.page.thanks')}</h3>
-                  <p>{t('contact.page.thanksDesc')}</p>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
-                  {/* Anti-spam hidden fields: do not alter layout */}
-                  {/* Honeypot: visible to bots, offscreen for users */}
-                  <input
-                    type="text"
-                    name="website"
-                    value={antiSpam.website}
-                    onChange={(e) => setAntiSpam(s => ({ ...s, website: e.target.value }))}
-                    autoComplete="off"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    style={{ position: 'absolute', left: '-9999px' }}
-                  />
-                  {/* Timestamp and JS execution markers */}
-                  <input type="hidden" name="ts" value={antiSpam.ts} readOnly />
-                  <input type="hidden" name="js" value={antiSpam.js} readOnly />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">{t('contact.form.name')}</Label>
-                      <Input 
-                        id="name" 
-                        name="name"
-                        placeholder={t('contact.page.namePlaceholder')} 
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        required 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">{t('contact.form.email')}</Label>
-                      <Input 
-                        id="email" 
-                        name="email"
-                        type="email" 
-                        placeholder={t('contact.page.emailPlaceholder')} 
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        required 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">{t('contact.form.phone')}</Label>
-                      <Input 
-                        id="phone" 
-                        name="phone"
-                        type="tel" 
-                        placeholder={t('contact.page.phonePlaceholder')} 
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        required 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company">{t('contact.form.company')}</Label>
-                      <Input 
-                        id="company" 
-                        name="company"
-                        placeholder={t('contact.page.companyPlaceholder')} 
-                        value={formData.company}
-                        onChange={handleInputChange}
-                        required 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="message">{t('contact.form.message')}</Label>
-                    <Textarea 
-                      id="message" 
-                      name="message"
-                      placeholder={t('contact.page.messagePlaceholder')} 
-                      className="min-h-[150px]" 
-                      maxLength={500}
-                      value={formData.message}
-                      onChange={handleInputChange}
-                      required 
-                    />
-                  </div>
-
-                  <div className="text-center">
-                    <Button 
-                      type="submit" 
-                      className="w-full sm:w-auto px-8"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? t('contact.page.sending') : t('contact.page.sendMessageBtn')}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Redes Sociales */}
-        <div className="mb-12">
-          <Card className="shadow-lg">
-            <CardContent className="p-8">
-              <h2 className="text-xl font-semibold mb-6 text-center">{t('contact.page.followUs')}</h2>
-              
-              <div className="flex flex-col sm:flex-row justify-center gap-8">
-                {/* LinkedIn */}
-                <a href="https://www.linkedin.com/company/publicidad-vial-imagen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-6 w-6"
-                    >
-                      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
-                      <rect x="2" y="9" width="4" height="12"></rect>
-                      <circle cx="4" cy="4" r="2"></circle>
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">LinkedIn</h3>
-                    <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
-                  </div>
-                </a>
-
-                {/* Facebook */}
-                <a href="https://www.facebook.com/PVISRL" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-6 w-6"
-                    >
-                      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Facebook</h3>
-                    <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
-                  </div>
-                </a>
-
-                {/* Instagram */}
-                <a href="https://www.instagram.com/imagenpublicidadbolivia/?hl=es-la" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-6 w-6"
-                    >
-                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Instagram</h3>
-                    <p className="text-muted-foreground text-sm">@imagenpublicidadbolivia</p>
-                  </div>
-                </a>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Título Sucursales */}
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold tracking-tight md:text-3xl">{t('contact.page.branches')}</h2>
@@ -485,6 +282,208 @@ export default function ContactPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Redes Sociales */}
+        <div className="mb-12 mt-12">
+          <Card className="shadow-lg">
+            <CardContent className="p-8">
+              <h2 className="text-xl font-semibold mb-6 text-center">{t('contact.page.followUs')}</h2>
+              
+              <div className="flex flex-col sm:flex-row justify-center gap-8">
+                {/* LinkedIn */}
+                <a href="https://www.linkedin.com/company/publicidad-vial-imagen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-6 w-6"
+                    >
+                      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                      <rect x="2" y="9" width="4" height="12"></rect>
+                      <circle cx="4" cy="4" r="2"></circle>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">LinkedIn</h3>
+                    <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
+                  </div>
+                </a>
+
+                {/* Facebook */}
+                <a href="https://www.facebook.com/PVISRL" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-6 w-6"
+                    >
+                      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Facebook</h3>
+                    <p className="text-muted-foreground text-sm">Publicidad Vial Imagen S.R.L.</p>
+                  </div>
+                </a>
+
+                {/* Instagram */}
+                <a href="https://www.instagram.com/imagenpublicidadbolivia/?hl=es-la" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-6 w-6"
+                    >
+                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Instagram</h3>
+                    <p className="text-muted-foreground text-sm">@imagenpublicidadbolivia</p>
+                  </div>
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Formulario de Contacto Completo */}
+        <div className="mb-12">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold tracking-tight mb-4 md:text-3xl">{t('contact.page.title')}</h1>
+            <p className="text-muted-foreground md:text-lg">
+              {t('contact.page.subtitle')}
+            </p>
+          </div>
+          <Card className="shadow-lg">
+            <CardContent className="p-8">
+              <h2 className="text-2xl font-semibold mb-6 text-center">{t('contact.page.sendMessage')}</h2>
+
+              {formSubmitted ? (
+                <div className="bg-primary/10 text-primary p-4 rounded-lg mb-6">
+                  <h3 className="font-semibold text-lg mb-2">{t('contact.page.thanks')}</h3>
+                  <p>{t('contact.page.thanksDesc')}</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
+                  {/* Anti-spam hidden fields: do not alter layout */}
+                  {/* Honeypot: visible to bots, offscreen for users */}
+                  <input
+                    type="text"
+                    name="website"
+                    value={antiSpam.website}
+                    onChange={(e) => setAntiSpam(s => ({ ...s, website: e.target.value }))}
+                    autoComplete="off"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    style={{ position: 'absolute', left: '-9999px' }}
+                  />
+                  {/* Timestamp and JS execution markers */}
+                  <input type="hidden" name="ts" value={antiSpam.ts} readOnly />
+                  <input type="hidden" name="js" value={antiSpam.js} readOnly />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">{t('contact.form.name')}</Label>
+                      <Input 
+                        id="name" 
+                        name="name"
+                        placeholder={t('contact.page.namePlaceholder')} 
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">{t('contact.form.email')}</Label>
+                      <Input 
+                        id="email" 
+                        name="email"
+                        type="email" 
+                        placeholder={t('contact.page.emailPlaceholder')} 
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">{t('contact.form.phone')}</Label>
+                      <Input 
+                        id="phone" 
+                        name="phone"
+                        type="tel" 
+                        placeholder={t('contact.page.phonePlaceholder')} 
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company">{t('contact.form.company')}</Label>
+                      <Input 
+                        id="company" 
+                        name="company"
+                        placeholder={t('contact.page.companyPlaceholder')} 
+                        value={formData.company}
+                        onChange={handleInputChange}
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="message">{t('contact.form.message')}</Label>
+                    <Textarea 
+                      id="message" 
+                      name="message"
+                      placeholder={t('contact.page.messagePlaceholder')} 
+                      className="min-h-[150px]" 
+                      maxLength={500}
+                      value={formData.message}
+                      onChange={handleInputChange}
+                      required 
+                    />
+                  </div>
+
+                  <div className="text-center">
+                    <Button 
+                      type="submit" 
+                      className="w-full sm:w-auto px-8"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? t('contact.page.sending') : t('contact.page.sendMessageBtn')}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

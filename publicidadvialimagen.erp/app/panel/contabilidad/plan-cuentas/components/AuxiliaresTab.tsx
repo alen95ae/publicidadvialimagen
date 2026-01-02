@@ -47,20 +47,40 @@ export default function AuxiliaresTab() {
     fetchAuxiliares()
   }, [])
 
+  // DEBUG: Log cuando cambia el estado de auxiliares
+  useEffect(() => {
+    console.log("🔍 [AuxiliaresTab] Estado auxiliares actualizado:", {
+      total: auxiliares.length,
+      loading: loading,
+      primerAuxiliar: auxiliares.length > 0 ? {
+        id: auxiliares[0].id,
+        codigo: auxiliares[0].codigo,
+        nombre: auxiliares[0].nombre,
+      } : null,
+    })
+  }, [auxiliares, loading])
+
   useEffect(() => {
     if (selectedAuxiliar) {
+      // Priorizar datos de contactos si existen, sino usar datos de auxiliar
+      const contacto = selectedAuxiliar.contactos
+      const nombre = contacto?.nombre ?? selectedAuxiliar.nombre ?? ""
+      const telefono = contacto?.telefono ?? selectedAuxiliar.telefono ?? ""
+      const email = contacto?.email ?? selectedAuxiliar.email ?? ""
+      const nit = contacto?.nit ?? selectedAuxiliar.nit ?? ""
+
       setFormData({
         tipo_auxiliar: selectedAuxiliar.tipo_auxiliar || "",
         codigo: selectedAuxiliar.codigo || "",
-        nombre: selectedAuxiliar.nombre || "",
+        nombre: nombre,
         cuenta_id: (selectedAuxiliar as any).cuenta_id || null,
         moneda: selectedAuxiliar.moneda || "BS",
         es_cuenta_bancaria: (selectedAuxiliar as any).es_cuenta_bancaria ?? false,
         departamento: selectedAuxiliar.departamento || "",
         direccion: selectedAuxiliar.direccion || "",
-        telefono: selectedAuxiliar.telefono || "",
-        email: selectedAuxiliar.email || "",
-        nit: selectedAuxiliar.nit || "",
+        telefono: telefono,
+        email: email,
+        nit: nit,
         autorizacion: selectedAuxiliar.autorizacion || "",
         vigente: (selectedAuxiliar as any).vigente ?? true,
       })
@@ -73,15 +93,37 @@ export default function AuxiliaresTab() {
   const fetchAuxiliares = async () => {
     try {
       setLoading(true)
-      const response = await api("/api/contabilidad/auxiliares")
+      console.log("🔍 [AuxiliaresTab] Iniciando carga de auxiliares...")
+      // Solicitar todos los registros (límite alto)
+      const response = await api("/api/contabilidad/auxiliares?limit=10000")
+      
+      // DEBUG: Log de respuesta
+      console.log("🔍 [AuxiliaresTab] Status de respuesta:", response.status)
+      console.log("🔍 [AuxiliaresTab] Response OK:", response.ok)
+      
       if (response.ok) {
         const data = await response.json()
-        setAuxiliares(data.data || [])
+        console.log("🔍 [AuxiliaresTab] Datos recibidos:", {
+          success: data.success,
+          totalRegistros: data.pagination?.total || 0,
+          registrosEnPagina: data.data?.length || 0,
+        })
+        
+        const auxiliaresData = data.data || []
+        console.log("🔍 [AuxiliaresTab] Array de auxiliares:", auxiliaresData.length, "elementos")
+        if (auxiliaresData.length > 0) {
+          console.log("🔍 [AuxiliaresTab] Primer auxiliar:", JSON.stringify(auxiliaresData[0], null, 2))
+        }
+        
+        setAuxiliares(auxiliaresData)
+        console.log("✅ [AuxiliaresTab] Estado actualizado con", auxiliaresData.length, "auxiliares")
       } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("❌ [AuxiliaresTab] Error en respuesta:", response.status, errorData)
         toast.error("Error al cargar los auxiliares")
       }
     } catch (error) {
-      console.error("Error fetching auxiliares:", error)
+      console.error("❌ [AuxiliaresTab] Error fetching auxiliares:", error)
       toast.error("Error de conexión")
     } finally {
       setLoading(false)
@@ -232,46 +274,53 @@ export default function AuxiliaresTab() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        auxiliares.map((auxiliar) => (
-                          <TableRow
-                            key={auxiliar.id}
-                            onClick={() => setSelectedAuxiliar(auxiliar)}
-                            className={`cursor-pointer ${
-                              selectedAuxiliar?.id === auxiliar.id ? "bg-blue-50" : ""
-                            }`}
-                          >
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs">{auxiliar.tipo_auxiliar}</Badge>
-                            </TableCell>
-                            <TableCell className="font-mono">{auxiliar.codigo}</TableCell>
-                            <TableCell>
-                              {auxiliar.nombre && auxiliar.nombre.length > 40 ? (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger className="text-left">
-                                      {auxiliar.nombre.slice(0, 40) + '…'}
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-sm">
-                                      <p>{auxiliar.nombre}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              ) : (
-                                auxiliar.nombre || '—'
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline" className="text-xs">{auxiliar.moneda}</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {((auxiliar as any).vigente ?? true) ? (
-                                <Badge className="bg-green-100 text-green-800 text-xs">Activo</Badge>
-                              ) : (
-                                <Badge variant="secondary" className="text-xs">Inactivo</Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        auxiliares.map((auxiliar) => {
+                          // Priorizar nombre de contactos si existe
+                          const contacto = auxiliar.contactos
+                          const nombre = contacto?.nombre ?? auxiliar.nombre ?? '—'
+                          const vigente = (auxiliar as any).vigente ?? true
+
+                          return (
+                            <TableRow
+                              key={auxiliar.id}
+                              onClick={() => setSelectedAuxiliar(auxiliar)}
+                              className={`cursor-pointer ${
+                                selectedAuxiliar?.id === auxiliar.id ? "bg-blue-50" : ""
+                              }`}
+                            >
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">{auxiliar.tipo_auxiliar}</Badge>
+                              </TableCell>
+                              <TableCell className="font-mono">{auxiliar.codigo}</TableCell>
+                              <TableCell>
+                                {nombre && nombre.length > 40 ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger className="text-left">
+                                        {nombre.slice(0, 40) + '…'}
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-sm">
+                                        <p>{nombre}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  nombre
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="outline" className="text-xs">{auxiliar.moneda}</Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {vigente ? (
+                                  <Badge className="bg-green-100 text-green-800 text-xs">Activo</Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-xs">Inactivo</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
                       )}
                     </TableBody>
                   </Table>

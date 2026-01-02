@@ -46,6 +46,30 @@ export const translations = {
         quote: 'Cotizar',
         viewMore: 'Ver más'
       },
+      whyOutdoor: {
+        title: '¿Por qué Publicidad Exterior?',
+        subtitle: 'Resultados medibles y comprobados que impulsan el reconocimiento de tu marca.',
+        reach: {
+          title: 'Alcance Efectivo',
+          value: '97%',
+          description: 'La publicidad exterior alcanza al 97% de los adultos en las principales ciudades.'
+        },
+        visibility: {
+          title: 'Mayor Visibilidad',
+          value: '70%',
+          description: '70% de las personas recuerdan haber visto un espectacular en la última semana.'
+        },
+        recall: {
+          title: 'Alto Recuerdo',
+          value: '55%',
+          description: '55% de los consumidores son más propensos a recordar marcas en publicidad exterior.'
+        },
+        roi: {
+          title: 'ROI Superior',
+          value: '5x',
+          description: 'El retorno de inversión en publicidad exterior supera 5 veces a otros medios tradicionales.'
+        }
+      },
       features: {
         title: '¿Por qué elegirnos?',
         strategic: {
@@ -252,12 +276,30 @@ export const translations = {
     contact: {
       title: 'Contacto',
       subtitle: 'Ponte en contacto con nosotros',
+      quote: {
+        title: '¿Listo para impulsar tu marca?',
+        titleHighlight: 'impulsar',
+        subtitle: 'Solicita una consulta gratuita y descubre cómo la publicidad exterior puede transformar el alcance de tu marca.',
+        benefits: {
+          consultation: 'Consulta inicial sin costo',
+          proposal: 'Propuesta personalizada en menos de 24h',
+          prices: 'Precios competitivos y flexibles'
+        },
+        formTitle: 'Solicita tu cotización',
+        privacy: 'Al enviar este formulario, aceptas nuestras políticas de privacidad.',
+        send: 'Enviar Solicitud'
+      },
       form: {
-        name: 'Nombre',
-        email: 'Email',
+        name: 'Nombre completo',
+        namePlaceholder: 'Tu nombre',
+        email: 'Correo electrónico',
+        emailPlaceholder: 'tu@email.com',
         phone: 'Teléfono',
+        phonePlaceholder: '+591 2 1234-5678',
         company: 'Empresa',
-        message: 'Mensaje',
+        companyPlaceholder: 'Nombre de tu empresa',
+        message: 'Mensaje (opcional)',
+        messagePlaceholder: 'Cuéntanos más sobre tu proyecto...',
         send: 'Enviar Mensaje'
       },
       info: {
@@ -523,6 +565,30 @@ export const translations = {
         quote: 'Quote',
         viewMore: 'View more'
       },
+      whyOutdoor: {
+        title: 'Why Outdoor Advertising?',
+        subtitle: 'Measurable and proven results that boost your brand recognition.',
+        reach: {
+          title: 'Effective Reach',
+          value: '97%',
+          description: 'Outdoor advertising reaches 97% of adults in major cities.'
+        },
+        visibility: {
+          title: 'Greater Visibility',
+          value: '70%',
+          description: '70% of people remember having seen a billboard in the last week.'
+        },
+        recall: {
+          title: 'High Recall',
+          value: '55%',
+          description: '55% of consumers are more likely to remember brands in outdoor advertising.'
+        },
+        roi: {
+          title: 'Superior ROI',
+          value: '5x',
+          description: 'The return on investment in outdoor advertising exceeds traditional media by 5 times.'
+        }
+      },
       features: {
         title: 'Why choose us?',
         strategic: {
@@ -729,12 +795,30 @@ export const translations = {
     contact: {
       title: 'Contact',
       subtitle: 'Get in touch with us',
+      quote: {
+        title: 'Ready to boost your brand?',
+        titleHighlight: 'boost',
+        subtitle: 'Request a free consultation and discover how outdoor advertising can transform your brand reach.',
+        benefits: {
+          consultation: 'Initial consultation at no cost',
+          proposal: 'Personalized proposal in less than 24h',
+          prices: 'Competitive and flexible prices'
+        },
+        formTitle: 'Request your quote',
+        privacy: 'By submitting this form, you agree to our privacy policy.',
+        send: 'Send Request'
+      },
       form: {
-        name: 'Name',
+        name: 'Full name',
+        namePlaceholder: 'Your name',
         email: 'Email',
+        emailPlaceholder: 'your@email.com',
         phone: 'Phone',
+        phonePlaceholder: '+591 2 1234-5678',
         company: 'Company',
-        message: 'Message',
+        companyPlaceholder: 'Your company name',
+        message: 'Message (optional)',
+        messagePlaceholder: 'Tell us more about your project...',
         send: 'Send Message'
       },
       info: {

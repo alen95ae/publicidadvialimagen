@@ -16,7 +16,7 @@ import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown } from "lucide-r
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
-import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta } from "@/lib/types/contabilidad"
+import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta, Auxiliar } from "@/lib/types/contabilidad"
 
 interface ComprobanteFormProps {
   comprobante: Comprobante | null
@@ -87,6 +87,12 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   const [openCuentaCombobox, setOpenCuentaCombobox] = useState<Record<number, boolean>>({})
   const [filteredCuentas, setFilteredCuentas] = useState<Record<number, Cuenta[]>>({})
   
+  // Estados para el combobox de auxiliares
+  const [auxiliares, setAuxiliares] = useState<Auxiliar[]>([])
+  const [loadingAuxiliares, setLoadingAuxiliares] = useState(false)
+  const [openAuxiliarCombobox, setOpenAuxiliarCombobox] = useState<Record<number, boolean>>({})
+  const [filteredAuxiliares, setFilteredAuxiliares] = useState<Record<number, Auxiliar[]>>({})
+  
   // Estados para el combobox de beneficiario (contactos)
   const [openBeneficiarioCombobox, setOpenBeneficiarioCombobox] = useState(false)
   const [todosLosContactos, setTodosLosContactos] = useState<any[]>([])
@@ -118,6 +124,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   // Cargar cuentas transaccionales
   useEffect(() => {
     fetchCuentasTransaccionales()
+  }, [])
+
+  // Cargar auxiliares
+  useEffect(() => {
+    fetchAuxiliares()
   }, [])
 
   // Cargar todos los contactos al inicio
@@ -207,6 +218,23 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cuentas.length, detalles.length])
 
+  // Inicializar filtros de auxiliares cuando se cargan y hay detalles
+  useEffect(() => {
+    if (auxiliares.length > 0 && detalles.length > 0) {
+      const initialFilters: Record<number, Auxiliar[]> = {}
+      detalles.forEach((_, idx) => {
+        // Solo inicializar si no existe ya un filtro para este índice
+        if (!(idx in filteredAuxiliares)) {
+          initialFilters[idx] = auxiliares.slice(0, 20)
+        }
+      })
+      if (Object.keys(initialFilters).length > 0) {
+        setFilteredAuxiliares(prev => ({ ...prev, ...initialFilters }))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auxiliares.length, detalles.length])
+
   // Sincronizar formulario cuando cambia comprobante seleccionado
   useEffect(() => {
     if (comprobante) {
@@ -236,10 +264,13 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
         setDetalles(comprobante.detalles)
         // Inicializar filtros
         const initialFilters: Record<number, Cuenta[]> = {}
+        const initialFiltersAuxiliares: Record<number, Auxiliar[]> = {}
         comprobante.detalles.forEach((_, idx) => {
           initialFilters[idx] = cuentas.slice(0, 20)
+          initialFiltersAuxiliares[idx] = auxiliares.slice(0, 20)
         })
         setFilteredCuentas(initialFilters)
+        setFilteredAuxiliares(initialFiltersAuxiliares)
       } else if (comprobante.id) {
         // Si no tiene detalles, cargarlos desde el API
         console.log("📡 Cargando detalles desde API para comprobante:", comprobante.id)
@@ -269,6 +300,21 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       console.error("Error fetching cuentas:", error)
     } finally {
       setLoadingCuentas(false)
+    }
+  }
+
+  const fetchAuxiliares = async () => {
+    try {
+      setLoadingAuxiliares(true)
+      const response = await api("/api/contabilidad/auxiliares?limit=10000")
+      if (response.ok) {
+        const data = await response.json()
+        setAuxiliares(data.data || [])
+      }
+    } catch (error) {
+      console.error("Error fetching auxiliares:", error)
+    } finally {
+      setLoadingAuxiliares(false)
     }
   }
 
@@ -390,13 +436,17 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
           setFilteredCuentas(initialFilters)
         }
         
-        // Si hay líneas calculadas, recalcular montos después de cargar
-        const tieneLineasCalculadas = detallesData.some((d: any) => d.esCalculado)
-        if (tieneLineasCalculadas) {
-          setTimeout(() => {
-            recalcularMontos()
-          }, 100)
+        // Inicializar filtros de auxiliares
+        if (auxiliares.length > 0) {
+          const initialFiltersAuxiliares: Record<number, Auxiliar[]> = {}
+          detallesData.forEach((_, idx) => {
+            initialFiltersAuxiliares[idx] = auxiliares.slice(0, 20)
+          })
+          setFilteredAuxiliares(initialFiltersAuxiliares)
         }
+        
+        // Nota: El recálculo se hace automáticamente cuando el usuario edita la línea base
+        // No es necesario recalcular al cargar, los montos inician en 0
       } else {
         const errorData = await response.json().catch(() => ({}))
         console.error("❌ Error en respuesta:", response.status, errorData)
@@ -434,21 +484,17 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       haber_usd: 0,
       orden: detalles.length + 1,
       // Nueva línea es siempre base (no calculada)
-      rol: "GASTO", // Por defecto, el usuario puede cambiar
+      // No se asigna rol (deprecado), solo se usa porcentaje + lado para plantillas
       esCalculado: false,
     }
     const newIndex = detalles.length
     setDetalles([...detalles, newDetalle])
     // Inicializar filtro para el nuevo detalle
     setFilteredCuentas(prev => ({ ...prev, [newIndex]: cuentas.slice(0, 20) }))
+    setFilteredAuxiliares(prev => ({ ...prev, [newIndex]: auxiliares.slice(0, 20) }))
     
-    // Activar recálculo si hay líneas calculadas
-    const tieneLineasCalculadas = detalles.some((d) => d.esCalculado)
-    if (tieneLineasCalculadas) {
-      setTimeout(() => {
-        recalcularMontos()
-      }, 10)
-    }
+    // Nota: El recálculo se hace automáticamente cuando el usuario edita la línea base
+    // No es necesario recalcular al agregar líneas
   }
 
   const handleRemoveDetalle = (index: number) => {
@@ -457,20 +503,18 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     setDetalles(newDetalles)
     // Reindexar filtros después de eliminar
     const newFilters: Record<number, Cuenta[]> = {}
+    const newFiltersAuxiliares: Record<number, Auxiliar[]> = {}
     newDetalles.forEach((_, idx) => {
       newFilters[idx] = filteredCuentas[idx + 1] || cuentas.slice(0, 20)
+      newFiltersAuxiliares[idx] = filteredAuxiliares[idx + 1] || auxiliares.slice(0, 20)
     })
     setFilteredCuentas(newFilters)
+    setFilteredAuxiliares(newFiltersAuxiliares)
     // Cerrar combobox si estaba abierto
     const newOpenState: Record<number, boolean> = {}
     
-    // Activar recálculo si se eliminó una línea base y hay líneas calculadas
-    const tieneLineasCalculadas = newDetalles.some((d) => d.esCalculado)
-    if (tieneLineasCalculadas && (detalleAEliminar.rol === "GASTO" || detalleAEliminar.rol === "INGRESO" || !detalleAEliminar.esCalculado)) {
-      setTimeout(() => {
-        recalcularMontos()
-      }, 10)
-    }
+    // Nota: El recálculo se hace automáticamente cuando el usuario edita la línea base
+    // No es necesario recalcular al eliminar líneas
     Object.keys(openCuentaCombobox).forEach(key => {
       const keyNum = parseInt(key)
       if (keyNum < index) {
@@ -483,93 +527,47 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   }
 
   const handleDetalleChange = (index: number, field: keyof ComprobanteDetalle, value: any) => {
+    // 🟡 LOG DE DIAGNÓSTICO: Entrada a handleDetalleChange
+    console.log("🟡 handleDetalleChange ENTER", {
+      index,
+      field,
+      valor: value,
+      detalleActual: detalles[index],
+      todosLosDetalles: detalles.map(d => ({
+        cuenta: d.cuenta,
+        porcentaje: (d as any).porcentaje,
+        bloqueado: (d as any).bloqueado,
+        esCalculado: d.esCalculado,
+        lado: (d as any).lado,
+        debe_bs: d.debe_bs,
+        haber_bs: d.haber_bs
+      }))
+    })
+    
+    // Verificar si es una línea derivada (no editable)
+    const detalle = detalles[index]
+    if (detalle && (detalle as any).esCalculado === true) {
+      // Línea derivada, no permitir edición
+      console.log("⚠️ Intento de editar línea con esCalculado = true, bloqueando edición")
+      return
+    }
+
+    // Si es un campo de monto, usar motor de cálculo de plantilla
+    if (field === "debe_bs" || field === "haber_bs" || field === "debe_usd" || field === "haber_usd") {
+      const valorNumerico = parseFloat(value) || 0
+      const nuevosDetalles = calcularMontosPlantilla(index, field, valorNumerico)
+      // Reemplazar completamente el estado con el resultado
+      setDetalles(nuevosDetalles)
+      return
+    }
+    
+    // Para otros campos (cuenta, auxiliar, glosa), actualizar normalmente
     const updated = [...detalles]
-    // Tipo de cambio fijo para conversión automática en detalles (siempre 6.96)
-    const tipoCambio = 6.96
-    
-    // Si se cambia debe_bs, calcular debe_usd automáticamente
-    if (field === "debe_bs") {
-      const valorBs = parseFloat(value) || 0
-      const valorUsd = valorBs / tipoCambio
-      updated[index] = { 
-        ...updated[index], 
-        [field]: valorBs,
-        debe_usd: Math.round(valorUsd * 100) / 100 // Redondear a 2 decimales
-      }
-    }
-    // Si se cambia haber_bs, calcular haber_usd automáticamente
-    else if (field === "haber_bs") {
-      const valorBs = parseFloat(value) || 0
-      const valorUsd = valorBs / tipoCambio
-      updated[index] = { 
-        ...updated[index], 
-        [field]: valorBs,
-        haber_usd: Math.round(valorUsd * 100) / 100 // Redondear a 2 decimales
-      }
-    }
-    // Si se cambia debe_usd, calcular debe_bs automáticamente
-    else if (field === "debe_usd") {
-      const valorUsd = parseFloat(value) || 0
-      const valorBs = valorUsd * tipoCambio
-      updated[index] = { 
-        ...updated[index], 
-        [field]: valorUsd,
-        debe_bs: Math.round(valorBs * 100) / 100 // Redondear a 2 decimales
-      }
-    }
-    // Si se cambia haber_usd, calcular haber_bs automáticamente
-    else if (field === "haber_usd") {
-      const valorUsd = parseFloat(value) || 0
-      const valorBs = valorUsd * tipoCambio
-      updated[index] = { 
-        ...updated[index], 
-        [field]: valorUsd,
-        haber_bs: Math.round(valorBs * 100) / 100 // Redondear a 2 decimales
-      }
-    }
-    // Para cualquier otro campo, solo actualizar ese campo
-    else {
-      updated[index] = { ...updated[index], [field]: value }
-    }
-    
+    updated[index] = { ...updated[index], [field]: value }
     setDetalles(updated)
-    
-    // Activar recálculo si se modificó un monto base (GASTO/INGRESO) y hay líneas calculadas
-    const detalleActualizado = updated[index]
-    const tieneLineasCalculadas = updated.some((d) => d.esCalculado)
-    if (tieneLineasCalculadas && 
-        (detalleActualizado.rol === "GASTO" || detalleActualizado.rol === "INGRESO") && 
-        !detalleActualizado.esCalculado &&
-        (field === "debe_bs" || field === "haber_bs" || field === "debe_usd" || field === "haber_usd")) {
-      // Usar setTimeout para evitar actualizaciones durante el render
-      setTimeout(() => {
-        recalcularMontos()
-      }, 10)
-    }
   }
   
-  // useEffect para recálculo automático cuando cambian montos base
-  useEffect(() => {
-    // Solo recalcular si hay detalles con plantilla y líneas calculadas
-    const tienePlantilla = detalles.some((d) => d.rol)
-    const tieneLineasCalculadas = detalles.some((d) => d.esCalculado)
-    if (tienePlantilla && tieneLineasCalculadas && detalles.length > 0) {
-      // Obtener hash de montos base para detectar cambios
-      const montosBase = detalles
-        .filter((d) => (d.rol === "GASTO" || d.rol === "INGRESO") && !d.esCalculado)
-        .map((d) => `${d.debe_bs || 0}-${d.haber_bs || 0}-${d.debe_usd || 0}-${d.haber_usd || 0}`)
-        .join("|")
-      
-      // Recalcular solo si hay montos base
-      if (montosBase) {
-        const timer = setTimeout(() => {
-          recalcularMontos()
-        }, 100)
-        return () => clearTimeout(timer)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detalles.filter((d) => (d.rol === "GASTO" || d.rol === "INGRESO") && !d.esCalculado).map((d) => `${d.debe_bs || 0}-${d.haber_bs || 0}-${d.debe_usd || 0}-${d.haber_usd || 0}`).join("|")])
+  // useEffect eliminado - el recálculo se hace directamente en handleDetalleChange
 
   // Función de filtrado para cuentas
   const filtrarCuentas = (detalleIndex: number, searchValue: string) => {
@@ -586,6 +584,24 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     }).slice(0, 20)
 
     setFilteredCuentas(prev => ({ ...prev, [detalleIndex]: filtered }))
+  }
+
+  const filtrarAuxiliares = (detalleIndex: number, searchValue: string) => {
+    if (!searchValue || searchValue.trim() === '') {
+      setFilteredAuxiliares(prev => ({ ...prev, [detalleIndex]: auxiliares.slice(0, 20) }))
+      return
+    }
+
+    const search = searchValue.toLowerCase().trim()
+    const filtered = auxiliares.filter((auxiliar) => {
+      // Priorizar nombre de contactos si existe
+      const contacto = auxiliar.contactos
+      const nombre = (contacto?.nombre ?? auxiliar.nombre ?? '').toLowerCase()
+      const codigo = (auxiliar.codigo || '').toLowerCase()
+      return nombre.includes(search) || codigo.includes(search)
+    }).slice(0, 20)
+
+    setFilteredAuxiliares(prev => ({ ...prev, [detalleIndex]: filtered }))
   }
 
   // Función de filtrado para contactos (beneficiario)
@@ -608,149 +624,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     setFilteredContactos(filtered)
   }
 
-  // Motor de recálculo automático
-  // Usa los datos de la plantilla: rol, lado, porcentaje
-  const recalcularMontos = useCallback(() => {
-    setDetalles((detallesActuales) => {
-      const nuevosDetalles = [...detallesActuales]
-      
-      // 1. Calcular total BASE (líneas con rol GASTO o INGRESO que NO son calculadas)
-      // Sumar según el lado definido en la plantilla
-      let totalBaseBs = 0
-      let totalBaseUsd = 0
-      
-      detallesActuales.forEach((det) => {
-        if ((det.rol === "GASTO" || det.rol === "INGRESO") && !det.esCalculado) {
-          // Sumar según el lado de la plantilla
-          if (det.lado === "DEBE") {
-            totalBaseBs += det.debe_bs || 0
-            totalBaseUsd += det.debe_usd || 0
-          } else if (det.lado === "HABER") {
-            totalBaseBs += det.haber_bs || 0
-            totalBaseUsd += det.haber_usd || 0
-          }
-        }
-      })
-      
-      // 2. Calcular IVA usando el porcentaje de la plantilla
-      // Buscar la primera línea de IVA para obtener el porcentaje
-      let porcentajeIVA = 0
-      detallesActuales.forEach((det) => {
-        if ((det.rol === "IVA_CREDITO" || det.rol === "IVA_DEBITO") && det.porcentaje && porcentajeIVA === 0) {
-          porcentajeIVA = det.porcentaje
-        }
-      })
-      
-      // Calcular IVA total (una sola vez)
-      const montoIVABs = porcentajeIVA > 0 ? Math.round((totalBaseBs * porcentajeIVA / 100) * 100) / 100 : 0
-      const montoIVAUsd = porcentajeIVA > 0 ? Math.round((totalBaseUsd * porcentajeIVA / 100) * 100) / 100 : 0
-      
-      // 3. Calcular PROVEEDOR/CLIENTE = BASE + IVA
-      const montoProveedorBs = totalBaseBs + montoIVABs
-      const montoProveedorUsd = totalBaseUsd + montoIVAUsd
-      
-      console.log("🔄 Recalculando montos (usando datos de plantilla):")
-      console.log("  Total BASE (Bs):", totalBaseBs)
-      console.log("  Total BASE (USD):", totalBaseUsd)
-      console.log("  Porcentaje IVA:", porcentajeIVA, "%")
-      console.log("  IVA (Bs):", montoIVABs)
-      console.log("  IVA (USD):", montoIVAUsd)
-      console.log("  PROVEEDOR (Bs):", montoProveedorBs)
-      console.log("  PROVEEDOR (USD):", montoProveedorUsd)
-
-      // 4. Aplicar recálculo a cada línea calculada usando lado y porcentaje de la plantilla
-      nuevosDetalles.forEach((det, index) => {
-        if (det.esCalculado) {
-          // Línea de IVA (IVA_CREDITO o IVA_DEBITO)
-          if (det.rol === "IVA_CREDITO" || det.rol === "IVA_DEBITO") {
-            // Usar el monto IVA calculado (mismo para todas las líneas de IVA)
-            // Usar el lado definido en la plantilla
-            if (det.lado === "DEBE") {
-              nuevosDetalles[index] = { 
-                ...det, 
-                debe_bs: montoIVABs, 
-                haber_bs: 0, 
-                debe_usd: montoIVAUsd, 
-                haber_usd: 0 
-              }
-            } else if (det.lado === "HABER") {
-              nuevosDetalles[index] = { 
-                ...det, 
-                debe_bs: 0, 
-                haber_bs: montoIVABs, 
-                debe_usd: 0, 
-                haber_usd: montoIVAUsd 
-              }
-            }
-          }
-          // Línea de PROVEEDOR (total = BASE + IVA)
-          else if (det.rol === "PROVEEDOR") {
-            // Usar el lado definido en la plantilla
-            if (det.lado === "DEBE") {
-              nuevosDetalles[index] = { 
-                ...det, 
-                debe_bs: montoProveedorBs, 
-                haber_bs: 0, 
-                debe_usd: montoProveedorUsd, 
-                haber_usd: 0 
-              }
-            } else if (det.lado === "HABER") {
-              nuevosDetalles[index] = { 
-                ...det, 
-                debe_bs: 0, 
-                haber_bs: montoProveedorBs, 
-                debe_usd: 0, 
-                haber_usd: montoProveedorUsd 
-              }
-            }
-          }
-          // Línea de CLIENTE/CAJA_BANCO (balanceo automático)
-          else if (det.rol === "CLIENTE" || det.rol === "CAJA_BANCO") {
-            // Calcular suma DEBE y suma HABER de todas las líneas excepto esta
-            let sumaDebeBs = 0
-            let sumaHaberBs = 0
-            let sumaDebeUsd = 0
-            let sumaHaberUsd = 0
-            
-            detallesActuales.forEach((d, idx) => {
-              // Sumar todas las líneas excepto esta misma línea de total
-              if (idx !== index) {
-                sumaDebeBs += d.debe_bs || 0
-                sumaHaberBs += d.haber_bs || 0
-                sumaDebeUsd += d.debe_usd || 0
-                sumaHaberUsd += d.haber_usd || 0
-              }
-            })
-
-            // El total debe hacer que DEBE = HABER
-            const diferenciaBs = sumaDebeBs - sumaHaberBs
-            const diferenciaUsd = sumaDebeUsd - sumaHaberUsd
-            
-            // Usar el lado definido en la plantilla
-            if (det.lado === "DEBE") {
-              nuevosDetalles[index] = { 
-                ...det, 
-                debe_bs: Math.abs(diferenciaBs), 
-                haber_bs: 0, 
-                debe_usd: Math.abs(diferenciaUsd), 
-                haber_usd: 0 
-              }
-            } else if (det.lado === "HABER") {
-              nuevosDetalles[index] = { 
-                ...det, 
-                debe_bs: 0, 
-                haber_bs: Math.abs(diferenciaBs), 
-                debe_usd: 0, 
-                haber_usd: Math.abs(diferenciaUsd) 
-              }
-            }
-          }
-        }
-      })
-
-      return nuevosDetalles
-    })
-  }, [formData.moneda])
+  // NOTA: La función recalcularMontos() fue eliminada porque usaba 'rol' que ya no existe.
+  // Todo el cálculo ahora se hace en calcularMontosPlantilla() usando porcentaje + lado.
 
   // Función para guardar comprobante si es nuevo
   const guardarComprobanteSiEsNuevo = async (): Promise<string | null> => {
@@ -875,25 +750,51 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
           await new Promise(resolve => setTimeout(resolve, 100))
         }
         
-        const detallesConPlantilla = data.data.detalles.map((det: any) => ({
+        const detallesConPlantilla = data.data.detalles.map((det: any) => {
+          // MODELO CONTABLE CLARO Y EXPLÍCITO:
+          // - bloqueado = false: línea base editable
+          // - bloqueado = true: línea calculada automáticamente
+          // NO inferencias implícitas, la plantilla gobierna completamente
+          const esCalculado = det.bloqueado === true
+          
+          return {
           ...det,
-          esCalculado: det.rol === "IVA_CREDITO" || det.rol === "IVA_DEBITO" || 
-                       det.rol === "PROVEEDOR" || det.rol === "CLIENTE" || det.rol === "CAJA_BANCO",
+            esCalculado: esCalculado,
+            bloqueado: det.bloqueado === true,
           // Preservar cuenta_sugerida y cuenta_es_fija del backend
           cuenta_sugerida: det.cuenta_sugerida || "",
           cuenta_es_fija: det.cuenta_es_fija === true,
-        }))
+            lado: det.lado || "DEBE",
+            porcentaje: det.porcentaje || null,
+            permite_auxiliar: det.permite_auxiliar === true,
+          }
+        })
         console.log("📋 Detalles cargados de plantilla:", detallesConPlantilla)
         console.log("📊 Total de líneas:", detallesConPlantilla.length)
         
         setDetalles(detallesConPlantilla)
         
+        // 🟠 LOG DE DIAGNÓSTICO: Estado de detalles después de aplicar plantilla
+        console.log("🟠 FRONTEND plantilla aplicada - detalles iniciales", detallesConPlantilla.map(d => ({
+          cuenta: d.cuenta,
+          cuenta_sugerida: (d as any).cuenta_sugerida,
+          porcentaje: (d as any).porcentaje,
+          lado: (d as any).lado,
+          bloqueado: (d as any).bloqueado,
+          esCalculado: d.esCalculado,
+          cuenta_es_fija: (d as any).cuenta_es_fija,
+          permite_auxiliar: (d as any).permite_auxiliar
+        })))
+        
         // Inicializar filtros para las nuevas líneas (usar cuentas actualizadas)
         const initialFilters: Record<number, Cuenta[]> = {}
+        const initialFiltersAuxiliares: Record<number, Auxiliar[]> = {}
         detallesConPlantilla.forEach((_, idx) => {
           initialFilters[idx] = cuentas.length > 0 ? cuentas.slice(0, 20) : []
+          initialFiltersAuxiliares[idx] = auxiliares.length > 0 ? auxiliares.slice(0, 20) : []
         })
         setFilteredCuentas(initialFilters)
+        setFilteredAuxiliares(initialFiltersAuxiliares)
       } else if (comprobanteId) {
         await fetchDetalles(comprobanteId)
       }
@@ -920,14 +821,326 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     setOpenCuentaCombobox(prev => ({ ...prev, [detalleIndex]: false }))
   }
 
-  // Obtener el texto a mostrar para la cuenta seleccionada
-  const getCuentaDisplayText = (cuentaCodigo: string) => {
+  // Función para seleccionar auxiliar
+  const seleccionarAuxiliar = (detalleIndex: number, auxiliar: Auxiliar) => {
+    // Guardar solo el nombre del auxiliar (priorizando contactos si existe)
+    const contacto = auxiliar.contactos
+    const nombre = contacto?.nombre ?? auxiliar.nombre ?? auxiliar.nombre
+    handleDetalleChange(detalleIndex, "auxiliar", nombre)
+    setOpenAuxiliarCombobox(prev => ({ ...prev, [detalleIndex]: false }))
+  }
+
+  // Obtener el texto a mostrar para la cuenta seleccionada (con descripción y si es fija)
+  const getCuentaDisplayText = (cuentaCodigo: string, esFija: boolean = false) => {
     if (!cuentaCodigo) return "Seleccionar cuenta..."
     const cuenta = cuentas.find(c => c.cuenta === cuentaCodigo)
     if (cuenta) {
-      return `${cuenta.cuenta} - ${cuenta.descripcion}`
+      const textoBase = `${cuenta.cuenta} - ${cuenta.descripcion}`
+      return esFija ? `${textoBase} (Fija)` : textoBase
     }
-    return cuentaCodigo
+    return esFija ? `${cuentaCodigo} (Fija)` : cuentaCodigo
+  }
+
+  /**
+   * Motor de cálculo de plantillas contables
+   * 
+   * MODELO CONTABLE:
+   * - Línea BASE: porcentaje === null o porcentaje === 0 (ÚNICA editable)
+   * - Líneas DERIVADAS: porcentaje > 0 (NO editables, esCalculado = true)
+   * 
+   * LÓGICA:
+   * 1. Identifica la línea base
+   * 2. Toma su monto (Debe u Haber según lado)
+   * 3. Para cada línea con porcentaje: calcula monto = base * (porcentaje / 100)
+   * 4. Aplica en Debe u Haber según lado de cada línea
+   * 5. Calcula línea de cierre (porcentaje 100% en HABER) = suma de todas las demás
+   * 6. Garantiza: Total Debe == Total Haber
+   * 7. Calcula USD automáticamente
+   */
+  const calcularMontosPlantilla = (detalleIndex: number, campo: string, valor: number): ComprobanteDetalle[] => {
+    // 🔵 LOG DE DIAGNÓSTICO: Entrada al motor de cálculo
+    console.log("🔵 calcularMontosPlantilla ENTER", {
+      detalleIndex,
+      campo,
+      valor,
+      total_detalles: detalles.length,
+      detalles: detalles.map((d, idx) => ({
+        index: idx,
+        cuenta: d.cuenta,
+        porcentaje: (d as any).porcentaje,
+        bloqueado: (d as any).bloqueado,
+        lado: (d as any).lado,
+        debe_bs: d.debe_bs,
+        haber_bs: d.haber_bs,
+        esCalculado: d.esCalculado
+      }))
+    })
+    
+    // Verificar que hay detalles
+    if (detalles.length === 0) {
+      console.log("⚠️ calcularMontosPlantilla: No hay detalles, saliendo temprano")
+      return detalles
+    }
+
+    // Verificar que el detalle existe
+    const detalleEditado = detalles[detalleIndex]
+    if (!detalleEditado) {
+      console.log("⚠️ calcularMontosPlantilla: Detalle editado no existe, saliendo temprano")
+      return detalles
+    }
+
+    // Verificar que tiene información de plantilla con bloqueado
+    const tienePlantilla = detalles.some(d => (d as any).bloqueado !== undefined)
+    console.log("🔍 tienePlantilla (bloqueado !== undefined):", tienePlantilla)
+    if (!tienePlantilla) {
+      // No hay plantilla, actualizar solo el campo editado
+      const nuevosDetalles = [...detalles]
+      nuevosDetalles[detalleIndex] = {
+        ...nuevosDetalles[detalleIndex],
+        [campo]: valor
+      }
+      return nuevosDetalles
+    }
+
+    // Crear copia de todos los detalles
+    const nuevosDetalles = detalles.map(d => ({ ...d }))
+
+    // 1. IDENTIFICAR LÍNEA BASE (bloqueado = false)
+    const lineaBaseIndex = nuevosDetalles.findIndex(d => (d as any).bloqueado === false)
+    
+    // 🟢 LOG DE DIAGNÓSTICO: Línea base detectada
+    console.log("🟢 lineaBaseIndex detectada:", lineaBaseIndex, {
+      detalleIndex,
+      esLaLineaBase: lineaBaseIndex === detalleIndex,
+      lineaBase: lineaBaseIndex >= 0 ? {
+        cuenta: nuevosDetalles[lineaBaseIndex].cuenta,
+        porcentaje: (nuevosDetalles[lineaBaseIndex] as any).porcentaje,
+        bloqueado: (nuevosDetalles[lineaBaseIndex] as any).bloqueado,
+        lado: (nuevosDetalles[lineaBaseIndex] as any).lado
+      } : null
+    })
+
+    if (lineaBaseIndex === -1) {
+      // No hay línea base, actualizar solo el campo editado
+      console.log("⚠️ No se encontró línea base (bloqueado = false), saliendo")
+      nuevosDetalles[detalleIndex] = {
+        ...nuevosDetalles[detalleIndex],
+        [campo]: valor
+      }
+      return nuevosDetalles
+    }
+
+    // 2. VALIDAR: Solo se puede editar la línea base
+    if (detalleIndex !== lineaBaseIndex) {
+      // Intento de editar línea bloqueada, ignorar
+      console.warn("⚠️ Intento de editar línea bloqueada. Solo la línea base es editable.", {
+        detalleIndex,
+        lineaBaseIndex
+      })
+      return nuevosDetalles
+    }
+
+    // 3. ACTUALIZAR LÍNEA BASE con el nuevo valor
+    const lineaBase = nuevosDetalles[lineaBaseIndex]
+    const ladoBase = (lineaBase as any).lado || "DEBE"
+    
+    // Actualizar el campo editado en la línea base
+    nuevosDetalles[lineaBaseIndex] = {
+      ...lineaBase,
+      [campo]: valor
+    }
+
+    // Limpiar el campo opuesto en la línea base según su lado
+    if (ladoBase === "DEBE") {
+      if (campo === "debe_bs" || campo === "debe_usd") {
+        nuevosDetalles[lineaBaseIndex] = {
+          ...nuevosDetalles[lineaBaseIndex],
+          haber_bs: 0,
+          haber_usd: 0
+        }
+      }
+    } else {
+      if (campo === "haber_bs" || campo === "haber_usd") {
+        nuevosDetalles[lineaBaseIndex] = {
+          ...nuevosDetalles[lineaBaseIndex],
+          debe_bs: 0,
+          debe_usd: 0
+        }
+      }
+    }
+
+    // 4. OBTENER MONTO BASE (según el lado de la línea base)
+    let montoBaseBs = 0
+    let montoBaseUsd = 0
+    
+    if (ladoBase === "DEBE") {
+      montoBaseBs = nuevosDetalles[lineaBaseIndex].debe_bs || 0
+      montoBaseUsd = nuevosDetalles[lineaBaseIndex].debe_usd || 0
+    } else {
+      montoBaseBs = nuevosDetalles[lineaBaseIndex].haber_bs || 0
+      montoBaseUsd = nuevosDetalles[lineaBaseIndex].haber_usd || 0
+    }
+
+    // 5. CALCULAR LÍNEAS DERIVADAS (bloqueado = true, porcentaje !== 100)
+    nuevosDetalles.forEach((det, idx) => {
+      if (idx === lineaBaseIndex) return // Saltar línea base
+      
+      const bloqueado = (det as any).bloqueado
+      const porcentaje = (det as any).porcentaje
+      const lado = (det as any).lado || "DEBE"
+
+      // Solo calcular si está bloqueada y tiene porcentaje válido (excluyendo 100%)
+      if (bloqueado === true && porcentaje && porcentaje > 0 && porcentaje !== 100) {
+        const montoCalculadoBs = Math.round((montoBaseBs * porcentaje / 100) * 100) / 100
+        const montoCalculadoUsd = Math.round((montoBaseUsd * porcentaje / 100) * 100) / 100
+
+        // Aplicar según el lado
+        if (lado === "DEBE") {
+          nuevosDetalles[idx] = {
+            ...det,
+            debe_bs: montoCalculadoBs,
+            haber_bs: 0,
+            debe_usd: montoCalculadoUsd,
+            haber_usd: 0
+          }
+        } else {
+          nuevosDetalles[idx] = {
+            ...det,
+            debe_bs: 0,
+            haber_bs: montoCalculadoBs,
+            debe_usd: 0,
+            haber_usd: montoCalculadoUsd
+          }
+        }
+      }
+    })
+
+    // 6. CALCULAR LÍNEA DE CIERRE (bloqueado = true, porcentaje = 100)
+    const lineaCierreIndex = nuevosDetalles.findIndex(d => {
+      const p = (d as any).porcentaje
+      const bloq = (d as any).bloqueado
+      return bloq === true && p === 100
+    })
+
+    if (lineaCierreIndex !== -1) {
+      const lineaCierre = nuevosDetalles[lineaCierreIndex]
+      const ladoCierre = (lineaCierre as any).lado || "HABER"
+
+      // Sumar todas las líneas excepto esta
+      let sumaDebeBs = 0
+      let sumaHaberBs = 0
+      let sumaDebeUsd = 0
+      let sumaHaberUsd = 0
+
+      nuevosDetalles.forEach((d, idx) => {
+        if (idx !== lineaCierreIndex) {
+          sumaDebeBs += d.debe_bs || 0
+          sumaHaberBs += d.haber_bs || 0
+          sumaDebeUsd += d.debe_usd || 0
+          sumaHaberUsd += d.haber_usd || 0
+        }
+      })
+
+      // La línea de cierre debe balancear: si suma DEBE > suma HABER, va en HABER
+      // Si suma HABER > suma DEBE, va en DEBE
+      const diferenciaBs = sumaDebeBs - sumaHaberBs
+      const diferenciaUsd = sumaDebeUsd - sumaHaberUsd
+
+      // Aplicar según el lado de cierre con redondeo correcto
+      if (ladoCierre === "HABER") {
+        // Si DEBE > HABER, la diferencia va en HABER
+        if (diferenciaBs > 0) {
+          nuevosDetalles[lineaCierreIndex] = {
+            ...lineaCierre,
+            debe_bs: 0,
+            haber_bs: Math.round(diferenciaBs * 100) / 100,
+            debe_usd: 0,
+            haber_usd: Math.round(diferenciaUsd * 100) / 100
+          }
+        } else {
+          // Si HABER > DEBE, la diferencia va en DEBE
+          nuevosDetalles[lineaCierreIndex] = {
+            ...lineaCierre,
+            debe_bs: Math.round(Math.abs(diferenciaBs) * 100) / 100,
+            haber_bs: 0,
+            debe_usd: Math.round(Math.abs(diferenciaUsd) * 100) / 100,
+            haber_usd: 0
+          }
+        }
+      } else {
+        // Lado DEBE
+        if (diferenciaBs < 0) {
+          nuevosDetalles[lineaCierreIndex] = {
+            ...lineaCierre,
+            debe_bs: Math.round(Math.abs(diferenciaBs) * 100) / 100,
+            haber_bs: 0,
+            debe_usd: Math.round(Math.abs(diferenciaUsd) * 100) / 100,
+            haber_usd: 0
+          }
+        } else {
+          nuevosDetalles[lineaCierreIndex] = {
+            ...lineaCierre,
+            debe_bs: 0,
+            haber_bs: Math.round(diferenciaBs * 100) / 100,
+            debe_usd: 0,
+            haber_usd: Math.round(diferenciaUsd * 100) / 100
+          }
+        }
+      }
+    }
+
+    // 7. CALCULAR USD AUTOMÁTICAMENTE (si se editó Bs)
+    if (campo === "debe_bs" || campo === "haber_bs") {
+      const tipoCambio = formData.tipo_cambio || 1
+      nuevosDetalles.forEach((det, idx) => {
+        const debeUsd = (det.debe_bs || 0) / tipoCambio
+        const haberUsd = (det.haber_bs || 0) / tipoCambio
+        nuevosDetalles[idx] = {
+          ...det,
+          debe_usd: Math.round(debeUsd * 100) / 100,
+          haber_usd: Math.round(haberUsd * 100) / 100
+        }
+      })
+    }
+
+    // 8. CALCULAR Bs AUTOMÁTICAMENTE (si se editó USD)
+    if (campo === "debe_usd" || campo === "haber_usd") {
+      const tipoCambio = formData.tipo_cambio || 1
+      nuevosDetalles.forEach((det, idx) => {
+        const debeBs = (det.debe_usd || 0) * tipoCambio
+        const haberBs = (det.haber_usd || 0) * tipoCambio
+        nuevosDetalles[idx] = {
+          ...det,
+          debe_bs: Math.round(debeBs * 100) / 100,
+          haber_bs: Math.round(haberBs * 100) / 100
+        }
+      })
+    }
+
+    // 🟣 LOG DE DIAGNÓSTICO: Resultado final del motor de cálculo
+    console.log("🟣 RESULTADO calcularMontosPlantilla", {
+      campo,
+      valor,
+      detallesRecalculados: nuevosDetalles.map((d, idx) => ({
+        index: idx,
+        cuenta: d.cuenta,
+        porcentaje: (d as any).porcentaje,
+        bloqueado: (d as any).bloqueado,
+        lado: (d as any).lado,
+        debe_bs: d.debe_bs,
+        haber_bs: d.haber_bs,
+        debe_usd: d.debe_usd,
+        haber_usd: d.haber_usd
+      }))
+    })
+
+    return nuevosDetalles
+  }
+
+  // Obtener el texto a mostrar para el auxiliar seleccionado (solo nombre)
+  const getAuxiliarDisplayText = (auxiliarNombre: string | null | undefined) => {
+    if (!auxiliarNombre) return "Seleccionar auxiliar..."
+    return auxiliarNombre
   }
 
   // Calcular totales
@@ -1482,17 +1695,23 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                             // Renderizar cuenta fija bloqueada
                             if (detalle.cuenta && detalle.cuenta.trim() !== "") {
                               const cuenta = cuentas.find(c => c.cuenta === detalle.cuenta)
+                              
+                              // 🔍 LOG DE DIAGNÓSTICO: Búsqueda de cuenta fija
+                              console.log("🔍 BUSQUEDA CUENTA (Fija)", {
+                                detalleCuenta: detalle.cuenta,
+                                cuentaEncontrada: cuenta,
+                                totalCuentasCargadas: cuentas.length,
+                                primerasCuentas: cuentas.slice(0, 5).map(c => ({ cuenta: c.cuenta, descripcion: c.descripcion }))
+                              })
+                              
                               if (cuenta) {
                                 const displayText = `${cuenta.cuenta} - ${cuenta.descripcion}`
-                                const fullText = displayText
                                 return (
-                                  <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
-                                    <TruncatedTextWithTooltip 
-                                      text={displayText} 
-                                      fullText={fullText}
-                                      className="block"
-                                    />
-                                    <span className="ml-2 text-xs text-gray-500">(Fija)</span>
+                                  <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm overflow-hidden">
+                                    <span className="truncate flex-1" title={displayText}>
+                                      {displayText}
+                                    </span>
+                                    <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">(Fija)</span>
                                   </div>
                                 )
                               } else {
@@ -1544,19 +1763,33 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                             }}
                           >
                             {(() => {
-                              const displayText = getCuentaDisplayText(detalle.cuenta || "")
+                              const esFija = (detalle as any).cuenta_es_fija === true
+                              const displayText = getCuentaDisplayText(detalle.cuenta || "", esFija)
                               const cuenta = cuentas.find(c => c.cuenta === detalle.cuenta)
-                              const fullText = cuenta ? `${cuenta.cuenta} - ${cuenta.descripcion}` : displayText
+                              
+                              // 🔍 LOG DE DIAGNÓSTICO: Búsqueda de cuenta en combobox
+                              console.log("🔍 BUSQUEDA CUENTA (Combobox)", {
+                                detalleCuenta: detalle.cuenta,
+                                esFija: esFija,
+                                cuentaEncontrada: cuenta,
+                                totalCuentasCargadas: cuentas.length,
+                                primerasCuentas: cuentas.slice(0, 5).map(c => ({ cuenta: c.cuenta, descripcion: c.descripcion }))
+                              })
+                              
+                              const fullText = cuenta 
+                                ? `${cuenta.cuenta} - ${cuenta.descripcion}${esFija ? ' (Fija)' : ''}` 
+                                : displayText
                               
                               return (
                                 <PopoverTrigger asChild>
                                   <Button
                                     variant="outline"
                                     role="combobox"
-                                    disabled={isReadOnly}
+                                    disabled={isReadOnly || esFija}
                                     className={cn(
                                       "w-[250px] h-9 justify-between font-mono text-sm overflow-hidden",
-                                      !detalle.cuenta && "text-muted-foreground"
+                                      !detalle.cuenta && "text-muted-foreground",
+                                      esFija && "bg-gray-50 cursor-not-allowed"
                                     )}
                                   >
                                     <TruncatedTextWithTooltip 
@@ -1564,7 +1797,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                                       fullText={fullText}
                                       className="block text-left flex-1"
                                     />
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    {!esFija && <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
                                   </Button>
                                 </PopoverTrigger>
                               )
@@ -1611,15 +1844,103 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                         })()}
                       </TableCell>
                       <TableCell>
-                        <Input
-                          value={detalle.auxiliar || ""}
-                          onChange={(e) =>
-                            handleDetalleChange(index, "auxiliar", e.target.value || null)
-                          }
+                        <Popover
+                          open={openAuxiliarCombobox[index]}
+                          onOpenChange={(open) => {
+                            setOpenAuxiliarCombobox(prev => ({ ...prev, [index]: open }))
+                            if (open) {
+                              // Si hay un auxiliar seleccionado, buscarlo y ponerlo primero
+                              if (detalle.auxiliar) {
+                                const auxiliarEncontrado = auxiliares.find(a => {
+                                  const contacto = a.contactos
+                                  const nombre = contacto?.nombre ?? a.nombre ?? a.nombre
+                                  return nombre === detalle.auxiliar
+                                })
+                                if (auxiliarEncontrado) {
+                                  // Poner el auxiliar seleccionado primero
+                                  setFilteredAuxiliares(prev => ({ 
+                                    ...prev, 
+                                    [index]: [auxiliarEncontrado, ...auxiliares.filter(a => a.id !== auxiliarEncontrado.id).slice(0, 19)]
+                                  }))
+                                } else {
+                                  // Si no se encuentra, mostrar las primeras 20
+                                  setFilteredAuxiliares(prev => ({ ...prev, [index]: auxiliares.slice(0, 20) }))
+                                }
+                              } else {
+                                // Al abrir, mostrar las primeras 20 auxiliares
+                                setFilteredAuxiliares(prev => ({ ...prev, [index]: auxiliares.slice(0, 20) }))
+                              }
+                            }
+                          }}
+                        >
+                          {(() => {
+                            const displayText = getAuxiliarDisplayText(detalle.auxiliar || null)
+                            return (
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
                           disabled={isReadOnly}
-                          className="w-24"
-                          placeholder="Auxiliar"
-                        />
+                                  className={cn(
+                                    "w-[200px] h-9 justify-between text-sm overflow-hidden",
+                                    !detalle.auxiliar && "text-muted-foreground"
+                                  )}
+                                >
+                                  <span className="truncate text-left flex-1">
+                                    {displayText}
+                                  </span>
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                            )
+                          })()}
+                          <PopoverContent className="w-[400px] p-0" align="start">
+                            <Command shouldFilter={false} className="overflow-visible">
+                              <CommandInput
+                                placeholder="Buscar por nombre o código..."
+                                className="h-9 border-0 focus:ring-0"
+                                onValueChange={(value) => filtrarAuxiliares(index, value)}
+                              />
+                              <CommandList>
+                                <CommandEmpty>
+                                  {loadingAuxiliares ? "Cargando..." : "No se encontraron auxiliares."}
+                                </CommandEmpty>
+                                {(filteredAuxiliares[index] || []).length > 0 && (
+                                  <CommandGroup>
+                                    {(filteredAuxiliares[index] || []).map((auxiliar) => {
+                                      // Priorizar nombre de contactos si existe
+                                      const contacto = auxiliar.contactos
+                                      const nombre = contacto?.nombre ?? auxiliar.nombre ?? auxiliar.nombre
+                                      const isSelected = detalle.auxiliar === nombre
+                                      
+                                      return (
+                                        <CommandItem
+                                          key={auxiliar.id}
+                                          value={`${auxiliar.codigo} ${nombre}`}
+                                          onSelect={() => seleccionarAuxiliar(index, auxiliar)}
+                                          className="cursor-pointer"
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              isSelected ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex items-center gap-2">
+                                            <span className="truncate">{nombre}</span>
+                                            <span className="text-gray-400 text-xs font-mono ml-auto">
+                                              {auxiliar.codigo}
+                                            </span>
+                                          </div>
+                                        </CommandItem>
+                                      )
+                                    })}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                       <TableCell>
                         <Input

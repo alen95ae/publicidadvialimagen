@@ -11,6 +11,7 @@ import { actualizarEstadoSoportesAlquileres } from '@/lib/helpersAlquileres';
  * - Soportes con alquileres activos → "Ocupado"
  * - Soportes "Reservado" → No se modifican (tienen lógica propia de 48h)
  * - Soportes "No disponible" → No se modifican (solo manualmente)
+ * - Soportes "A Consultar" sin alquileres vigentes → No se modifican (solo manualmente)
  * 
  * Uso desde cron job (ejemplo con curl):
  * curl -X POST http://localhost:3000/api/soportes/actualizar-estados \

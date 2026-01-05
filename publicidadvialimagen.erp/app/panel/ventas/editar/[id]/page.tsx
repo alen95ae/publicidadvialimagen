@@ -412,6 +412,9 @@ export default function EditarCotizacionPage() {
   const [filteredComerciales, setFilteredComerciales] = useState<any[]>([])
   const [cargandoComerciales, setCargandoComerciales] = useState(false)
 
+  // Estado para el popover de meses en el modal de fechas
+  const [openMeses, setOpenMeses] = useState(false)
+
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
   }
@@ -2948,7 +2951,12 @@ export default function EditarCotizacionPage() {
         </Dialog>
 
         {/* Modal de selección de fechas para soportes */}
-        <Dialog open={modalFechasSoporte.open} onOpenChange={(open) => !open && setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })}>
+        <Dialog open={modalFechasSoporte.open} onOpenChange={(open) => {
+          if (!open) {
+            setModalFechasSoporte({ open: false, productoId: '', itemData: null, fechaInicio: '', fechaFin: '', meses: 1 })
+            setOpenMeses(false)
+          }
+        }}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Seleccionar fechas de alquiler</DialogTitle>
@@ -2968,24 +2976,50 @@ export default function EditarCotizacionPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="meses">Meses</Label>
-                <Select
-                  value={modalFechasSoporte.meses.toString()}
-                  onValueChange={(value) => setModalFechasSoporte(prev => ({ ...prev, meses: parseFloat(value) }))}
-                >
-                  <SelectTrigger id="meses">
-                    <SelectValue placeholder="Seleccionar meses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem key="0.5" value="0.5">
-                      15 días
-                    </SelectItem>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mes) => (
-                      <SelectItem key={mes} value={mes.toString()}>
-                        {mes} {mes === 1 ? 'Mes' : 'Meses'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openMeses} onOpenChange={setOpenMeses}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openMeses}
+                      className="w-full justify-between"
+                      id="meses"
+                    >
+                      {modalFechasSoporte.meses === 0.5 
+                        ? "15 días" 
+                        : `${modalFechasSoporte.meses} ${modalFechasSoporte.meses === 1 ? 'Mes' : 'Meses'}`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start" side="top" onWheel={(e) => e.stopPropagation()}>
+                    <div className="max-h-[300px] overflow-y-auto overscroll-contain" onWheel={(e) => e.stopPropagation()}>
+                      <div
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${
+                          modalFechasSoporte.meses === 0.5 ? 'bg-accent font-medium' : ''
+                        }`}
+                        onClick={() => {
+                          setModalFechasSoporte(prev => ({ ...prev, meses: 0.5 }))
+                          setOpenMeses(false)
+                        }}
+                      >
+                        15 días
+                      </div>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mes) => (
+                        <div
+                          key={mes}
+                          className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${
+                            modalFechasSoporte.meses === mes ? 'bg-accent font-medium' : ''
+                          }`}
+                          onClick={() => {
+                            setModalFechasSoporte(prev => ({ ...prev, meses: mes }))
+                            setOpenMeses(false)
+                          }}
+                        >
+                          {mes} {mes === 1 ? 'Mes' : 'Meses'}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="fecha-fin">Fecha de fin</Label>

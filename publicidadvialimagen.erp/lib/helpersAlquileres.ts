@@ -313,7 +313,7 @@ async function debeVolverAConsultar(soporteId: number): Promise<boolean> {
  * Reglas:
  * - "Reservado": No cambiar (tiene su propia lógica de 48h)
  * - "No disponible": No cambiar (solo manualmente)
- * - "A Consultar": Si estaba en "A Consultar" antes de pasar a "Ocupado", volver a "A Consultar" cuando finalice
+ * - "A Consultar": No cambiar si no tiene alquileres vigentes (solo manualmente). Si tiene alquileres vigentes, cambiar a "Ocupado". Si estaba en "A Consultar" antes de pasar a "Ocupado", volver a "A Consultar" cuando finalice.
  * - Otros: Cambiar a "Disponible" si no hay alquileres vigentes, o "Ocupado" si hay
  */
 export async function actualizarEstadoSoporte(soporteId: string | number) {
@@ -345,6 +345,12 @@ export async function actualizarEstadoSoporte(soporteId: string | number) {
     
     // Obtener alquileres vigentes del soporte
     const alquileresVigentes = await getAlquileresVigentesPorSoporte(soporteId);
+    
+    // REGLA 2.5: No cambiar "A Consultar" si no tiene alquileres vigentes (solo manualmente)
+    if (estadoActual === 'A Consultar' && alquileresVigentes.length === 0) {
+      console.log(`⏭️ Soporte ${soporteIdStr} está en "A Consultar" sin alquileres vigentes, no se modifica (solo manualmente)`);
+      return;
+    }
     
     if (alquileresVigentes.length > 0) {
       // Tiene alquileres vigentes, debe estar "Ocupado"

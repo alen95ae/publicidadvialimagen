@@ -70,6 +70,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     title: "Ventas",
     navItems: [
       { label: "Cotizaciones", href: "/panel/ventas/cotizaciones" },
+      { label: "Pipeline", href: "/panel/ventas/pipeline" },
       { label: "Solicitudes de cotización", href: "/panel/ventas/solicitudes" },
     ],
   },

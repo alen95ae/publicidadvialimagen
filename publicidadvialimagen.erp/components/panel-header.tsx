@@ -93,6 +93,8 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     title: "Contactos",
     navItems: [
       { label: "Contactos", href: "/panel/contactos" },
+      { label: "Leads", href: "/panel/contactos/leads" },
+      { label: "Miembros", href: "/panel/contactos/miembros" },
     ],
   },
   calendario: {
@@ -607,6 +609,12 @@ export default function PanelHeader() {
     // No debe activarse cuando estás en /panel/mensajes/formularios o /panel/mensajes/[id]
     if (href === "/panel/mensajes") {
       return pathname === "/panel/mensajes" && !pathname.startsWith("/panel/mensajes/")
+    }
+    
+    // Caso especial para contactos: /panel/contactos solo debe estar activo si es exactamente esa ruta
+    // No debe activarse cuando estás en /panel/contactos/leads o /panel/contactos/[id]
+    if (href === "/panel/contactos") {
+      return pathname === "/panel/contactos" && !pathname.startsWith("/panel/contactos/")
     }
     
     // Para rutas dinámicas o subrutas, verificar que empiece con el href

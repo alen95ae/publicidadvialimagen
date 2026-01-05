@@ -12,7 +12,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Search, Edit, Trash2, UserCheck, UserX, MoreHorizontal, Upload, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Switch } from "@/components/ui/switch";
 
 interface User {
   id: string;
@@ -32,23 +31,20 @@ interface Role {
   descripcion: string;
 }
 
-export default function UsersSection() {
+export default function MembersSection() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast();
 
-  // Formulario para crear/editar usuario
+  // Formulario para editar usuario
   const [formData, setFormData] = useState({
     nombre: "",
     email: "",
     rol_id: "",
-    vendedor: false,
   });
 
   // Estados para imagen de perfil
@@ -63,14 +59,15 @@ export default function UsersSection() {
 
   useEffect(() => {
     loadUsers();
-  }, [searchTerm, roleFilter]);
+  }, [searchTerm]);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (searchTerm) params.append("search", searchTerm);
-      if (roleFilter) params.append("role", roleFilter);
+      // Filtrar solo usuarios con rol "invitado"
+      params.append("role", "invitado");
 
       const response = await fetch(`/api/ajustes/usuarios?${params}`, {
         credentials: "include"
@@ -78,22 +75,22 @@ export default function UsersSection() {
       const data = await response.json();
       
       if (response.ok) {
-        // Excluir usuarios con rol "invitado" - estos se muestran en la sección Miembros
-        const usuariosSinInvitados = data.users.filter((user: User) => 
-          user.rol?.toLowerCase() !== "invitado"
+        // Filtrar adicionalmente por rol "invitado" en el frontend por si acaso
+        const invitados = data.users.filter((user: User) => 
+          user.rol?.toLowerCase() === "invitado"
         );
-        setUsers(usuariosSinInvitados);
+        setUsers(invitados);
       } else {
         toast({
           title: "Error",
-          description: data.error || "Error al cargar usuarios",
+          description: data.error || "Error al cargar miembros",
           variant: "destructive",
         });
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Error al cargar usuarios",
+        description: "Error al cargar miembros",
         variant: "destructive",
       });
     } finally {
@@ -113,41 +110,6 @@ export default function UsersSection() {
       }
     } catch (error) {
       console.error("Error loading roles:", error);
-    }
-  };
-
-  const handleCreateUser = async () => {
-    try {
-      const response = await fetch("/api/ajustes/usuarios", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast({
-          title: "Éxito",
-          description: "Usuario creado correctamente",
-        });
-        setIsCreateDialogOpen(false);
-        setFormData({ nombre: "", email: "", rol_id: "", vendedor: false });
-        loadUsers();
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Error al crear usuario",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al crear usuario",
-        variant: "destructive",
-      });
     }
   };
 
@@ -263,7 +225,6 @@ export default function UsersSection() {
           nombre: formData.nombre,
           email: formData.email,
           rol_id: formData.rol_id,
-          vendedor: formData.vendedor,
         }),
       });
 
@@ -272,18 +233,18 @@ export default function UsersSection() {
       if (response.ok) {
         toast({
           title: "Éxito",
-          description: "Usuario actualizado correctamente",
+          description: "Miembro actualizado correctamente",
         });
         setIsEditDialogOpen(false);
         setEditingUser(null);
-        setFormData({ nombre: "", email: "", rol_id: "", vendedor: false });
+        setFormData({ nombre: "", email: "", rol_id: "" });
         setImagePreview(null);
         setImageFile(null);
         loadUsers();
       } else {
         toast({
           title: "Error",
-          description: data.error || "Error al actualizar usuario",
+          description: data.error || "Error al actualizar miembro",
           variant: "destructive",
         });
       }
@@ -291,44 +252,13 @@ export default function UsersSection() {
       console.error("Error editing user:", error);
       toast({
         title: "Error",
-        description: "Error al actualizar usuario",
+        description: "Error al actualizar miembro",
         variant: "destructive",
       });
       setUploadingImage(false);
     }
   };
 
-  const handleToggleVendedor = async (userId: string, currentValue: boolean) => {
-    try {
-      const response = await fetch("/api/ajustes/usuarios", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          id: userId,
-          vendedor: !currentValue,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        loadUsers();
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Error al actualizar vendedor",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al actualizar vendedor",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleDeleteUser = async (userId: string) => {
     try {
@@ -341,20 +271,20 @@ export default function UsersSection() {
       if (response.ok) {
         toast({
           title: "Éxito",
-          description: "Usuario eliminado correctamente",
+          description: "Miembro eliminado correctamente",
         });
         loadUsers();
       } else {
         toast({
           title: "Error",
-          description: data.error || "Error al eliminar usuario",
+          description: data.error || "Error al eliminar miembro",
           variant: "destructive",
         });
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Error al eliminar usuario",
+        description: "Error al eliminar miembro",
         variant: "destructive",
       });
     }
@@ -367,7 +297,6 @@ export default function UsersSection() {
       nombre: user.nombre,
       email: user.email,
       rol_id: user.rol_id || "",
-      vendedor: user.vendedor ?? false,
     });
     
     // Cargar imagen de perfil si existe
@@ -412,9 +341,8 @@ export default function UsersSection() {
     const matchesSearch = !searchTerm || 
       user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = !roleFilter || roleFilter === "all" || user.rol === roleFilter;
     
-    return matchesSearch && matchesRole;
+    return matchesSearch;
   });
 
   return (
@@ -432,24 +360,11 @@ export default function UsersSection() {
             />
           </div>
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Filtrar por rol" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los roles</SelectItem>
-            {roles.map((role) => (
-              <SelectItem key={role.id} value={role.nombre}>
-                {role.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Título */}
       <div>
-        <h3 className="text-lg font-semibold">Usuarios ({filteredUsers.length})</h3>
+        <h3 className="text-lg font-semibold">Miembros ({filteredUsers.length})</h3>
       </div>
 
       {/* Tabla de usuarios */}
@@ -460,7 +375,6 @@ export default function UsersSection() {
               <TableHead className="text-center">Nombre</TableHead>
               <TableHead className="text-center">Email</TableHead>
               <TableHead className="text-center">Rol</TableHead>
-              <TableHead className="text-center">Vendedor</TableHead>
               <TableHead className="text-center">Fecha de Creación</TableHead>
               <TableHead className="text-center">Último Acceso</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
@@ -469,14 +383,14 @@ export default function UsersSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
-                  Cargando usuarios...
+                <TableCell colSpan={6} className="text-center py-8">
+                  Cargando miembros...
                 </TableCell>
               </TableRow>
             ) : filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                  No se encontraron usuarios
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  No se encontraron miembros
                 </TableCell>
               </TableRow>
             ) : (
@@ -498,15 +412,6 @@ export default function UsersSection() {
                   <TableCell className="text-center">{user.email}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary">{user.rol}</Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center">
-                      <Switch
-                        checked={user.vendedor ?? false}
-                        onCheckedChange={() => handleToggleVendedor(user.id, user.vendedor ?? false)}
-                        className="data-[state=checked]:bg-[#D54644] data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-[#B03A38] data-[state=unchecked]:hover:bg-gray-400 transition-colors"
-                      />
-                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     {new Date(user.fechaCreacion).toLocaleDateString()}
@@ -538,9 +443,9 @@ export default function UsersSection() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+                            <AlertDialogTitle>¿Eliminar miembro?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Se eliminará permanentemente el usuario {user.nombre}.
+                              Esta acción no se puede deshacer. Se eliminará permanentemente el miembro {user.nombre}.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -565,9 +470,9 @@ export default function UsersSection() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar Usuario</DialogTitle>
+            <DialogTitle>Editar Miembro</DialogTitle>
             <DialogDescription>
-              Modifica la información del usuario
+              Modifica la información del miembro
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -576,7 +481,7 @@ export default function UsersSection() {
               <Label>Imagen de Perfil</Label>
               <div className="flex items-center gap-4 mt-2">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={imagePreview || undefined} alt={formData.nombre || "Usuario"} />
+                  <AvatarImage src={imagePreview || undefined} alt={formData.nombre || "Miembro"} />
                   <AvatarFallback>{getInitials(formData.nombre || "")}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
@@ -649,15 +554,6 @@ export default function UsersSection() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="edit-vendedor">Vendedor</Label>
-              <Switch
-                id="edit-vendedor"
-                checked={formData.vendedor}
-                onCheckedChange={(checked) => setFormData({ ...formData, vendedor: checked })}
-                className="data-[state=checked]:bg-[#D54644] data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-[#B03A38] data-[state=unchecked]:hover:bg-gray-400 transition-colors"
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
@@ -672,3 +568,4 @@ export default function UsersSection() {
     </div>
   );
 }
+

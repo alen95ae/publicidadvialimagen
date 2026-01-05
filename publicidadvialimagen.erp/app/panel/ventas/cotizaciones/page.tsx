@@ -1001,7 +1001,7 @@ export default function CotizacionesPage() {
                           />
                         </td>
                         <td className="py-3 px-4 align-middle">
-                          <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                          <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200 whitespace-nowrap">
                             {cotizacion.codigo}
                           </span>
                         </td>

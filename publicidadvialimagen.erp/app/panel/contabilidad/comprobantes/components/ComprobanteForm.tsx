@@ -290,11 +290,9 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       const response = await api("/api/contabilidad/cuentas?limit=10000")
       if (response.ok) {
         const data = await response.json()
-        // Filtrar solo cuentas transaccionales
-        const transaccionales = (data.data || []).filter(
-          (c: Cuenta) => c.transaccional === true
-        )
-        setCuentas(transaccionales)
+        // 4️⃣ VISUALIZACIÓN DE CUENTA: NO filtrar por transaccional
+        // Cargar TODAS las cuentas para poder mostrar descripción de cualquier cuenta
+        setCuentas(data.data || [])
       }
     } catch (error) {
       console.error("Error fetching cuentas:", error)
@@ -403,8 +401,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                         porcentaje: detPlantilla.porcentaje,
                         permite_seleccionar_cuenta: detPlantilla.permite_seleccionar_cuenta,
                         permite_auxiliar: detPlantilla.permite_auxiliar,
-                        esCalculado: detPlantilla.rol === "IVA_CREDITO" || detPlantilla.rol === "IVA_DEBITO" || 
-                                     detPlantilla.rol === "PROVEEDOR" || detPlantilla.rol === "CLIENTE" || detPlantilla.rol === "CAJA_BANCO",
+                        // esCalculado se calcula basado en bloqueado (no usar rol)
+                        esCalculado: detPlantilla.bloqueado === true,
                       }
                     })
                     break
@@ -420,8 +418,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
         // Asegurar que esCalculado esté definido para todos los detalles
         detallesData = detallesData.map((det: any) => ({
           ...det,
-          esCalculado: det.esCalculado ?? (det.rol === "IVA_CREDITO" || det.rol === "IVA_DEBITO" || 
-                                           det.rol === "PROVEEDOR" || det.rol === "CLIENTE" || det.rol === "CAJA_BANCO"),
+          // esCalculado se calcula basado en bloqueado (no usar rol)
+          esCalculado: det.esCalculado ?? (det.bloqueado === true),
         }))
         
         console.log("✅ Detalles procesados y establecidos:", detallesData)
@@ -546,19 +544,55 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     
     // Verificar si es una línea derivada (no editable)
     const detalle = detalles[index]
-    if (detalle && (detalle as any).esCalculado === true) {
-      // Línea derivada, no permitir edición
+    const esCalculado = detalle && (detalle as any).esCalculado === true
+    const tienePlantilla = detalles.some(d => (d as any).bloqueado !== undefined || (d as any).porcentaje !== undefined)
+    
+    if (esCalculado) {
+      // Línea derivada, no permitir edición manual
       console.log("⚠️ Intento de editar línea con esCalculado = true, bloqueando edición")
       return
     }
 
     // Si es un campo de monto, usar motor de cálculo de plantilla
+    // Esto se ejecuta incluso si hay plantilla aplicada, siempre que no sea línea calculada
     if (field === "debe_bs" || field === "haber_bs" || field === "debe_usd" || field === "haber_usd") {
       const valorNumerico = parseFloat(value) || 0
-      const nuevosDetalles = calcularMontosPlantilla(index, field, valorNumerico)
-      // Reemplazar completamente el estado con el resultado
-      setDetalles(nuevosDetalles)
-      return
+      
+      // Si hay plantilla aplicada, usar motor de cálculo
+      if (tienePlantilla) {
+        console.log("🟡 [Plantillas] handleDetalleChange - Llamando a calcularMontosPlantilla", {
+          index,
+          field,
+          valorNumerico,
+          detalleActual: {
+            cuenta: detalles[index]?.cuenta,
+            porcentaje: (detalles[index] as any)?.porcentaje,
+            bloqueado: (detalles[index] as any)?.bloqueado,
+            lado: (detalles[index] as any)?.lado
+          }
+        })
+        const nuevosDetalles = calcularMontosPlantilla(index, field, valorNumerico)
+        console.log("🟢 [Plantillas] handleDetalleChange - Resultado de calcularMontosPlantilla", {
+          totalDetalles: nuevosDetalles.length,
+          montos: nuevosDetalles.map((d, idx) => ({
+            index: idx,
+            cuenta: d.cuenta,
+            debe_bs: d.debe_bs,
+            haber_bs: d.haber_bs,
+            porcentaje: (d as any)?.porcentaje,
+            bloqueado: (d as any)?.bloqueado
+          }))
+        })
+        // Reemplazar completamente el estado con el resultado
+        setDetalles(nuevosDetalles)
+        return
+      } else {
+        // No hay plantilla, actualizar solo el campo editado
+        const updated = [...detalles]
+        updated[index] = { ...updated[index], [field]: valorNumerico }
+        setDetalles(updated)
+        return
+      }
     }
     
     // Para otros campos (cuenta, auxiliar, glosa), actualizar normalmente
@@ -750,27 +784,58 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
           await new Promise(resolve => setTimeout(resolve, 100))
         }
         
-        const detallesConPlantilla = data.data.detalles.map((det: any) => {
-          // MODELO CONTABLE CLARO Y EXPLÍCITO:
-          // - bloqueado = false: línea base editable
-          // - bloqueado = true: línea calculada automáticamente
-          // NO inferencias implícitas, la plantilla gobierna completamente
-          const esCalculado = det.bloqueado === true
+        // 1️⃣ NORMALIZAR PLANTILLA: Ordenar por orden y forzar primera línea como base
+        const detallesOrdenados = [...data.data.detalles].sort((a: any, b: any) => {
+          const ordenA = a.orden || 0
+          const ordenB = b.orden || 0
+          return ordenA - ordenB
+        })
+        
+        const detallesConPlantilla = detallesOrdenados.map((det: any, index: number) => {
+          // FORZAR PRIMERA LÍNEA COMO BASE (índice 0)
+          const esPrimeraLinea = index === 0
+          const bloqueadoNormalizado = esPrimeraLinea 
+            ? false  // Primera línea SIEMPRE es base (editable)
+            : (det.bloqueado === true || (det.porcentaje && det.porcentaje > 0))
+          
+          // IMPORTANTE: Preservar el porcentaje de la línea base si existe
+          // El motor necesita este porcentaje para calcular BASE = valorIntroducido / (porcentaje / 100)
+          const porcentajeNormalizado = esPrimeraLinea 
+            ? (det.porcentaje || null)  // Preservar porcentaje de la línea base
+            : (det.porcentaje || null)
+          
+          const esCalculado = bloqueadoNormalizado === true
           
           return {
-          ...det,
+            ...det,
             esCalculado: esCalculado,
-            bloqueado: det.bloqueado === true,
-          // Preservar cuenta_sugerida y cuenta_es_fija del backend
-          cuenta_sugerida: det.cuenta_sugerida || "",
-          cuenta_es_fija: det.cuenta_es_fija === true,
+            bloqueado: bloqueadoNormalizado,
+            porcentaje: porcentajeNormalizado,
+            // Preservar cuenta_sugerida y cuenta_es_fija del backend
+            cuenta_sugerida: det.cuenta_sugerida || "",
+            cuenta_es_fija: det.cuenta_es_fija === true,
             lado: det.lado || "DEBE",
-            porcentaje: det.porcentaje || null,
             permite_auxiliar: det.permite_auxiliar === true,
           }
         })
-        console.log("📋 Detalles cargados de plantilla:", detallesConPlantilla)
-        console.log("📊 Total de líneas:", detallesConPlantilla.length)
+        
+        // 🧠 LOG: Plantilla normalizada
+        console.log("🧠 [Plantillas] Plantilla normalizada al aplicar", {
+          total_lineas: detallesConPlantilla.length,
+          primera_linea: {
+            cuenta: detallesConPlantilla[0]?.cuenta,
+            bloqueado: detallesConPlantilla[0]?.bloqueado,
+            porcentaje: detallesConPlantilla[0]?.porcentaje,
+            lado: detallesConPlantilla[0]?.lado
+          },
+          todas_las_lineas: detallesConPlantilla.map((d: any, idx: number) => ({
+            index: idx,
+            cuenta: d.cuenta,
+            bloqueado: d.bloqueado,
+            porcentaje: d.porcentaje,
+            lado: d.lado
+          }))
+        })
         
         setDetalles(detallesConPlantilla)
         
@@ -831,9 +896,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   }
 
   // Obtener el texto a mostrar para la cuenta seleccionada (con descripción y si es fija)
+  // 4️⃣ VISUALIZACIÓN DE CUENTA: Normalizar búsqueda con String().trim()
   const getCuentaDisplayText = (cuentaCodigo: string, esFija: boolean = false) => {
     if (!cuentaCodigo) return "Seleccionar cuenta..."
-    const cuenta = cuentas.find(c => c.cuenta === cuentaCodigo)
+    const codigoNormalizado = String(cuentaCodigo).trim()
+    const cuenta = cuentas.find(c => String(c.cuenta || "").trim() === codigoNormalizado)
     if (cuenta) {
       const textoBase = `${cuenta.cuenta} - ${cuenta.descripcion}`
       return esFija ? `${textoBase} (Fija)` : textoBase
@@ -842,56 +909,50 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   }
 
   /**
-   * Motor de cálculo de plantillas contables
+   * MOTOR DE DESCOMPOSICIÓN PORCENTUAL DE PLANTILLAS CONTABLES
    * 
-   * MODELO CONTABLE:
-   * - Línea BASE: porcentaje === null o porcentaje === 0 (ÚNICA editable)
-   * - Líneas DERIVADAS: porcentaje > 0 (NO editables, esCalculado = true)
+   * MODELO: Descomposición porcentual (NO sumatorio)
    * 
-   * LÓGICA:
-   * 1. Identifica la línea base
-   * 2. Toma su monto (Debe u Haber según lado)
-   * 3. Para cada línea con porcentaje: calcula monto = base * (porcentaje / 100)
-   * 4. Aplica en Debe u Haber según lado de cada línea
-   * 5. Calcula línea de cierre (porcentaje 100% en HABER) = suma de todas las demás
-   * 6. Garantiza: Total Debe == Total Haber
-   * 7. Calcula USD automáticamente
+   * El valor introducido por el usuario representa el 100% del hecho económico.
+   * Las líneas con porcentaje reparten ese 100%, y la línea con porcentaje = 100 solo balancea.
+   * 
+   * REGLAS ABSOLUTAS:
+   * 1. Identificar línea base: bloqueado === false (si hay más de una, usar la primera)
+   * 2. BASE = valor introducido en la línea base
+   * 3. Para líneas calculadas (bloqueado === true && porcentaje < 100):
+   *    monto = BASE × (porcentaje / 100)
+   * 4. Para línea con porcentaje === 100:
+   *    monto = BASE (solo balancea, no suma componentes)
+   * 
+   * PROHIBIDO:
+   * - TOTAL_EDITABLE
+   * - Sumas acumuladas
+   * - Inferencias tipo "IVA", "cierre", "base"
+   * - Lógica que genere totales > BASE
    */
   const calcularMontosPlantilla = (detalleIndex: number, campo: string, valor: number): ComprobanteDetalle[] => {
-    // 🔵 LOG DE DIAGNÓSTICO: Entrada al motor de cálculo
-    console.log("🔵 calcularMontosPlantilla ENTER", {
+    // 🧠 LOG: Entrada al motor universal
+    console.log("🧠 [Plantillas] Motor universal - ENTRADA", {
       detalleIndex,
       campo,
       valor,
-      total_detalles: detalles.length,
-      detalles: detalles.map((d, idx) => ({
-        index: idx,
-        cuenta: d.cuenta,
-        porcentaje: (d as any).porcentaje,
-        bloqueado: (d as any).bloqueado,
-        lado: (d as any).lado,
-        debe_bs: d.debe_bs,
-        haber_bs: d.haber_bs,
-        esCalculado: d.esCalculado
-      }))
+      total_detalles: detalles.length
     })
     
-    // Verificar que hay detalles
+    // Validaciones básicas
     if (detalles.length === 0) {
-      console.log("⚠️ calcularMontosPlantilla: No hay detalles, saliendo temprano")
+      console.log("🧠 [Plantillas] No hay detalles, saliendo")
       return detalles
     }
 
-    // Verificar que el detalle existe
     const detalleEditado = detalles[detalleIndex]
     if (!detalleEditado) {
-      console.log("⚠️ calcularMontosPlantilla: Detalle editado no existe, saliendo temprano")
+      console.log("🧠 [Plantillas] Detalle editado no existe, saliendo")
       return detalles
     }
 
-    // Verificar que tiene información de plantilla con bloqueado
+    // Verificar si tiene plantilla (bloqueado definido)
     const tienePlantilla = detalles.some(d => (d as any).bloqueado !== undefined)
-    console.log("🔍 tienePlantilla (bloqueado !== undefined):", tienePlantilla)
     if (!tienePlantilla) {
       // No hay plantilla, actualizar solo el campo editado
       const nuevosDetalles = [...detalles]
@@ -905,24 +966,21 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     // Crear copia de todos los detalles
     const nuevosDetalles = detalles.map(d => ({ ...d }))
 
-    // 1. IDENTIFICAR LÍNEA BASE (bloqueado = false)
-    const lineaBaseIndex = nuevosDetalles.findIndex(d => (d as any).bloqueado === false)
-    
-    // 🟢 LOG DE DIAGNÓSTICO: Línea base detectada
-    console.log("🟢 lineaBaseIndex detectada:", lineaBaseIndex, {
-      detalleIndex,
-      esLaLineaBase: lineaBaseIndex === detalleIndex,
-      lineaBase: lineaBaseIndex >= 0 ? {
-        cuenta: nuevosDetalles[lineaBaseIndex].cuenta,
-        porcentaje: (nuevosDetalles[lineaBaseIndex] as any).porcentaje,
-        bloqueado: (nuevosDetalles[lineaBaseIndex] as any).bloqueado,
-        lado: (nuevosDetalles[lineaBaseIndex] as any).lado
-      } : null
-    })
+    // VALIDAR: Solo se puede editar líneas con bloqueado = false
+    const detalleEditadoEsBloqueado = (nuevosDetalles[detalleIndex] as any).bloqueado === true
+    if (detalleEditadoEsBloqueado) {
+      console.warn("🧠 [Plantillas] Intento de editar línea bloqueada. Solo líneas editables (bloqueado=false) son editables.")
+      return nuevosDetalles
+    }
 
+    // 1. IDENTIFICAR LÍNEA BASE (bloqueado === false)
+    // Si hay más de una, usar la primera
+    // Si no hay ninguna → NO calcular
+    let lineaBaseIndex = nuevosDetalles.findIndex(d => (d as any).bloqueado === false)
+    
     if (lineaBaseIndex === -1) {
+      console.warn("🧠 [Plantillas] No hay línea base (bloqueado=false), no se puede calcular")
       // No hay línea base, actualizar solo el campo editado
-      console.log("⚠️ No se encontró línea base (bloqueado = false), saliendo")
       nuevosDetalles[detalleIndex] = {
         ...nuevosDetalles[detalleIndex],
         [campo]: valor
@@ -930,27 +988,23 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       return nuevosDetalles
     }
 
-    // 2. VALIDAR: Solo se puede editar la línea base
-    if (detalleIndex !== lineaBaseIndex) {
-      // Intento de editar línea bloqueada, ignorar
-      console.warn("⚠️ Intento de editar línea bloqueada. Solo la línea base es editable.", {
-        detalleIndex,
-        lineaBaseIndex
-      })
-      return nuevosDetalles
+    // Si se está editando una línea que no es la base pero es editable, usarla como base
+    if (detalleIndex !== lineaBaseIndex && (nuevosDetalles[detalleIndex] as any).bloqueado === false) {
+      // La línea editada también es editable, usarla como base
+      lineaBaseIndex = detalleIndex
     }
 
-    // 3. ACTUALIZAR LÍNEA BASE con el nuevo valor
+    // 2. ACTUALIZAR LÍNEA BASE con el nuevo valor
     const lineaBase = nuevosDetalles[lineaBaseIndex]
     const ladoBase = (lineaBase as any).lado || "DEBE"
     
-    // Actualizar el campo editado en la línea base
+    // Actualizar el campo editado
     nuevosDetalles[lineaBaseIndex] = {
       ...lineaBase,
       [campo]: valor
     }
 
-    // Limpiar el campo opuesto en la línea base según su lado
+    // Limpiar el campo opuesto según el lado
     if (ladoBase === "DEBE") {
       if (campo === "debe_bs" || campo === "debe_usd") {
         nuevosDetalles[lineaBaseIndex] = {
@@ -969,19 +1023,59 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       }
     }
 
-    // 4. OBTENER MONTO BASE (según el lado de la línea base)
-    let montoBaseBs = 0
-    let montoBaseUsd = 0
+    // 3. OBTENER VALOR INTRODUCIDO Y CALCULAR BASE REAL
+    // Si la línea editable tiene porcentaje p, entonces BASE = valorIntroducido / (p / 100)
+    let valorIntroducidoBs = 0
+    let valorIntroducidoUsd = 0
     
     if (ladoBase === "DEBE") {
-      montoBaseBs = nuevosDetalles[lineaBaseIndex].debe_bs || 0
-      montoBaseUsd = nuevosDetalles[lineaBaseIndex].debe_usd || 0
+      valorIntroducidoBs = nuevosDetalles[lineaBaseIndex].debe_bs || 0
+      valorIntroducidoUsd = nuevosDetalles[lineaBaseIndex].debe_usd || 0
     } else {
-      montoBaseBs = nuevosDetalles[lineaBaseIndex].haber_bs || 0
-      montoBaseUsd = nuevosDetalles[lineaBaseIndex].haber_usd || 0
+      valorIntroducidoBs = nuevosDetalles[lineaBaseIndex].haber_bs || 0
+      valorIntroducidoUsd = nuevosDetalles[lineaBaseIndex].haber_usd || 0
     }
 
-    // 5. CALCULAR LÍNEAS DERIVADAS (bloqueado = true, porcentaje !== 100)
+    // Obtener porcentaje de la línea base
+    const pBase = (nuevosDetalles[lineaBaseIndex] as any).porcentaje
+    
+    // Calcular BASE REAL
+    // Si la línea base tiene porcentaje p, BASE = valorIntroducido / (p / 100)
+    // Si no tiene porcentaje (null/0), BASE = valorIntroducido (representa 100%)
+    let BASE_Bs = 0
+    let BASE_Usd = 0
+    
+    if (pBase !== null && pBase !== undefined && pBase > 0) {
+      // La línea base tiene un porcentaje, calcular BASE real
+      BASE_Bs = Math.round((valorIntroducidoBs / (pBase / 100)) * 100) / 100
+      BASE_Usd = Math.round((valorIntroducidoUsd / (pBase / 100)) * 100) / 100
+    } else {
+      // La línea base no tiene porcentaje o es 0, representa el 100%
+      BASE_Bs = valorIntroducidoBs
+      BASE_Usd = valorIntroducidoUsd
+    }
+
+    // 🧠 LOG: Línea base identificada y BASE calculada
+    console.log("🧠 [Plantillas] Línea base identificada (descomposición porcentual)", {
+      lineaBaseIndex,
+      pBase,
+      valorIntroducidoBs,
+      BASE_Bs,
+      BASE_Usd,
+      ladoBase,
+      cuenta: nuevosDetalles[lineaBaseIndex]?.cuenta,
+      calculo: pBase !== null && pBase !== undefined && pBase > 0 
+        ? `${valorIntroducidoBs} / (${pBase} / 100) = ${BASE_Bs}`
+        : `BASE = ${valorIntroducidoBs} (sin porcentaje)`
+    })
+
+    // 4. CALCULAR LÍNEAS CON PORCENTAJE < 100
+    // monto = BASE × (porcentaje / 100)
+    // Aplicar según lado (DEBE / HABER)
+    // NO modificar BASE
+    // NO sumar nada
+    const lineasCalculadas: Array<{ index: number; montoBs: number; montoUsd: number; porcentaje: number; lado: string }> = []
+
     nuevosDetalles.forEach((det, idx) => {
       if (idx === lineaBaseIndex) return // Saltar línea base
       
@@ -989,10 +1083,15 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       const porcentaje = (det as any).porcentaje
       const lado = (det as any).lado || "DEBE"
 
-      // Solo calcular si está bloqueada y tiene porcentaje válido (excluyendo 100%)
-      if (bloqueado === true && porcentaje && porcentaje > 0 && porcentaje !== 100) {
-        const montoCalculadoBs = Math.round((montoBaseBs * porcentaje / 100) * 100) / 100
-        const montoCalculadoUsd = Math.round((montoBaseUsd * porcentaje / 100) * 100) / 100
+      // Línea calculada: bloqueado === true AND porcentaje < 100
+      const esLineaCalculada = bloqueado === true && porcentaje !== null && porcentaje > 0 && porcentaje !== 100
+
+      if (esLineaCalculada) {
+        // Descomposición porcentual: monto = BASE × (porcentaje / 100)
+        const montoCalculadoBs = Math.round((BASE_Bs * porcentaje / 100) * 100) / 100
+        const montoCalculadoUsd = Math.round((BASE_Usd * porcentaje / 100) * 100) / 100
+
+        lineasCalculadas.push({ index: idx, montoBs: montoCalculadoBs, montoUsd: montoCalculadoUsd, porcentaje, lado })
 
         // Aplicar según el lado
         if (lado === "DEBE") {
@@ -1015,10 +1114,27 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       }
     })
 
-    // 6. CALCULAR LÍNEA DE CIERRE (bloqueado = true, porcentaje = 100)
+    // 🧠 LOG: Líneas calculadas
+    console.log("🧠 [Plantillas] Líneas calculadas (descomposición porcentual)", {
+      BASE_Bs,
+      lineasCalculadas: lineasCalculadas.map(l => ({
+        index: l.index,
+        cuenta: nuevosDetalles[l.index]?.cuenta,
+        porcentaje: l.porcentaje,
+        montoBs: l.montoBs,
+        montoUsd: l.montoUsd,
+        lado: l.lado
+      }))
+    })
+
+    // 5. CALCULAR LÍNEA CON PORCENTAJE === 100
+    // monto = BASE
+    // Aplicar SOLO en su lado
+    // Usada únicamente para balancear
+    // Nunca suma componentes
     const lineaCierreIndex = nuevosDetalles.findIndex(d => {
-      const p = (d as any).porcentaje
       const bloq = (d as any).bloqueado
+      const p = (d as any).porcentaje
       return bloq === true && p === 100
     })
 
@@ -1026,72 +1142,44 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       const lineaCierre = nuevosDetalles[lineaCierreIndex]
       const ladoCierre = (lineaCierre as any).lado || "HABER"
 
-      // Sumar todas las líneas excepto esta
-      let sumaDebeBs = 0
-      let sumaHaberBs = 0
-      let sumaDebeUsd = 0
-      let sumaHaberUsd = 0
+      // monto = BASE (no suma componentes, solo balancea)
+      const montoCierreBs = Math.round(BASE_Bs * 100) / 100
+      const montoCierreUsd = Math.round(BASE_Usd * 100) / 100
 
-      nuevosDetalles.forEach((d, idx) => {
-        if (idx !== lineaCierreIndex) {
-          sumaDebeBs += d.debe_bs || 0
-          sumaHaberBs += d.haber_bs || 0
-          sumaDebeUsd += d.debe_usd || 0
-          sumaHaberUsd += d.haber_usd || 0
-        }
-      })
-
-      // La línea de cierre debe balancear: si suma DEBE > suma HABER, va en HABER
-      // Si suma HABER > suma DEBE, va en DEBE
-      const diferenciaBs = sumaDebeBs - sumaHaberBs
-      const diferenciaUsd = sumaDebeUsd - sumaHaberUsd
-
-      // Aplicar según el lado de cierre con redondeo correcto
+      // Aplicar SOLO en su lado
       if (ladoCierre === "HABER") {
-        // Si DEBE > HABER, la diferencia va en HABER
-        if (diferenciaBs > 0) {
-          nuevosDetalles[lineaCierreIndex] = {
-            ...lineaCierre,
-            debe_bs: 0,
-            haber_bs: Math.round(diferenciaBs * 100) / 100,
-            debe_usd: 0,
-            haber_usd: Math.round(diferenciaUsd * 100) / 100
-          }
-        } else {
-          // Si HABER > DEBE, la diferencia va en DEBE
-          nuevosDetalles[lineaCierreIndex] = {
-            ...lineaCierre,
-            debe_bs: Math.round(Math.abs(diferenciaBs) * 100) / 100,
-            haber_bs: 0,
-            debe_usd: Math.round(Math.abs(diferenciaUsd) * 100) / 100,
-            haber_usd: 0
-          }
+        nuevosDetalles[lineaCierreIndex] = {
+          ...lineaCierre,
+          debe_bs: 0,
+          haber_bs: montoCierreBs,
+          debe_usd: 0,
+          haber_usd: montoCierreUsd
         }
       } else {
-        // Lado DEBE
-        if (diferenciaBs < 0) {
-          nuevosDetalles[lineaCierreIndex] = {
-            ...lineaCierre,
-            debe_bs: Math.round(Math.abs(diferenciaBs) * 100) / 100,
-            haber_bs: 0,
-            debe_usd: Math.round(Math.abs(diferenciaUsd) * 100) / 100,
-            haber_usd: 0
-          }
-        } else {
-          nuevosDetalles[lineaCierreIndex] = {
-            ...lineaCierre,
-            debe_bs: 0,
-            haber_bs: Math.round(diferenciaBs * 100) / 100,
-            debe_usd: 0,
-            haber_usd: Math.round(diferenciaUsd * 100) / 100
-          }
+        nuevosDetalles[lineaCierreIndex] = {
+          ...lineaCierre,
+          debe_bs: montoCierreBs,
+          haber_bs: 0,
+          debe_usd: montoCierreUsd,
+          haber_usd: 0
         }
       }
+      
+      // 🧠 LOG: Línea de cierre calculada
+      console.log("🧠 [Plantillas] Línea de cierre calculada (descomposición porcentual)", {
+        lineaCierreIndex,
+        BASE_Bs,
+        montoCierreBs,
+        ladoCierre,
+        cuenta: nuevosDetalles[lineaCierreIndex]?.cuenta
+      })
     }
 
-    // 7. CALCULAR USD AUTOMÁTICAMENTE (si se editó Bs)
+    // 6. CALCULAR USD AUTOMÁTICAMENTE desde BS usando tipo de cambio
+    const tipoCambio = formData.tipo_cambio || 1
+    
     if (campo === "debe_bs" || campo === "haber_bs") {
-      const tipoCambio = formData.tipo_cambio || 1
+      // Si se editó BS, calcular USD
       nuevosDetalles.forEach((det, idx) => {
         const debeUsd = (det.debe_bs || 0) / tipoCambio
         const haberUsd = (det.haber_bs || 0) / tipoCambio
@@ -1101,11 +1189,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
           haber_usd: Math.round(haberUsd * 100) / 100
         }
       })
-    }
-
-    // 8. CALCULAR Bs AUTOMÁTICAMENTE (si se editó USD)
-    if (campo === "debe_usd" || campo === "haber_usd") {
-      const tipoCambio = formData.tipo_cambio || 1
+    } else if (campo === "debe_usd" || campo === "haber_usd") {
+      // Si se editó USD, calcular BS
       nuevosDetalles.forEach((det, idx) => {
         const debeBs = (det.debe_usd || 0) * tipoCambio
         const haberBs = (det.haber_usd || 0) * tipoCambio
@@ -1117,15 +1202,22 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       })
     }
 
-    // 🟣 LOG DE DIAGNÓSTICO: Resultado final del motor de cálculo
-    console.log("🟣 RESULTADO calcularMontosPlantilla", {
+    // 🧠 LOG: Resultado final
+    const totalDebeFinal = nuevosDetalles.reduce((sum, d) => sum + (d.debe_bs || 0), 0)
+    const totalHaberFinal = nuevosDetalles.reduce((sum, d) => sum + (d.haber_bs || 0), 0)
+    
+    console.log("🧠 [Plantillas] Resultado final del cálculo", {
       campo,
       valor,
+      tipoCambio,
+      totalDebeBs: totalDebeFinal,
+      totalHaberBs: totalHaberFinal,
+      balanceado: Math.abs(totalDebeFinal - totalHaberFinal) < 0.01,
       detallesRecalculados: nuevosDetalles.map((d, idx) => ({
         index: idx,
         cuenta: d.cuenta,
-        porcentaje: (d as any).porcentaje,
         bloqueado: (d as any).bloqueado,
+        porcentaje: (d as any).porcentaje,
         lado: (d as any).lado,
         debe_bs: d.debe_bs,
         haber_bs: d.haber_bs,
@@ -1693,42 +1785,55 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                           
                           if (cuentaEsFija) {
                             // Renderizar cuenta fija bloqueada
-                            if (detalle.cuenta && detalle.cuenta.trim() !== "") {
-                              const cuenta = cuentas.find(c => c.cuenta === detalle.cuenta)
-                              
-                              // 🔍 LOG DE DIAGNÓSTICO: Búsqueda de cuenta fija
-                              console.log("🔍 BUSQUEDA CUENTA (Fija)", {
-                                detalleCuenta: detalle.cuenta,
-                                cuentaEncontrada: cuenta,
-                                totalCuentasCargadas: cuentas.length,
-                                primerasCuentas: cuentas.slice(0, 5).map(c => ({ cuenta: c.cuenta, descripcion: c.descripcion }))
-                              })
-                              
-                              if (cuenta) {
-                                const displayText = `${cuenta.cuenta} - ${cuenta.descripcion}`
-                                return (
-                                  <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm overflow-hidden">
-                                    <span className="truncate flex-1" title={displayText}>
-                                      {displayText}
-                                    </span>
-                                    <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">(Fija)</span>
-                                  </div>
-                                )
-                              } else {
-                                // Cuenta no encontrada, mostrar solo código
-                                return (
-                                  <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
-                                    <span className="truncate block">{detalle.cuenta}</span>
-                                    <span className="ml-2 text-xs text-gray-500">(Fija)</span>
-                                  </div>
-                                )
-                              }
-                            } else {
-                              // Cuenta fija pero sin código (no debería pasar)
+                            // Normalizar búsqueda: convertir a String y aplicar trim
+                            const cuentaCodigoNormalizado = String(detalle.cuenta || "").trim()
+                            const cuentaSugerida = String((detalle as any).cuenta_sugerida || "").trim()
+                            
+                            // Buscar cuenta con normalización
+                            const cuenta = cuentas.find(c => {
+                              const codigoNormalizado = String(c.cuenta || "").trim()
+                              return codigoNormalizado === cuentaCodigoNormalizado
+                            })
+                            
+                            // Fallback: intentar con cuenta_sugerida si no se encontró
+                            const cuentaAlternativa = !cuenta && cuentaSugerida
+                              ? cuentas.find(c => {
+                                  const codigoNormalizado = String(c.cuenta || "").trim()
+                                  return codigoNormalizado === cuentaSugerida
+                                })
+                              : null
+                            
+                            // 🔍 LOG DE DIAGNÓSTICO: Búsqueda de cuenta fija
+                            console.log("🔍 BUSQUEDA CUENTA (Fija)", {
+                              detalleCuenta: detalle.cuenta,
+                              cuentaCodigoNormalizado,
+                              cuentaSugerida,
+                              cuentaEncontrada: cuenta || cuentaAlternativa,
+                              totalCuentasCargadas: cuentas.length,
+                              primerasCuentas: cuentas.slice(0, 5).map(c => ({ cuenta: c.cuenta, descripcion: c.descripcion }))
+                            })
+                            
+                            const cuentaFinal = cuenta || cuentaAlternativa
+                            
+                            if (cuentaFinal) {
+                              const displayText = `${cuentaFinal.cuenta} - ${cuentaFinal.descripcion}`
                               return (
-                                <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm">
-                                  <span className="truncate block text-muted-foreground">Cuenta fija</span>
-                                  <span className="ml-2 text-xs text-gray-500">(Fija)</span>
+                                <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm overflow-hidden">
+                                  <span className="truncate flex-1" title={displayText}>
+                                    {displayText}
+                                  </span>
+                                  <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">(Fija)</span>
+                                </div>
+                              )
+                            } else {
+                              // Cuenta no encontrada, mostrar código con fallback seguro
+                              const codigoAMostrar = cuentaCodigoNormalizado || cuentaSugerida || "Sin cuenta"
+                              return (
+                                <div className="w-[250px] h-9 px-3 py-2 bg-gray-100 rounded-md border border-gray-200 flex items-center font-mono text-sm overflow-hidden">
+                                  <span className="truncate flex-1" title={codigoAMostrar}>
+                                    {codigoAMostrar}
+                                  </span>
+                                  <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">(Fija)</span>
                                 </div>
                               )
                             }
@@ -1744,7 +1849,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                                 // Si no hay cuenta seleccionada pero hay cuenta_sugerida, precargarla
                                 const cuentaSugerida = (detalle as any).cuenta_sugerida
                                 if (!detalle.cuenta && cuentaSugerida) {
-                                  const cuentaEncontrada = cuentas.find(c => c.cuenta === cuentaSugerida)
+                                  const cuentaSugeridaNormalizada = String(cuentaSugerida).trim()
+                                  const cuentaEncontrada = cuentas.find(c => String(c.cuenta || "").trim() === cuentaSugeridaNormalizada)
                                   if (cuentaEncontrada) {
                                     // Precargar la cuenta sugerida en el selector
                                     setFilteredCuentas(prev => ({ 
@@ -1765,7 +1871,9 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                             {(() => {
                               const esFija = (detalle as any).cuenta_es_fija === true
                               const displayText = getCuentaDisplayText(detalle.cuenta || "", esFija)
-                              const cuenta = cuentas.find(c => c.cuenta === detalle.cuenta)
+                              // 4️⃣ VISUALIZACIÓN DE CUENTA: Normalizar búsqueda
+                              const cuentaCodigoNormalizado = String(detalle.cuenta || "").trim()
+                              const cuenta = cuentas.find(c => String(c.cuenta || "").trim() === cuentaCodigoNormalizado)
                               
                               // 🔍 LOG DE DIAGNÓSTICO: Búsqueda de cuenta en combobox
                               console.log("🔍 BUSQUEDA CUENTA (Combobox)", {

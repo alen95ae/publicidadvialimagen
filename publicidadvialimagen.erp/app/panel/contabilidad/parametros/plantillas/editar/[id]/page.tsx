@@ -93,7 +93,8 @@ export default function EditarPlantillaPage() {
           ...det,
           cuenta_es_fija: det.cuenta_es_fija ?? (det.cuenta_fija !== null && det.cuenta_fija !== ""),
           cuenta_id: det.cuenta_id ? Number(det.cuenta_id) : null,
-          bloqueado: det.bloqueado ?? (det.porcentaje !== null && det.porcentaje > 0),
+          // Cargar bloqueado directamente desde backend, sin inferencias
+          bloqueado: det.bloqueado ?? false,
         }))
         
         setDetallesPlantilla(detallesMapeados)
@@ -156,10 +157,9 @@ export default function EditarPlantillaPage() {
       )
     } else if (campo === "porcentaje") {
       const porcentajeValue = valor !== "" && valor !== null ? parseFloat(valor) : null
-      // Auto-ajustar bloqueado: si porcentaje > 0, bloqueado = true
-      const bloqueado = porcentajeValue !== null && porcentajeValue > 0
+      // NO inferir bloqueado desde porcentaje - el usuario lo controla explícitamente
       nuevosDetalles = detallesPlantilla.map((d) =>
-        d.id === id ? { ...d, porcentaje: porcentajeValue, bloqueado: bloqueado } : d
+        d.id === id ? { ...d, porcentaje: porcentajeValue } : d
       )
     } else if (campo === "bloqueado") {
       nuevosDetalles = detallesPlantilla.map((d) =>
@@ -252,6 +252,14 @@ export default function EditarPlantillaPage() {
   const guardarCambios = async () => {
     try {
       setSaving(true)
+
+      // 4️⃣ VALIDACIÓN: Impedir guardar si todas las líneas están bloqueadas
+      const todasBloqueadas = detallesPlantilla.length > 0 && detallesPlantilla.every(d => d.bloqueado === true)
+      if (todasBloqueadas) {
+        toast.error("La plantilla debe tener al menos una línea editable (bloqueado = No)")
+        setSaving(false)
+        return
+      }
 
       // 1. Guardar cambios en la plantilla principal
       const responsePlantilla = await api(`/api/contabilidad/plantillas/${plantillaId}`, {
@@ -512,13 +520,14 @@ export default function EditarPlantillaPage() {
                   <TableHead className="w-32">Permite Auxiliar</TableHead>
                   <TableHead className="w-32">Porcentaje</TableHead>
                   <TableHead className="w-32">Lado</TableHead>
+                  <TableHead className="w-32">Bloqueado</TableHead>
                   <TableHead className="w-24">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {detallesPlantilla.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={9} className="text-center text-gray-500 py-8">
                       No hay líneas configuradas. Haz clic en "Agregar Línea" para comenzar.
                     </TableCell>
                   </TableRow>
@@ -662,6 +671,20 @@ export default function EditarPlantillaPage() {
                                 <SelectItem value="HABER">HABER</SelectItem>
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          
+                          {/* Bloqueado */}
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={detalle.bloqueado}
+                                onCheckedChange={(checked) => actualizarDetalle(detalle.id, "bloqueado", checked)}
+                                className="data-[state=checked]:bg-red-600"
+                              />
+                              <Label className="text-sm">
+                                {detalle.bloqueado ? "Sí" : "No"}
+                              </Label>
+                            </div>
                           </TableCell>
                           
                           {/* Acciones */}

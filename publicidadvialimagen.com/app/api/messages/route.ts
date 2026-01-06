@@ -2,7 +2,11 @@ export const runtime = 'nodejs'
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createMensajeSupabase } from "@/lib/supabaseMensajes";
+import { validateCriticalEndpoint } from "@/lib/api-protection";
+import { messagesSchema, sanitizeEmailForLog } from "@/lib/validation-schemas";
+import { sanitizeText } from "@/lib/sanitize";
 
 // 👉 Usa la versión REST directa (sin SDK) - Mantenido para compatibilidad
 const API = "https://api.airtable.com/v0";
@@ -25,8 +29,6 @@ async function airtableUpsertByEmail(fields: Record<string, any>) {
     records: [{ fields }],
   };
   
-  console.log('🔍 Upsert request:', { url, body });
-  
   const res = await fetch(url, {
     method: "POST",
     headers: headers(),
@@ -34,14 +36,11 @@ async function airtableUpsertByEmail(fields: Record<string, any>) {
     cache: "no-store",
   });
   
-  console.log('🔍 Upsert response status:', res.status);
-  
   if (!res.ok) {
     const text = await res.text();
-    console.error("Error al crear/actualizar contacto:", text);
+    console.error("Error al crear/actualizar contacto en Airtable");
     
     // Si el upsert falla, intentar crear directamente
-    console.log('🔄 Intentando crear contacto directamente...');
     return await airtableCreateContacto(fields);
   }
   return res.json();
@@ -51,8 +50,6 @@ async function airtableCreateContacto(fields: Record<string, any>) {
   const url = `${API}/${baseId}/${encodeURIComponent(TABLE_CONTACTOS)}`;
   const body = { records: [{ fields }] };
   
-  console.log('🔍 Create contacto request:', { url, body });
-  
   const res = await fetch(url, {
     method: "POST",
     headers: headers(),
@@ -60,12 +57,10 @@ async function airtableCreateContacto(fields: Record<string, any>) {
     cache: "no-store",
   });
   
-  console.log('🔍 Create contacto response status:', res.status);
-  
   if (!res.ok) {
     const text = await res.text();
-    console.error("Error al crear contacto:", text);
-    throw new Error(`Create contacto falló: ${res.status} ${text}`);
+    console.error("Error al crear contacto en Airtable");
+    throw new Error(`Create contacto falló: ${res.status}`);
   }
   return res.json();
 }
@@ -88,61 +83,73 @@ async function airtableCreateMensaje(fields: Record<string, any>) {
 }
 
 export async function POST(req: Request) {
+  // 1. Validación de protección contra bots (ANTES de parsear body)
+  const protection = validateCriticalEndpoint(req as NextRequest, false);
+  if (!protection.allowed) {
+    return protection.response!;
+  }
+
+  const requestId = crypto.randomUUID().substring(0, 8);
+  console.log(`[${requestId}] Mensaje recibido`);
+
   try {
     const body = await req.json();
-    const nombre = (body?.name ?? body?.nombre ?? "").toString();
-    const email = (body?.email ?? "").toString();
-    const telefono = (body?.phone ?? body?.telefono ?? "").toString();
-    const empresa = (body?.company ?? body?.empresa ?? "").toString();
-    const mensaje = (body?.message ?? body?.mensaje ?? "").toString();
 
-    // === Anti-spam lightweight validation ===
-    // Fields expected from client: website (honeypot), ts (timestamp), js (flag)
-    const website = (body?.website ?? "").toString();
-    const js = (body?.js ?? "0").toString();
-    const tsRaw = body?.ts;
-    const ts = typeof tsRaw === 'number' ? tsRaw : Number(tsRaw);
+    // Validación robusta con Zod (incluye validación anti-spam)
+    const validationResult = messagesSchema.safeParse(body);
+    if (!validationResult.success) {
+      console.warn(`[${requestId}] Validación fallida:`, validationResult.error.errors[0]?.message);
+      return NextResponse.json(
+        { 
+          error: validationResult.error.errors[0]?.message || "Datos inválidos",
+          details: validationResult.error.errors.map(e => e.message)
+        },
+        { status: 400 }
+      );
+    }
+
+    const { nombre, email, telefono, empresa, mensaje, website, js, ts } = validationResult.data;
+
+    // Validación anti-spam adicional (después de Zod)
     const now = Date.now();
-    const elapsedMs = Number.isFinite(ts) ? now - ts : 0;
-
-    // Reject if honeypot filled, JS not executed, or submission too fast (< 3000ms)
-    // Adjust MIN_SUBMIT_DELAY_MS to tweak the time threshold
+    const elapsedMs = ts ? now - ts : 0;
     const MIN_SUBMIT_DELAY_MS = 3000;
+    
     if (website.trim() !== "" || js !== "1" || elapsedMs < MIN_SUBMIT_DELAY_MS) {
+      console.warn(`[${requestId}] Solicitud rechazada por anti-spam`);
       return NextResponse.json(
         { error: "Solicitud rechazada" },
         { status: 400 }
       );
     }
 
-    if (!email) {
-      return NextResponse.json({ error: "Email es obligatorio" }, { status: 400 });
-    }
+    // Sanitización XSS: eliminar HTML y atributos peligrosos de campos de texto libre
+    // Aplicar DESPUÉS de validar con Zod y ANTES de guardar en BD
+    const nombreSanitizado = sanitizeText(nombre);
+    const empresaSanitizada = empresa ? sanitizeText(empresa) : undefined;
+    const mensajeSanitizado = sanitizeText(mensaje);
+    // NO sanitizar: email, telefono (tienen formato específico validado por Zod)
 
     // 1️⃣ Guardar mensaje en Supabase (principal)
     let mensajeId: string | null = null
     try {
-      console.log('📝 Intentando guardar en Supabase:', { nombre, email, telefono, empresa, mensaje: mensaje.substring(0, 50) + '...' })
+      console.log(`[${requestId}] Guardando en Supabase`);
       const mensajeSupabase = await createMensajeSupabase({
-        nombre: nombre || '',
+        nombre: nombreSanitizado,
         email: email,
         telefono: telefono || undefined,
-        empresa: empresa || undefined,
-        mensaje: mensaje,
+        empresa: empresaSanitizada,
+        mensaje: mensajeSanitizado,
         estado: 'NUEVO'
       })
       mensajeId = mensajeSupabase.id || null
-      console.log('✅ Mensaje guardado en Supabase:', mensajeId)
+      console.log(`[${requestId}] Mensaje guardado: ${mensajeId}`)
     } catch (error: any) {
-      console.error('❌ Error guardando en Supabase:', error)
-      console.error('❌ Error details:', error.message)
-      console.error('❌ Error stack:', error.stack)
-      // Si falla Supabase, lanzar el error para que se vea en el response
+      console.error(`[${requestId}] Error guardando en Supabase:`, error?.message || 'unknown');
       return NextResponse.json(
         { 
           error: "Error al guardar formulario en Supabase", 
-          details: error.message,
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+          details: error.message
         },
         { status: 500 }
       )
@@ -152,15 +159,15 @@ export async function POST(req: Request) {
     let contactoId: string | null = null
     try {
       const contactoFields = {
-        Nombre: nombre,
+        Nombre: nombreSanitizado,
         Email: email,
         ["Teléfono"]: telefono,
-        Empresa: empresa,
+        Empresa: empresaSanitizada || empresa,
       };
       const upsertRes = await airtableUpsertByEmail(contactoFields);
       contactoId = upsertRes?.records?.[0]?.id ?? null;
     } catch (error: any) {
-      console.error('⚠️ Error en Airtable (no crítico):', error)
+      console.warn(`[${requestId}] Error en Airtable (no crítico)`);
     }
 
     // 3️⃣ Fallback: Crear mensaje en Airtable (opcional, para compatibilidad)
@@ -168,20 +175,21 @@ export async function POST(req: Request) {
     if (!mensajeId) {
       try {
         const mensajeFields = {
-          Nombre: nombre,
+          Nombre: nombreSanitizado,
           Email: email,
           ["Teléfono"]: telefono,
-          Empresa: empresa,
-          Mensaje: mensaje,
+          Empresa: empresaSanitizada || empresa,
+          Mensaje: mensajeSanitizado,
           Estado: "NUEVO",
         };
         const createRes = await airtableCreateMensaje(mensajeFields);
         mensajeAirtableId = createRes?.records?.[0]?.id ?? null;
       } catch (error: any) {
-        console.error('⚠️ Error creando mensaje en Airtable (no crítico):', error)
+        console.warn(`[${requestId}] Error creando mensaje en Airtable (no crítico)`);
       }
     }
 
+    console.log(`[${requestId}] Mensaje procesado exitosamente`);
     return NextResponse.json({ 
       success: true, 
       mensajeId: mensajeId || mensajeAirtableId,
@@ -189,14 +197,11 @@ export async function POST(req: Request) {
       source: mensajeId ? 'supabase' : 'airtable'
     });
   } catch (e: any) {
-    console.error("❌ Error en /api/messages:", e);
-    console.error("❌ Error message:", e.message);
-    console.error("❌ Error stack:", e.stack);
+    console.error(`[${requestId}] Error en /api/messages:`, e?.message || 'unknown');
     return NextResponse.json(
       { 
         error: e.message || "Error interno",
-        details: e.message,
-        stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+        details: e.message
       },
       { status: 500 }
     );

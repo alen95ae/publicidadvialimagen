@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
+import { botProtectionMiddleware } from "./middleware-bot-protection";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -82,8 +83,16 @@ function isPublicRoute(pathname: string): boolean {
 // MIDDLEWARE PRINCIPAL
 // ============================================================================
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // ✅ 0. PROTECCIÓN CONTRA BOTS (PRIMERO)
+  // Aplicar antes de cualquier otra lógica
+  // El botProtectionMiddleware ya maneja rutas esenciales (robots.txt, sitemap, etc.)
+  const botProtectionResult = await botProtectionMiddleware(req);
+  if (botProtectionResult) {
+    return botProtectionResult; // Bloqueo o rate limit
+  }
 
   // ✅ 1. RUTAS PÚBLICAS: Permitir acceso inmediato sin procesamiento
   // Esto asegura que bots de Vercel, Googlebot, etc. puedan acceder sin problemas
@@ -189,5 +198,9 @@ export const config = {
     "/product-page/:path*",
     "/products/:path*",
     "/vallas/:path*",
+    // Rutas de API (para protección de bots)
+    "/api/:path*",
+    // Rutas públicas (para protección de bots y rate limiting)
+    "/((?!_next/static|_next/image|favicon.ico|_next/webpack-hmr).*)",
   ],
 };

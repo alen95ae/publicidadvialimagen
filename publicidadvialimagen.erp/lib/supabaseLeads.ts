@@ -14,6 +14,7 @@ export interface LeadSupabase {
   sector?: string | null
   interes?: string | null
   origen?: string | null
+  deleted_at?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -29,6 +30,7 @@ export interface Lead {
   sector?: string
   interes?: string
   origen?: string
+  deleted_at?: string
   created_at?: string
   updated_at?: string
 }
@@ -47,6 +49,7 @@ export function supabaseToLead(record: LeadSupabase): Lead {
     sector: record.sector || undefined,
     interes: record.interes || undefined,
     origen: record.origen || undefined,
+    deleted_at: record.deleted_at || undefined,
     created_at: record.created_at || new Date().toISOString(),
     updated_at: record.updated_at || new Date().toISOString()
   }
@@ -105,11 +108,20 @@ export async function getAllLeads(options?: {
   origen?: string
   page?: number
   limit?: number
+  includeDeleted?: boolean
 }): Promise<{ data: Lead[], total: number }> {
   try {
     let queryBuilder = supabase
       .from('leads')
       .select('*', { count: 'exact' })
+
+    // Por defecto, excluir leads eliminados (deleted_at IS NULL)
+    // Si includeDeleted es true, solo mostrar los eliminados (deleted_at IS NOT NULL)
+    if (options?.includeDeleted) {
+      queryBuilder = queryBuilder.not('deleted_at', 'is', null)
+    } else {
+      queryBuilder = queryBuilder.is('deleted_at', null)
+    }
 
     // Aplicar filtros de búsqueda
     if (options?.query && options.query.trim()) {
@@ -328,10 +340,16 @@ export async function getAllLeadsIds(options?: {
   sector?: string
   interes?: string
   origen?: string
+  includeDeleted?: boolean
 }): Promise<string[]> {
   let queryBuilder = supabase
     .from('leads')
     .select('id')
+
+  // Por defecto, excluir leads eliminados
+  if (!options?.includeDeleted) {
+    queryBuilder = queryBuilder.is('deleted_at', null)
+  }
 
   // Aplicar filtros de búsqueda
   if (options?.query && options.query.trim()) {
@@ -393,6 +411,54 @@ export async function getUniqueFieldValues(field: 'sector' | 'interes' | 'origen
   } catch (error) {
     console.error(`❌ Error en getUniqueFieldValues(${field}):`, error)
     return []
+  }
+}
+
+/**
+ * Matar leads (marcar como eliminados con deleted_at)
+ */
+export async function killLeads(leadIds: string[]): Promise<number> {
+  try {
+    const now = new Date().toISOString()
+    const { error, count } = await supabase
+      .from('leads')
+      .update({ deleted_at: now, updated_at: now })
+      .in('id', leadIds)
+      .is('deleted_at', null) // Solo actualizar si no están ya eliminados
+
+    if (error) {
+      console.error('❌ Error killing leads:', error)
+      return 0
+    }
+
+    return count || 0
+  } catch (error) {
+    console.error('❌ Error en killLeads:', error)
+    return 0
+  }
+}
+
+/**
+ * Restaurar leads (quitar deleted_at)
+ */
+export async function restoreLeads(leadIds: string[]): Promise<number> {
+  try {
+    const now = new Date().toISOString()
+    const { error, count } = await supabase
+      .from('leads')
+      .update({ deleted_at: null, updated_at: now })
+      .in('id', leadIds)
+      .not('deleted_at', 'is', null) // Solo actualizar si están eliminados
+
+    if (error) {
+      console.error('❌ Error restoring leads:', error)
+      return 0
+    }
+
+    return count || 0
+  } catch (error) {
+    console.error('❌ Error en restoreLeads:', error)
+    return 0
   }
 }
 

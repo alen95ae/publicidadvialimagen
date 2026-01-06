@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Download, Edit, Trash2, X } from "lucide-react"
+import { Plus, Search, Download, Edit, Trash2, X, Trash, RotateCcw, UserPlus } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { PermisoEliminar } from "@/components/permiso"
@@ -38,6 +39,7 @@ interface LeadFilters {
 }
 
 export default function LeadsPage() {
+  const router = useRouter()
   const { puedeEliminar, puedeEditar } = usePermisosContext()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
@@ -392,6 +394,72 @@ export default function LeadsPage() {
     toast.info(`Campo ${field} actualizado para ${selectedLeads.size} lead(s)`)
   }
 
+  // Convertir leads seleccionados a contactos
+  const handleConvertToContact = async () => {
+    if (selectedLeads.size === 0) return
+
+    const count = selectedLeads.size
+    const confirmMessage = `¿Estás seguro de convertir ${count} lead(s) en contacto(s)?`
+    if (!confirm(confirmMessage)) return
+
+    try {
+      const leadIds = Array.from(selectedLeads)
+      const response = await fetch('/api/leads/convert-to-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ leadIds })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`${result.count || count} lead(s) convertido(s) a contacto(s)`)
+        setSelectedLeads(new Set())
+        setSelectAllMode('none')
+        fetchLeads()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Error al convertir leads")
+      }
+    } catch (error) {
+      console.error('Error al convertir leads:', error)
+      toast.error("Error de conexión")
+    }
+  }
+
+  // Matar leads seleccionados
+  const handleKillLeads = async () => {
+    if (selectedLeads.size === 0) return
+
+    const count = selectedLeads.size
+    const confirmMessage = `¿Estás seguro de matar ${count} lead(s)? Los leads se moverán a la papelera.`
+    if (!confirm(confirmMessage)) return
+
+    try {
+      const leadIds = Array.from(selectedLeads)
+      const response = await fetch('/api/leads/kill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ leadIds })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`${result.count || count} lead(s) movido(s) a la papelera`)
+        setSelectedLeads(new Set())
+        setSelectAllMode('none')
+        fetchLeads()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Error al matar leads")
+      }
+    } catch (error) {
+      console.error('Error al matar leads:', error)
+      toast.error("Error de conexión")
+    }
+  }
+
   // Crear nuevo lead
   const handleCreate = () => {
     setFormData({
@@ -627,6 +695,13 @@ export default function LeadsPage() {
 
             {/* Botones - Derecha */}
             <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => router.push('/panel/contactos/leads/papelera')}
+              >
+                <Trash className="w-4 h-4 mr-2" />
+                Papelera
+              </Button>
               <Button variant="outline" onClick={handleExport}>
                 <Download className="w-4 h-4 mr-2" />
                 Exportar CSV
@@ -649,26 +724,6 @@ export default function LeadsPage() {
                       : `${selectedLeads.size} lead(s) seleccionado(s)`
                     }
                   </span>
-                  <Select onValueChange={(value) => handleBulkFieldChange('sector', value)}>
-                    <SelectTrigger className="h-8 w-40">
-                      <SelectValue placeholder="Sector" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {uniqueSectors.map(sector => (
-                        <SelectItem key={sector} value={sector}>{sector}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select onValueChange={(value) => handleBulkFieldChange('interes', value)}>
-                    <SelectTrigger className="h-8 w-40">
-                      <SelectValue placeholder="Interés" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {uniqueIntereses.map(interes => (
-                        <SelectItem key={interes} value={interes}>{interes}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <Select onValueChange={(value) => handleBulkFieldChange('origen', value)}>
                     <SelectTrigger className="h-8 w-40">
                       <SelectValue placeholder="Origen" />
@@ -707,6 +762,24 @@ export default function LeadsPage() {
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Exportar selección
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={handleConvertToContact}
+                    className="border-green-500 text-green-700 hover:bg-green-50"
+                  >
+                    <UserPlus className="w-4 h-4 mr-1" />
+                    Convertir en contacto
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={handleKillLeads}
+                    className="border-orange-500 text-orange-700 hover:bg-orange-50"
+                  >
+                    <Trash className="w-4 h-4 mr-1" />
+                    Matar lead
                   </Button>
                   <PermisoEliminar modulo="contactos">
                     <AlertDialog>

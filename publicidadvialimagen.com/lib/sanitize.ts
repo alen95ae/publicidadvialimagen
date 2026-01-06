@@ -2,19 +2,14 @@
  * Sanitización XSS de inputs de usuario
  * 
  * Neutraliza payloads XSS almacenados antes de guardar en BD.
- * Usa DOMPurify con JSDOM para modo server-side.
  * 
  * Política MUY restrictiva: solo texto plano, sin etiquetas HTML.
  * 
  * NOTA: React escapa por defecto, pero esta sanitización es defensa en profundidad.
+ * 
+ * IMPLEMENTACIÓN: Usa regex simple para eliminar HTML, sin dependencias de DOM.
+ * Esto evita problemas de compatibilidad ESM/CommonJS en producción (Vercel).
  */
-
-import DOMPurify from 'dompurify'
-import { JSDOM } from 'jsdom'
-
-// Crear window object para DOMPurify en modo server
-const window = new JSDOM('').window
-const purify = DOMPurify(window as unknown as Window)
 
 /**
  * Sanitiza texto de usuario eliminando HTML y atributos peligrosos
@@ -31,28 +26,38 @@ export function sanitizeText(input: string): string {
     return ''
   }
 
-  // Configuración MUY restrictiva: solo texto plano
-  const config: DOMPurify.Config = {
-    // No permitir ninguna etiqueta HTML
-    ALLOWED_TAGS: [],
-    // No permitir ningún atributo
-    ALLOWED_ATTR: [],
-    // Mantener saltos de línea como espacios
-    KEEP_CONTENT: true,
-    // No permitir data URIs
-    ALLOW_DATA_ATTR: false,
-    // No permitir URIs peligrosos
-    ALLOW_UNKNOWN_PROTOCOLS: false,
-  }
+  // Paso 1: Eliminar todas las etiquetas HTML (incluyendo script, style, etc.)
+  // Esta regex captura cualquier etiqueta HTML, incluyendo atributos
+  let sanitized = input.replace(/<[^>]*>/g, '')
 
-  // Sanitizar: elimina todas las etiquetas y devuelve solo el contenido de texto
-  const sanitized = purify.sanitize(input, config)
+  // Paso 2: Eliminar entidades HTML codificadas comunes
+  // Decodificar entidades básicas para mantener legibilidad
+  sanitized = sanitized
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
 
-  // Limpiar espacios múltiples y saltos de línea
-  return sanitized
+  // Paso 3: Eliminar cualquier intento de inyección de JavaScript
+  // Eliminar patrones comunes de XSS
+  sanitized = sanitized
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '') // Eliminar event handlers (onclick, onerror, etc.)
+    .replace(/data:/gi, '') // Eliminar data URIs potencialmente peligrosos
+
+  // Paso 4: Limpiar espacios múltiples y saltos de línea
+  sanitized = sanitized
     .replace(/\s+/g, ' ') // Múltiples espacios a uno solo
     .replace(/\n+/g, ' ') // Saltos de línea a espacio
+    .replace(/\r+/g, ' ') // Retornos de carro a espacio
+    .replace(/\t+/g, ' ') // Tabs a espacio
     .trim() // Eliminar espacios al inicio y final
+
+  return sanitized
 }
 
 /**

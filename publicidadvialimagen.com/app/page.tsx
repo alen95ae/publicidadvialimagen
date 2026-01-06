@@ -477,10 +477,26 @@ export default function HomePage() {
         })
       })
 
+      // Manejo robusto de respuesta: no asumir que siempre hay JSON
+      let data = null;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          console.error('Respuesta no JSON:', text);
+          throw new Error(`Error del servidor (${response.status}): ${response.statusText}`);
+        }
+      } catch (jsonError) {
+        console.error('Error parseando respuesta JSON:', jsonError);
+        throw new Error(`Error del servidor (${response.status}): ${response.statusText}`);
+      }
+
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Error sending message:', errorData)
-        alert('Error al enviar el mensaje. Por favor, inténtalo de nuevo.')
+        const errorMessage = data?.error || data?.message || `Error del servidor (${response.status})`;
+        console.error('Error sending message:', data);
+        alert(`Error al enviar el mensaje: ${errorMessage}`);
         return
       }
 

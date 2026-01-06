@@ -41,6 +41,16 @@ export default function AjustesHeader() {
           >
             Invitaciones
           </Link>
+          <Link 
+            href="/panel/ajustes/notificaciones" 
+            className={`text-sm font-medium transition-colors ${
+              pathname === "/panel/ajustes/notificaciones" 
+                ? "text-[#D54644]" 
+                : "text-gray-600 hover:text-[#D54644]"
+            }`}
+          >
+            Notificaciones
+          </Link>
         </div>
       </div>
     </header>

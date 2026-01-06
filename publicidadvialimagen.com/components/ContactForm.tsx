@@ -31,8 +31,26 @@ export default function ContactForm() {
         body: JSON.stringify(form),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Error al enviar");
+      // Manejo robusto de respuesta: no asumir que siempre hay JSON
+      let data = null;
+      try {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          data = await res.json();
+        } else {
+          const text = await res.text();
+          console.error('Respuesta no JSON:', text);
+          throw new Error(`Error del servidor (${res.status}): ${res.statusText}`);
+        }
+      } catch (jsonError) {
+        console.error('Error parseando respuesta JSON:', jsonError);
+        throw new Error(`Error del servidor (${res.status}): ${res.statusText}`);
+      }
+
+      if (!res.ok) {
+        const errorMessage = data?.error || data?.message || `Error del servidor (${res.status})`;
+        throw new Error(errorMessage);
+      }
 
       setOk("¡Mensaje enviado! Te responderemos pronto.");
       setForm({ nombre: "", email: "", telefono: "", empresa: "", mensaje: "" });

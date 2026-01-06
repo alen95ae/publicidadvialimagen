@@ -88,6 +88,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Usuarios", href: "/panel/ajustes/usuarios" },
       { label: "Roles y Permisos", href: "/panel/ajustes/roles" },
       { label: "Invitaciones", href: "/panel/ajustes/invitaciones" },
+      { label: "Notificaciones", href: "/panel/ajustes/notificaciones" },
     ],
   },
   contactos: {

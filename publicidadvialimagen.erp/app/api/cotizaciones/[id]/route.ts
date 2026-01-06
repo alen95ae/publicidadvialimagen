@@ -259,25 +259,7 @@ export async function PATCH(
       const seEstaRechazando = estadoAnterior !== 'Rechazada' && nuevoEstado === 'Rechazada'
       const hayCambioEstado = estadoAnterior !== nuevoEstado
 
-      // Crear notificación OBLIGATORIA según el cambio de estado
-      // Si falla, loguear pero NO fallar la actualización de la cotización
-      try {
-        const { notificarCotizacion } = await import('@/lib/notificaciones')
-        
-        if (seEstaAprobando) {
-          await notificarCotizacion(id, 'aprobada', usuario.id)
-        } else if (seEstaRechazando) {
-          await notificarCotizacion(id, 'rechazada', usuario.id)
-        } else if (hayCambioEstado) {
-          // Si hay cambio de estado pero no es aprobada/rechazada, notificar como actualizada
-          await notificarCotizacion(id, 'actualizada', usuario.id)
-        }
-        // Si no hay cambio de estado, no notificar (solo cambios de campos)
-      } catch (notifError) {
-        // Log error pero NO fallar la actualización de la cotización
-        console.error('[PATCH /api/cotizaciones/[id]] ❌ ERROR creando notificación (continuando):', notifError);
-        console.error('[PATCH /api/cotizaciones/[id]] Error details:', notifError instanceof Error ? notifError.message : String(notifError));
-      }
+      // Notificaciones de cotización aprobada/rechazada/actualizada ELIMINADAS según requerimientos
       
       // Si se está aprobando, descontar stock de los productos (con idempotencia)
       if (seEstaAprobando) {

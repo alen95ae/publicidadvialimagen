@@ -7,6 +7,7 @@ import { formSubmitSchema, sanitizeEmailForLog } from "@/lib/validation-schemas"
 import { sanitizeText } from "@/lib/sanitize";
 
 export const runtime = 'nodejs'; // Asegurar runtime Node.js
+export const dynamic = 'force-dynamic'; // Forzar dinámico para evitar cacheo
 
 // Función segura para obtener Supabase Admin sin depender de imports complejos
 function getSupabaseAdminSafe() {
@@ -43,12 +44,23 @@ function getSupabaseAdminSafe() {
  * - SIEMPRE devolver JSON (nunca HTML)
  * - Guardar formulario es CRÍTICO
  * - Notificaciones son SIDE-EFFECT (no bloqueante)
+ * 
+ * ESTRUCTURA: app/api/form/submit/route.ts
+ * EXPORT: export async function POST(req: Request)
  */
 export async function POST(req: Request) {
   // 1. Validación de protección contra bots (ANTES de parsear body)
   const protection = validateCriticalEndpoint(req as NextRequest, false);
   if (!protection.allowed) {
-    return protection.response!;
+    // Asegurar que la respuesta de protección es JSON
+    if (protection.response) {
+      return protection.response;
+    }
+    // Fallback: devolver JSON si no hay respuesta
+    return NextResponse.json(
+      { ok: false, error: 'Access denied' },
+      { status: 403 }
+    );
   }
 
   const requestId = crypto.randomUUID().substring(0, 8);

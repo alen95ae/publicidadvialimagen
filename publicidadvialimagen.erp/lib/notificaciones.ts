@@ -135,7 +135,7 @@ export async function crearNotificacionPorRol(
 
 /**
  * Helper para crear notificación de formulario nuevo
- * Notifica a: Administrador, Ventas
+ * Notifica SOLO a: Desarrollador (SAGRADA - NO MODIFICAR)
  */
 export async function notificarFormularioNuevo(
   formularioId: string,
@@ -151,7 +151,7 @@ export async function notificarFormularioNuevo(
     entidad_tipo: 'formulario',
     entidad_id: formularioId,
     prioridad: 'media',
-    roles_destino: ['admin', 'desarrollador'], // Solo admin y desarrollador
+    roles_destino: ['desarrollador'], // SOLO desarrollador (SAGRADA)
   });
 
   console.log('[NOTIFICACIONES] [notificarFormularioNuevo] ✅ Proceso completado');
@@ -221,6 +221,7 @@ export async function notificarAlquilerCreado(
 
 /**
  * Helper para crear notificación de solicitud de cotización web
+ * Notifica SOLO a: Desarrollador (SAGRADA - NO MODIFICAR)
  */
 export async function notificarSolicitudCotizacion(
   solicitudId: string,
@@ -236,7 +237,7 @@ export async function notificarSolicitudCotizacion(
     entidad_tipo: 'solicitud',
     entidad_id: solicitudId,
     prioridad: 'alta',
-    roles_destino: ['admin', 'desarrollador'],
+    roles_destino: ['desarrollador'], // SOLO desarrollador (SAGRADA)
   });
 
   console.log('[NOTIFICACIONES] [notificarSolicitudCotizacion] ✅ Proceso completado');
@@ -244,6 +245,7 @@ export async function notificarSolicitudCotizacion(
 
 /**
  * Helper para crear notificación de alquiler próximo a finalizar
+ * Notifica SOLO a: Ventas
  */
 export async function notificarAlquilerProximoFinalizar(
   alquilerId: string,
@@ -257,12 +259,13 @@ export async function notificarAlquilerProximoFinalizar(
     entidad_tipo: 'alquiler',
     entidad_id: alquilerId,
     prioridad,
-    roles_destino: ['produccion', 'admin', 'ventas'],
+    roles_destino: ['ventas'], // SOLO ventas
   });
 }
 
 /**
  * Helper para crear notificación de stock bajo
+ * Notifica SOLO a: Producción
  */
 export async function notificarStockBajo(
   productoId: string,
@@ -276,7 +279,7 @@ export async function notificarStockBajo(
     entidad_tipo: 'producto',
     entidad_id: productoId,
     prioridad: 'alta',
-    roles_destino: ['admin'],
+    roles_destino: ['produccion'], // SOLO producción
   });
 }
 

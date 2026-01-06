@@ -1,5 +1,5 @@
 export const runtime = 'nodejs'
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic' // Forzar dinámico para evitar cacheo
 export const revalidate = 0
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -66,11 +66,25 @@ function normalizarServiciosAdicionales(servicios: string[]): string[] {
   return servicios.map(servicio => mapeo[servicio] || servicio)
 }
 
+/**
+ * POST /api/solicitudes
+ * 
+ * ESTRUCTURA: app/api/solicitudes/route.ts
+ * EXPORT: export async function POST(request: NextRequest)
+ */
 export async function POST(request: NextRequest) {
   // 1. Validación de protección contra bots (ANTES de parsear body)
   const protection = validateCriticalEndpoint(request, false);
   if (!protection.allowed) {
-    return protection.response!;
+    // Asegurar que la respuesta de protección es JSON
+    if (protection.response) {
+      return protection.response;
+    }
+    // Fallback: devolver JSON si no hay respuesta
+    return NextResponse.json(
+      { error: 'Access denied' },
+      { status: 403 }
+    );
   }
 
   const requestId = crypto.randomUUID().substring(0, 8);

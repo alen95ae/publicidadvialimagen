@@ -47,6 +47,11 @@ import {
   AlertCircle,
   Clock,
   TrendingDown,
+  Info,
+  Maximize2,
+  Pause,
+  Server,
+  ShoppingBag,
 } from "lucide-react";
 import {
   AreaChart,
@@ -64,6 +69,14 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -114,6 +127,97 @@ const empleadosData = [
   { id: 3, nombre: "Carlos López", cargo: "Vendedor", ventas: 98000, comision: 9800, rendimiento: 75 },
   { id: 4, nombre: "Ana Martínez", cargo: "Coordinadora", proyectos: 60, comision: 12000, rendimiento: 92 },
 ];
+
+// Datos para Competitor Analysis (Radar Chart)
+const competitorData = [
+  { subject: "Precio", A: 75, B: 85 },
+  { subject: "Publicidad", A: 90, B: 70 },
+  { subject: "Servicios", A: 80, B: 85 },
+  { subject: "Canal", A: 70, B: 90 },
+  { subject: "Calidad", A: 95, B: 80 },
+  { subject: "Durabilidad", A: 85, B: 75 },
+  { subject: "Diseño", A: 90, B: 85 },
+  { subject: "Variedad", A: 80, B: 90 },
+];
+
+// Datos para Sales Chart (Bubble Chart) - Vallas vs Banners por temporada
+const salesBubbleData = [
+  // Vallas (Product A)
+  { temperature: 20, sales: 15000, volume: 120, product: "Vallas" },
+  { temperature: 25, sales: 18000, volume: 150, product: "Vallas" },
+  { temperature: 30, sales: 22000, volume: 180, product: "Vallas" },
+  { temperature: 35, sales: 28000, volume: 200, product: "Vallas" },
+  { temperature: 40, sales: 32000, volume: 220, product: "Vallas" },
+  { temperature: 45, sales: 35000, volume: 250, product: "Vallas" },
+  // Banners (Product B)
+  { temperature: 20, sales: 12000, volume: 100, product: "Banners" },
+  { temperature: 25, sales: 14000, volume: 120, product: "Banners" },
+  { temperature: 30, sales: 16000, volume: 140, product: "Banners" },
+  { temperature: 35, sales: 18000, volume: 160, product: "Banners" },
+  { temperature: 40, sales: 20000, volume: 180, product: "Banners" },
+  { temperature: 45, sales: 22000, volume: 200, product: "Banners" },
+];
+
+// Separar datos para el gráfico
+const vallasData = salesBubbleData.filter(d => d.product === "Vallas");
+const bannersData = salesBubbleData.filter(d => d.product === "Banners");
+
+// Datos para Transfer Data (simulación de transferencia de archivos de diseño)
+const transferProgress = 45; // 45%
+const transferTotal = 80.2; // GB
+const transferCurrent = 36.09; // GB
+const transferSpeed = 3.25; // Mb/s
+const transferEstimation = 32; // minutos
+const transferFiles = 1029;
+
+// Datos para Contributer Heatmap (proyectos completados por día)
+// Generar datos de ejemplo para los últimos 6 meses
+const generateHeatmapData = () => {
+  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+  const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const data: any[] = [];
+  
+  // Generar datos más realistas (más actividad en días laborables)
+  months.forEach((month, monthIdx) => {
+    const daysInMonth = monthIdx === 1 ? 28 : 30; // Febrero tiene 28 días
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayOfWeekIdx = (day + monthIdx * 2) % 7;
+      const dayOfWeek = daysOfWeek[dayOfWeekIdx];
+      
+      // Más actividad en días laborables (Lun-Vie)
+      let contributions = 0;
+      if (dayOfWeekIdx >= 1 && dayOfWeekIdx <= 5) {
+        // Días laborables: más actividad
+        contributions = Math.floor(Math.random() * 4) + 1; // 1-4
+        if (Math.random() > 0.7) contributions = 4; // 30% de probabilidad de alta actividad
+      } else {
+        // Fines de semana: menos actividad
+        contributions = Math.random() > 0.5 ? 1 : 0;
+      }
+      
+      data.push({
+        month,
+        day,
+        dayOfWeek,
+        dayOfWeekIdx,
+        contributions,
+      });
+    }
+  });
+  
+  return data;
+};
+
+const heatmapData = generateHeatmapData();
+const totalContributionsThisYear = heatmapData.reduce((sum, d) => sum + d.contributions, 0);
+const totalContributionsLastYear = Math.floor(totalContributionsThisYear * 0.7); // 70% del año actual
+
+// Agrupar datos por mes y día de la semana para el heatmap
+const heatmapGrid: { [key: string]: number } = {};
+heatmapData.forEach(d => {
+  const key = `${d.month}-${d.dayOfWeekIdx}`;
+  heatmapGrid[key] = (heatmapGrid[key] || 0) + d.contributions;
+});
 
 export default function MetricasCharts() {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -566,6 +670,320 @@ export default function MetricasCharts() {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sección de Ejemplos Adicionales */}
+      <div className="space-y-6 mt-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Ejemplos Adicionales</h2>
+          <p className="text-gray-600 mt-1">
+            Visualizaciones de ejemplo sin datos
+          </p>
+        </div>
+
+        {/* Ejemplo 1: Competitor Analysis - Radar Chart */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Building2 className="mr-2 h-5 w-5" />
+                <CardTitle className="text-lg">Competitor Analysis</CardTitle>
+                <Info className="ml-2 h-4 w-4 text-gray-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm">
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[400px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={competitorData}>
+                  <PolarGrid stroke="#e5e7eb" />
+                  <PolarAngleAxis 
+                    dataKey="subject" 
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                  />
+                  <PolarRadiusAxis 
+                    angle={90} 
+                    domain={[0, 100]} 
+                    tick={{ fill: '#9ca3af', fontSize: 10 }}
+                  />
+                  <Radar
+                    name="Publicidad Exterior"
+                    dataKey="A"
+                    stroke="#f97316"
+                    fill="#f97316"
+                    fillOpacity={0.3}
+                  />
+                  <Radar
+                    name="Marketing Digital"
+                    dataKey="B"
+                    stroke="#10b981"
+                    fill="#10b981"
+                    fillOpacity={0.3}
+                  />
+                  <Tooltip />
+                  <Legend />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-orange-500"></div>
+                <span className="text-sm text-gray-600">Publicidad Exterior</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-green-500"></div>
+                <span className="text-sm text-gray-600">Marketing Digital</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Ejemplo 2: Sales Chart - Bubble Chart */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <ShoppingBag className="mr-2 h-5 w-5 text-green-600" />
+                <CardTitle className="text-lg">Sales of Product A & Product B</CardTitle>
+                <Info className="ml-2 h-4 w-4 text-gray-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm">
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <p className="text-2xl font-bold text-gray-900">1,428</p>
+                <p className="text-sm text-gray-600">Vallas Sales</p>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <p className="text-2xl font-bold text-gray-900">428</p>
+                <p className="text-sm text-gray-600">Banners Sales</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                <span className="text-sm text-gray-600">Vallas</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                <span className="text-sm text-gray-600">Banners</span>
+              </div>
+            </div>
+            <div className="h-[400px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    type="number" 
+                    dataKey="temperature" 
+                    name="Temporada" 
+                    unit="°C"
+                    domain={[15, 50]}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                  />
+                  <YAxis 
+                    type="number" 
+                    dataKey="sales" 
+                    name="Ventas" 
+                    unit=" Bs."
+                    domain={[0, 40000]}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                  />
+                  <ZAxis type="number" dataKey="volume" range={[50, 400]} />
+                  <Tooltip 
+                    cursor={{ strokeDasharray: '3 3' }}
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                    formatter={(value: number, name: string) => {
+                      if (name === 'sales') return [`Bs. ${value.toLocaleString()}`, 'Ventas'];
+                      if (name === 'volume') return [value, 'Cantidad'];
+                      return [value, name];
+                    }}
+                  />
+                  <Legend />
+                  <Scatter name="Vallas" data={vallasData} fill="#a855f7" />
+                  <Scatter name="Banners" data={bannersData} fill="#4ade80" />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Ejemplo 3: Transfer Data */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Server className="mr-2 h-5 w-5" />
+                <CardTitle className="text-lg">Transfer Data</CardTitle>
+                <Info className="ml-2 h-4 w-4 text-gray-400" />
+              </div>
+              <Button variant="outline" size="sm">
+                <Pause className="mr-2 h-4 w-4" />
+                Pause
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div>
+                <p className="text-4xl font-bold text-gray-900 mb-2">{transferTotal} Gb</p>
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span>Speed: {transferSpeed} Mb/s</span>
+                  <span>Estimation: {transferEstimation} Minutes</span>
+                  <span>File: {transferFiles.toLocaleString()}</span>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <div className="h-32 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600 mb-1">{transferProgress}%</div>
+                    <div className="text-sm text-gray-600">{transferCurrent} Gb</div>
+                  </div>
+                </div>
+                <div 
+                  className="absolute top-0 left-0 h-32 bg-purple-200 rounded-lg flex items-center justify-center transition-all duration-300"
+                  style={{ width: `${transferProgress}%` }}
+                >
+                </div>
+                {/* Gráfico de área simulada */}
+                <div className="mt-4 h-16 bg-gray-50 rounded-lg relative overflow-hidden">
+                  <svg className="w-full h-full">
+                    <defs>
+                      <linearGradient id="transferGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#a855f7" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="#a855f7" stopOpacity="0.1" />
+                      </linearGradient>
+                    </defs>
+                    <path
+                      d="M 0 40 Q 50 20, 100 30 T 200 25 T 300 35 T 400 20 T 500 30"
+                      fill="url(#transferGradient)"
+                      stroke="#a855f7"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Ejemplo 4: Contributer - Heatmap */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Users className="mr-2 h-5 w-5" />
+                <CardTitle className="text-lg">Contributer</CardTitle>
+                <Info className="ml-2 h-4 w-4 text-gray-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm">
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <p className="text-3xl font-bold text-gray-900">{totalContributionsThisYear.toLocaleString()}</p>
+                  <p className="text-sm text-gray-600">Proyectos completados este año</p>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <p className="text-3xl font-bold text-gray-900">{totalContributionsLastYear.toLocaleString()}</p>
+                  <p className="text-sm text-gray-600">Proyectos completados el año pasado</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-end gap-2 text-xs text-gray-600 mb-2">
+                <span>Menos</span>
+                <div className="flex gap-1">
+                  <div className="w-3 h-3 rounded bg-purple-100"></div>
+                  <div className="w-3 h-3 rounded bg-purple-200"></div>
+                  <div className="w-3 h-3 rounded bg-purple-300"></div>
+                  <div className="w-3 h-3 rounded bg-purple-400"></div>
+                  <div className="w-3 h-3 rounded bg-purple-500"></div>
+                </div>
+                <span>Más</span>
+              </div>
+              
+              <div className="h-[200px] w-full bg-gray-50 rounded-lg p-4 overflow-x-auto">
+                <div className="grid grid-cols-7 gap-1 h-full min-w-[400px]">
+                  {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((day, dayIdx) => (
+                    <div key={day} className="flex flex-col gap-1">
+                      <div className="text-xs text-gray-500 text-center mb-1 h-4">
+                        {dayIdx % 2 === 0 ? day : ''}
+                      </div>
+                      <div className="flex-1 grid grid-rows-6 gap-1">
+                        {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'].map((month, monthIdx) => {
+                          const key = `${month}-${dayIdx}`;
+                          const intensity = heatmapGrid[key] || 0;
+                          const colors = [
+                            'bg-purple-100',
+                            'bg-purple-200',
+                            'bg-purple-300',
+                            'bg-purple-400',
+                            'bg-purple-500',
+                          ];
+                          const colorClass = intensity === 0 
+                            ? 'bg-gray-100' 
+                            : colors[Math.min(intensity - 1, 4)];
+                          
+                          return (
+                            <div
+                              key={`${day}-${month}`}
+                              className={`w-full h-3 rounded ${colorClass} hover:ring-2 hover:ring-purple-400 transition-all cursor-pointer`}
+                              title={`${day} ${month}: ${intensity} proyectos`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-gray-500 px-1">
+                  <span>Ene</span>
+                  <span>Feb</span>
+                  <span>Mar</span>
+                  <span>Abr</span>
+                  <span>May</span>
+                  <span>Jun</span>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -44,6 +44,11 @@ export async function POST(req: NextRequest) {
     
     const resultado = await actualizarEstadoSoportesAlquileres();
     
+    // Verificar y notificar alquileres próximos a finalizar
+    console.log('🔔 [API] Verificando alquileres próximos a finalizar...');
+    const { verificarYNotificarAlquileresProximosFinalizar } = await import('@/lib/helpersAlquileres');
+    const notificaciones = await verificarYNotificarAlquileresProximosFinalizar();
+    
     const duracion = Date.now() - inicio;
     
     return NextResponse.json({
@@ -51,6 +56,7 @@ export async function POST(req: NextRequest) {
       message: 'Estados de soportes actualizados correctamente',
       resultado: {
         ...resultado,
+        notificaciones_alquileres: notificaciones,
         duracion_ms: duracion
       },
       timestamp: new Date().toISOString()
@@ -91,6 +97,11 @@ export async function GET(req: NextRequest) {
     
     const resultado = await actualizarEstadoSoportesAlquileres();
     
+    // Verificar y notificar alquileres próximos a finalizar
+    console.log('🔔 [API] Verificando alquileres próximos a finalizar...');
+    const { verificarYNotificarAlquileresProximosFinalizar } = await import('@/lib/helpersAlquileres');
+    const notificaciones = await verificarYNotificarAlquileresProximosFinalizar();
+    
     const duracion = Date.now() - inicio;
     
     return NextResponse.json({
@@ -98,6 +109,7 @@ export async function GET(req: NextRequest) {
       message: 'Estados de soportes actualizados correctamente',
       resultado: {
         ...resultado,
+        notificaciones_alquileres: notificaciones,
         duracion_ms: duracion
       },
       timestamp: new Date().toISOString()

@@ -112,14 +112,29 @@ export default function SolicitarCotizacionPage() {
 
       console.log('📡 Respuesta del servidor:', response.status, response.statusText)
 
+      // Manejo robusto de respuesta: no asumir que siempre hay JSON
+      let data = null;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          console.error('Respuesta no JSON:', text);
+          throw new Error(`Error del servidor (${response.status}): ${response.statusText}`);
+        }
+      } catch (jsonError) {
+        console.error('Error parseando respuesta JSON:', jsonError);
+        throw new Error(`Error del servidor (${response.status}): ${response.statusText}`);
+      }
+
       if (response.ok) {
-        const result = await response.json()
-        console.log('✅ Solicitud enviada exitosamente:', result)
+        console.log('✅ Solicitud enviada exitosamente:', data)
         setIsSubmitted(true)
       } else {
-        const errorData = await response.json()
-        console.error('❌ Error del servidor:', errorData)
-        alert(`Error: ${errorData.error}`)
+        const errorMessage = data?.error || data?.message || `Error del servidor (${response.status})`;
+        console.error('❌ Error del servidor:', data)
+        alert(`Error: ${errorMessage}`)
       }
     } catch (error) {
       console.error('❌ Error al enviar solicitud:', error)

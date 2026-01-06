@@ -177,14 +177,7 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
       
       alquileresCreados.push(alquiler)
       
-      // Crear notificación de alquiler creado
-      try {
-        const { notificarAlquilerCreado } = await import('@/lib/notificaciones')
-        await notificarAlquilerCreado(alquiler.id, alquiler.codigo)
-      } catch (notifError) {
-        // No fallar la creación si falla la notificación
-        console.error('⚠️ Error creando notificación de alquiler:', notifError)
-      }
+      // Notificación de alquiler creado ELIMINADA según requerimientos
       
       // Obtener estado actual del soporte antes de actualizarlo
       const soporteIdNum = typeof info.soporte.id === 'number' ? info.soporte.id : parseInt(String(info.soporte.id))
@@ -384,6 +377,83 @@ export async function actualizarEstadoSoporte(soporteId: string | number) {
 }
 
 // Actualizar estados de todos los soportes basado en sus alquileres
+/**
+ * Verificar y notificar alquileres próximos a finalizar
+ * Notifica a ventas sobre alquileres que finalizan en los próximos 7 días
+ */
+export async function verificarYNotificarAlquileresProximosFinalizar() {
+  console.log('🔔 Iniciando verificación de alquileres próximos a finalizar...');
+  
+  try {
+    const { getAlquileres } = await import('@/lib/supabaseAlquileres');
+    const { notificarAlquilerProximoFinalizar } = await import('@/lib/notificaciones');
+    const { getSupabaseAdmin } = await import('@/lib/supabaseServer');
+    
+    // Obtener todos los alquileres activos
+    const { data: alquileres } = await getAlquileres({ estado: 'activo', limit: 10000 });
+    
+    if (!alquileres || alquileres.length === 0) {
+      console.log('⚠️ No se encontraron alquileres activos');
+      return { notificados: 0, omitidos: 0 };
+    }
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const supabase = getSupabaseAdmin();
+    let notificados = 0;
+    let omitidos = 0;
+    
+    for (const alquiler of alquileres) {
+      try {
+        if (!alquiler.fin) continue;
+        
+        const fechaFin = new Date(alquiler.fin);
+        fechaFin.setHours(0, 0, 0, 0);
+        
+        // Calcular días restantes
+        const diffMs = fechaFin.getTime() - hoy.getTime();
+        const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        
+        // Solo notificar si está entre 1 y 7 días
+        if (diasRestantes > 0 && diasRestantes <= 7) {
+          // Verificar si ya existe una notificación reciente para este alquiler (últimas 24h)
+          const ayer = new Date();
+          ayer.setDate(ayer.getDate() - 1);
+          
+          const { data: notificacionesExistentes } = await supabase
+            .from('notificaciones')
+            .select('id')
+            .eq('entidad_tipo', 'alquiler')
+            .eq('entidad_id', alquiler.id)
+            .gte('created_at', ayer.toISOString())
+            .limit(1);
+          
+          // Si ya existe una notificación reciente, omitir
+          if (notificacionesExistentes && notificacionesExistentes.length > 0) {
+            omitidos++;
+            continue;
+          }
+          
+          // Crear notificación
+          await notificarAlquilerProximoFinalizar(alquiler.id, diasRestantes);
+          notificados++;
+          console.log(`✅ Notificación creada para alquiler ${alquiler.codigo || alquiler.id} (${diasRestantes} días restantes)`);
+        }
+      } catch (error) {
+        console.error(`❌ Error procesando alquiler ${alquiler.id}:`, error);
+        omitidos++;
+      }
+    }
+    
+    console.log(`✅ Verificación de alquileres próximos completada: ${notificados} notificados, ${omitidos} omitidos`);
+    return { notificados, omitidos };
+  } catch (error) {
+    console.error('❌ Error en verificarYNotificarAlquileresProximosFinalizar:', error);
+    return { notificados: 0, omitidos: 0 };
+  }
+}
+
 // Esta función se puede llamar desde un CRON para actualizar estados diariamente
 export async function actualizarEstadoSoportesAlquileres() {
   console.log('🔄 Iniciando actualización diaria de estados de soportes...');

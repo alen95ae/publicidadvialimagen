@@ -74,6 +74,7 @@ export default function AlquileresPage() {
   const [filtersLoaded, setFiltersLoaded] = useState(false)
   const hadDataRef = useRef(false)
   const reloadAttemptedRef = useRef(false)
+  const [currentUserVendedor, setCurrentUserVendedor] = useState<boolean>(false)
 
   // Cargar alquileres desde la API
   const loadAlquileres = async (page: number = currentPage) => {
@@ -149,30 +150,38 @@ export default function AlquileresPage() {
   // Cargar TODOS los vendedores del sistema y de la tabla alquileres
   const fetchVendedoresSistema = async () => {
     try {
-      // 1. Obtener todos los comerciales (vendedores marcados en tabla usuarios)
+      // 1. Obtener todos los comerciales (vendedores marcados en tabla usuarios con vendedor=true)
       const comercialesResponse = await fetch('/api/public/comerciales')
       const comercialesData = await comercialesResponse.json()
       const comerciales = comercialesData.users || []
       // Normalizar nombres (trim) para evitar duplicados por espacios
+      // SOLO incluir usuarios con vendedor=true (ya filtrado por el endpoint)
       const vendedoresComerciales = comerciales
         .map((u: any) => (u.nombre || '').trim())
         .filter((nombre: string) => nombre.length > 0) as string[]
       
-      // 2. Obtener TODOS los vendedores únicos de la tabla alquileres (endpoint optimizado)
+      // 2. Obtener vendedores únicos de la tabla alquileres, pero SOLO los que tienen vendedor=true
+      // El endpoint /api/alquileres/vendedores devuelve todos los vendedores de alquileres,
+      // pero debemos filtrar para incluir solo los que tienen vendedor=true en usuarios
       const vendedoresResponse = await fetch('/api/alquileres/vendedores', {
         cache: 'no-store',
         credentials: 'include'
       })
       const vendedoresData = await vendedoresResponse.json()
-      // Los vendedores ya vienen normalizados del endpoint, pero por seguridad normalizamos de nuevo
       const vendedoresAlquileres = vendedoresData.success 
         ? (vendedoresData.vendedores || []).map((v: string) => v.trim()).filter((v: string) => v.length > 0)
         : []
       
-      // 3. Combinar ambos conjuntos, normalizar de nuevo y ordenar
-      // Usar Set para eliminar duplicados (ya normalizados)
+      // 3. Filtrar: solo incluir vendedores que están en la lista de comerciales (vendedor=true)
+      // O que están en alquileres pero también tienen vendedor=true
+      const vendedoresComercialesSet = new Set(vendedoresComerciales)
+      const vendedoresFiltrados = vendedoresAlquileres.filter((v: string) => 
+        vendedoresComercialesSet.has(v)
+      )
+      
+      // 4. Combinar ambos conjuntos (ya filtrados), normalizar de nuevo y ordenar
       const todosLosVendedores = Array.from(
-        new Set([...vendedoresComerciales, ...vendedoresAlquileres])
+        new Set([...vendedoresComerciales, ...vendedoresFiltrados])
       ).sort()
       
       setVendedoresUnicos(todosLosVendedores)
@@ -180,6 +189,24 @@ export default function AlquileresPage() {
       console.error('Error fetching vendedores del sistema:', error)
     }
   }
+
+  // Cargar usuario actual para verificar si es vendedor
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success && data.user) {
+            setCurrentUserVendedor(data.user.vendedor ?? false)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current user:', error)
+      }
+    }
+    fetchCurrentUser()
+  }, [])
 
   useEffect(() => {
     fetchVendedoresSistema()
@@ -428,12 +455,14 @@ export default function AlquileresPage() {
                   </Button>
                 )}
                 
-                <Link href="/panel/ventas/nuevo">
-                  <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nuevo Alquiler
-                  </Button>
-                </Link>
+                {currentUserVendedor && (
+                  <Link href="/panel/ventas/nuevo">
+                    <Button size="sm" className="bg-[#D54644] hover:bg-[#B03A38]">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nuevo Alquiler
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
             

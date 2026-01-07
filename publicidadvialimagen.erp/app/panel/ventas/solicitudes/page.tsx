@@ -29,80 +29,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast, Toaster } from "sonner"
 import { normalizeText } from "@/lib/utils"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
-// Datos de ejemplo para las solicitudes de cotización
-const solicitudes = [
-  {
-    codigo: "S-001",
-    fechaCreacion: "15/01/2024 09:30",
-    empresa: "Empresa ABC S.A.",
-    contacto: "Juan Pérez",
-    telefono: "+591 2 1234567",
-    email: "juan.perez@empresaabc.com",
-    comentarios: "Solicitud de cotización para vallas publicitarias en zona centro",
-    estado: "Pendiente",
-    fechaInicio: "01/02/2024",
-    mesesAlquiler: 6,
-    soporte: "V-001",
-    serviciosAdicionales: ["Diseño gráfico", "Impresión de lona", "Instalación en valla"]
-  },
-  {
-    codigo: "S-002", 
-    fechaCreacion: "14/01/2024 14:15",
-    empresa: "Comercial XYZ Ltda.",
-    contacto: "María García",
-    telefono: "+591 2 7654321",
-    email: "maria.garcia@comercialxyz.com",
-    comentarios: "Cotización para pantallas digitales en zona norte",
-    estado: "Nueva",
-    fechaInicio: "15/02/2024",
-    mesesAlquiler: 12,
-    soporte: "PD-002",
-    serviciosAdicionales: ["Diseño gráfico"]
-  },
-  {
-    codigo: "S-003",
-    fechaCreacion: "13/01/2024 11:45", 
-    empresa: "Industrias DEF S.A.S.",
-    contacto: "Carlos López",
-    telefono: "+591 2 9876543",
-    email: "carlos.lopez@industriasdef.com",
-    comentarios: "Propuesta para murales publicitarios en zona sur",
-    estado: "Cotizada",
-    fechaInicio: "01/03/2024",
-    mesesAlquiler: 8,
-    soporte: "M-003",
-    serviciosAdicionales: ["Diseño gráfico", "Instalación en valla"]
-  },
-  {
-    codigo: "S-004",
-    fechaCreacion: "12/01/2024 16:20",
-    empresa: "Servicios GHI S.A.",
-    contacto: "Ana Martínez",
-    telefono: "+591 2 4567890",
-    email: "ana.martinez@serviciosghi.com",
-    comentarios: "Solicitud de presupuesto para publicidad móvil",
-    estado: "Pendiente",
-    fechaInicio: "20/02/2024",
-    mesesAlquiler: 3,
-    soporte: "VM-004",
-    serviciosAdicionales: ["Impresión de lona", "Instalación en valla"]
-  },
-  {
-    codigo: "S-005",
-    fechaCreacion: "11/01/2024 10:00",
-    empresa: "Distribuidora JKL Ltda.",
-    contacto: "Pedro Rodríguez",
-    telefono: "+591 2 3210987",
-    email: "pedro.rodriguez@distribuidorajkl.com",
-    comentarios: "Cotización para impresión digital en zona norte",
-    estado: "Nueva",
-    fechaInicio: "05/03/2024",
-    mesesAlquiler: 4,
-    soporte: "BD-005",
-    serviciosAdicionales: []
-  }
-]
+// Los datos se cargan desde la API - no hay datos de ejemplo
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
@@ -139,6 +68,7 @@ const ESTADOS_META = {
 
 export default function SolicitudesPage() {
   const router = useRouter()
+  const { puedeEliminar, puedeEditar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSolicitudes, setSelectedSolicitudes] = useState<string[]>([])
   const [solicitudesList, setSolicitudesList] = useState<any[]>([])
@@ -188,18 +118,20 @@ export default function SolicitudesPage() {
         console.error('❌ Error del servidor:', response.status, response.statusText)
         console.error('❌ Detalles del error:', errorText)
         
-        // Manejar diferentes tipos de errores
+        // Manejar diferentes tipos de errores - NO usar datos de ejemplo
         if (response.status === 401) {
-          console.log('🔒 No autorizado (401). Manteniendo UI y usando datos de ejemplo.')
-          // No forzar logout aquí: en producción puede ser un tema de permisos/RLS/config.
-          setSolicitudesList(solicitudes)
+          console.log('🔒 No autorizado (401)')
+          toast.error('No tienes permisos para ver solicitudes')
+          setSolicitudesList([])
           return
         } else if (response.status === 500) {
-          console.log('⚠️ Error interno del servidor, usando datos de ejemplo')
-          setSolicitudesList(solicitudes)
+          console.log('⚠️ Error interno del servidor')
+          toast.error('Error al cargar solicitudes. Por favor, recarga la página.')
+          setSolicitudesList([])
         } else {
-          console.log('⚠️ Error del servidor, usando datos de ejemplo')
-          setSolicitudesList(solicitudes)
+          console.log('⚠️ Error del servidor:', response.status)
+          toast.error('Error al cargar solicitudes')
+          setSolicitudesList([])
         }
       }
     } catch (error) {
@@ -207,14 +139,9 @@ export default function SolicitudesPage() {
       console.error('❌ Tipo de error:', error.constructor.name)
       console.error('❌ Mensaje:', error.message)
       
-      // Si es un error de red, usar datos de ejemplo
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        console.log('⚠️ Error de conexión, usando datos de ejemplo')
-        setSolicitudesList(solicitudes)
-      } else {
-        console.log('⚠️ Error inesperado, usando datos de ejemplo')
-        setSolicitudesList(solicitudes)
-      }
+      // NO usar datos de ejemplo - mostrar error
+      toast.error('Error de conexión al cargar solicitudes')
+      setSolicitudesList([])
     } finally {
       setLoading(false)
     }
@@ -628,7 +555,7 @@ export default function SolicitudesPage() {
                       </Button>
                     </>
                   )}
-                  {selectedSolicitudes.length > 0 && (
+                  {(puedeEliminar("ventas") || esAdmin("ventas")) && selectedSolicitudes.length > 0 && (
                     <Button
                       size="sm"
                       onClick={handleBulkDelete}
@@ -753,15 +680,17 @@ export default function SolicitudesPage() {
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Eliminar"
-                            onClick={() => handleEliminarSolicitud(solicitud.codigo)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {(puedeEliminar("ventas") || esAdmin("ventas")) && (
+                            <Button
+                              variant="ghost" 
+                              size="sm" 
+                              title="Eliminar"
+                              onClick={() => handleEliminarSolicitud(solicitud.codigo)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

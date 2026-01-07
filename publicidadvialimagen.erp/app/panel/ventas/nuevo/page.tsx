@@ -130,6 +130,7 @@ type ItemLista = ProductoItem | NotaItem | SeccionItem
 
 export default function NuevaCotizacionPage() {
   const router = useRouter()
+  const { tieneFuncionTecnica } = usePermisosContext()
   const [cliente, setCliente] = useState("")
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
@@ -2198,6 +2199,7 @@ export default function NuevaCotizacionPage() {
                               }}
                               className="w-20 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               step="0.01"
+                              disabled={!tieneFuncionTecnica("modificar precio cotización")}
                             />
                           </td>
 

@@ -1302,10 +1302,12 @@ export default function CostesPage() {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => exportToCSV(allSoportesCostes)}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
+              {tieneFuncionTecnica("ver boton exportar") && (
+                <Button variant="outline" size="sm" onClick={() => exportToCSV(allSoportesCostes)}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar
+                </Button>
+              )}
             </div>
           </div>
         </div>

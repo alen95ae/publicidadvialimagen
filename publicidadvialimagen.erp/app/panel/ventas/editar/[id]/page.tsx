@@ -44,6 +44,7 @@ import {
   generarDatosParaModalAprobacion,
   sincronizarLineas
 } from '@/hooks/useCotizacionFlujo'
+import { usePermisosContext } from '@/hooks/permisos-provider'
 
 const sucursales = [
   { id: "1", nombre: "La Paz" },
@@ -93,6 +94,7 @@ export default function EditarCotizacionPage() {
   const router = useRouter()
   const params = useParams()
   const cotizacionId = params.id as string
+  const { tieneFuncionTecnica } = usePermisosContext()
 
   // ESTADOS ESPECÍFICOS DE EDITAR
   const [cargandoCotizacion, setCargandoCotizacion] = useState(true)
@@ -2689,6 +2691,7 @@ export default function EditarCotizacionPage() {
                               }}
                               className="w-20 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               step="0.01"
+                              disabled={!tieneFuncionTecnica("modificar precio cotización")}
                             />
                           </td>
 

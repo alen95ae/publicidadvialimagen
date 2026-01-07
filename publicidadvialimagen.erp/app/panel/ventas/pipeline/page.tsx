@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Check } from "lucide-react"
@@ -129,11 +130,13 @@ interface Vendedor {
   nombre: string
   email?: string
   imagen_usuario?: any
+  rol?: string
 }
 
 type VendedorOption = Vendedor
 
 export default function PipelinePage() {
+  const { puedeEliminar, puedeEditar, esAdmin } = usePermisosContext()
   const [pipelines, setPipelines] = useState<any[]>([])
   const [pipelineId, setPipelineId] = useState<string | null>(null)
   const [stages, setStages] = useState<any[]>([])
@@ -377,6 +380,16 @@ export default function PipelinePage() {
       fetchOpportunities()
     }
   }, [pipelineId, searchTerm, filtroOrigen, filtroInteres, filtroCiudad, filtroEstado])
+
+  // Si hay pipelines pero no hay pipelineId seleccionado, seleccionar el primero
+  useEffect(() => {
+    if (!pipelineId && pipelines.length > 0) {
+      const firstPipeline = pipelines.find((p: any) => p.is_default) ?? pipelines[0]
+      if (firstPipeline?.id) {
+        setPipelineId(firstPipeline.id)
+      }
+    }
+  }, [pipelines, pipelineId])
 
   const fetchOpportunities = async () => {
     if (!pipelineId) return
@@ -1037,11 +1050,23 @@ export default function PipelinePage() {
     )
   }
 
-  if (!pipelineId) {
+  // Si no hay pipelines, mostrar mensaje y permitir crear uno
+  if (pipelines.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground mb-4">No se encontró ningún pipeline.</p>
-        <Button onClick={() => window.location.reload()}>Recargar</Button>
+      <div className="p-6 space-y-6 pb-8">
+        <Toaster />
+        <div className="text-center py-8">
+          <p className="text-muted-foreground mb-4">No se encontró ningún pipeline.</p>
+          {(puedeEditar("ventas") || esAdmin("ventas")) && (
+            <Button 
+              onClick={() => handleOpenPipelineModal()} 
+              className="bg-[#D54644] hover:bg-[#B03A38] text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Crear primer pipeline
+            </Button>
+          )}
+        </div>
       </div>
     )
   }
@@ -1055,10 +1080,12 @@ export default function PipelinePage() {
             No hay etapas. Crea una etapa para comenzar.
           </div>
           <div className="flex justify-center">
-            <Button onClick={handleOpenCreateStageDialog} className="bg-[#D54644] hover:bg-[#B03A38] text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Crear primera etapa
-            </Button>
+            {(puedeEditar("ventas") || esAdmin("ventas")) && (
+              <Button onClick={handleOpenCreateStageDialog} className="bg-[#D54644] hover:bg-[#B03A38] text-white">
+                <Plus className="w-4 h-4 mr-2" />
+                Crear primera etapa
+              </Button>
+            )}
           </div>
         </div>
         
@@ -1118,10 +1145,12 @@ export default function PipelinePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Pipeline</h1>
-        <Button onClick={handleOpenCreateStageDialog} variant="outline" size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          Agregar etapa
-        </Button>
+        {(puedeEditar("ventas") || esAdmin("ventas")) && (
+          <Button onClick={handleOpenCreateStageDialog} variant="outline" size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            Agregar etapa
+          </Button>
+        )}
         </div>
         
         {pipelines.length > 0 && (
@@ -1148,24 +1177,28 @@ export default function PipelinePage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleOpenPipelineModal(pipeline)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
+                        {(puedeEditar("ventas") || esAdmin("ventas")) && (
+                          <DropdownMenuItem onClick={() => handleOpenPipelineModal(pipeline)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 ))}
               </TabsList>
             </Tabs>
-            <Button
-              onClick={() => handleOpenPipelineModal()}
-              variant="outline"
-              size="sm"
-              className="ml-2"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+            {(puedeEditar("ventas") || esAdmin("ventas")) && (
+              <Button
+                onClick={() => handleOpenPipelineModal()}
+                variant="outline"
+                size="sm"
+                className="ml-2"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1234,10 +1267,12 @@ export default function PipelinePage() {
               </SelectContent>
             </Select>
             
-            <Button onClick={handleOpenCreateModal} className="bg-[#D54644] hover:bg-[#B03A38] text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva oportunidad
-            </Button>
+            {(puedeEditar("ventas") || esAdmin("ventas")) && (
+              <Button onClick={handleOpenCreateModal} className="bg-[#D54644] hover:bg-[#B03A38] text-white">
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva oportunidad
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1258,16 +1293,16 @@ export default function PipelinePage() {
                   <StageColumn
                     stage={stage}
                     opportunities={stageOpportunities}
-                    onDeleteStage={() => {
+                    onDeleteStage={(puedeEliminar("ventas") || esAdmin("ventas")) ? () => {
                       setDeletingStageId(stage.id)
                       setIsDeleteStageDialogOpen(true)
-                    }}
+                    } : undefined}
                     onEdit={handleOpenEditModal}
-                    onDelete={(id) => {
+                    onDelete={(puedeEliminar("ventas") || esAdmin("ventas")) ? (id) => {
                       console.log('🗑️ Delete clicked for opportunity:', id)
                       setDeletingOpportunityId(id)
                       setIsDeleteDialogOpen(true)
-                    }}
+                    } : undefined}
                     onStageUpdated={fetchStages}
                   />
                 </div>
@@ -1558,11 +1593,12 @@ function StageColumn({
 }: {
   stage: Stage
   opportunities: Opportunity[]
-  onDeleteStage: () => void
+  onDeleteStage?: () => void
   onEdit: (opp: Opportunity) => void
-  onDelete: (id: string) => void
+  onDelete?: (id: string) => void
   onStageUpdated?: () => void
 }) {
+  const { puedeEliminar, puedeEditar, esAdmin } = usePermisosContext()
   const [isEditingName, setIsEditingName] = useState(false)
   const [editingName, setEditingName] = useState(stage.nombre)
   const [isSaving, setIsSaving] = useState(false)
@@ -1712,14 +1748,18 @@ function StageColumn({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleNameClick}>
-                <Edit className="w-4 h-4 mr-2" />
-                Editar etapa
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDeleteStage} className="text-red-600">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Eliminar etapa
-              </DropdownMenuItem>
+              {(puedeEditar("ventas") || esAdmin("ventas")) && (
+                <DropdownMenuItem onClick={handleNameClick}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar etapa
+                </DropdownMenuItem>
+              )}
+              {onDeleteStage && (puedeEliminar("ventas") || esAdmin("ventas")) && (
+                <DropdownMenuItem onClick={onDeleteStage} className="text-red-600">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar etapa
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1771,7 +1811,7 @@ function SortableOpportunityCard({
 }: {
   opportunity: Opportunity
   onEdit: (opp: Opportunity) => void
-  onDelete: (id: string) => void
+  onDelete?: (id: string) => void
 }) {
   const {
     attributes,
@@ -1814,6 +1854,7 @@ function OpportunityCard({
   isDragging?: boolean
   dragListeners?: any
 }) {
+  const { puedeEliminar, esAdmin } = usePermisosContext()
   const formatCurrency = (value: number | null | undefined, currency: string = "BOB") => {
     if (!value) return "-"
     return new Intl.NumberFormat("es-BO", {
@@ -1879,7 +1920,7 @@ function OpportunityCard({
                       Editar
                     </DropdownMenuItem>
                   )}
-                  {onDelete && (
+                  {onDelete && (puedeEliminar("ventas") || esAdmin("ventas")) && (
                     <DropdownMenuItem 
                       onClick={(e) => {
                         e.stopPropagation()

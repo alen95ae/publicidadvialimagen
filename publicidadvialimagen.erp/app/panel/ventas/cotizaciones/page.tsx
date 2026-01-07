@@ -96,7 +96,7 @@ const getEstadoIcon = (estado: string) => {
 }
 
 export default function CotizacionesPage() {
-  const { tieneFuncionTecnica, loading } = usePermisosContext()
+  const { tieneFuncionTecnica, loading, puedeEliminar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCotizaciones, setSelectedCotizaciones] = useState<string[]>([])
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
@@ -117,6 +117,7 @@ export default function CotizacionesPage() {
     hasPrev: false,
   })
   const [filtersLoaded, setFiltersLoaded] = useState(false)
+  const [currentUserVendedor, setCurrentUserVendedor] = useState<boolean>(false)
 
   // Función para obtener iniciales del vendedor
   const getInitials = (nombre: string) => {
@@ -265,6 +266,24 @@ export default function CotizacionesPage() {
   }
 
   // E4: Vendedores se cargan cuando cambian las cotizaciones (ver useEffect más abajo)
+
+  // Cargar usuario actual para verificar si es vendedor
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success && data.user) {
+            setCurrentUserVendedor(data.user.vendedor ?? false)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current user:', error)
+      }
+    }
+    fetchCurrentUser()
+  }, [])
 
   // 1) Cargar los filtros una sola vez al montar
   useEffect(() => {
@@ -839,12 +858,14 @@ export default function CotizacionesPage() {
                     {exporting ? 'Exportando...' : 'Exportar'}
                   </Button>
                 )}
-                <Link href="/panel/ventas/nuevo">
-                  <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nueva Cotización
-                  </Button>
-                </Link>
+                {currentUserVendedor && (
+                  <Link href="/panel/ventas/nuevo">
+                    <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nueva Cotización
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
             
@@ -1064,15 +1085,17 @@ export default function CotizacionesPage() {
                                 <Edit className="w-4 h-4" />
                               </Button>
                             </Link>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="Eliminar"
-                              onClick={() => handleDelete(cotizacion.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {(puedeEliminar("ventas") || esAdmin("ventas")) && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                title="Eliminar"
+                                onClick={() => handleDelete(cotizacion.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

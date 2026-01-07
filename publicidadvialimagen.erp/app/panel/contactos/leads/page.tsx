@@ -40,7 +40,7 @@ interface LeadFilters {
 
 export default function LeadsPage() {
   const router = useRouter()
-  const { puedeEliminar, puedeEditar } = usePermisosContext()
+  const { puedeEliminar, puedeEditar, tieneFuncionTecnica } = usePermisosContext()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
@@ -702,10 +702,12 @@ export default function LeadsPage() {
                 <Trash className="w-4 h-4 mr-2" />
                 Papelera
               </Button>
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar CSV
-              </Button>
+              {tieneFuncionTecnica("ver boton exportar") && (
+                <Button variant="outline" onClick={handleExport}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              )}
               <Button className="bg-[#D54644] hover:bg-[#B03A38]" onClick={handleCreate}>
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo
@@ -755,14 +757,16 @@ export default function LeadsPage() {
                       </Button>
                     </>
                   )}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleExportSelected}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Exportar selección
-                  </Button>
+                  {tieneFuncionTecnica("ver boton exportar") && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleExportSelected}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Exportar selección
+                    </Button>
+                  )}
                   <Button 
                     size="sm" 
                     variant="outline"

@@ -562,7 +562,7 @@ export default function ContactosPage() {
                   {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
                 </Button>
               )}
-              {esAdmin("contactos") && (
+              {tieneFuncionTecnica("ver boton exportar") && (
                 <Button variant="outline" onClick={handleExport}>
                   <Download className="w-4 h-4 mr-2" />
                   Exportar

@@ -30,6 +30,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Tipos para los mensajes
 interface Message {
@@ -77,6 +78,7 @@ const ESTADOS_META = {
 }
 
 export default function FormulariosPage() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMensajes, setSelectedMensajes] = useState<string[]>([])
   const [mensajesList, setMensajesList] = useState<Message[]>([])
@@ -377,10 +379,12 @@ export default function FormulariosPage() {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
+              {tieneFuncionTecnica("ver boton exportar") && (
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar
+                </Button>
+              )}
             </div>
           </div>
         </div>

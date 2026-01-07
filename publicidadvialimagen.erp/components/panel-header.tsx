@@ -282,7 +282,7 @@ interface Notification {
 export default function PanelHeader() {
   const router = useRouter()
   const pathname = usePathname()
-  const { tieneFuncionTecnica, puedeVer } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeVer, esAdmin } = usePermisosContext()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -806,6 +806,10 @@ export default function PanelHeader() {
                         return false;
                       }
                       if (item.href === "/panel/ventas/solicitudes" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+                        return false;
+                      }
+                      // Filtrar Leads y Miembros si no tiene admin en contactos
+                      if ((item.href === "/panel/contactos/leads" || item.href === "/panel/contactos/miembros") && !esAdmin("contactos")) {
                         return false;
                       }
                       return true;

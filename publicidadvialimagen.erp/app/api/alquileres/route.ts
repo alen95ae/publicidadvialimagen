@@ -7,6 +7,13 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
+    // Verificar permiso de ver alquileres
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("soportes", "ver");
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
     const { searchParams } = new URL(request.url)
     const pageSize = parseInt(searchParams.get('pageSize') || '100')
     const page = parseInt(searchParams.get('page') || '1')
@@ -76,6 +83,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verificar permiso de editar alquileres (permite crear nuevos)
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("soportes", "editar");
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
     const body = await request.json()
 
     const alquiler = await createAlquiler(body)

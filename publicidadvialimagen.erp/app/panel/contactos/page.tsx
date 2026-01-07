@@ -47,7 +47,7 @@ interface ContactFilters {
 }
 
 export default function ContactosPage() {
-  const { tieneFuncionTecnica, puedeEliminar, puedeEditar } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEliminar, puedeEditar, esAdmin } = usePermisosContext()
   const router = useRouter()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
@@ -562,7 +562,7 @@ export default function ContactosPage() {
                   {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
                 </Button>
               )}
-              {tieneFuncionTecnica("ver boton exportar") && (
+              {esAdmin("contactos") && (
                 <Button variant="outline" onClick={handleExport}>
                   <Download className="w-4 h-4 mr-2" />
                   Exportar

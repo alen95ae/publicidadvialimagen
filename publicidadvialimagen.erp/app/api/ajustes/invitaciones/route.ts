@@ -21,13 +21,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token de sesión no encontrado" }, { status: 401 });
     }
     
-    const session = await verifySession(token);
-    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
-    const isAdmin = session?.role === "admin";
-    
-    if (!session || (!isAdmin && !isDeveloper)) {
-      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+    // Verificar permiso de admin en ajustes (reemplaza hardcodeo por email)
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof Response) {
+      return authResult;
     }
+    
+    const session = await verifySession(token);
 
     const statusFilter = request.nextUrl.searchParams.get("status");
     
@@ -176,13 +177,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Token de sesión no encontrado" }, { status: 401 });
     }
     
-    const session = await verifySession(token);
-    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
-    const isAdmin = session?.role === "admin";
-    
-    if (!session || (!isAdmin && !isDeveloper)) {
-      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+    // Verificar permiso de admin en ajustes (reemplaza hardcodeo por email)
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof Response) {
+      return authResult;
     }
+    
+    const session = await verifySession(token);
 
     const { email, rol, horasValidez, cambioPassword } = await request.json();
 
@@ -307,13 +309,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Token de sesión no encontrado" }, { status: 401 });
     }
     
-    const session = await verifySession(token);
-    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
-    const isAdmin = session?.role === "admin";
-    
-    if (!session || (!isAdmin && !isDeveloper)) {
-      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+    // Verificar permiso de admin en ajustes (reemplaza hardcodeo por email)
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof Response) {
+      return authResult;
     }
+    
+    const session = await verifySession(token);
 
     const { id, estado } = await request.json();
 
@@ -340,13 +343,14 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Token de sesión no encontrado" }, { status: 401 });
     }
     
-    const session = await verifySession(token);
-    const isDeveloper = session?.email?.toLowerCase() === "alen95ae@gmail.com";
-    const isAdmin = session?.role === "admin";
-    
-    if (!session || (!isAdmin && !isDeveloper)) {
-      return NextResponse.json({ error: "Acceso denegado. Se requiere rol de administrador" }, { status: 403 });
+    // Verificar permiso de admin en ajustes (reemplaza hardcodeo por email)
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("ajustes", "admin");
+    if (authResult instanceof Response) {
+      return authResult;
     }
+    
+    const session = await verifySession(token);
 
     const { id } = await request.json();
 

@@ -146,18 +146,36 @@ export default function AlquileresPage() {
     }
   }
 
-  // Cargar vendedores del sistema
+  // Cargar TODOS los vendedores del sistema y de la tabla alquileres
   const fetchVendedoresSistema = async () => {
     try {
-      const response = await fetch('/api/ajustes/usuarios?pageSize=100')
-      const data = await response.json()
-      if (data.users) {
-        const vendedoresSistema = data.users.map((u: any) => u.nombre).filter(Boolean) as string[]
-        setVendedoresUnicos(prev => {
-          const combined = [...new Set([...prev, ...vendedoresSistema])]
-          return combined.sort()
-        })
-      }
+      // 1. Obtener todos los comerciales (vendedores marcados en tabla usuarios)
+      const comercialesResponse = await fetch('/api/public/comerciales')
+      const comercialesData = await comercialesResponse.json()
+      const comerciales = comercialesData.users || []
+      // Normalizar nombres (trim) para evitar duplicados por espacios
+      const vendedoresComerciales = comerciales
+        .map((u: any) => (u.nombre || '').trim())
+        .filter((nombre: string) => nombre.length > 0) as string[]
+      
+      // 2. Obtener TODOS los vendedores únicos de la tabla alquileres (endpoint optimizado)
+      const vendedoresResponse = await fetch('/api/alquileres/vendedores', {
+        cache: 'no-store',
+        credentials: 'include'
+      })
+      const vendedoresData = await vendedoresResponse.json()
+      // Los vendedores ya vienen normalizados del endpoint, pero por seguridad normalizamos de nuevo
+      const vendedoresAlquileres = vendedoresData.success 
+        ? (vendedoresData.vendedores || []).map((v: string) => v.trim()).filter((v: string) => v.length > 0)
+        : []
+      
+      // 3. Combinar ambos conjuntos, normalizar de nuevo y ordenar
+      // Usar Set para eliminar duplicados (ya normalizados)
+      const todosLosVendedores = Array.from(
+        new Set([...vendedoresComerciales, ...vendedoresAlquileres])
+      ).sort()
+      
+      setVendedoresUnicos(todosLosVendedores)
     } catch (error) {
       console.error('Error fetching vendedores del sistema:', error)
     }
@@ -355,18 +373,25 @@ export default function AlquileresPage() {
                 </div>
 
                 {/* Filtro por Vendedor */}
-                <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
+                <Select value={filtroVendedor} onValueChange={(value) => {
+                  // Normalizar el valor seleccionado (trim) para evitar problemas con espacios
+                  setFiltroVendedor(value === 'all' ? 'all' : value.trim())
+                }}>
                   <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
                     <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                     <SelectValue placeholder="Vendedor" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos los vendedores</SelectItem>
-                    {vendedoresUnicos.map((vendedor) => (
-                      <SelectItem key={vendedor} value={vendedor}>
-                        {vendedor}
-                      </SelectItem>
-                    ))}
+                    {vendedoresUnicos.map((vendedor) => {
+                      // Asegurar que el vendedor esté normalizado (sin espacios)
+                      const vendedorNormalizado = vendedor.trim();
+                      return (
+                        <SelectItem key={vendedorNormalizado} value={vendedorNormalizado}>
+                          {vendedorNormalizado}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
 

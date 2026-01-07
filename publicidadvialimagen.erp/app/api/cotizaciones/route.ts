@@ -22,6 +22,13 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verificar permiso de ver cotizaciones
+    const { requirePermiso } = await import('@/lib/permisos');
+    const authResult = await requirePermiso("ventas", "ver");
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+
     const { searchParams } = new URL(request.url)
     const pageSize = parseInt(searchParams.get('pageSize') || '50')
     const page = parseInt(searchParams.get('page') || '1')
@@ -82,6 +89,13 @@ export async function POST(request: NextRequest) {
   // ============================================================================
   // C1, C3: VALIDACIÓN DE SESIÓN Y AUTENTICACIÓN
   // ============================================================================
+  // Verificar permiso de editar cotizaciones (permite crear nuevas)
+  const { requirePermiso } = await import('@/lib/permisos');
+  const authResult = await requirePermiso("ventas", "editar");
+  if (authResult instanceof Response) {
+    return authResult;
+  }
+
   const usuario = await getUsuarioAutenticado(request)
   if (!usuario) {
     return NextResponse.json(

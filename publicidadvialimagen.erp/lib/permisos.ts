@@ -14,37 +14,12 @@ export interface PermisosMatrix {
  * Obtener permisos de un usuario desde el backend
  * @param userId ID del usuario
  * @returns Matriz de permisos
+ * 
+ * IMPORTANTE: No hay bypass por email. Todos los usuarios (incluido desarrollador)
+ * obtienen permisos desde rol_permisos en la base de datos.
  */
 export async function getPermisos(userId: string, userEmail?: string): Promise<PermisosMatrix> {
-  const isDeveloper = userEmail?.toLowerCase() === "alen95ae@gmail.com";
   const supabase = getSupabaseServer();
-
-  // Si es desarrollador, dar todos los permisos
-  if (isDeveloper) {
-    const { data: permisosData } = await supabase
-      .from('permisos')
-      .select('*')
-      .order('modulo', { ascending: true })
-      .order('accion', { ascending: true });
-
-    const permisosMatrix: PermisosMatrix = {};
-    (permisosData || []).forEach(permiso => {
-      if (!permisosMatrix[permiso.modulo]) {
-        permisosMatrix[permiso.modulo] = {};
-      }
-      // Para módulos normales, inicializar acciones estándar si no existen
-      if (permiso.modulo !== 'tecnico') {
-        if (permisosMatrix[permiso.modulo].ver === undefined) permisosMatrix[permiso.modulo].ver = false;
-        if (permisosMatrix[permiso.modulo].editar === undefined) permisosMatrix[permiso.modulo].editar = false;
-        if (permisosMatrix[permiso.modulo].eliminar === undefined) permisosMatrix[permiso.modulo].eliminar = false;
-        if (permisosMatrix[permiso.modulo].admin === undefined) permisosMatrix[permiso.modulo].admin = false;
-      }
-      // Asignar el permiso (funciona para acciones estándar y personalizadas)
-      permisosMatrix[permiso.modulo][permiso.accion] = true;
-    });
-
-    return permisosMatrix;
-  }
 
   // Obtener rol_id del usuario
   const { data: userData } = await supabase
@@ -54,6 +29,7 @@ export async function getPermisos(userId: string, userEmail?: string): Promise<P
     .single();
 
   if (!userData || !userData.rol_id) {
+    // Usuario sin rol = sin permisos
     return {};
   }
 
@@ -170,26 +146,22 @@ export async function requirePermiso(
 
   const permisos = await getPermisos(session.sub, session.email);
   
-  const isDeveloper = session.email?.toLowerCase() === "alen95ae@gmail.com";
+  // Verificar permisos según la acción solicitada
+  // NO hay bypass por email - todos los usuarios (incluido desarrollador) usan permisos reales
   let tieneAcceso = false;
-
-  if (isDeveloper) {
-    tieneAcceso = true;
-  } else {
-    switch (accion) {
-      case "ver":
-        tieneAcceso = puedeVer(permisos, modulo);
-        break;
-      case "editar":
-        tieneAcceso = puedeEditar(permisos, modulo);
-        break;
-      case "eliminar":
-        tieneAcceso = puedeEliminar(permisos, modulo);
-        break;
-      case "admin":
-        tieneAcceso = tienePermiso(permisos, modulo, "admin");
-        break;
-    }
+  switch (accion) {
+    case "ver":
+      tieneAcceso = puedeVer(permisos, modulo);
+      break;
+    case "editar":
+      tieneAcceso = puedeEditar(permisos, modulo);
+      break;
+    case "eliminar":
+      tieneAcceso = puedeEliminar(permisos, modulo);
+      break;
+    case "admin":
+      tieneAcceso = tienePermiso(permisos, modulo, "admin");
+      break;
   }
 
   if (!tieneAcceso) {
@@ -227,13 +199,7 @@ export async function requirePermisoTecnico(
     return NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
   }
 
-  const isDeveloper = session.email?.toLowerCase() === "alen95ae@gmail.com";
-  
-  if (isDeveloper) {
-    const permisos = await getPermisos(session.sub, session.email);
-    return { userId: session.sub, userEmail: session.email, permisos };
-  }
-
+  // NO hay bypass por email - todos los usuarios (incluido desarrollador) usan permisos reales
   const supabase = getSupabaseServer();
 
   // Obtener rol_id del usuario

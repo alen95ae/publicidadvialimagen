@@ -103,10 +103,8 @@ export async function middleware(req: NextRequest) {
       // 🔒 Verificación especial para módulo de ajustes - verificar permiso admin en ajustes
       // NOTA: ajustes-inventario NO es parte de ajustes, es parte de inventario
       if ((pathname.startsWith("/panel/ajustes") && !pathname.startsWith("/panel/ajustes-inventario")) || pathname.startsWith("/api/ajustes")) {
-        const isDeveloper = payload.email?.toLowerCase() === "alen95ae@gmail.com";
-        
-        // Si no es desarrollador, verificar permisos
-        if (!isDeveloper && payload.sub) {
+        // NO hay bypass por email - todos los usuarios (incluido desarrollador) usan permisos reales
+        if (payload.sub) {
           try {
             const permisos = await getPermisos(payload.sub, payload.email);
             const tieneAdminAjustes = tienePermiso(permisos, "ajustes", "admin");
@@ -131,8 +129,6 @@ export async function middleware(req: NextRequest) {
             console.error("Error checking ajustes permissions:", error);
             return NextResponse.json({ error: "Error al verificar permisos" }, { status: 500 });
           }
-        } else if (isDeveloper) {
-          console.log("✅ Developer access granted to ajustes for user:", payload.email);
         }
       }
       

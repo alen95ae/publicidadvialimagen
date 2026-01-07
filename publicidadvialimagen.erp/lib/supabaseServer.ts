@@ -199,14 +199,11 @@ export async function getSupabaseUser(
     try {
       const payload = await verifySession(token)
       const role = (payload?.role || "").toLowerCase().trim()
-      const email = (payload?.email || "").toLowerCase().trim()
-      const isDeveloper =
-        role === "desarrollador" ||
-        role === "developer" ||
-        email === "alen95ae@gmail.com"
-
-      if (isDeveloper) {
-        console.warn("[getSupabaseUser] ⚠️ Fallback a getSupabaseAdmin() para desarrollador (JWT Supabase no disponible).")
+      
+      // Verificar si el rol es "desarrollador" (NO por email)
+      // El rol desarrollador debe tener todos los permisos asignados en BD
+      if (role === "desarrollador" || role === "developer") {
+        console.warn("[getSupabaseUser] ⚠️ Fallback a getSupabaseAdmin() para rol desarrollador (JWT Supabase no disponible).")
         return getSupabaseAdmin()
       }
     } catch {

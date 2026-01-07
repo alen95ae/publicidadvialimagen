@@ -115,13 +115,8 @@ export async function verificarAccesoCotizacion(
       return false
     }
 
-    // El desarrollador siempre tiene acceso
-    const isDeveloper = usuario.email?.toLowerCase() === 'alen95ae@gmail.com'
-    if (isDeveloper) {
-      return true
-    }
-
-    // Admin siempre tiene acceso
+    // NO hay bypass por email - todos los usuarios (incluido desarrollador) usan permisos reales
+    // Admin siempre tiene acceso (si tiene permiso admin en ventas)
     if (usuario.role === 'admin') {
       return true
     }

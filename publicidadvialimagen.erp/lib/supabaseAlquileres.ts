@@ -102,7 +102,11 @@ export async function getAlquileres(options?: {
     query = query.ilike("cliente", `%${options.cliente}%`);
   }
   if (options?.vendedor) {
-    query = query.ilike("vendedor", `%${options.vendedor}%`);
+    // Normalizar el vendedor (trim) para evitar problemas con espacios al final
+    const vendedorNormalizado = options.vendedor.trim();
+    // Usar ilike para búsqueda case-insensitive, pero también normalizar en la consulta
+    // Buscar tanto con espacios como sin espacios al final
+    query = query.or(`vendedor.ilike.%${vendedorNormalizado}%,vendedor.ilike.%${vendedorNormalizado} %`);
   }
   // Búsqueda general en múltiples campos
   if (options?.search) {

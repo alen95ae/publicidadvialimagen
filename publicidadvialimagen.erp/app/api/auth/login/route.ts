@@ -60,11 +60,9 @@ export async function POST(req: Request) {
       }
     }
 
-    // El desarrollador siempre tiene acceso de admin
-    const isDeveloper = user.fields.Email?.toLowerCase() === "alen95ae@gmail.com";
-    if (isDeveloper) {
-      roleName = "admin";
-    }
+    // NOTA: El rol del usuario debe estar asignado en la BD (tabla usuarios.rol_id)
+    // Si el usuario tiene rol "desarrollador" en BD, se usará ese rol
+    // NO hay asignación automática de rol por email
 
     const token = await signSession({ id: user.id, email: user.fields.Email, role: roleName, name: user.fields.Nombre });
     

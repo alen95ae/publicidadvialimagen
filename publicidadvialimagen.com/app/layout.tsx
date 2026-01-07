@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "Publicidad Vial Imagen | Vallas Publicitarias",
   description: "Espacios publicitarios premium y servicios de impresión profesional para potenciar tu marca - Multilingual support ES/EN",
   generator: 'v0.app',
+  verification: {
+    google: '7O2B_0NKp3dUp3OVJdWUPSb7vwDi-eN9qq4zl6pC6KY',
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },

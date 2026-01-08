@@ -538,8 +538,8 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
     
     // Distribuir el footer con separadores (ajustado para altura menor)
     const footerTextY = footerY + (footerHeight / 2) + 2 // Centrado verticalmente
-    // Izquierda: © 2025 Publicidad Vial Imagen
-    pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerTextY)
+    // Izquierda: 2025 Publicidad Vial Imagen
+    pdf.text(`${currentYear} Publicidad Vial Imagen`, 5, footerTextY)
     
     // Separador 1 (entre izquierda y centro)
     pdf.text('|', 65, footerTextY)
@@ -925,8 +925,8 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
     
     // Distribuir el footer con separadores (ajustado para altura menor)
     const footerTextY = footerY + (footerHeight / 2) + 2 // Centrado verticalmente
-    // Izquierda: © 2025 Publicidad Vial Imagen
-    pdf.text(`© ${currentYear} Publicidad Vial Imagen`, 5, footerTextY)
+    // Izquierda: 2025 Publicidad Vial Imagen
+    pdf.text(`${currentYear} Publicidad Vial Imagen`, 5, footerTextY)
     
     // Separador 1 (entre izquierda y centro)
     pdf.text('|', 70, footerTextY)

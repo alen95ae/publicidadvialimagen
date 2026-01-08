@@ -1645,12 +1645,47 @@ export default function EditarCotizacionPage() {
       const soportesInfo = await generarDatosParaModalAprobacion(cotizacionId, lineas)
 
       if (soportesInfo.length > 0) {
-        // Hay soportes, mostrar modal de confirmación
-        setModalAprobacion({
-          open: true,
-          soportesInfo: soportesInfo,
-          cargando: false
-        })
+        // VALIDACIÓN PREVENTIVA: Verificar solapes antes de mostrar el modal
+        try {
+          const response = await fetch('/api/alquileres/validar-solapes', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              alquileres: soportesInfo.map(info => ({
+                soporte_codigo: info.soporte.codigo,
+                fechaInicio: info.fechaInicio,
+                fechaFin: info.fechaFin
+              }))
+            })
+          })
+
+          const data = await response.json()
+
+          if (!data.success || data.haySolapes) {
+            // Hay solapes, mostrar error y NO abrir el modal
+            const mensajeError = data.mensaje || 'Hay alquileres que se solapan con fechas existentes'
+            toast.error(mensajeError)
+            setModalAprobacion(prev => ({ ...prev, cargando: false, open: false }))
+            return
+          }
+
+          // No hay solapes, mostrar modal de confirmación
+          setModalAprobacion({
+            open: true,
+            soportesInfo: soportesInfo,
+            cargando: false
+          })
+        } catch (errorValidacion) {
+          console.error('Error validando solapes:', errorValidacion)
+          // Si falla la validación, mostrar el modal de todas formas (no bloquear)
+          setModalAprobacion({
+            open: true,
+            soportesInfo: soportesInfo,
+            cargando: false
+          })
+        }
       } else {
         // No hay soportes, aprobar directamente sin modal
         await confirmarAprobacionSinSoportes()

@@ -110,7 +110,7 @@ export default function Footer() {
         <div className="mt-8 border-t pt-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} Publicidad Vial Imagen. {t('footer.copyright')}
+              {new Date().getFullYear()} Publicidad Vial Imagen. {t('footer.copyright')}
             </p>
             <div className="flex items-center gap-4">
               <div className="flex justify-center gap-4">

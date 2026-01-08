@@ -579,8 +579,8 @@ export async function GET(
       
       const footerTextY = footerY + (footerHeight / 2) + 2
       
-      // Izquierda: © 2025 Publicidad Vial Imagen
-      const leftText = `© ${currentYear} Publicidad Vial Imagen`
+      // Izquierda: 2025 Publicidad Vial Imagen
+      const leftText = `${currentYear} Publicidad Vial Imagen`
       const leftTextWidth = pdf.getTextWidth(leftText)
       pdf.text(leftText, 5, footerTextY)
       

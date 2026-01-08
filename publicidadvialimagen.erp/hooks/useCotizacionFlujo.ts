@@ -567,7 +567,9 @@ export async function crearAlquileres(
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(data?.error || 'Error al crear alquileres')
+    // Usar el mensaje de error del servidor (puede ser el mensaje de solape u otro error específico)
+    const errorMsg = data?.error || data?.message || 'Error al crear alquileres'
+    throw new Error(errorMsg)
   }
 
   return {

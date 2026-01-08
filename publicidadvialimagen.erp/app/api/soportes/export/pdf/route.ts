@@ -959,8 +959,8 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       pdf.setFont('helvetica', 'normal')
       
       // Distribuir el footer con separadores (igual que en cotización)
-      // Izquierda: © 2025 Publicidad Vial Imagen
-      const leftText = `© ${currentYear} Publicidad Vial Imagen`
+      // Izquierda: 2025 Publicidad Vial Imagen
+      const leftText = `${currentYear} Publicidad Vial Imagen`
       pdf.text(leftText, 5, footerY + 7)
       
       // Separador 1 (después del texto izquierdo)

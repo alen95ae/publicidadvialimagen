@@ -384,6 +384,40 @@ export async function updateAlquiler(
 ) {
   const supabase = getSupabaseServer();
 
+  // Obtener alquiler actual para validación y cálculo de estado
+  const alquilerActual = await getAlquilerById(id);
+  if (!alquilerActual) {
+    throw new Error(`Alquiler con ID ${id} no encontrado`);
+  }
+
+  // Determinar fechas y soporte que se usarán (nuevos o actuales)
+  const fechaInicio = alquiler.inicio !== undefined ? alquiler.inicio : alquilerActual.inicio;
+  const fechaFin = alquiler.fin !== undefined ? alquiler.fin : alquilerActual.fin;
+  const soporteId = alquiler.soporte_id !== undefined ? alquiler.soporte_id : alquilerActual.soporte_id;
+
+  // VALIDACIÓN PREVENTIVA: Verificar solape si se cambian fechas o soporte
+  // Esta validación es NO DESTRUCTIVA: solo lee datos, no modifica nada
+  if (alquiler.inicio !== undefined || alquiler.fin !== undefined || alquiler.soporte_id !== undefined) {
+    // Obtener código del soporte para mensaje de error claro
+    let codigoSoporte: string | undefined;
+    try {
+      const { getSoporteById } = await import('./supabaseSoportes');
+      const soporte = await getSoporteById(String(soporteId));
+      codigoSoporte = soporte?.codigo;
+    } catch (error) {
+      console.warn('⚠️ [updateAlquiler] No se pudo obtener código del soporte para mensaje de error:', error);
+    }
+
+    // Validar solape excluyendo el alquiler actual
+    await validarSolapeAlquileres(
+      soporteId,
+      fechaInicio,
+      fechaFin,
+      id, // Excluir el alquiler actual de la validación
+      codigoSoporte
+    );
+  }
+
   const updateData: any = {};
   if (alquiler.codigo !== undefined) updateData.codigo = alquiler.codigo;
   if (alquiler.cliente !== undefined) updateData.cliente = alquiler.cliente;
@@ -400,15 +434,12 @@ export async function updateAlquiler(
 
   // Si se actualizan fechas, recalcular estado
   if (alquiler.inicio || alquiler.fin) {
-    const alquilerActual = await getAlquilerById(id);
-    if (alquilerActual) {
-      const estadoCalculado = recalcularEstadoAlquiler({
-        ...alquilerActual,
-        inicio: alquiler.inicio || alquilerActual.inicio,
-        fin: alquiler.fin || alquilerActual.fin,
-      });
-      updateData.estado = estadoCalculado;
-    }
+    const estadoCalculado = recalcularEstadoAlquiler({
+      ...alquilerActual,
+      inicio: fechaInicio,
+      fin: fechaFin,
+    });
+    updateData.estado = estadoCalculado;
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -525,6 +556,84 @@ export async function getAllAlquileresParaActualizarSoportes() {
   }
 
   return (data || []) as Alquiler[];
+}
+
+/**
+ * Validar si un alquiler nuevo se solapa con alquileres existentes del mismo soporte
+ * Regla de solape: inicio_nuevo <= fin_existente AND fin_nuevo >= inicio_existente
+ * 
+ * @param soporteId - ID del soporte
+ * @param fechaInicio - Fecha de inicio del alquiler nuevo
+ * @param fechaFin - Fecha de fin del alquiler nuevo
+ * @param alquilerIdExcluir - ID del alquiler a excluir de la validación (útil para edición)
+ * @param codigoSoporte - Código del soporte para el mensaje de error (opcional)
+ * @returns Objeto con { haySolape: boolean, alquilerSolapado: Alquiler | null }
+ * @throws Error si hay solape con mensaje claro
+ */
+export async function validarSolapeAlquileres(
+  soporteId: string | number,
+  fechaInicio: string,
+  fechaFin: string,
+  alquilerIdExcluir?: string,
+  codigoSoporte?: string
+): Promise<{ haySolape: boolean; alquilerSolapado: Alquiler | null }> {
+  const supabase = getSupabaseServer();
+
+  // Convertir a número si es posible
+  const soporteIdValue = typeof soporteId === 'string' && !isNaN(Number(soporteId)) 
+    ? Number(soporteId) 
+    : soporteId;
+
+  // Obtener todos los alquileres del mismo soporte (sin filtrar por estado)
+  let query = supabase
+    .from("alquileres")
+    .select("*")
+    .eq("soporte_id", soporteIdValue);
+
+  // Excluir el alquiler actual si se está editando
+  if (alquilerIdExcluir) {
+    query = query.neq("id", alquilerIdExcluir);
+  }
+
+  const { data: alquileresExistentes, error } = await query;
+
+  if (error) {
+    console.error('❌ [validarSolapeAlquileres] Error consultando alquileres:', error);
+    throw error;
+  }
+
+  if (!alquileresExistentes || alquileresExistentes.length === 0) {
+    return { haySolape: false, alquilerSolapado: null };
+  }
+
+  // Convertir fechas a Date para comparación
+  const inicioNuevo = new Date(fechaInicio);
+  inicioNuevo.setHours(0, 0, 0, 0);
+  const finNuevo = new Date(fechaFin);
+  finNuevo.setHours(0, 0, 0, 0);
+
+  // Verificar solape con cada alquiler existente
+  // Regla: inicio_nuevo <= fin_existente AND fin_nuevo >= inicio_existente
+  for (const alquilerExistente of alquileresExistentes) {
+    const inicioExistente = new Date(alquilerExistente.inicio);
+    inicioExistente.setHours(0, 0, 0, 0);
+    const finExistente = new Date(alquilerExistente.fin);
+    finExistente.setHours(0, 0, 0, 0);
+
+    // Verificar solape
+    if (inicioNuevo <= finExistente && finNuevo >= inicioExistente) {
+      // Hay solape
+      const mensajeError = codigoSoporte
+        ? `El soporte ${codigoSoporte} ya tiene un alquiler que se solapa con el rango de fechas seleccionado.`
+        : `El soporte ya tiene un alquiler que se solapa con el rango de fechas seleccionado.`;
+      
+      const error = new Error(mensajeError);
+      (error as any).alquilerSolapado = alquilerExistente;
+      throw error;
+    }
+  }
+
+  return { haySolape: false, alquilerSolapado: null };
 }
 
 // Obtener alquileres de una cotización específica con información del soporte

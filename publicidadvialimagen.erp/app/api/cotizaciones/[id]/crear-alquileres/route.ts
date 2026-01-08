@@ -276,9 +276,10 @@ export async function POST(
     const errorStack = error instanceof Error ? error.stack : undefined
     
     // 🔥 GARANTIZAR JSON VÁLIDO SIEMPRE
+    // Usar el mensaje de error real en lugar de un código genérico
     return NextResponse.json({
       success: false,
-      error: "ERROR_CREANDO_ALQUILERES",
+      error: errorMessage, // Usar el mensaje real del error (ej: mensaje de solape)
       message: errorMessage,
       ...(errorStack && { stack: errorStack })
     }, { status: 500 })

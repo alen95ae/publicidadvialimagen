@@ -7,7 +7,8 @@ import {
   getAllAlquileresParaActualizarSoportes,
   getAlquileresPorCotizacion,
   cancelarAlquileresDeCotizacion,
-  getAlquileresVigentesPorSoporte
+  getAlquileresVigentesPorSoporte,
+  validarSolapeAlquileres
 } from './supabaseAlquileres'
 import { 
   registrarAlquilerCreado, 
@@ -157,6 +158,16 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
   
   for (const info of soportesInfo) {
     try {
+      // VALIDACIÓN PREVENTIVA: Verificar solape con alquileres existentes
+      // Esta validación es NO DESTRUCTIVA: solo lee datos, no modifica nada
+      await validarSolapeAlquileres(
+        info.soporte.id,
+        info.fechaInicio,
+        info.fechaFin,
+        undefined, // No excluir ningún alquiler (es creación nueva)
+        info.soporte.codigo // Código del soporte para mensaje de error claro
+      );
+
       // Crear alquiler
       // Nota: Si soporte_id es UUID pero soportes.id es numérico, hay un problema de esquema
       // Por ahora, intentamos usar el ID numérico directamente

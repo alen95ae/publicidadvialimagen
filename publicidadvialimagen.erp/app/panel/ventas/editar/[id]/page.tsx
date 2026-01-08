@@ -2639,6 +2639,7 @@ export default function EditarCotizacionPage() {
                               className="w-16 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               step="0.5"
                               min="0.5"
+                              disabled={producto.esSoporte === true}
                             />
                           </td>
 

@@ -45,6 +45,7 @@ import {
   type ProductoItem as ProductoItemType
 } from '@/hooks/useCotizacionFlujo'
 import { usePermisosContext } from '@/hooks/permisos-provider'
+import { normalizarAccion } from '@/lib/permisos-utils'
 
 // Datos de ejemplo para los desplegables
 const clientes = [
@@ -131,7 +132,7 @@ type ItemLista = ProductoItem | NotaItem | SeccionItem
 
 export default function NuevaCotizacionPage() {
   const router = useRouter()
-  const { tieneFuncionTecnica } = usePermisosContext()
+  const { tieneFuncionTecnica, permisos } = usePermisosContext()
   const [cliente, setCliente] = useState("")
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
@@ -1011,6 +1012,18 @@ export default function NuevaCotizacionPage() {
         return
       }
 
+      // Verificar si el usuario tiene permiso para modificar precio cotización
+      const puedeModificarPrecio = tieneFuncionTecnica("modificar precio cotización")
+      
+      // Log de depuración para validaciones
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 [Validaciones Guardar] Debug:', {
+          puedeModificarPrecio,
+          permisosTecnico: permisos["tecnico"],
+          valorPermiso: permisos["tecnico"]?.[normalizarAccion("modificar precio cotización")]
+        })
+      }
+
       // Validar cada producto individualmente
       for (const producto of productos) {
         const esUnidades = producto.udm?.toLowerCase().trim() === 'unidad' || producto.udm?.toLowerCase().trim() === 'unidades' || producto.udm?.toLowerCase().trim() === 'unidade'
@@ -1026,7 +1039,9 @@ export default function NuevaCotizacionPage() {
         )
 
         // Tolerancia del 1% para redondeos
-        if (producto.total < subtotalCalculado * 0.99) {
+        // IMPORTANTE: Solo permitir precios inferiores si tiene el permiso explícitamente
+        // Si NO tiene permiso, bloquear cualquier valor menor al calculado
+        if (!puedeModificarPrecio && producto.total < subtotalCalculado * 0.99) {
           toast.error(`El producto "${producto.producto}" tiene un subtotal (${producto.total.toFixed(2)}) menor al calculado (${subtotalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
           setGuardando(false)
           return
@@ -1034,7 +1049,9 @@ export default function NuevaCotizacionPage() {
       }
 
       // Validar que el subtotal general no sea menor al calculado
-      if (totalGeneralReal < totalCalculado * 0.99) {
+      // IMPORTANTE: Solo permitir precios inferiores si tiene el permiso explícitamente
+      // Si NO tiene permiso, bloquear cualquier valor menor al calculado
+      if (!puedeModificarPrecio && totalGeneralReal < totalCalculado * 0.99) {
         toast.error(`El subtotal general (${totalGeneralReal.toFixed(2)}) es menor al calculado (${totalCalculado.toFixed(2)}). Por favor corrige antes de guardar.`)
         setGuardando(false)
         return
@@ -2191,19 +2208,42 @@ export default function NuevaCotizacionPage() {
                           </td>
 
                           <td className="py-2 px-2">
-                            <Input
-                              type="number"
-                              value={producto.precio}
-                              onChange={(e) => actualizarProducto(producto.id, 'precio', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
-                              onBlur={(e) => {
-                                if (e.target.value === '') {
-                                  actualizarProducto(producto.id, 'precio', 0)
-                                }
-                              }}
-                              className="w-20 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              step="0.01"
-                              disabled={!tieneFuncionTecnica("modificar precio cotización")}
-                            />
+                            {(() => {
+                              // Detectar si es PRO-001
+                              const esPRO001 = producto.producto?.includes('PRO-001') || producto.producto_id === 'PRO-001'
+                              // Verificar permiso
+                              const tienePermiso = tieneFuncionTecnica("modificar precio cotización")
+                              // El campo precio está habilitado si tiene el permiso O si es PRO-001
+                              const precioHabilitado = tienePermiso || esPRO001
+                              
+                              // Log de depuración (solo en desarrollo)
+                              if (process.env.NODE_ENV === 'development' && !esPRO001) {
+                                console.log('🔍 [Precio Campo] Debug:', {
+                                  producto: producto.producto,
+                                  tienePermiso,
+                                  esPRO001,
+                                  precioHabilitado,
+                                  permisosTecnico: permisos["tecnico"],
+                                  todasLasClaves: permisos["tecnico"] ? Object.keys(permisos["tecnico"]) : []
+                                })
+                              }
+                              
+                              return (
+                                <Input
+                                  type="number"
+                                  value={producto.precio}
+                                  onChange={(e) => actualizarProducto(producto.id, 'precio', e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                                  onBlur={(e) => {
+                                    if (e.target.value === '') {
+                                      actualizarProducto(producto.id, 'precio', 0)
+                                    }
+                                  }}
+                                  className="w-20 h-8 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  step="0.01"
+                                  disabled={!precioHabilitado}
+                                />
+                              )
+                            })()}
                           </td>
 
                           <td className="py-2 px-2">

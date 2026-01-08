@@ -44,17 +44,26 @@ export function normalizarModulo(modulo: string | undefined | null): string {
 /**
  * Normaliza un nombre de acción
  * 
- * A diferencia de módulos, las acciones mantienen acentos y mayúsculas
- * para soportar acciones especiales como "ver dueño de casa"
+ * IMPORTANTE: Elimina diacríticos (tildes) y convierte a minúsculas
+ * para garantizar coincidencia entre BD y código, independientemente
+ * de cómo esté almacenado en la base de datos.
+ * 
+ * Ejemplos:
+ * - "modificar precio cotización" → "modificar precio cotizacion"
+ * - "Modificar Precio Cotización" → "modificar precio cotizacion"
+ * - "modificar precio cotizacion" → "modificar precio cotizacion"
  * 
  * @param accion - Nombre de la acción
- * @returns Acción normalizada (trim + colapso de espacios)
+ * @returns Acción normalizada (sin tildes, minúsculas, trim, espacios colapsados)
  */
 export function normalizarAccion(accion: string | undefined | null): string {
   if (!accion) return '';
   return accion
+    .normalize("NFD")              // Descompone caracteres con diacríticos
+    .replace(/[\u0300-\u036f]/g, "") // Elimina diacríticos (tildes, etc.)
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")         // Colapsa espacios múltiples
+    .toLowerCase();                // Convierte a minúsculas
 }
 
 /**

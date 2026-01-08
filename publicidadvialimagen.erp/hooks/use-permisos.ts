@@ -108,49 +108,31 @@ export function usePermisos() {
   const tieneFuncionTecnica = (accion: string): boolean => {
     // No verificar si aún está cargando
     if (loading) {
-      if (accion === 'ver historial soportes') {
+      if (accion === 'ver historial soportes' || accion === 'modificar precio cotización') {
         console.log('⏳ [usePermisos] Aún cargando permisos, retornando false');
       }
       return false;
     }
     
-    // Normalizar acción para coincidir con la clave del backend
-    const accionNormalizada = accion
-      .trim()
-      .replace(/\s+/g, " ");
+    // SOLUCIÓN DEFINITIVA: Usar la misma normalización que el backend
+    // Esto elimina tildes, convierte a minúsculas y colapsa espacios
+    const accionNormalizada = normalizarAccion(accion);
     
-    // SOLUCIÓN QUIRÚRGICA: Buscar la clave exacta o variaciones
     const permisosTecnico = permisos["tecnico"];
     if (!permisosTecnico) {
-      if (accion === 'ver historial soportes') {
+      if (accion === 'ver historial soportes' || accion === 'modificar precio cotización') {
         console.warn('⚠️ [usePermisos] No hay módulo técnico en permisos');
       }
       return false;
     }
     
-    // Intentar con la clave exacta primero
-    let valor = permisosTecnico[accionNormalizada];
-    
-    // Si no se encuentra, buscar en todas las claves con normalización
-    if (valor === undefined) {
-      const todasLasClaves = Object.keys(permisosTecnico);
-      const claveEncontrada = todasLasClaves.find(k => {
-        const kNormalizada = k.trim().replace(/\s+/g, " ");
-        return kNormalizada === accionNormalizada;
-      });
-      if (claveEncontrada) {
-        valor = permisosTecnico[claveEncontrada];
-        if (accion === 'ver historial soportes') {
-          console.log(`✅ [usePermisos] Clave encontrada con normalización: "${claveEncontrada}"`);
-        }
-      }
-    }
-    
-    // Verificar explícitamente que sea true (no truthy)
+    // Buscar directamente con la clave normalizada
+    // El backend ya normalizó las claves, así que coincidirán
+    const valor = permisosTecnico[accionNormalizada];
     const resultado = valor === true;
     
     // Log específico para permisos técnicos importantes - SIEMPRE mostrar
-    if (accion === 'ver dueño de casa' || accion === 'ver historial soportes') {
+    if (accion === 'ver dueño de casa' || accion === 'ver historial soportes' || accion === 'modificar precio cotización') {
       console.log(`🔍 [usePermisos] Verificando "${accion}":`, {
         accion,
         accionNormalizada,
@@ -158,8 +140,7 @@ export function usePermisos() {
         valorEnPermisos: valor,
         tipoValor: typeof valor,
         todasLasClaves: Object.keys(permisosTecnico || {}),
-        permisosTecnico: permisosTecnico,
-        permisosCompletos: permisos
+        permisosTecnico: permisosTecnico
       });
     }
     

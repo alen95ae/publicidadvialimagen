@@ -44,6 +44,7 @@ import {
   sincronizarLineas,
   type ProductoItem as ProductoItemType
 } from '@/hooks/useCotizacionFlujo'
+import { usePermisosContext } from '@/hooks/permisos-provider'
 
 // Datos de ejemplo para los desplegables
 const clientes = [

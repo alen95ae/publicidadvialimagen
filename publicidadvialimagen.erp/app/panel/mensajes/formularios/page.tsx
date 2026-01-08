@@ -78,7 +78,7 @@ const ESTADOS_META = {
 }
 
 export default function FormulariosPage() {
-  const { tieneFuncionTecnica } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEliminar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMensajes, setSelectedMensajes] = useState<string[]>([])
   const [mensajesList, setMensajesList] = useState<Message[]>([])
@@ -449,7 +449,7 @@ export default function FormulariosPage() {
                         </Button>
                       </>
                     )}
-                    {selectedMensajes.length > 0 && (
+                    {selectedMensajes.length > 0 && (puedeEliminar("mensajes") || esAdmin("mensajes")) && (
                       <Button 
                         size="sm" 
                         onClick={handleBulkDelete}
@@ -563,15 +563,17 @@ export default function FormulariosPage() {
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Eliminar"
-                            onClick={() => handleEliminarMensaje(mensaje.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {(puedeEliminar("mensajes") || esAdmin("mensajes")) && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Eliminar"
+                              onClick={() => handleEliminarMensaje(mensaje.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

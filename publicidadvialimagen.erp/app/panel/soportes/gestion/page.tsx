@@ -58,7 +58,7 @@ interface Support {
 }
 
 export default function SoportesPage() {
-  const { tieneFuncionTecnica, puedeEditar, loading: permisosLoading } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEditar, puedeEliminar, esAdmin, loading: permisosLoading } = usePermisosContext()
   const puedeReservar = tieneFuncionTecnica("reservar soportes")
   const [supports, setSupports] = useState<Support[]>([])
   const [allSupports, setAllSupports] = useState<Support[]>([]) // Para almacenar todos los soportes cuando hay ordenamiento
@@ -819,7 +819,6 @@ export default function SoportesPage() {
         'Precio por m²',
         'Coste de producción',
         'Estado',
-        ...(!permisosLoading && tieneFuncionTecnica("ver propietario soportes") ? ['Propietario'] : []),
         'Empresa'
       ]
       
@@ -836,7 +835,6 @@ export default function SoportesPage() {
         s.pricePerM2 || '',
         s.productionCost || '',
         s.status || '',
-        ...(!permisosLoading && tieneFuncionTecnica("ver propietario soportes") ? [s.owner || ''] : []),
         s.company?.name || ''
       ])
       
@@ -1289,15 +1287,17 @@ export default function SoportesPage() {
                           >
                             <Eye className="w-3 h-3" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Editar"
-                            onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
-                            className="flex-1 h-6 px-1"
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
+                          {(puedeEditar("soportes") || esAdmin("soportes")) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Editar"
+                              onClick={() => router.push(`/panel/soportes/${support.id}?edit=true`)}
+                              className="flex-1 h-6 px-1"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                          )}
                           <PermisoTecnico accion="ver historial soportes">
                             <Button
                               variant="ghost"
@@ -1309,15 +1309,17 @@ export default function SoportesPage() {
                               <FolderClock className="w-3 h-3" />
                             </Button>
                           </PermisoTecnico>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Eliminar"
-                            onClick={() => handleDelete(support.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          {(puedeEliminar("soportes") || esAdmin("soportes")) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Eliminar"
+                              onClick={() => handleDelete(support.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>

@@ -92,14 +92,20 @@ export async function GET(request: NextRequest) {
     });
 
     // Aplicar lógica: si admin=true, forzar ver/editar/eliminar a true (solo para módulos no técnicos)
-    // Esto es una conveniencia: admin implica ver/editar/eliminar, pero SOLO si admin está explícitamente asignado
+    // EXCEPCIÓN: Para el módulo "ajustes", editar y eliminar NO se establecen automáticamente
+    // Esto permite control granular en ajustes: admin puede tener acceso completo, pero editar/eliminar se controlan por separado
     Object.keys(permisosMatrix).forEach(modulo => {
       const moduloNormalizado = normalizarModulo(modulo);
       if (moduloNormalizado !== 'tecnico' && permisosMatrix[modulo].admin === true) {
-        // Admin está asignado explícitamente → otorgar ver/editar/eliminar
-        permisosMatrix[modulo].ver = true;
-        permisosMatrix[modulo].editar = true;
-        permisosMatrix[modulo].eliminar = true;
+        if (moduloNormalizado === 'ajustes') {
+          // Para ajustes: admin solo otorga ver, editar/eliminar deben estar explícitamente asignados
+          permisosMatrix[modulo].ver = true;
+        } else {
+          // Para otros módulos: admin otorga ver/editar/eliminar (comportamiento estándar)
+          permisosMatrix[modulo].ver = true;
+          permisosMatrix[modulo].editar = true;
+          permisosMatrix[modulo].eliminar = true;
+        }
       }
     });
 

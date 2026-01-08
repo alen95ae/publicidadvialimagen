@@ -65,12 +65,19 @@ export async function getPermisos(userId: string, userEmail?: string): Promise<P
     permisosMatrix[permiso.modulo][permiso.accion] = permisoIds.includes(permiso.id);
   });
 
-  // Aplicar lógica: si admin=true, forzar todos a true
+  // Aplicar lógica: si admin=true, forzar ver/editar/eliminar a true
+  // EXCEPCIÓN: Para el módulo "ajustes", editar y eliminar NO se establecen automáticamente
   Object.keys(permisosMatrix).forEach(modulo => {
     if (permisosMatrix[modulo].admin) {
-      permisosMatrix[modulo].ver = true;
-      permisosMatrix[modulo].editar = true;
-      permisosMatrix[modulo].eliminar = true;
+      if (modulo === 'ajustes') {
+        // Para ajustes: admin solo otorga ver, editar/eliminar deben estar explícitamente asignados
+        permisosMatrix[modulo].ver = true;
+      } else {
+        // Para otros módulos: admin otorga ver/editar/eliminar (comportamiento estándar)
+        permisosMatrix[modulo].ver = true;
+        permisosMatrix[modulo].editar = true;
+        permisosMatrix[modulo].eliminar = true;
+      }
     }
   });
 

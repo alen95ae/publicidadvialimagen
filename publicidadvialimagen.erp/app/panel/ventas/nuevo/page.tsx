@@ -1645,19 +1645,21 @@ export default function NuevaCotizacionPage() {
                 </div>
 
                 {/* Descargar OT */}
-                <div className="space-y-2 w-48">
-                  <Label>&nbsp;</Label>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    disabled={!cotizacionId}
-                    onClick={descargarOTPDF}
-                    title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
-                  >
-                    <Hammer className="w-4 h-4 mr-2" />
-                    Descargar OT
-                  </Button>
-                </div>
+                {tieneFuncionTecnica("descargar ot") && (
+                  <div className="space-y-2 w-48">
+                    <Label>&nbsp;</Label>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={!cotizacionId}
+                      onClick={descargarOTPDF}
+                      title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
+                    >
+                      <Hammer className="w-4 h-4 mr-2" />
+                      Descargar OT
+                    </Button>
+                  </div>
+                )}
 
                 {/* Descargar Cotización */}
                 <div className="space-y-2 w-48">

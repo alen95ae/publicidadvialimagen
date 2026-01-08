@@ -812,6 +812,10 @@ export default function PanelHeader() {
                       if ((item.href === "/panel/contactos/leads" || item.href === "/panel/contactos/miembros") && !esAdmin("contactos")) {
                         return false;
                       }
+                      // Filtrar Formularios si no tiene admin en mensajes
+                      if (item.href === "/panel/mensajes/formularios" && !esAdmin("mensajes")) {
+                        return false;
+                      }
                       return true;
                     })
                     .map((item) => (

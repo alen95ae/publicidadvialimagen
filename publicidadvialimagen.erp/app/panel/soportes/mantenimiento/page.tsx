@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Interface para los datos de mantenimiento
 interface Mantenimiento {
@@ -42,6 +43,7 @@ const ESTADOS_MANTENIMIENTO = {
 } as const
 
 export default function MantenimientoPage() {
+  const { puedeEliminar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMantenimientos, setSelectedMantenimientos] = useState<string[]>([])
   const [mantenimientos, setMantenimientos] = useState<Mantenimiento[]>([])
@@ -276,15 +278,17 @@ export default function MantenimientoPage() {
                               <Button variant="ghost" size="sm" title="Editar mantenimiento">
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleDelete(mantenimiento.id)}
-                                className="text-red-600 hover:text-red-700"
-                                title="Eliminar mantenimiento"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {(puedeEliminar("soportes") || esAdmin("soportes")) && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleDelete(mantenimiento.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                  title="Eliminar mantenimiento"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>

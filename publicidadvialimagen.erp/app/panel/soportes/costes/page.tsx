@@ -113,8 +113,6 @@ const getBeneficioIcon = (porcentaje: number) => {
 
 export default function CostesPage() {
   const { puedeEditar, loading: permisosLoading, tieneFuncionTecnica } = usePermisosContext()
-  // SOLUCIÓN QUIRÚRGICA: Solo verificar si los permisos ya están cargados
-  const puedeVerDuenoCasa = !permisosLoading && tieneFuncionTecnica("ver dueño de casa")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSoportes, setSelectedSoportes] = useState<string[]>([])
   const [supports, setSupports] = useState<Support[]>([])
@@ -1460,9 +1458,6 @@ export default function CostesPage() {
                         </button>
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Propietario</th>
-                      {!permisosLoading && puedeVerDuenoCasa && (
-                        <th className="text-left py-2 px-3 font-medium text-gray-900">Dueño de casa</th>
-                      )}
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Temporalidad de pago</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Método de pago</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">Notas</th>
@@ -1569,7 +1564,7 @@ export default function CostesPage() {
                   <tbody>
                     {soportesCostesPaginated.length === 0 ? (
                       <tr>
-                        <td colSpan={(!permisosLoading && puedeVerDuenoCasa) ? 26 : 25} className="text-center py-8 text-gray-500">
+                        <td colSpan={25} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron soportes con ese criterio de búsqueda' : 'No hay soportes disponibles'}
                         </td>
                       </tr>
@@ -1632,33 +1627,6 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          {!permisosLoading && puedeVerDuenoCasa && (
-                            <td className="py-2 px-3 whitespace-nowrap">
-                              {isSelected && canEdit ? (
-                                <Input
-                                  value={edited.duenoCasa ?? support?.duenoCasa ?? ""}
-                                  onChange={(e) => handleFieldChange(soporte.id, 'duenoCasa', e.target.value)}
-                                  className="h-8 text-xs w-32"
-                                  placeholder="Dueño de casa"
-                                />
-                              ) : soporte.duenoCasa ? (
-                                soporte.duenoCasa.length > 20 ? (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger className="text-left">
-                                        <span className="text-sm">{soporte.duenoCasa.slice(0, 20) + '…'}</span>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="max-w-sm">{soporte.duenoCasa}</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                ) : (
-                                  <span className="text-sm">{soporte.duenoCasa}</span>
-                                )
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              )}
-                            </td>
-                          )}
                           <td className="py-2 px-3 whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input

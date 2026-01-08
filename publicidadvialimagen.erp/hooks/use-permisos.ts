@@ -55,11 +55,19 @@ export function usePermisos() {
     const moduloPermisos = permisos[moduloNormalizado];
     if (!moduloPermisos) return false;
 
-    // Si tiene admin (solo para módulos no técnicos), tiene todos los permisos estándar
+    // Si tiene admin (solo para módulos no técnicos), tiene acceso según el módulo
+    // EXCEPCIÓN: Para "ajustes", editar y eliminar NO se otorgan automáticamente
     if (moduloNormalizado !== 'tecnico' && moduloPermisos.admin) {
-      // Para módulos normales, admin da acceso a ver, editar, eliminar
-      if (accionNormalizada === 'ver' || accionNormalizada === 'editar' || accionNormalizada === 'eliminar' || accionNormalizada === 'admin') {
-        return true;
+      if (moduloNormalizado === 'ajustes') {
+        // Para ajustes: admin solo da acceso a ver y admin, editar/eliminar deben estar explícitamente asignados
+        if (accionNormalizada === 'ver' || accionNormalizada === 'admin') {
+          return true;
+        }
+      } else {
+        // Para otros módulos: admin da acceso a ver, editar, eliminar, admin (comportamiento estándar)
+        if (accionNormalizada === 'ver' || accionNormalizada === 'editar' || accionNormalizada === 'eliminar' || accionNormalizada === 'admin') {
+          return true;
+        }
       }
     }
 

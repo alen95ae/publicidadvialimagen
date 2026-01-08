@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Copy, ExternalLink, Clock, CheckCircle, XCircle, Key, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePermisosContext } from "@/hooks/permisos-provider";
 
 interface Invitation {
   id: string;
@@ -32,6 +33,7 @@ interface Role {
 }
 
 export default function InvitationsSection() {
+  const { puedeEliminar, esAdmin, tienePermiso, permisos } = usePermisosContext();
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -522,15 +524,17 @@ export default function InvitationsSection() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        title="Eliminar"
-                        onClick={() => handleEliminarInvitacion(invitation.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {permisos.ajustes?.eliminar === true && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="Eliminar"
+                          onClick={() => handleEliminarInvitacion(invitation.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

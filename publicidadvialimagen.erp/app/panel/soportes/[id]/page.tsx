@@ -739,22 +739,6 @@ export default function SoporteDetailPage() {
                   </Select>
                 </div>
 
-                  {tieneFuncionTecnica("ver propietario soportes") && (
-                    <div className="space-y-2">
-                      <Label htmlFor="owner">Propietario</Label>
-                      <Input
-                        id="owner"
-                        value={formData.owner}
-                        onChange={(e) => handleChange("owner", e.target.value)}
-                        placeholder="Propietario del soporte"
-                      />
-                      {owner && (
-                        <div className={`mt-2 inline-flex rounded-md px-3 py-1 text-sm pointer-events-none select-none ${ownerClass}`}>
-                          {owner}
-                        </div>
-                      )}
-                    </div>
-                  )}
 
                 </>
               ) : (
@@ -777,16 +761,6 @@ export default function SoporteDetailPage() {
                     </span>
                   </div>
 
-                  {support.owner && tieneFuncionTecnica("ver propietario soportes") && (
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Propietario</Label>
-                      <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${
-                        support.owner.trim().toLowerCase() === 'imagen' ? 'bg-pink-100 text-pink-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {support.owner}
-                      </span>
-                    </div>
-                  )}
 
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Imágenes</Label>

@@ -51,7 +51,7 @@ const ESTADOS_ALQUILER = {
 } as const
 
 export default function AlquileresPage() {
-  const { tieneFuncionTecnica, puedeEditar, puedeEliminar } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEditar, puedeEliminar, esAdmin } = usePermisosContext()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAlquileres, setSelectedAlquileres] = useState<string[]>([])
@@ -650,16 +650,18 @@ export default function AlquileresPage() {
                           </td>
                           <td className="py-2 px-3 text-center">
                             <div className="flex gap-2 justify-center">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                title="Editar cotización"
-                                onClick={() => handleEdit(alquiler.cotizacion_id)}
-                                className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              {puedeEliminar("soportes") && (
+                              {(puedeEditar("soportes") || esAdmin("soportes")) && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  title="Editar cotización"
+                                  onClick={() => handleEdit(alquiler.cotizacion_id)}
+                                  className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {(puedeEliminar("soportes") || esAdmin("soportes")) && (
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 

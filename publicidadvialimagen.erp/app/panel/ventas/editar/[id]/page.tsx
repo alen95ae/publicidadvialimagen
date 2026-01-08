@@ -2130,17 +2130,19 @@ export default function EditarCotizacionPage() {
                 </div>
 
                 {/* Descargar OT */}
-                <div className="space-y-2 w-48">
-                  <Label>&nbsp;</Label>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={descargarOTPDF}
-                  >
-                    <Hammer className="w-4 h-4 mr-2" />
-                    Descargar OT
-                  </Button>
-                </div>
+                {tieneFuncionTecnica("descargar ot") && (
+                  <div className="space-y-2 w-48">
+                    <Label>&nbsp;</Label>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={descargarOTPDF}
+                    >
+                      <Hammer className="w-4 h-4 mr-2" />
+                      Descargar OT
+                    </Button>
+                  </div>
+                )}
 
                 {/* Descargar Cotización */}
                 <div className="space-y-2 w-48">

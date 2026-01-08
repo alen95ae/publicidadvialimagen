@@ -91,7 +91,7 @@ export default function Sidebar({ children }: SidebarProps) {
         {/* Logo y Toggle Button */}
         {!isCollapsed ? (
           <div className="flex justify-between items-center py-6 px-4 border-b border-gray-200">
-            <div className="w-32 h-8">
+            <div className="w-32 h-8 ml-[20px]">
               <svg id="Capa_1" data-name="Capa 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580.82 132.56" className="w-full h-full">
                 <defs>
                   <style>

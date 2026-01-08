@@ -100,17 +100,18 @@ export async function middleware(req: NextRequest) {
           return NextResponse.redirect(loginUrl);
         }
       
-      // 🔒 Verificación especial para módulo de ajustes - verificar permiso admin en ajustes
+      // 🔒 Verificación especial para módulo de ajustes - verificar permiso ver o admin en ajustes
       // NOTA: ajustes-inventario NO es parte de ajustes, es parte de inventario
       if ((pathname.startsWith("/panel/ajustes") && !pathname.startsWith("/panel/ajustes-inventario")) || pathname.startsWith("/api/ajustes")) {
         // NO hay bypass por email - todos los usuarios (incluido desarrollador) usan permisos reales
         if (payload.sub) {
           try {
             const permisos = await getPermisos(payload.sub, payload.email);
+            const tieneVerAjustes = tienePermiso(permisos, "ajustes", "ver");
             const tieneAdminAjustes = tienePermiso(permisos, "ajustes", "admin");
             
-            if (!tieneAdminAjustes) {
-              console.log("🔒 Access denied to ajustes - no admin permission");
+            if (!tieneVerAjustes && !tieneAdminAjustes) {
+              console.log("🔒 Access denied to ajustes - no ver or admin permission");
               console.log("🔒 Current user email:", payload.email);
               
               // Si está intentando acceder a la página principal de ajustes, redirigir a access-denied
@@ -122,9 +123,9 @@ export async function middleware(req: NextRequest) {
               }
               
               // Para APIs, devolver error 403
-              return NextResponse.json({ error: "Acceso denegado. Se requiere permiso de administrador en ajustes" }, { status: 403 });
+              return NextResponse.json({ error: "Acceso denegado. Se requiere permiso de ver o administrador en ajustes" }, { status: 403 });
             }
-            console.log("✅ Admin permission granted to ajustes for user:", payload.email);
+            console.log("✅ Ver/Admin permission granted to ajustes for user:", payload.email);
           } catch (error) {
             console.error("Error checking ajustes permissions:", error);
             return NextResponse.json({ error: "Error al verificar permisos" }, { status: 500 });

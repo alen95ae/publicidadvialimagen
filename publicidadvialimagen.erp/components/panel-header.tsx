@@ -79,6 +79,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     navItems: [
       { label: "Productos", href: "/panel/inventario" },
       { label: "Recursos", href: "/panel/recursos" },
+      { label: "Consumibles", href: "/panel/consumibles" },
       { label: "Control de Stock", href: "/panel/ajustes-inventario" },
     ],
   },
@@ -238,10 +239,11 @@ function getModuleConfig(pathname: string): ModuleConfig | null {
   if (pathname.startsWith("/panel/ventas")) {
     return moduleConfigs.ventas
   }
-  // Inventario incluye inventario, recursos, ajustes-inventario, insumos, mano-de-obra
+  // Inventario incluye inventario, recursos, consumibles, ajustes-inventario, insumos, mano-de-obra
   if (
     pathname.startsWith("/panel/inventario") ||
     pathname.startsWith("/panel/recursos") ||
+    pathname.startsWith("/panel/consumibles") ||
     pathname.startsWith("/panel/ajustes-inventario") ||
     pathname.startsWith("/panel/insumos") ||
     pathname.startsWith("/panel/mano-de-obra")

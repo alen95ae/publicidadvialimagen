@@ -8,7 +8,8 @@ import {
   Edit, 
   Trash2,
   MapPin,
-  X
+  X,
+  Filter
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,6 +51,7 @@ interface AjusteInventarioItem {
   precioVariante: number
   stock: number
   variantesData: any // Datos de las variantes combinadas
+  tipo?: 'recurso' | 'consumible' // Tipo de item
 }
 
 // Sucursales disponibles (se pueden leer desde Airtable si existe el campo)
@@ -127,7 +129,9 @@ function AjustesInventarioPageContent() {
   const { puedeEditar } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSucursal, setSelectedSucursal] = useState<string>("all")
+  const [selectedCategoria, setSelectedCategoria] = useState<string>("all")
   const [items, setItems] = useState<any[]>([])
+  const [consumibles, setConsumibles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [editedItems, setEditedItems] = useState<Record<string, Partial<AjusteInventarioItem>>>({})
@@ -148,6 +152,7 @@ function AjustesInventarioPageContent() {
         const f = JSON.parse(saved)
         setSearchTerm(f.searchTerm ?? "")
         setSelectedSucursal(f.selectedSucursal ?? "all")
+        setSelectedCategoria(f.selectedCategoria ?? "all")
       } catch (error) {
         console.error('❌ Error parseando filtros guardados:', error)
       }
@@ -162,18 +167,22 @@ function AjustesInventarioPageContent() {
     
     sessionStorage.setItem("control_stock_filtros", JSON.stringify({
       searchTerm,
-      selectedSucursal
+      selectedSucursal,
+      selectedCategoria
     }))
-  }, [searchTerm, selectedSucursal, filtersLoaded])
+  }, [searchTerm, selectedSucursal, selectedCategoria, filtersLoaded])
 
   // Función para eliminar un filtro específico
-  const eliminarFiltro = (tipo: 'busqueda' | 'sucursal') => {
+  const eliminarFiltro = (tipo: 'busqueda' | 'sucursal' | 'categoria') => {
     switch (tipo) {
       case 'busqueda':
         setSearchTerm("")
         break
       case 'sucursal':
         setSelectedSucursal("all")
+        break
+      case 'categoria':
+        setSelectedCategoria("all")
         break
     }
   }
@@ -182,6 +191,7 @@ function AjustesInventarioPageContent() {
   const limpiarTodosFiltros = () => {
     setSearchTerm("")
     setSelectedSucursal("all")
+    setSelectedCategoria("all")
     sessionStorage.removeItem('control_stock_filtros')
   }
 
@@ -195,18 +205,30 @@ function AjustesInventarioPageContent() {
   const fetchRecursos = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/recursos?limit=1000')
       
-      if (response.ok) {
-        const result = await response.json()
-        setItems(result.data || [])
+      // Cargar recursos
+      const recursosResponse = await fetch('/api/recursos?limit=1000')
+      if (recursosResponse.ok) {
+        const recursosResult = await recursosResponse.json()
+        setItems(recursosResult.data || [])
       } else {
         console.error('Error al cargar recursos')
         setItems([])
       }
+      
+      // Cargar consumibles
+      const consumiblesResponse = await fetch('/api/consumibles?limit=1000')
+      if (consumiblesResponse.ok) {
+        const consumiblesResult = await consumiblesResponse.json()
+        setConsumibles(consumiblesResult.data || [])
+      } else {
+        console.error('Error al cargar consumibles')
+        setConsumibles([])
+      }
     } catch (error) {
       console.error('Error de conexión:', error)
       setItems([])
+      setConsumibles([])
     } finally {
       setLoading(false)
     }
@@ -219,6 +241,7 @@ function AjustesInventarioPageContent() {
     // Filtrar solo recursos con categoría "Insumos"
     const recursosInsumos = items.filter(item => item.categoria === "Insumos")
 
+    // Procesar recursos (Unimos)
     recursosInsumos.forEach(recurso => {
       // Obtener sucursales del recurso si existe el campo, sino usar las por defecto
       const sucursales = recurso.sucursal 
@@ -279,14 +302,52 @@ function AjustesInventarioPageContent() {
             diferenciaPrecio,
             precioVariante,
             stock: stockVariante,
-            variantesData: combinacionConSucursal // Incluye sucursal en los datos
+            variantesData: combinacionConSucursal, // Incluye sucursal en los datos
+            tipo: 'recurso' // Marcar como recurso
           })
         })
       })
     })
 
+    // Procesar consumibles (sin variantes, solo por sucursal)
+    consumibles.forEach(consumible => {
+      // Obtener sucursales del consumible si existe el campo, sino usar las por defecto
+      const sucursales = consumible.sucursal 
+        ? (Array.isArray(consumible.sucursal) ? consumible.sucursal : [consumible.sucursal])
+        : SUCURSALES_DEFAULT
+
+      // Los consumibles no tienen variantes, solo se duplican por sucursal
+      sucursales.forEach((sucursal: string) => {
+        const id = `consumible-${consumible.id}-${sucursal}`
+
+        // Obtener stock, precio variante y diferencia de precio desde Control de Stock
+        const stockVariante = getStockFromControlStock(consumible, {}, sucursal)
+        const precioVarianteData = getPrecioVarianteFromControlStock(consumible, {}, sucursal)
+        const diferenciaPrecio = precioVarianteData.diferencia || 0
+        const precioVariante = precioVarianteData.precio || consumible.coste || 0
+
+        // Crear combinación con sucursal incluida
+        const combinacionConSucursal = { Sucursal: sucursal }
+        
+        ajustes.push({
+          id,
+          recursoId: consumible.id,
+          codigo: consumible.codigo,
+          nombre: consumible.nombre,
+          sucursal,
+          varianteCombinacion: "Sin variantes",
+          unidad_medida: consumible.unidad_medida || '',
+          diferenciaPrecio,
+          precioVariante,
+          stock: stockVariante,
+          variantesData: combinacionConSucursal,
+          tipo: 'consumible' // Marcar como consumible
+        })
+      })
+    })
+
     return ajustes
-  }, [items])
+  }, [items, consumibles])
 
   // Función auxiliar para obtener stock desde Control de Stock
   function getStockFromControlStock(recurso: any, combinacion: any, sucursal: string): number {
@@ -377,7 +438,17 @@ function AjustesInventarioPageContent() {
     
     const matchesSucursal = selectedSucursal === "all" || item.sucursal === selectedSucursal
     
-    return matchesSearch && matchesSucursal
+    // Filtro por categoría
+    let matchesCategoria = true
+    if (selectedCategoria !== "all") {
+      if (selectedCategoria === "Unimos") {
+        matchesCategoria = item.tipo !== 'consumible'
+      } else if (selectedCategoria === "Consumibles") {
+        matchesCategoria = item.tipo === 'consumible'
+      }
+    }
+    
+    return matchesSearch && matchesSucursal && matchesCategoria
   })
 
   // Calcular paginación
@@ -391,7 +462,7 @@ function AjustesInventarioPageContent() {
   useEffect(() => {
     if (!filtersLoaded) return
     setCurrentPage(1)
-  }, [searchTerm, selectedSucursal, filtersLoaded])
+  }, [searchTerm, selectedSucursal, selectedCategoria, filtersLoaded])
 
   // Funciones de paginación
   const handlePageChange = (page: number) => {
@@ -487,7 +558,10 @@ function AjustesInventarioPageContent() {
         const item = filteredItems.find(i => i.id === id)
         if (!item) return
         
-        const recurso = items.find(r => r.id === item.recursoId)
+        // Buscar en recursos o consumibles según el tipo
+        const recurso = item.tipo === 'consumible' 
+          ? consumibles.find(c => c.id === item.recursoId)
+          : items.find(r => r.id === item.recursoId)
         if (!recurso) return
         
         const recursoId = item.recursoId
@@ -542,9 +616,15 @@ function AjustesInventarioPageContent() {
         }
       })
       
-      // Guardar cada recurso actualizado
+      // Guardar cada recurso/consumible actualizado
       const promises = Object.entries(cambiosPorRecurso).map(async ([recursoId, datosPorVariante]) => {
-        const recurso = items.find(r => r.id === recursoId)
+        // Determinar si es consumible o recurso
+        const item = filteredItems.find(i => i.recursoId === recursoId)
+        const esConsumible = item?.tipo === 'consumible'
+        
+        const recurso = esConsumible
+          ? consumibles.find(c => c.id === recursoId)
+          : items.find(r => r.id === recursoId)
         if (!recurso) return
         
         // Obtener estructura actual de Control de Stock
@@ -572,8 +652,9 @@ function AjustesInventarioPageContent() {
           }
         })
         
-        // Guardar en Supabase
-        const response = await fetch(`/api/recursos/${recursoId}`, {
+        // Guardar en Supabase (recursos o consumibles)
+        const endpoint = esConsumible ? `/api/consumibles/${recursoId}` : `/api/recursos/${recursoId}`
+        const response = await fetch(endpoint, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ control_stock: controlStock })
@@ -591,7 +672,7 @@ function AjustesInventarioPageContent() {
           }
           
           // Construir mensaje de error detallado
-          let errorMessage = `Error actualizando recurso ${recursoId}`
+          let errorMessage = `Error actualizando ${esConsumible ? 'consumible' : 'recurso'} ${recursoId}`
           
           if (errorData.error) {
             errorMessage = errorData.error
@@ -612,7 +693,7 @@ function AjustesInventarioPageContent() {
             }
           }
           
-          console.error(`❌ Error actualizando recurso ${recursoId}:`, {
+          console.error(`❌ Error actualizando ${esConsumible ? 'consumible' : 'recurso'} ${recursoId}:`, {
             status: response.status,
             statusText: response.statusText,
             errorData: errorData
@@ -827,7 +908,7 @@ function AjustesInventarioPageContent() {
             </CardHeader>
             <CardContent>
               {/* Etiquetas de filtros activos */}
-              {(searchTerm || selectedSucursal !== "all") && (
+              {(searchTerm || selectedSucursal !== "all" || selectedCategoria !== "all") && (
                 <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
                   {searchTerm && (
                     <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
@@ -850,6 +931,20 @@ function AjustesInventarioPageContent() {
                       <button
                         type="button"
                         onClick={() => eliminarFiltro('sucursal')}
+                        className="ml-1 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {selectedCategoria !== "all" && (
+                    <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                      <span className="font-medium">Categoría:</span>
+                      <span className="text-gray-700">{selectedCategoria}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarFiltro('categoria')}
                         className="ml-1 hover:text-red-500 transition-colors"
                       >
                         <X className="w-3 h-3" />
@@ -888,9 +983,21 @@ function AjustesInventarioPageContent() {
                       <SelectValue placeholder="Filtrar por sucursal" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas las sucursales</SelectItem>
+                      <SelectItem value="all">Sucursal</SelectItem>
                       <SelectItem value="La Paz">La Paz</SelectItem>
                       <SelectItem value="Santa Cruz">Santa Cruz</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={selectedCategoria} onValueChange={setSelectedCategoria}>
+                    <SelectTrigger className="w-[200px] [&>span]:text-black !pl-9 !pr-3 relative">
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
+                      <SelectValue placeholder="Filtrar por categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Categorías</SelectItem>
+                      <SelectItem value="Unimos">Unimos</SelectItem>
+                      <SelectItem value="Consumibles">Consumibles</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -998,7 +1105,7 @@ function AjustesInventarioPageContent() {
               <div className="text-center py-8 text-gray-500">Cargando control de stock...</div>
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm || selectedSucursal !== "all" ? "No se encontraron items" : "No hay items en el control de stock"}
+                {searchTerm || selectedSucursal !== "all" || selectedCategoria !== "all" ? "No se encontraron items" : "No hay items en el control de stock"}
               </div>
             ) : (
               <div className="overflow-x-auto">

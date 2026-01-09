@@ -56,6 +56,10 @@ import { toast } from "sonner"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { normalizeText } from "@/lib/utils"
+import { AjustesRecursosModal } from "@/components/inventario/ajustes-recursos-modal"
+import { FormatosRecursosModal } from "@/components/inventario/formatos-recursos-modal"
+import { useCategorias } from "@/hooks/use-categorias"
+import { Settings, PillBottle } from "lucide-react"
 
 // Tipo para los items de recursos
 interface RecursoItem {
@@ -64,6 +68,7 @@ interface RecursoItem {
   nombre: string
   responsable: string
   unidad_medida: string
+  formato?: { formato: string; cantidad: number; unidad_medida: string } | null
   coste: number
   categoria: string
   cantidad: number
@@ -71,15 +76,7 @@ interface RecursoItem {
   imagen_portada?: string
 }
 
-// Categorías disponibles (solo las válidas en Airtable)
-const categorias = [
-  "Insumos",
-  "Mano de Obra",
-  "Suministros"
-]
-
-// Unidades de medida de Airtable
-const unidadesMedida = UNIDADES_MEDIDA_AIRTABLE
+// Categorías se cargan dinámicamente desde la BD
 
 
 // Datos de ejemplo para los recursos
@@ -179,6 +176,16 @@ export default function RecursosPage() {
     hasPrev: false
   })
   const [filtersLoaded, setFiltersLoaded] = useState(false)
+  const [ajustesModalOpen, setAjustesModalOpen] = useState(false)
+  const [formatosModalOpen, setFormatosModalOpen] = useState(false)
+  
+  // Cargar categorías dinámicamente
+  const { categorias, loading: categoriasLoading } = useCategorias("Inventario", "Recursos")
+  // Cargar unidades de medida dinámicamente (desde Productos_unidades)
+  const { categorias: unidadesMedida, loading: unidadesLoading } = useCategorias("Inventario", "Productos_unidades")
+  // Cargar formatos
+  const [formatos, setFormatos] = useState<Array<{ id: string; formato: string; cantidad: number; unidad_medida: string }>>([])
+  const [formatosLoading, setFormatosLoading] = useState(false)
 
   // 1) Cargar los filtros una sola vez al montar
   useEffect(() => {
@@ -225,6 +232,25 @@ export default function RecursosPage() {
     setSelectedCategory("")
     sessionStorage.removeItem('recursos_filtros')
   }
+
+  // Cargar formatos al montar
+  useEffect(() => {
+    const fetchFormatos = async () => {
+      try {
+        setFormatosLoading(true)
+        const response = await fetch('/api/formatos')
+        if (response.ok) {
+          const result = await response.json()
+          setFormatos(result.data || [])
+        }
+      } catch (error) {
+        console.error('Error cargando formatos:', error)
+      } finally {
+        setFormatosLoading(false)
+      }
+    }
+    fetchFormatos()
+  }, [])
 
   // Cargar datos de la API al inicializar
   useEffect(() => {
@@ -717,7 +743,45 @@ export default function RecursosPage() {
           {/* Filtros y búsqueda */}
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
+                <div className="flex gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setFormatosModalOpen(true)}
+                          className="h-9 w-9 p-0"
+                        >
+                          <PillBottle className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Gestionar formatos</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAjustesModalOpen(true)}
+                          className="h-9 w-9 p-0"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Ajustes de Recursos</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {/* Etiquetas de filtros activos */}
@@ -781,8 +845,8 @@ export default function RecursosPage() {
                       <SelectValue placeholder="Filtrar por categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas las categorías</SelectItem>
-                      {categorias.map((categoria) => (
+                      <SelectItem value="all">Categorías</SelectItem>
+                      {!categoriasLoading && categorias.map((categoria) => (
                         <SelectItem key={categoria} value={categoria}>
                           {categoria}
                         </SelectItem>
@@ -874,11 +938,49 @@ export default function RecursosPage() {
                             <SelectValue placeholder="Cambiar unidad" />
                           </SelectTrigger>
                           <SelectContent>
-                            {unidadesMedida.map((unidad) => (
+                            {!unidadesLoading && unidadesMedida.map((unidad) => (
                               <SelectItem key={unidad} value={unidad}>
                                 {unidad}
                               </SelectItem>
                             ))}
+                          </SelectContent>
+                        </Select>
+
+                        {/* Cambiar formato */}
+                        <Select onValueChange={(value) => {
+                          let formatoObj: { formato: string; cantidad: number; unidad_medida: string } | null = null
+                          if (value === "__sin_formato__") {
+                            formatoObj = null
+                          } else if (value === "Unidad suelta") {
+                            formatoObj = { formato: "Unidad suelta", cantidad: 0, unidad_medida: "" }
+                          } else {
+                            const formatoSeleccionado = formatos.find(f => 
+                              `${f.formato} ${f.cantidad} ${f.unidad_medida}` === value
+                            )
+                            if (formatoSeleccionado) {
+                              formatoObj = {
+                                formato: formatoSeleccionado.formato,
+                                cantidad: formatoSeleccionado.cantidad,
+                                unidad_medida: formatoSeleccionado.unidad_medida
+                              }
+                            }
+                          }
+                          handleBulkFieldChange('formato', formatoObj)
+                        }}>
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="Cambiar formato" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__sin_formato__">Sin formato</SelectItem>
+                            <SelectItem value="Unidad suelta">Unidad suelta</SelectItem>
+                            {!formatosLoading && formatos.map((formato) => {
+                              const displayText = `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
+                              return (
+                                <SelectItem key={formato.id} value={displayText}>
+                                  {displayText}
+                                </SelectItem>
+                              )
+                            })}
                           </SelectContent>
                         </Select>
                       </>
@@ -977,7 +1079,7 @@ export default function RecursosPage() {
                           </div>
                           <div className="flex items-center justify-between text-[10px]">
                             <span className="text-gray-600">Coste:</span>
-                            <span className="font-medium text-green-600">Bs {item.coste.toFixed(2)}</span>
+                            <span className="font-medium text-green-600">Bs {item.coste.toFixed(2)}/{item.unidad_medida || ''}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-0.5 pt-1 border-t">
@@ -1021,6 +1123,7 @@ export default function RecursosPage() {
                     <TableHead>Nombre</TableHead>
                     <TableHead>Responsable</TableHead>
                     <TableHead>Categoría</TableHead>
+                    <TableHead>Formato</TableHead>
                     <TableHead>Unidad</TableHead>
                     <TableHead>Coste</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
@@ -1102,7 +1205,7 @@ export default function RecursosPage() {
                               handleImmediateSave(item.id, { categoria: value as string })
                             }}
                           >
-                            <SelectTrigger className="h-8 w-32">
+                            <SelectTrigger className="h-8 w-32 [&_svg]:hidden overflow-hidden [&>*]:truncate [&>*]:max-w-full">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1120,13 +1223,84 @@ export default function RecursosPage() {
                       <TableCell>
                         {selected[item.id] ? (
                           <Select 
+                            value={
+                              editedItems[item.id]?.formato 
+                                ? typeof editedItems[item.id].formato === 'object' && editedItems[item.id].formato?.formato === "Unidad suelta"
+                                  ? "Unidad suelta"
+                                  : typeof editedItems[item.id].formato === 'object' && editedItems[item.id].formato
+                                    ? `${editedItems[item.id].formato.formato} ${editedItems[item.id].formato.cantidad} ${editedItems[item.id].formato.unidad_medida}`
+                                    : "__sin_formato__"
+                                : item.formato
+                                  ? item.formato.formato === "Unidad suelta"
+                                    ? "Unidad suelta"
+                                    : `${item.formato.formato} ${item.formato.cantidad} ${item.formato.unidad_medida}`
+                                  : "__sin_formato__"
+                            }
+                            onValueChange={(value) => {
+                              let formatoObj: { formato: string; cantidad: number; unidad_medida: string } | null = null
+                              if (value === "__sin_formato__") {
+                                formatoObj = null
+                              } else if (value === "Unidad suelta") {
+                                formatoObj = { formato: "Unidad suelta", cantidad: 0, unidad_medida: "" }
+                              } else {
+                                const formatoSeleccionado = formatos.find(f => 
+                                  `${f.formato} ${f.cantidad} ${f.unidad_medida}` === value
+                                )
+                                if (formatoSeleccionado) {
+                                  formatoObj = {
+                                    formato: formatoSeleccionado.formato,
+                                    cantidad: formatoSeleccionado.cantidad,
+                                    unidad_medida: formatoSeleccionado.unidad_medida
+                                  }
+                                }
+                              }
+                              handleFieldChange(item.id, 'formato', formatoObj)
+                              handleImmediateSave(item.id, { formato: formatoObj })
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-24 [&_svg]:hidden overflow-hidden [&>*]:truncate [&>*]:max-w-full">
+                              <SelectValue placeholder="Sin formato" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__sin_formato__">Sin formato</SelectItem>
+                              <SelectItem value="Unidad suelta">Unidad suelta</SelectItem>
+                              {!formatosLoading && formatos.map((formato) => {
+                                const displayText = `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
+                                return (
+                                  <SelectItem key={formato.id} value={displayText}>
+                                    {displayText}
+                                  </SelectItem>
+                                )
+                              })}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge 
+                            variant="secondary" 
+                            className={
+                              item.formato 
+                                ? "bg-blue-200 text-blue-800 hover:bg-blue-200" 
+                                : "bg-gray-200 text-gray-800 hover:bg-gray-200"
+                            }
+                          >
+                            {item.formato 
+                              ? item.formato.formato === "Unidad suelta" 
+                                ? "Unidad suelta"
+                                : `${item.formato.formato} ${item.formato.cantidad} ${item.formato.unidad_medida}`
+                              : 'Sin formato'}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {selected[item.id] ? (
+                          <Select 
                             value={editedItems[item.id]?.unidad_medida ?? item.unidad_medida}
                             onValueChange={(value) => {
                               handleFieldChange(item.id, 'unidad_medida', value as string)
                               handleImmediateSave(item.id, { unidad_medida: value as string })
                             }}
                           >
-                            <SelectTrigger className="h-8 w-24">
+                            <SelectTrigger className="h-8 w-24 [&_svg]:hidden overflow-hidden [&>*]:truncate [&>*]:max-w-full">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1138,7 +1312,7 @@ export default function RecursosPage() {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
+                          <Badge variant="secondary" className="bg-purple-200 text-purple-800 hover:bg-purple-200">
                             {item.unidad_medida}
                           </Badge>
                         )}
@@ -1163,7 +1337,7 @@ export default function RecursosPage() {
                             />
                           </div>
                         ) : (
-                          `Bs ${item.coste.toFixed(2)}`
+                          `Bs ${item.coste.toFixed(2)}/${item.unidad_medida || ''}`
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -1259,6 +1433,21 @@ export default function RecursosPage() {
         )}
       </main>
 
+      <AjustesRecursosModal 
+        open={ajustesModalOpen} 
+        onOpenChange={(open) => {
+          setAjustesModalOpen(open)
+          if (!open) {
+            // Refrescar categorías cuando se cierre el modal
+            window.location.reload()
+          }
+        }}
+      />
+
+      <FormatosRecursosModal 
+        open={formatosModalOpen} 
+        onOpenChange={setFormatosModalOpen}
+      />
     </div>
   )
 }

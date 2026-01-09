@@ -23,20 +23,7 @@ import { generarCombinacionesVariantes, convertirVariantesAFormato, parsearClave
 import { calcularDiferenciaCoste, calcularDiferenciaPrecio } from "@/lib/variantes/calcularPrecioVariante"
 import { calcularCosteVariante } from "@/lib/variantes/calcularCosteVariante"
 import { findResourceVariantPrice } from "@/lib/variantes/variantEngine"
-
-// Categorías disponibles
-const categoriasProductos = [
-  "Categoria general",
-  "Impresion Digital",
-  "Corte y Grabado",
-  "Displays"
-]
-
-// Unidades de medida disponibles
-const unidadesProductos = [
-  "m2",
-  "unidad"
-]
+import { useCategorias } from "@/hooks/use-categorias"
 
 // Helper para fusionar variantes sin duplicados
 function mergeVariantes(prev: any[], nuevas: any[]) {
@@ -97,6 +84,10 @@ export default function ProductoDetailPage() {
   const searchParams = useSearchParams()
   const id = (params?.id || '') as string
   const shouldEdit = searchParams?.get('edit') === 'true'
+  
+  // Cargar categorías y unidades dinámicamente
+  const { categorias: categoriasProductos, loading: categoriasLoading } = useCategorias("Inventario", "Productos")
+  const { categorias: unidadesMedida, loading: unidadesLoading } = useCategorias("Inventario", "Productos_unidades")
 
   const [producto, setProducto] = useState<Producto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -3105,7 +3096,7 @@ export default function ProductoDetailPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-white border border-gray-200 shadow-md">
-                            {categoriasProductos.map((categoria) => (
+                            {!categoriasLoading && categoriasProductos.map((categoria) => (
                               <SelectItem key={categoria} value={categoria}>
                                 {categoria}
                               </SelectItem>
@@ -3136,7 +3127,7 @@ export default function ProductoDetailPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-white border border-gray-200 shadow-md">
-                            {unidadesProductos.map((unidad) => (
+                            {!unidadesLoading && unidadesMedida.map((unidad) => (
                               <SelectItem key={unidad} value={unidad}>
                                 {unidad}
                               </SelectItem>

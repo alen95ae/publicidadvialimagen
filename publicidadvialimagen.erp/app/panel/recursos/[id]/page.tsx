@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ArrowLeft, Save, Trash2, Image as ImageIcon, Plus, X, Info, List, Palette, Check, Edit } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { UNIDADES_MEDIDA_AIRTABLE, CATEGORIAS_RECURSOS_AIRTABLE } from "@/lib/constants"
+import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
+import { useCategorias } from "@/hooks/use-categorias"
 
 interface Recurso {
   id: string
@@ -24,6 +25,7 @@ interface Recurso {
   nombre: string
   imagen_portada?: string
   categoria: string
+  formato?: string | null
   responsable: string
   unidad_medida: string
   coste: number
@@ -75,6 +77,7 @@ export default function RecursoDetailPage() {
     nombre: "",
     imagen_portada: "",
     categoria: "Insumos",
+    formato: null as { formato: string; cantidad: number; unidad_medida: string } | null,
     responsable: "",
     unidad_medida: "unidad",
     coste: "0"
@@ -83,6 +86,31 @@ export default function RecursoDetailPage() {
   // Estado para códigos existentes (solo para validación en nuevo recurso)
   const [codigosExistentes, setCodigosExistentes] = useState<Set<string>>(new Set())
   const [codigoDuplicado, setCodigoDuplicado] = useState(false)
+  
+  // Cargar categorías dinámicamente
+  const { categorias, loading: categoriasLoading } = useCategorias("Inventario", "Recursos")
+  // Cargar formatos
+  const [formatos, setFormatos] = useState<Array<{ id: string; formato: string; cantidad: number; unidad_medida: string }>>([])
+  const [formatosLoading, setFormatosLoading] = useState(false)
+
+  // Cargar formatos al montar
+  useEffect(() => {
+    const fetchFormatos = async () => {
+      try {
+        setFormatosLoading(true)
+        const response = await fetch('/api/formatos')
+        if (response.ok) {
+          const result = await response.json()
+          setFormatos(result.data || [])
+        }
+      } catch (error) {
+        console.error('Error cargando formatos:', error)
+      } finally {
+        setFormatosLoading(false)
+      }
+    }
+    fetchFormatos()
+  }, [])
 
   const fetchRecurso = useCallback(async () => {
     try {
@@ -121,6 +149,7 @@ export default function RecursoDetailPage() {
           nombre: data.nombre || "",
           imagen_portada: data.imagen_portada || "",
           categoria: data.categoria || "Insumos",
+          formato: data.formato || "",
           responsable: data.responsable || "",
           unidad_medida: data.unidad_medida || "unidad",
           coste: costeRedondeado.toFixed(2)
@@ -282,7 +311,7 @@ export default function RecursoDetailPage() {
     }
   }, [recurso, isNewRecurso, fetchCodigosExistentesParaEdicion])
 
-  const handleChange = (field: string, value: string | boolean | number) => {
+  const handleChange = (field: string, value: string | boolean | number | { formato: string; cantidad: number; unidad_medida: string } | null) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -348,6 +377,7 @@ export default function RecursoDetailPage() {
         nombre: formData.nombre.trim(),
         imagen_portada: formData.imagen_portada || null,
         categoria: formData.categoria,
+        formato: formData.formato,
         responsable: formData.responsable.trim(),
         unidad_medida: formData.unidad_medida,
         coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
@@ -692,6 +722,7 @@ export default function RecursoDetailPage() {
           nombre: formData.nombre.trim(),
           imagen_portada: formData.imagen_portada || null,
           categoria: formData.categoria,
+          formato: formData.formato,
           responsable: formData.responsable.trim(),
           unidad_medida: formData.unidad_medida,
           coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
@@ -875,7 +906,7 @@ export default function RecursoDetailPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-white border border-gray-200 shadow-md">
-                            {CATEGORIAS_RECURSOS_AIRTABLE.map((categoria) => (
+                            {!categoriasLoading && categorias.map((categoria) => (
                               <SelectItem key={categoria} value={categoria}>
                                 {categoria}
                               </SelectItem>
@@ -883,6 +914,54 @@ export default function RecursoDetailPage() {
                           </SelectContent>
                         </Select>
                       </div>
+                      {formData.categoria === "Insumos" && (
+                        <div className="space-y-2">
+                          <Label htmlFor="formato">Formato</Label>
+                          <Select 
+                            value={
+                              formData.formato 
+                                ? formData.formato.formato === "Unidad suelta" 
+                                  ? "Unidad suelta"
+                                  : `${formData.formato.formato} ${formData.formato.cantidad} ${formData.formato.unidad_medida}`
+                                : "__sin_formato__"
+                            }
+                            onValueChange={(value) => {
+                              if (value === "__sin_formato__") {
+                                handleChange("formato", null)
+                              } else if (value === "Unidad suelta") {
+                                handleChange("formato", { formato: "Unidad suelta", cantidad: 0, unidad_medida: "" })
+                              } else {
+                                const formatoSeleccionado = formatos.find(f => 
+                                  `${f.formato} ${f.cantidad} ${f.unidad_medida}` === value
+                                )
+                                if (formatoSeleccionado) {
+                                  handleChange("formato", {
+                                    formato: formatoSeleccionado.formato,
+                                    cantidad: formatoSeleccionado.cantidad,
+                                    unidad_medida: formatoSeleccionado.unidad_medida
+                                  })
+                                }
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
+                              <SelectValue placeholder="Sin formato" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white border border-gray-200 shadow-md">
+                              <SelectItem value="__sin_formato__">Sin formato</SelectItem>
+                              <SelectItem value="Unidad suelta">Unidad suelta</SelectItem>
+                              {!formatosLoading && formatos.map((formato) => {
+                                const displayText = `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
+                                return (
+                                  <SelectItem key={formato.id} value={displayText}>
+                                    {displayText}
+                                  </SelectItem>
+                                )
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">

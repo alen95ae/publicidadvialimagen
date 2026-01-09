@@ -18,7 +18,7 @@ import {
   calcularDesgloseImpuestos,
   type CotizacionPayload
 } from '@/lib/cotizacionesBackend'
-import { descontarStockProducto, registrarMovimiento, descontarInsumosDesdeCotizacion } from '@/lib/services/inventoryService'
+import { descontarStockProducto, registrarMovimiento, descontarInsumosDesdeCotizacion, revertirStockCotizacion } from '@/lib/services/inventoryService'
 
 export async function GET(
   request: Request,
@@ -205,6 +205,44 @@ export async function PATCH(
       
     }
     
+    // REGLA DEFINITIVA DE INVENTARIO: Revertir stock SIEMPRE que se sale de Aprobada
+    // Si: estadoAnterior === 'Aprobada' AND estadoNuevo !== 'Aprobada' AND stock_descontado === true
+    const seEstaSaliendoDeAprobada = estadoAnterior === 'Aprobada' && nuevoEstado !== 'Aprobada'
+    
+    if (seEstaSaliendoDeAprobada && cotizacionActual.stock_descontado === true) {
+      try {
+        // Obtener líneas para revertir stock
+        const lineasParaReversion = await getLineasByCotizacionId(id)
+        if (lineasParaReversion && lineasParaReversion.length > 0) {
+          const sucursal = cotizacionActual.sucursal || 'La Paz'
+          await revertirStockCotizacion({
+            cotizacionId: id,
+            lineas: lineasParaReversion,
+            sucursal: sucursal
+          })
+          
+          // Marcar flag como false solo si la reversión fue completamente exitosa
+          await updateCotizacion(id, { stock_descontado: false })
+          console.log('✅ [PATCH /api/cotizaciones/[id]] Stock revertido y flag stock_descontado marcado como false')
+        } else {
+          console.warn('⚠️ [PATCH /api/cotizaciones/[id]] No hay líneas para revertir stock')
+        }
+      } catch (errorReversion) {
+        console.error('❌ [PATCH /api/cotizaciones/[id]] Error revirtiendo stock:', errorReversion)
+        // Si la reversión falla, NO actualizar estado ni cambiar stock_descontado
+        // Retornar error claro
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Error revirtiendo stock de inventario. La cotización no fue actualizada. Por favor, inténtalo de nuevo.'
+          },
+          { status: 500 }
+        )
+      }
+    } else if (seEstaSaliendoDeAprobada && cotizacionActual.stock_descontado === false) {
+      console.log('ℹ️ [PATCH /api/cotizaciones/[id]] Stock no estaba descontado, omitiendo reversión')
+    }
+    
     // Si se está rechazando una cotización aprobada, cancelar alquileres
     if (seEstaCambiandoARechazada) {
       try {
@@ -265,8 +303,8 @@ export async function PATCH(
       if (seEstaAprobando) {
         try {
           // Verificar si ya se descontó stock para esta cotización (idempotencia)
-          // Por ahora, asumimos que si la cotización ya estaba aprobada, el stock ya fue descontado
-          const yaDescontado = estadoAnterior === 'Aprobada'
+          // Usar flag persistente en BD como fuente de verdad
+          const yaDescontado = cotizacionActualizada.stock_descontado === true
           
           if (yaDescontado) {
             console.log('⚠️ [PATCH /api/cotizaciones/[id]] Stock ya descontado previamente para esta cotización, omitiendo descuento duplicado')
@@ -293,6 +331,9 @@ export async function PATCH(
                 sucursal: sucursal
               })
               
+              // Marcar flag solo si el descuento fue completamente exitoso
+              await updateCotizacion(id, { stock_descontado: true })
+              console.log('✅ [PATCH /api/cotizaciones/[id]] Flag stock_descontado marcado como true')
             } else {
               console.warn('⚠️ [PATCH /api/cotizaciones/[id]] No hay líneas para descontar stock')
             }
@@ -300,6 +341,7 @@ export async function PATCH(
         } catch (errorStock) {
           console.error('❌ [PATCH /api/cotizaciones/[id]] Error descontando stock:', errorStock)
           // NO fallar la aprobación si falla el descuento de stock
+          // NO marcar flag si falló el descuento
           // Solo loguear el error para que el usuario pueda revisarlo
         }
       }
@@ -432,6 +474,38 @@ export async function DELETE(
         { success: false, error: 'No tienes permiso para eliminar esta cotización.' },
         { status: 403 }
       )
+    }
+
+    // Obtener cotización antes de eliminar para verificar si hay stock a revertir
+    const cotizacionAEliminar = await getCotizacionById(id)
+    
+    // Si la cotización está aprobada y tiene stock descontado, revertir antes de eliminar
+    if (cotizacionAEliminar.estado === 'Aprobada' && cotizacionAEliminar.stock_descontado === true) {
+      try {
+        // Obtener líneas para revertir stock
+        const lineasParaReversion = await getLineasByCotizacionId(id)
+        if (lineasParaReversion && lineasParaReversion.length > 0) {
+          const sucursal = cotizacionAEliminar.sucursal || 'La Paz'
+          await revertirStockCotizacion({
+            cotizacionId: id,
+            lineas: lineasParaReversion,
+            sucursal: sucursal
+          })
+          console.log('✅ [DELETE /api/cotizaciones/[id]] Stock revertido antes de eliminar')
+        } else {
+          console.warn('⚠️ [DELETE /api/cotizaciones/[id]] No hay líneas para revertir stock')
+        }
+      } catch (errorReversion) {
+        console.error('❌ [DELETE /api/cotizaciones/[id]] Error revirtiendo stock:', errorReversion)
+        // Si la reversión falla, NO eliminar la cotización (condición obligatoria)
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'No se pudo revertir el stock de la cotización. La cotización no fue eliminada.' 
+          },
+          { status: 500 }
+        )
+      }
     }
 
     // Eliminar las líneas primero (por la FK)

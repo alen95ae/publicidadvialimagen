@@ -68,3 +68,4 @@ CREATE INDEX IF NOT EXISTS idx_plantillas_contables_detalle_cuenta_id
 -- Nota: No eliminamos la columna 'cuenta_fija' por ahora para mantener compatibilidad
 -- Se puede eliminar en una migración futura después de verificar que todo funciona
 
+

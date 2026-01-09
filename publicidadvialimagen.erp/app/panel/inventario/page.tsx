@@ -17,7 +17,8 @@ import {
   Copy,
   LayoutGrid,
   List,
-  X
+  X,
+  Settings
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -60,6 +61,8 @@ import { usePermisosContext } from "@/hooks/permisos-provider"
 import { calcularComponentesDesdePrecio } from "@/lib/engines/pricingEngine"
 import { PriceRow } from "@/lib/types/inventario"
 import { parseCalculadora } from "@/lib/models/productoModel"
+import { AjustesProductosModal } from "@/components/inventario/ajustes-productos-modal"
+import { useCategorias } from "@/hooks/use-categorias"
 
 // Tipo para los items del inventario
 interface InventoryItem {
@@ -78,32 +81,7 @@ interface InventoryItem {
   calculadora_precios?: any
 }
 
-// Categorías disponibles - Valores exactos en Airtable
-const categoriasProductos = [
-  "Categoria general",
-  "Impresion Digital",
-  "Corte y Grabado",
-  "Displays"
-]
-
-// Unidades de medida disponibles para edición masiva
-const unidadesProductos = [
-  "m2",
-  "unidad"
-]
-
-// Unidades de medida disponibles (para filtros y otras funciones)
-const unidadesMedida = [
-  "unidad",
-  "m²",
-  "kg",
-  "hora",
-  "metro",
-  "litro",
-  "pieza",
-  "rollo",
-  "pliego"
-]
+// Categorías y unidades se cargan dinámicamente desde la BD
 
 // Función para calcular el porcentaje de utilidad (legacy, mantenida para compatibilidad)
 function calcularPorcentajeUtilidad(coste: number, precioVenta: number): number {
@@ -243,6 +221,11 @@ export default function InventarioPage() {
   
   // Estado para vista (lista o galería)
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
+  const [ajustesModalOpen, setAjustesModalOpen] = useState(false)
+  
+  // Cargar categorías y unidades dinámicamente
+  const { categorias: categoriasProductos, loading: categoriasLoading } = useCategorias("Inventario", "Productos")
+  const { categorias: unidadesMedida, loading: unidadesLoading } = useCategorias("Inventario", "Productos_unidades")
 
   // 1) Cargar los filtros una sola vez al montar
   useEffect(() => {
@@ -893,7 +876,26 @@ export default function InventarioPage() {
           {/* Filtros y búsqueda */}
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAjustesModalOpen(true)}
+                        className="h-9 w-9 p-0"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Ajustes de Productos</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </CardHeader>
             <CardContent>
               {/* Etiquetas de filtros activos */}
@@ -957,8 +959,8 @@ export default function InventarioPage() {
                       <SelectValue placeholder="Filtrar por categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas las categorías</SelectItem>
-                      {categoriasProductos.map((categoria) => (
+                      <SelectItem value="all">Categorías</SelectItem>
+                      {!categoriasLoading && categoriasProductos.map((categoria) => (
                         <SelectItem key={categoria} value={categoria}>
                           {categoria}
                         </SelectItem>
@@ -1034,7 +1036,7 @@ export default function InventarioPage() {
                             <SelectValue placeholder="Cambiar categoría" />
                           </SelectTrigger>
                           <SelectContent>
-                            {categoriasProductos.map((categoria) => (
+                            {!categoriasLoading && categoriasProductos.map((categoria) => (
                               <SelectItem key={categoria} value={categoria}>
                                 {categoria}
                               </SelectItem>
@@ -1048,7 +1050,7 @@ export default function InventarioPage() {
                             <SelectValue placeholder="Cambiar unidad" />
                           </SelectTrigger>
                           <SelectContent>
-                            {unidadesProductos.map((unidad) => (
+                            {!unidadesLoading && unidadesMedida.map((unidad) => (
                               <SelectItem key={unidad} value={unidad}>
                                 {unidad}
                               </SelectItem>
@@ -1309,7 +1311,7 @@ export default function InventarioPage() {
                               <SelectValue placeholder="Seleccionar unidad" />
                             </SelectTrigger>
                             <SelectContent>
-                              {unidadesProductos.map((unidad) => (
+                              {!unidadesLoading && unidadesMedida.map((unidad) => (
                                 <SelectItem key={unidad} value={unidad}>
                                   {unidad}
                                 </SelectItem>
@@ -1323,7 +1325,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        Bs {item.coste.toFixed(2)}
+                        Bs {item.coste.toFixed(2)}/{item.unidad_medida || ''}
                       </TableCell>
                       <TableCell>
                         Bs {item.precio_venta.toFixed(2)}
@@ -1448,6 +1450,17 @@ export default function InventarioPage() {
           </div>
         )}
       </main>
+
+      <AjustesProductosModal 
+        open={ajustesModalOpen} 
+        onOpenChange={(open) => {
+          setAjustesModalOpen(open)
+          if (!open) {
+            // Refrescar categorías y unidades cuando se cierre el modal
+            window.location.reload()
+          }
+        }}
+      />
     </div>
   )
 }

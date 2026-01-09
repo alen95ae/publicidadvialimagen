@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MessageSquare, Handshake, Monitor, DollarSign, FileText, AlertCircle, Calendar, Wrench, Package, Receipt } from "lucide-react"
 
@@ -32,9 +32,17 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
   })
   const [loading, setLoading] = useState(true)
   const roleNormalized = userRole?.toLowerCase().trim() || ''
+  const fetchingRef = useRef(false)
+  const initializedRef = useRef(false)
 
   useEffect(() => {
+    // Prevenir múltiples ejecuciones simultáneas o si ya se inicializó
+    if (fetchingRef.current || initializedRef.current) {
+      return
+    }
+
     const fetchMetrics = async () => {
+      fetchingRef.current = true
       try {
         const ahora = new Date()
         const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
@@ -125,12 +133,12 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
             return fechaFin >= inicioSemana && fechaFin <= finSemana && alq.estado === 'activo'
           }).length
 
-          setMetrics({
-            ...metrics,
+          setMetrics(prev => ({
+            ...prev,
             trabajosPendientes: 0, // TODO: Implementar cuando exista endpoint
             instalacionesPendientes: 0, // TODO: Implementar cuando exista endpoint
             finalizanEstaSemana
-          })
+          }))
         } else if (roleNormalized === 'contabilidad') {
           // CONTABILIDAD: Facturas pendientes, Facturas vencidas, Ingresos del mes
           // TODO: Implementar cuando exista endpoint de facturas
@@ -199,6 +207,8 @@ export default function PanelMetrics({ userName, userRole }: { userName: string;
         console.error('Error fetching metrics:', error)
       } finally {
         setLoading(false)
+        fetchingRef.current = false
+        initializedRef.current = true
       }
     }
 

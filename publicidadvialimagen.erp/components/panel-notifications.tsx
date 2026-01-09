@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bell, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { normalizarAccion } from "@/lib/permisos-utils"
 
 interface Notification {
   id: string
@@ -20,11 +21,35 @@ interface Notification {
 }
 
 export default function PanelNotifications() {
-  const { tieneFuncionTecnica } = usePermisosContext()
+  const { permisos, loading: permisosLoading } = usePermisosContext()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const fetchingRef = useRef(false)
+  const channelRef = useRef<any>(null)
+  const initializedRef = useRef(false)
+
+  // Memoizar el resultado de la verificación de permisos para evitar re-renders
+  // Usar el objeto permisos directamente en lugar de la función para evitar bucles
+  const puedeVerSolicitudes = useMemo(() => {
+    if (permisosLoading) return false
+    const permisosTecnico = permisos["tecnico"]
+    if (!permisosTecnico) return false
+    // Normalizar la acción igual que en el hook
+    const accionNormalizada = normalizarAccion("ver solicitudes cotizacion")
+    return permisosTecnico[accionNormalizada] === true
+  }, [permisos, permisosLoading])
 
   useEffect(() => {
+    // Esperar a que los permisos terminen de cargar antes de inicializar
+    if (permisosLoading) {
+      return
+    }
+
+    // Prevenir múltiples ejecuciones simultáneas o si ya se inicializó
+    if (fetchingRef.current || initializedRef.current) {
+      return
+    }
+
     const fetchNotifications = async () => {
       try {
         const res = await fetch('/api/notificaciones', {
@@ -40,7 +65,7 @@ export default function PanelNotifications() {
               if (n.leida) return false
               // Formularios y solicitudes solo para usuarios con función técnica
               if (n.entidad_tipo === "formulario" || n.entidad_tipo === "mensaje" || n.entidad_tipo === "solicitud") {
-                return tieneFuncionTecnica("ver solicitudes cotizacion")
+                return puedeVerSolicitudes
               }
               // Otras notificaciones se muestran normalmente
               return true
@@ -55,11 +80,20 @@ export default function PanelNotifications() {
       }
     }
 
+    fetchingRef.current = true
     fetchNotifications()
 
     // Configurar Realtime después de carga inicial
     const setupRealtime = async () => {
       try {
+        // Limpiar canal anterior si existe
+        if (channelRef.current) {
+          const { getSupabaseBrowserClient } = await import('@/lib/supabase/client')
+          const supabase = getSupabaseBrowserClient()
+          supabase.removeChannel(channelRef.current)
+          channelRef.current = null
+        }
+
         // Obtener usuario para saber su rol
         const userRes = await fetch('/api/auth/me', {
           credentials: 'include'
@@ -76,6 +110,9 @@ export default function PanelNotifications() {
         const { getSupabaseBrowserClient } = await import('@/lib/supabase/client')
         
         const supabase = getSupabaseBrowserClient()
+        
+        // Guardar el valor de puedeVerSolicitudes en el closure
+        const puedeVer = puedeVerSolicitudes
         
         // Suscribirse a cambios
         // Nota: No podemos filtrar por array directamente en Realtime,
@@ -101,7 +138,7 @@ export default function PanelNotifications() {
               const notification = newNotification as Notification
               
               // Filtrar formularios y solicitudes: solo para usuarios con función técnica
-              if ((notification.entidad_tipo === "formulario" || notification.entidad_tipo === "mensaje" || notification.entidad_tipo === "solicitud") && !tieneFuncionTecnica("ver solicitudes cotizacion")) {
+              if ((notification.entidad_tipo === "formulario" || notification.entidad_tipo === "mensaje" || notification.entidad_tipo === "solicitud") && !puedeVer) {
                 return // No tiene permiso, ignorar
               }
               
@@ -116,16 +153,29 @@ export default function PanelNotifications() {
           )
           .subscribe()
         
-        return () => {
-          supabase.removeChannel(channel)
-        }
+        channelRef.current = channel
+        initializedRef.current = true
       } catch (error) {
         console.error('[Realtime] Error configurando suscripción:', error)
+      } finally {
+        fetchingRef.current = false
       }
     }
 
     setupRealtime()
-  }, [tieneFuncionTecnica])
+
+    // Cleanup: remover canal al desmontar
+    return () => {
+      if (channelRef.current) {
+        import('@/lib/supabase/client').then(({ getSupabaseBrowserClient }) => {
+          const supabase = getSupabaseBrowserClient()
+          supabase.removeChannel(channelRef.current)
+          channelRef.current = null
+        })
+      }
+      initializedRef.current = false
+    }
+  }, [puedeVerSolicitudes, permisosLoading])
 
   const formatDate = (dateString: string) => {
     try {

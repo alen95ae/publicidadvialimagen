@@ -219,6 +219,80 @@ async function descontarStockRecurso(params: {
 }
 
 /**
+ * Aumenta stock de un recurso específico (inverso de descontarStockRecurso)
+ */
+async function aumentarStockRecurso(params: {
+  recursoId: string
+  cantidad: number
+  sucursal: string
+  variantes?: Record<string, string>
+}): Promise<void> {
+  const { recursoId, cantidad, sucursal, variantes = {} } = params
+
+  try {
+    // Obtener recurso actual
+    const { data: recurso, error: recursoError } = await supabase
+      .from('recursos')
+      .select('id, nombre, control_stock')
+      .eq('id', recursoId)
+      .single()
+
+    if (recursoError || !recurso) {
+      console.error('❌ Error obteniendo recurso:', recursoError)
+      throw new Error(`Recurso no encontrado: ${recursoId}`)
+    }
+
+    // Parsear control_stock
+    let controlStock: any = {}
+    if (recurso.control_stock) {
+      if (typeof recurso.control_stock === 'string') {
+        controlStock = JSON.parse(recurso.control_stock)
+      } else {
+        controlStock = recurso.control_stock
+      }
+    }
+
+    // Generar clave de variante con sucursal
+    const combinacionConSucursal = { ...variantes, Sucursal: sucursal }
+    const claveVariante = generarClaveVariante(combinacionConSucursal)
+
+    // Obtener stock actual
+    const datosVariante = controlStock[claveVariante] || {}
+    const stockActual = Number(datosVariante.stock) || 0
+
+    // Calcular nuevo stock (sumar en lugar de restar)
+    const nuevoStock = round2(stockActual + cantidad)
+
+    // Actualizar control_stock
+    controlStock[claveVariante] = {
+      ...datosVariante,
+      stock: nuevoStock
+    }
+
+    // Guardar en Supabase
+    const { error: updateError } = await supabase
+      .from('recursos')
+      .update({ control_stock: controlStock })
+      .eq('id', recursoId)
+
+    if (updateError) {
+      console.error('❌ Error actualizando stock:', updateError)
+      throw new Error(`Error actualizando stock: ${updateError.message}`)
+    }
+
+    console.log(`✅ [REVERTIR] Stock actualizado: ${recurso.nombre}`)
+    console.log(`   - Clave variante: ${claveVariante}`)
+    console.log(`   - Stock anterior: ${stockActual}`)
+    console.log(`   - Cantidad revertida: ${cantidad}`)
+    console.log(`   - Stock nuevo: ${nuevoStock}`)
+    console.log(`   - UPDATE ejecutado correctamente en recursos.id = ${recursoId}`)
+  } catch (error) {
+    console.error('❌ Error aumentando stock de recurso:', error)
+    throw error
+  }
+}
+
+/**
  * Registra un movimiento de inventario (log)
  * Por ahora solo loguea, puede extenderse para guardar en tabla de movimientos
  */
@@ -650,6 +724,287 @@ export async function descontarInsumosDesdeCotizacion(
     console.log(`✅ [DESCONTAR] Procesamiento completado para cotización ${cotizacionId}`)
   } catch (error) {
     console.error('❌ [DESCONTAR] Error general descontando insumos:', error)
+    throw error
+  }
+}
+
+/**
+ * Interface para revertir insumos desde una cotización
+ */
+export interface RevertirInsumosParams {
+  cotizacionId: string
+  lineas: Array<{
+    tipo: string
+    codigo_producto?: string | null
+    nombre_producto?: string | null
+    cantidad: number
+    ancho?: number | null
+    alto?: number | null
+    total_m2?: number | null
+    unidad_medida?: string
+    es_soporte?: boolean
+    variantes?: any
+  }>
+  sucursal: string
+}
+
+/**
+ * Revierte insumos desde una cotización aprobada
+ * Es el inverso exacto de descontarInsumosDesdeCotizacion
+ * Considera unidad de medida (m² vs unidades), receta, variantes y excluye soportes
+ */
+export async function revertirStockCotizacion(
+  params: RevertirInsumosParams
+): Promise<void> {
+  const { cotizacionId, lineas, sucursal } = params
+
+  console.log(`🔄 [REVERTIR] Procesando cotización ${cotizacionId}`)
+  console.log(`🔄 [REVERTIR] Sucursal: ${sucursal}`)
+  console.log(`🔄 [REVERTIR] Total líneas recibidas: ${lineas.length}`)
+
+  try {
+    // 1. Filtrar líneas válidas (mismo filtro que descuento)
+    const lineasValidas = lineas.filter(linea => {
+      // Solo procesar líneas de tipo 'Producto'
+      if (linea.tipo !== 'Producto') {
+        return false
+      }
+
+      // Excluir soportes
+      if (linea.es_soporte === true) {
+        console.log(`⚠️ [REVERTIR] Línea ${linea.nombre_producto || linea.codigo_producto} es soporte, omitiendo`)
+        return false
+      }
+
+      // Debe tener código o nombre de producto
+      if (!linea.codigo_producto && !linea.nombre_producto) {
+        console.log(`⚠️ [REVERTIR] Línea sin código ni nombre, omitiendo`)
+        return false
+      }
+
+      // Debe tener cantidad > 0
+      if (!linea.cantidad || linea.cantidad <= 0) {
+        console.log(`⚠️ [REVERTIR] Línea ${linea.nombre_producto || linea.codigo_producto} sin cantidad válida, omitiendo`)
+        return false
+      }
+
+      return true
+    })
+
+    console.log(`🔄 [REVERTIR] Líneas válidas a procesar: ${lineasValidas.length}`)
+
+    if (lineasValidas.length === 0) {
+      console.log('⚠️ [REVERTIR] No hay líneas válidas para procesar')
+      return
+    }
+
+    // 2. Obtener todos los recursos de una vez (optimización)
+    const { data: recursos, error: recursosError } = await supabase
+      .from('recursos')
+      .select('id, nombre, codigo, control_stock, variantes, categoria')
+
+    if (recursosError || !recursos) {
+      console.error('❌ [REVERTIR] Error obteniendo recursos:', recursosError)
+      throw new Error('Error obteniendo recursos')
+    }
+
+    // 3. Procesar cada línea válida
+    for (const linea of lineasValidas) {
+      try {
+        console.log(`🔄 [REVERTIR] Procesando: ${linea.nombre_producto || linea.codigo_producto}`)
+
+        // a. Buscar producto
+        let producto: any = null
+        if (linea.codigo_producto) {
+          const { data, error } = await supabase
+            .from('productos')
+            .select('id, nombre, codigo, receta, unidad_medida')
+            .eq('codigo', linea.codigo_producto)
+            .single()
+          
+          if (!error && data) {
+            producto = data
+          }
+        }
+
+        // Si no se encontró por código, buscar por nombre
+        if (!producto && linea.nombre_producto) {
+          const { data, error } = await supabase
+            .from('productos')
+            .select('id, nombre, codigo, receta, unidad_medida')
+            .eq('nombre', linea.nombre_producto)
+            .single()
+          
+          if (!error && data) {
+            producto = data
+          }
+        }
+
+        if (!producto) {
+          console.warn(`⚠️ [REVERTIR] Producto no encontrado: ${linea.codigo_producto || linea.nombre_producto}`)
+          continue
+        }
+
+        // b. Validar que tenga receta
+        const receta = producto.receta || []
+        if (!Array.isArray(receta) || receta.length === 0) {
+          console.log(`⚠️ [REVERTIR] Producto ${producto.nombre} no tiene receta, omitiendo`)
+          continue
+        }
+
+        // c. Calcular consumo real según unidad de medida (mismo cálculo que descuento)
+        let consumoReal: number = 0
+
+        const unidadMedida = linea.unidad_medida || producto.unidad_medida || ''
+        const unidadNormalizada = unidadMedida.toLowerCase().trim()
+
+        if (unidadNormalizada === 'm²' || unidadNormalizada === 'm2' || unidadNormalizada === 'm') {
+          // Calcular m² reales: cantidad × ancho × alto
+          const cantidad = Number(linea.cantidad) || 0
+          const ancho = Number(linea.ancho) || 0
+          const alto = Number(linea.alto) || 0
+          const m2 = cantidad * ancho * alto
+          
+          // Si no hay ancho/alto, usar total_m2 si existe
+          const m2Final = m2 > 0 ? m2 : (Number(linea.total_m2) || 0)
+          consumoReal = round2(m2Final)
+
+          console.log(`🔄 [REVERTIR]   - Unidad: m²`)
+          console.log(`🔄 [REVERTIR]   - Cantidad items: ${cantidad}, Ancho: ${ancho}, Alto: ${alto}`)
+          console.log(`🔄 [REVERTIR]   - m² calculados: ${m2Final}`)
+          console.log(`🔄 [REVERTIR]   - Consumo real (m²): ${consumoReal}`)
+        } else {
+          // Para unidades, solo usar cantidad
+          consumoReal = round2(Number(linea.cantidad) || 0)
+          console.log(`🔄 [REVERTIR]   - Unidad: ${unidadMedida}`)
+          console.log(`🔄 [REVERTIR]   - Cantidad items: ${consumoReal}`)
+          console.log(`🔄 [REVERTIR]   - Consumo real (unidades): ${consumoReal}`)
+        }
+
+        if (consumoReal <= 0) {
+          console.warn(`⚠️ [REVERTIR] Consumo inválido para producto ${producto.nombre}, omitiendo`)
+          continue
+        }
+
+        // d. Obtener variantes del producto
+        let variantesProducto: Record<string, string> = {}
+        if (linea.variantes) {
+          try {
+            if (typeof linea.variantes === 'string') {
+              variantesProducto = JSON.parse(linea.variantes)
+            } else if (typeof linea.variantes === 'object') {
+              variantesProducto = linea.variantes
+            }
+          } catch (e) {
+            console.warn('⚠️ [REVERTIR] Error parseando variantes:', e)
+          }
+        }
+
+        console.log(`🔄 [REVERTIR]   - Variantes producto: ${JSON.stringify(variantesProducto)}`)
+
+        // e. Procesar cada item de la receta
+        for (const itemReceta of receta) {
+          try {
+            // Buscar recurso (insumo) - usar cache primero
+            let recurso: any = null
+            
+            // Buscar en cache por nombre (insensible a mayúsculas)
+            if (itemReceta.recurso_nombre) {
+              const nombreBuscar = itemReceta.recurso_nombre.trim().toLowerCase()
+              recurso = recursos.find(r => 
+                r.nombre && r.nombre.trim().toLowerCase() === nombreBuscar
+              )
+            }
+
+            // Si no se encuentra, buscar por código
+            if (!recurso && itemReceta.recurso_codigo) {
+              recurso = recursos.find(r => 
+                r.codigo && r.codigo.toLowerCase() === itemReceta.recurso_codigo.toLowerCase()
+              )
+            }
+
+            // Si no se encuentra, buscar por ID
+            if (!recurso && itemReceta.recurso_id) {
+              recurso = recursos.find(r => r.id === itemReceta.recurso_id)
+            }
+
+            // Si no se encuentra en cache, buscar en BD
+            if (!recurso) {
+              try {
+                recurso = await buscarRecurso(itemReceta, recursos)
+              } catch (e) {
+                console.error(`❌ [REVERTIR] Recurso no encontrado para receta:`, {
+                  recurso_id: itemReceta.recurso_id,
+                  recurso_codigo: itemReceta.recurso_codigo,
+                  recurso_nombre: itemReceta.recurso_nombre,
+                  error: e instanceof Error ? e.message : String(e)
+                })
+                continue
+              }
+            }
+
+            if (!recurso) {
+              console.error(`❌ [REVERTIR] No se pudo encontrar recurso: ${itemReceta.recurso_nombre || itemReceta.recurso_id}`)
+              continue
+            }
+
+            // Validar que sea insumo
+            if (recurso.categoria !== 'Insumos') {
+              console.log(`⚠️ [REVERTIR] Recurso ${recurso.nombre} no es insumo (categoría: ${recurso.categoria}), omitiendo`)
+              continue
+            }
+
+            // Calcular cantidad a revertir (mismo cálculo que descuento)
+            const cantidadReceta = Number(itemReceta.cantidad) || 0
+            const cantidadRevertir = round2(cantidadReceta * consumoReal)
+
+            if (cantidadRevertir <= 0) {
+              console.warn(`⚠️ [REVERTIR] Cantidad a revertir inválida para ${recurso.nombre}: ${cantidadRevertir}`)
+              continue
+            }
+
+            // Aplicar variantes del producto a los insumos SOLO si el insumo tiene variantes
+            const variantesInsumo = aplicarVariantesAInsumo(recurso, variantesProducto)
+
+            console.log(`🔄 [REVERTIR]   - Insumo: ${recurso.nombre}`)
+            console.log(`🔄 [REVERTIR]   - Cantidad en receta (por m²/unidad): ${cantidadReceta}`)
+            console.log(`🔄 [REVERTIR]   - Consumo real (m²/unidades vendidas): ${consumoReal}`)
+            console.log(`🔄 [REVERTIR]   - Cantidad a revertir: ${cantidadRevertir}`)
+            console.log(`🔄 [REVERTIR]   - Variantes aplicadas: ${JSON.stringify(variantesInsumo)}`)
+
+            // Aumentar stock del insumo con variantes (inverso de descontar)
+            await aumentarStockRecurso({
+              recursoId: recurso.id,
+              cantidad: cantidadRevertir,
+              sucursal: sucursal,
+              variantes: variantesInsumo
+            })
+
+            // Registrar movimiento (delta positivo para reversión)
+            await registrarMovimiento({
+              tipo: 'cotizacion',
+              recursoId: recurso.id,
+              variante: variantesInsumo,
+              delta: cantidadRevertir, // Positivo para revertir
+              sucursal,
+              referencia: cotizacionId
+            })
+
+            console.log(`✅ [REVERTIR] Stock revertido: ${recurso.nombre} - ${cantidadRevertir} unidades`)
+          } catch (error) {
+            console.error(`❌ [REVERTIR] Error procesando insumo ${itemReceta.recurso_nombre || itemReceta.recurso_id}:`, error)
+            // Continuar con siguiente insumo
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [REVERTIR] Error procesando línea ${linea.nombre_producto || linea.codigo_producto}:`, error)
+        // Continuar con siguiente línea
+      }
+    }
+
+    console.log(`✅ [REVERTIR] Procesamiento completado para cotización ${cotizacionId}`)
+  } catch (error) {
+    console.error('❌ [REVERTIR] Error general revirtiendo insumos:', error)
     throw error
   }
 }

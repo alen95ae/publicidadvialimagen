@@ -9,6 +9,7 @@ export interface RecursoSupabase {
   nombre: string
   imagen_portada?: string
   categoria: 'Insumos' | 'Mano de Obra' | 'Suministros'
+  formato?: { formato: string; cantidad: number; unidad_medida: string } | null
   responsable: string
   unidad_medida: string
   coste: number
@@ -142,6 +143,24 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     }
   }
 
+  // Parsear formato (JSONB)
+  let formato: { formato: string; cantidad: number; unidad_medida: string } | null = null
+  if (record.formato) {
+    try {
+      if (typeof record.formato === 'string') {
+        const parsed = JSON.parse(record.formato)
+        if (parsed && typeof parsed === 'object' && parsed.formato) {
+          formato = parsed
+        }
+      } else if (typeof record.formato === 'object' && record.formato.formato) {
+        formato = record.formato
+      }
+    } catch (e) {
+      console.error('❌ Error parseando formato:', e)
+      formato = null
+    }
+  }
+
   const imagenPortada =
     record.imagen_principal || record.imagen_portada || undefined
 
@@ -151,6 +170,7 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     nombre: record.nombre || '',
     imagen_portada: imagenPortada,
     categoria: record.categoria || 'Insumos',
+    formato,
     responsable: record.responsable || '',
     unidad_medida: unidadMedida,
     coste: Number(record.coste) || 0,
@@ -187,6 +207,11 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
         : cat === 'Suministros'
         ? 'Suministros'
         : 'Insumos'
+  }
+
+  // Formato como JSONB
+  if (recurso.formato !== undefined) {
+    fields.formato = recurso.formato || null
   }
 
   if (recurso.responsable != null) fields.responsable = recurso.responsable

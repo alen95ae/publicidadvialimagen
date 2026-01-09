@@ -35,3 +35,4 @@ BEGIN
     RAISE NOTICE '   Líneas editables (base): %', lineas_editables;
 END $$;
 
+

@@ -81,6 +81,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Recursos", href: "/panel/recursos" },
       { label: "Consumibles", href: "/panel/consumibles" },
       { label: "Control de Stock", href: "/panel/ajustes-inventario" },
+      { label: "Historial", href: "/panel/inventario/historial" },
     ],
   },
   ajustes: {
@@ -606,6 +607,16 @@ export default function PanelHeader() {
   }
 
   const isActive = (href: string) => {
+    // Caso especial: registro-movimiento pertenece a Control de Stock
+    if (href === "/panel/ajustes-inventario" && pathname === "/panel/inventario/registro-movimiento") {
+      return true
+    }
+    
+    // Caso especial: Productos NO debe estar activo cuando estamos en registro-movimiento o historial
+    if (href === "/panel/inventario" && (pathname === "/panel/inventario/registro-movimiento" || pathname === "/panel/inventario/historial")) {
+      return false
+    }
+    
     // Coincidencia exacta
     if (href === pathname) return true
     

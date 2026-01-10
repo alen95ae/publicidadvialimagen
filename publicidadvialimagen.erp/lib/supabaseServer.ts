@@ -241,13 +241,23 @@ export async function getSupabaseUser(
  */
 export function getSupabaseServer(): SupabaseClient {
   if (_supabaseServer) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabaseServer.ts:243',message:'getSupabaseServer cached client',data:{hasCachedClient:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+    // #endregion
     return _supabaseServer
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabaseServer.ts:250',message:'getSupabaseServer env check',data:{hasUrl:!!supabaseUrl,hasServiceKey:!!supabaseServiceKey,serviceKeyLength:supabaseServiceKey?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+
   if (!supabaseUrl || !supabaseServiceKey) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabaseServer.ts:253',message:'getSupabaseServer ERROR env missing',data:{hasUrl:!!supabaseUrl,hasServiceKey:!!supabaseServiceKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     throw new Error('Missing Supabase environment variables')
   }
 
@@ -262,6 +272,10 @@ export function getSupabaseServer(): SupabaseClient {
       }
     }
   })
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabaseServer.ts:266',message:'getSupabaseServer client created',data:{hasClient:!!_supabaseServer},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+  // #endregion
 
   return _supabaseServer
 }

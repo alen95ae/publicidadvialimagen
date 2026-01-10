@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ArrowLeft, Save, Trash2, Image as ImageIcon, Plus, X, Info, List, Palette, Check, Edit } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -77,11 +78,15 @@ export default function RecursoDetailPage() {
     nombre: "",
     imagen_portada: "",
     categoria: "Insumos",
-    formato: null as { formato: string; cantidad: number; unidad_medida: string } | null,
+    formato: [] as Array<{ formato: string; cantidad: number; unidad_medida: string }>,
     responsable: "",
     unidad_medida: "unidad",
     coste: "0"
   })
+  
+  // Estado para el input de formato
+  const [formatoInputValue, setFormatoInputValue] = useState("")
+  const [openFormatoPopover, setOpenFormatoPopover] = useState(false)
   
   // Estado para códigos existentes (solo para validación en nuevo recurso)
   const [codigosExistentes, setCodigosExistentes] = useState<Set<string>>(new Set())
@@ -144,12 +149,36 @@ export default function RecursoDetailPage() {
         setRecurso(data)
         // Redondear coste a 2 decimales
         const costeRedondeado = data.coste ? Math.round(data.coste * 100) / 100 : 0
+        
+        // Parsear formato: puede ser null, objeto único, o array
+        let formatosArray: Array<{ formato: string; cantidad: number; unidad_medida: string }> = []
+        if (data.formato) {
+          if (Array.isArray(data.formato)) {
+            formatosArray = data.formato
+          } else if (typeof data.formato === 'string') {
+            try {
+              const parsed = JSON.parse(data.formato)
+              formatosArray = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : [])
+            } catch {
+              // Si no es JSON válido, intentar como objeto único
+              try {
+                const obj = typeof data.formato === 'object' ? data.formato : JSON.parse(data.formato)
+                formatosArray = obj ? [obj] : []
+              } catch {
+                formatosArray = []
+              }
+            }
+          } else if (typeof data.formato === 'object') {
+            formatosArray = [data.formato]
+          }
+        }
+        
         setFormData({
           codigo: data.codigo || "",
           nombre: data.nombre || "",
           imagen_portada: data.imagen_portada || "",
           categoria: data.categoria || "Insumos",
-          formato: data.formato || "",
+          formato: formatosArray,
           responsable: data.responsable || "",
           unidad_medida: data.unidad_medida || "unidad",
           coste: costeRedondeado.toFixed(2)
@@ -311,7 +340,7 @@ export default function RecursoDetailPage() {
     }
   }, [recurso, isNewRecurso, fetchCodigosExistentesParaEdicion])
 
-  const handleChange = (field: string, value: string | boolean | number | { formato: string; cantidad: number; unidad_medida: string } | null) => {
+  const handleChange = (field: string, value: string | boolean | number | { formato: string; cantidad: number; unidad_medida: string } | null | Array<{ formato: string; cantidad: number; unidad_medida: string }>) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -322,6 +351,70 @@ export default function RecursoDetailPage() {
       const codigoNormalizado = String(value).toLowerCase().trim()
       const existe = codigosExistentes.has(codigoNormalizado)
       setCodigoDuplicado(existe && codigoNormalizado.length > 0)
+    }
+  }
+  
+  // Funciones para manejar múltiples formatos
+  const handleFormatoInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && formatoInputValue.trim()) {
+      e.preventDefault()
+      const formatoSeleccionado = formatos.find(f => {
+        const displayText = `${f.formato} ${f.cantidad} ${f.unidad_medida}`
+        return displayText.toLowerCase().includes(formatoInputValue.toLowerCase().trim())
+      })
+      
+      if (formatoSeleccionado) {
+        const nuevoFormato = {
+          formato: formatoSeleccionado.formato,
+          cantidad: formatoSeleccionado.cantidad,
+          unidad_medida: formatoSeleccionado.unidad_medida
+        }
+        
+        // Verificar que no esté ya agregado
+        const yaExiste = formData.formato.some(f => 
+          f.formato === nuevoFormato.formato && 
+          f.cantidad === nuevoFormato.cantidad && 
+          f.unidad_medida === nuevoFormato.unidad_medida
+        )
+        
+        if (!yaExiste) {
+          handleChange("formato", [...formData.formato, nuevoFormato])
+        }
+        setFormatoInputValue("")
+      }
+    }
+  }
+  
+  const handleRemoveFormato = (formatoToRemove: { formato: string; cantidad: number; unidad_medida: string }) => {
+    handleChange("formato", formData.formato.filter(f => 
+      !(f.formato === formatoToRemove.formato && 
+        f.cantidad === formatoToRemove.cantidad && 
+        f.unidad_medida === formatoToRemove.unidad_medida)
+    ))
+  }
+  
+  const handleFormatoSelectChange = (value: string) => {
+    if (value === "__sin_formato__") {
+      handleChange("formato", [])
+      setFormatoInputValue("")
+    } else {
+      const formatoSeleccionado = formatos.find(f => f.id === value)
+      if (formatoSeleccionado) {
+        const nuevoFormato = {
+          formato: formatoSeleccionado.formato,
+          cantidad: formatoSeleccionado.cantidad,
+          unidad_medida: formatoSeleccionado.unidad_medida
+        }
+        const yaExiste = formData.formato.some(f => 
+          f.formato === nuevoFormato.formato && 
+          f.cantidad === nuevoFormato.cantidad && 
+          f.unidad_medida === nuevoFormato.unidad_medida
+        )
+        if (!yaExiste) {
+          handleChange("formato", [...formData.formato, nuevoFormato])
+        }
+        setFormatoInputValue("")
+      }
     }
   }
 
@@ -917,49 +1010,90 @@ export default function RecursoDetailPage() {
                       {formData.categoria === "Insumos" && (
                         <div className="space-y-2">
                           <Label htmlFor="formato">Formato</Label>
-                          <Select 
-                            value={
-                              formData.formato 
-                                ? formData.formato.formato === "Unidad suelta" 
-                                  ? "Unidad suelta"
-                                  : `${formData.formato.formato} ${formData.formato.cantidad} ${formData.formato.unidad_medida}`
-                                : "__sin_formato__"
-                            }
-                            onValueChange={(value) => {
-                              if (value === "__sin_formato__") {
-                                handleChange("formato", null)
-                              } else if (value === "Unidad suelta") {
-                                handleChange("formato", { formato: "Unidad suelta", cantidad: 0, unidad_medida: "" })
-                              } else {
-                                const formatoSeleccionado = formatos.find(f => 
-                                  `${f.formato} ${f.cantidad} ${f.unidad_medida}` === value
-                                )
-                                if (formatoSeleccionado) {
-                                  handleChange("formato", {
-                                    formato: formatoSeleccionado.formato,
-                                    cantidad: formatoSeleccionado.cantidad,
-                                    unidad_medida: formatoSeleccionado.unidad_medida
-                                  })
-                                }
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="bg-white dark:bg-white text-gray-900 border border-gray-200">
-                              <SelectValue placeholder="Sin formato" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-white border border-gray-200 shadow-md">
-                              <SelectItem value="__sin_formato__">Sin formato</SelectItem>
-                              <SelectItem value="Unidad suelta">Unidad suelta</SelectItem>
-                              {!formatosLoading && formatos.map((formato) => {
-                                const displayText = `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
-                                return (
-                                  <SelectItem key={formato.id} value={displayText}>
-                                    {displayText}
-                                  </SelectItem>
-                                )
-                              })}
-                            </SelectContent>
-                          </Select>
+                          <Popover open={openFormatoPopover} onOpenChange={setOpenFormatoPopover}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openFormatoPopover}
+                                className="w-full justify-between bg-white dark:bg-white text-gray-900 border border-gray-200"
+                              >
+                                Agregar formato
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start" side="top">
+                              <div className="max-h-[300px] overflow-y-auto">
+                                <div
+                                  className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${
+                                    formData.formato.length === 0 ? 'bg-accent font-medium' : ''
+                                  }`}
+                                  onClick={() => {
+                                    handleChange("formato", [])
+                                    setOpenFormatoPopover(false)
+                                  }}
+                                >
+                                  Sin formato
+                                </div>
+                                {!formatosLoading && formatos.map((formato) => {
+                                  const displayText = `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
+                                  const yaExiste = formData.formato.some(f => 
+                                    f.formato === formato.formato && 
+                                    f.cantidad === formato.cantidad && 
+                                    f.unidad_medida === formato.unidad_medida
+                                  )
+                                  return (
+                                    <div
+                                      key={formato.id}
+                                      className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${
+                                        yaExiste ? 'bg-accent font-medium' : ''
+                                      }`}
+                                      onClick={() => {
+                                        if (!yaExiste) {
+                                          const nuevoFormato = {
+                                            formato: formato.formato,
+                                            cantidad: formato.cantidad,
+                                            unidad_medida: formato.unidad_medida
+                                          }
+                                          handleChange("formato", [...formData.formato, nuevoFormato])
+                                        }
+                                        setOpenFormatoPopover(false)
+                                      }}
+                                    >
+                                      {displayText}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                          
+                          {/* Chips de formatos seleccionados */}
+                          {formData.formato && formData.formato.length > 0 && (
+                            <div className="min-h-[60px] w-full rounded-md border border-gray-200 bg-white p-3">
+                              <div className="flex flex-wrap gap-2">
+                                {formData.formato.map((formato, index) => {
+                                  const displayText = formato.formato === "Unidad suelta" 
+                                    ? "Unidad suelta"
+                                    : `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
+                                  return (
+                                    <div
+                                      key={index}
+                                      className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800"
+                                    >
+                                      <span>{displayText}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveFormato(formato)}
+                                        className="ml-1 hover:bg-gray-200 rounded-full p-0.5 transition-colors"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

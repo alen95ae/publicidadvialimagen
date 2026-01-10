@@ -874,20 +874,48 @@ export default function ConsumiblesPage() {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <Badge 
-                            variant="secondary" 
-                            className={
-                              item.formato 
-                                ? "bg-blue-200 text-blue-800 hover:bg-blue-200" 
-                                : "bg-gray-200 text-gray-800 hover:bg-gray-200"
-                            }
-                          >
-                            {item.formato 
-                              ? item.formato.formato === "Unidad suelta" 
-                                ? "Unidad suelta"
-                                : `${item.formato.formato} ${item.formato.cantidad} ${item.formato.unidad_medida}`
-                              : 'Sin formato'}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            {(() => {
+                              let formatosArray: Array<{ formato: string; cantidad: number; unidad_medida: string }> = []
+                              if (item.formato) {
+                                if (Array.isArray(item.formato)) {
+                                  formatosArray = item.formato
+                                } else if (typeof item.formato === 'string') {
+                                  try {
+                                    const parsed = JSON.parse(item.formato)
+                                    formatosArray = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : [])
+                                  } catch {
+                                    formatosArray = []
+                                  }
+                                } else if (typeof item.formato === 'object') {
+                                  formatosArray = [item.formato]
+                                }
+                              }
+                              
+                              if (formatosArray.length === 0) {
+                                return (
+                                  <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
+                                    Sin formato
+                                  </Badge>
+                                )
+                              }
+                              
+                              return formatosArray.map((formato, idx) => {
+                                const displayText = formato.formato === "Unidad suelta" 
+                                  ? "Unidad suelta"
+                                  : `${formato.formato} ${formato.cantidad} ${formato.unidad_medida}`
+                                return (
+                                  <Badge 
+                                    key={idx}
+                                    variant="secondary" 
+                                    className="bg-blue-200 text-blue-800 hover:bg-blue-200"
+                                  >
+                                    {displayText}
+                                  </Badge>
+                                )
+                              })
+                            })()}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>

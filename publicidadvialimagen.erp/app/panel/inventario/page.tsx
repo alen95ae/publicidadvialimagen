@@ -720,6 +720,140 @@ export default function InventarioPage() {
     }
   }
 
+  // Función para exportar catálogo PDF
+  async function exportPDF() {
+    const ids = Object.keys(selected).filter(id => selected[id])
+    if (!ids.length) {
+      toast.error("Selecciona al menos un producto para generar el catálogo")
+      return
+    }
+    
+    // Validar que todos los productos seleccionados tengan imagen
+    const productosSinImagen = ids.filter(id => {
+      // Buscar primero en filteredItems (lo que se muestra), luego en items
+      const producto = filteredItems.find(p => p.id === id) || items.find(p => p.id === id)
+      return !producto?.imagen_portada
+    })
+    
+    if (productosSinImagen.length > 0) {
+      const nombresSinImagen = productosSinImagen
+        .map(id => {
+          const producto = filteredItems.find(p => p.id === id) || items.find(p => p.id === id)
+          return producto?.nombre || producto?.codigo || id
+        })
+        .join(', ')
+      
+      toast.error(
+        `No se puede generar el catálogo. Los siguientes productos no tienen imagen: ${nombresSinImagen}. Por favor, agrega una imagen a estos productos antes de generar el catálogo.`,
+        { duration: 6000 }
+      )
+      return
+    }
+    
+    const downloadPromise = async () => {
+      // Obtener el email y número del usuario actual
+      let userEmail = ''
+      let userNumero: string | null = null
+      try {
+        const userResponse = await fetch('/api/auth/me')
+        if (userResponse.ok) {
+          const userData = await userResponse.json()
+          if (userData.success && userData.user) {
+            userEmail = userData.user.email || ''
+            userNumero = userData.user.numero || null
+            console.log('📧 Email del usuario obtenido:', userEmail)
+            console.log('📱 Número del usuario obtenido:', userNumero)
+          }
+        }
+      } catch (error) {
+        console.error('Error obteniendo datos del usuario:', error)
+      }
+      
+      // Determinar si es un solo producto y obtener su nombre
+      let productoNombre: string | undefined = undefined
+      if (ids.length === 1) {
+        const selectedId = ids[0]
+        const selectedProduct = items.find(p => p.id === selectedId)
+        if (selectedProduct?.nombre) {
+          productoNombre = selectedProduct.nombre
+        }
+      }
+      
+      // Construir URL con IDs, email, número y filtros
+      const params = new URLSearchParams({
+        ids: ids.join(',')
+      })
+      
+      if (userEmail) {
+        params.append('email', userEmail)
+      }
+      
+      if (userNumero) {
+        params.append('numero', userNumero)
+      }
+      
+      if (productoNombre) {
+        // Codificar el nombre del producto para evitar problemas con caracteres especiales
+        params.append('producto', encodeURIComponent(productoNombre))
+      }
+      
+      // Si hay categoría seleccionada, agregarla
+      if (selectedCategory) {
+        params.append('categoria', encodeURIComponent(selectedCategory))
+      }
+      
+      const url = `/api/inventario/export/pdf?${params.toString()}`
+      
+      // Hacer fetch en lugar de link directo para poder mostrar loading
+      const response = await fetch(url, {
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Error al generar el PDF')
+      }
+      
+      // Obtener el nombre del archivo del header Content-Disposition
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let fileName = `catalogo-productos-${new Date().toISOString().split('T')[0]}.pdf`
+      
+      if (contentDisposition) {
+        // Mejorar el regex para capturar correctamente el nombre del archivo
+        // Puede venir como filename="nombre.pdf" o filename*=UTF-8''nombre.pdf
+        const fileNameMatch = contentDisposition.match(/filename\*?=['"]?([^'";]+)['"]?/i)
+        if (fileNameMatch && fileNameMatch[1]) {
+          fileName = fileNameMatch[1]
+          // Decodificar si viene codificado (UTF-8'')
+          if (fileName.includes("UTF-8''")) {
+            fileName = decodeURIComponent(fileName.split("UTF-8''")[1])
+          }
+          // Eliminar cualquier carácter extra al final (como _)
+          fileName = fileName.trim().replace(/[_\s]+$/, '')
+        }
+      }
+      
+      // Convertir a blob y descargar
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+      
+      return ids.length
+    }
+    
+    // Mostrar toast de carga durante todo el proceso
+    toast.promise(downloadPromise(), {
+      loading: 'Generando catálogo PDF...',
+      success: (count) => `Catálogo PDF generado para ${count} producto(s)`,
+      error: 'Error al generar el catálogo PDF'
+    })
+  }
+
   // Funciones de paginación
   const handlePageChange = (page: number) => {
     fetchItems(page)
@@ -1018,6 +1152,27 @@ export default function InventarioPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* Catálogo PDF - Siempre visible cuando hay productos seleccionados (para todos los usuarios) */}
+            {viewMode === "list" && Object.keys(selected).filter(id => selected[id]).length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-blue-800">
+                      {Object.keys(selected).filter(id => selected[id]).length} seleccionado{Object.keys(selected).filter(id => selected[id]).length > 1 ? 's' : ''}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportPDF}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Descargar Catálogo
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
             {viewMode === "list" && puedeEditar("inventario") && someSelected && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">

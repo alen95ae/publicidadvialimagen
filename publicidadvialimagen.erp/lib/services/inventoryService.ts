@@ -5,6 +5,7 @@
 
 import { getSupabaseServer } from '@/lib/supabaseServer'
 import { generarClaveVariante } from '@/lib/variantes/generarCombinaciones'
+import { insertarHistorialStock, obtenerUsuarioActual } from '@/lib/supabaseHistorialStock'
 
 const supabase = getSupabaseServer()
 
@@ -125,7 +126,9 @@ export async function descontarStockPorReceta(params: DescontarStockParams): Pro
         recursoId: recurso.id,
         cantidad: cantidadDescontar,
         sucursal,
-        variantes
+        variantes,
+        origen: 'cotizacion_aprobada', // Origen por defecto para recetas
+        tipo_movimiento: 'Venta'
       })
 
       // Registrar movimiento
@@ -152,14 +155,21 @@ async function descontarStockRecurso(params: {
   cantidad: number
   sucursal: string
   variantes?: Record<string, string>
+  // Parámetros para historial
+  origen?: 'registro_manual' | 'cotizacion_aprobada' | 'cotizacion_rechazada' | 'cotizacion_editada' | 'cotizacion_eliminada'
+  referencia_id?: string | null
+  referencia_codigo?: string | null
+  tipo_movimiento?: string | null
+  observaciones?: string | null
+  formato?: any | null
 }): Promise<void> {
-  const { recursoId, cantidad, sucursal, variantes = {} } = params
+  const { recursoId, cantidad, sucursal, variantes = {}, origen, referencia_id, referencia_codigo, tipo_movimiento, observaciones, formato } = params
 
   try {
-    // Obtener recurso actual
+    // Obtener recurso actual con más campos para historial
     const { data: recurso, error: recursoError } = await supabase
       .from('recursos')
-      .select('id, nombre, control_stock')
+      .select('id, codigo, nombre, control_stock, unidad_medida, formato')
       .eq('id', recursoId)
       .single()
 
@@ -206,6 +216,33 @@ async function descontarStockRecurso(params: {
       throw new Error(`Error actualizando stock: ${updateError.message}`)
     }
 
+    // Registrar en historial SIEMPRE
+    const origenFinal = origen || 'registro_manual'
+    const usuario = await obtenerUsuarioActual()
+    await insertarHistorialStock({
+      origen: origenFinal,
+      referencia_id: referencia_id || null,
+      referencia_codigo: referencia_codigo || null,
+      item_tipo: 'Recurso',
+      item_id: recurso.id,
+      item_codigo: recurso.codigo || '',
+      item_nombre: recurso.nombre || '',
+      sucursal,
+      formato: formato || recurso.formato || null,
+      cantidad_udm: cantidad,
+      unidad_medida: recurso.unidad_medida || '',
+      impacto: -cantidad, // Numérico negativo para descuento
+      stock_anterior: stockActual,
+      stock_nuevo: nuevoStock,
+      tipo_movimiento: tipo_movimiento || 'Descuento stock',
+      observaciones: observaciones || null,
+      usuario_id: usuario.id,
+      usuario_nombre: usuario.nombre
+    })
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:241',message:'descontarStockRecurso DESPUÉS de insertarHistorialStock',data:{recursoId,success:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+
     console.log(`✅ [DESCONTAR] Stock actualizado: ${recurso.nombre}`)
     console.log(`   - Clave variante: ${claveVariante}`)
     console.log(`   - Stock anterior: ${stockActual}`)
@@ -213,6 +250,9 @@ async function descontarStockRecurso(params: {
     console.log(`   - Stock nuevo: ${nuevoStock}`)
     console.log(`   - UPDATE ejecutado correctamente en recursos.id = ${recursoId}`)
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:252',message:'descontarStockRecurso CATCH ERROR',data:{recursoId,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     console.error('❌ Error descontando stock de recurso:', error)
     throw error
   }
@@ -226,14 +266,21 @@ async function aumentarStockRecurso(params: {
   cantidad: number
   sucursal: string
   variantes?: Record<string, string>
+  // Parámetros para historial
+  origen?: 'registro_manual' | 'cotizacion_aprobada' | 'cotizacion_rechazada' | 'cotizacion_editada' | 'cotizacion_eliminada'
+  referencia_id?: string | null
+  referencia_codigo?: string | null
+  tipo_movimiento?: string | null
+  observaciones?: string | null
+  formato?: any | null
 }): Promise<void> {
-  const { recursoId, cantidad, sucursal, variantes = {} } = params
+  const { recursoId, cantidad, sucursal, variantes = {}, origen, referencia_id, referencia_codigo, tipo_movimiento, observaciones, formato } = params
 
   try {
-    // Obtener recurso actual
+    // Obtener recurso actual con más campos para historial
     const { data: recurso, error: recursoError } = await supabase
       .from('recursos')
-      .select('id, nombre, control_stock')
+      .select('id, codigo, nombre, control_stock, unidad_medida, formato')
       .eq('id', recursoId)
       .single()
 
@@ -280,6 +327,33 @@ async function aumentarStockRecurso(params: {
       throw new Error(`Error actualizando stock: ${updateError.message}`)
     }
 
+    // Registrar en historial SIEMPRE
+    const origenFinal = origen || 'registro_manual'
+    const usuario = await obtenerUsuarioActual()
+    await insertarHistorialStock({
+      origen: origenFinal,
+      referencia_id: referencia_id || null,
+      referencia_codigo: referencia_codigo || null,
+      item_tipo: 'Recurso',
+      item_id: recurso.id,
+      item_codigo: recurso.codigo || '',
+      item_nombre: recurso.nombre || '',
+      sucursal,
+      formato: formato || recurso.formato || null,
+      cantidad_udm: cantidad,
+      unidad_medida: recurso.unidad_medida || '',
+      impacto: cantidad, // Numérico positivo para aumento
+      stock_anterior: stockActual,
+      stock_nuevo: nuevoStock,
+      tipo_movimiento: tipo_movimiento || 'Aumento stock',
+      observaciones: observaciones || null,
+      usuario_id: usuario.id,
+      usuario_nombre: usuario.nombre
+    })
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:346',message:'aumentarStockRecurso DESPUÉS de insertarHistorialStock',data:{recursoId,success:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+
     console.log(`✅ [REVERTIR] Stock actualizado: ${recurso.nombre}`)
     console.log(`   - Clave variante: ${claveVariante}`)
     console.log(`   - Stock anterior: ${stockActual}`)
@@ -287,6 +361,9 @@ async function aumentarStockRecurso(params: {
     console.log(`   - Stock nuevo: ${nuevoStock}`)
     console.log(`   - UPDATE ejecutado correctamente en recursos.id = ${recursoId}`)
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:354',message:'aumentarStockRecurso CATCH ERROR',data:{recursoId,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     console.error('❌ Error aumentando stock de recurso:', error)
     throw error
   }
@@ -326,6 +403,7 @@ export async function registrarMovimiento(params: RegistrarMovimientoParams): Pr
  */
 export interface DescontarInsumosParams {
   cotizacionId: string
+  cotizacionCodigo?: string
   lineas: Array<{
     tipo: string
     codigo_producto?: string | null
@@ -339,6 +417,7 @@ export interface DescontarInsumosParams {
     variantes?: any
   }>
   sucursal: string
+  origen?: 'cotizacion_aprobada' | 'cotizacion_editada'
 }
 
 /**
@@ -472,7 +551,7 @@ function aplicarVariantesAInsumo(
 export async function descontarInsumosDesdeCotizacion(
   params: DescontarInsumosParams
 ): Promise<void> {
-  const { cotizacionId, lineas, sucursal } = params
+  const { cotizacionId, cotizacionCodigo, lineas, sucursal, origen = 'cotizacion_aprobada' } = params
 
   console.log(`📦 [DESCONTAR] Procesando cotización ${cotizacionId}`)
   console.log(`📦 [DESCONTAR] Sucursal: ${sucursal}`)
@@ -598,6 +677,9 @@ export async function descontarInsumosDesdeCotizacion(
         }
 
         if (consumoReal <= 0) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:679',message:'descontarInsumosDesdeCotizacion CONSUMO INVALIDO - OMITIENDO',data:{productoNombre:producto.nombre,consumoReal,linea},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
           console.warn(`⚠️ [DESCONTAR] Consumo inválido para producto ${producto.nombre}, omitiendo`)
           continue
         }
@@ -692,11 +774,19 @@ export async function descontarInsumosDesdeCotizacion(
             console.log(`📦 [DESCONTAR]   - Variantes aplicadas: ${JSON.stringify(variantesInsumo)}`)
 
             // Descontar stock del insumo con variantes
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:774',message:'descontarInsumosDesdeCotizacion LLAMANDO descontarStockRecurso',data:{recursoId:recurso.id,cantidadDescontar,origen,cotizacionId,cotizacionCodigo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             await descontarStockRecurso({
               recursoId: recurso.id,
               cantidad: cantidadDescontar,
               sucursal: sucursal,
-              variantes: variantesInsumo
+              variantes: variantesInsumo,
+              origen,
+              referencia_id: cotizacionId,
+              referencia_codigo: cotizacionCodigo,
+              tipo_movimiento: 'Venta',
+              formato: recurso.formato || null
             })
 
             // Registrar movimiento
@@ -733,6 +823,7 @@ export async function descontarInsumosDesdeCotizacion(
  */
 export interface RevertirInsumosParams {
   cotizacionId: string
+  cotizacionCodigo?: string
   lineas: Array<{
     tipo: string
     codigo_producto?: string | null
@@ -746,6 +837,7 @@ export interface RevertirInsumosParams {
     variantes?: any
   }>
   sucursal: string
+  origen?: 'cotizacion_rechazada' | 'cotizacion_editada' | 'cotizacion_eliminada'
 }
 
 /**
@@ -756,7 +848,7 @@ export interface RevertirInsumosParams {
 export async function revertirStockCotizacion(
   params: RevertirInsumosParams
 ): Promise<void> {
-  const { cotizacionId, lineas, sucursal } = params
+  const { cotizacionId, cotizacionCodigo, lineas, sucursal, origen = 'cotizacion_rechazada' } = params
 
   console.log(`🔄 [REVERTIR] Procesando cotización ${cotizacionId}`)
   console.log(`🔄 [REVERTIR] Sucursal: ${sucursal}`)
@@ -977,7 +1069,12 @@ export async function revertirStockCotizacion(
               recursoId: recurso.id,
               cantidad: cantidadRevertir,
               sucursal: sucursal,
-              variantes: variantesInsumo
+              variantes: variantesInsumo,
+              origen,
+              referencia_id: cotizacionId,
+              referencia_codigo: cotizacionCodigo,
+              tipo_movimiento: 'Reversión venta',
+              formato: recurso.formato || null
             })
 
             // Registrar movimiento (delta positivo para reversión)

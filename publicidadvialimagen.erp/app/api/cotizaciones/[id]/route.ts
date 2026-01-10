@@ -217,8 +217,10 @@ export async function PATCH(
           const sucursal = cotizacionActual.sucursal || 'La Paz'
           await revertirStockCotizacion({
             cotizacionId: id,
+            cotizacionCodigo: cotizacionActual.codigo,
             lineas: lineasParaReversion,
-            sucursal: sucursal
+            sucursal: sucursal,
+            origen: nuevoEstado === 'Rechazada' ? 'cotizacion_rechazada' : 'cotizacion_editada'
           })
           
           // Marcar flag como false solo si la reversión fue completamente exitosa
@@ -327,8 +329,10 @@ export async function PATCH(
               // Usar la nueva función mejorada que considera m², unidades, variantes y excluye soportes
               await descontarInsumosDesdeCotizacion({
                 cotizacionId: id,
+                cotizacionCodigo: cotizacionActualizada.codigo,
                 lineas: lineasParaDescuento,
-                sucursal: sucursal
+                sucursal: sucursal,
+                origen: estadoAnterior === 'Aprobada' ? 'cotizacion_editada' : 'cotizacion_aprobada'
               })
               
               // Marcar flag solo si el descuento fue completamente exitoso
@@ -488,8 +492,10 @@ export async function DELETE(
           const sucursal = cotizacionAEliminar.sucursal || 'La Paz'
           await revertirStockCotizacion({
             cotizacionId: id,
+            cotizacionCodigo: cotizacionAEliminar.codigo,
             lineas: lineasParaReversion,
-            sucursal: sucursal
+            sucursal: sucursal,
+            origen: 'cotizacion_eliminada'
           })
           console.log('✅ [DELETE /api/cotizaciones/[id]] Stock revertido antes de eliminar')
         } else {

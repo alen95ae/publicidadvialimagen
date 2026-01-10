@@ -997,9 +997,17 @@ function AjustesInventarioPageContent() {
                     <SelectContent>
                       <SelectItem value="all">Categorías</SelectItem>
                       <SelectItem value="Unimos">Unimos</SelectItem>
-                      <SelectItem value="Consumibles">Consumibles</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                
+                <div className="flex items-center ml-auto">
+                  <Button
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => router.push('/panel/inventario/registro-movimiento')}
+                  >
+                    Registrar movimiento
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -1058,22 +1066,6 @@ function AjustesInventarioPageContent() {
                           />
                         </div>
 
-                        {/* Stock */}
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm text-gray-700">Stock:</label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="Cambiar stock"
-                            className="h-8 w-32 text-right"
-                            onChange={(e) => {
-                              const value = validateNumberInput(e.target.value, '')
-                              if (value !== '') {
-                                handleBulkFieldChange('stock', value)
-                              }
-                            }}
-                          />
-                        </div>
                       </>
                     )}
                   </div>
@@ -1258,45 +1250,22 @@ function AjustesInventarioPageContent() {
                         </TableCell>
                         <TableCell className="text-right w-20">
                           <div className="flex justify-end">
-                            {selected[item.id] && puedeEditar("inventario") ? (
-                              <Input
-                                type="text"
-                                inputMode="decimal"
-                                value={inputValues[item.id]?.stock ?? (() => {
-                                  const val = editedItems[item.id]?.stock ?? pendingChanges[item.id]?.stock ?? item.stock
-                                  return typeof val === 'number' ? val.toFixed(2) : String(val || '0.00')
-                                })()}
-                                onChange={(e) => handleFieldChange(item.id, 'stock', e.target.value)}
-                                className="h-8 w-24 text-right"
-                                onBlur={() => handleFieldBlur(item.id, 'stock')}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleFieldBlur(item.id, 'stock')
-                                    handleSaveChanges(item.id)
-                                  } else if (e.key === 'Escape') {
-                                    handleCancelEdit(item.id)
-                                  }
-                                }}
-                                autoFocus
-                              />
-                            ) : (
-                              <Badge className={(() => {
-                                const stockValue = pendingChanges[item.id]?.stock ?? item.stock
-                                const numValue = typeof stockValue === 'number' ? stockValue : parseFloat(stockValue || 0)
-                                if (numValue > 0) {
-                                  return "bg-green-100 text-green-800 hover:bg-green-100"
-                                } else if (numValue === 0) {
-                                  return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-                                } else {
-                                  return "bg-red-100 text-red-800 hover:bg-red-100"
-                                }
-                              })()}>
-                                {(() => {
-                                  const val = pendingChanges[item.id]?.stock ?? item.stock
-                                  return typeof val === 'number' ? val.toFixed(2) : parseFloat(val || 0).toFixed(2)
-                                })()}
-                              </Badge>
-                            )}
+                            <Badge className={(() => {
+                              const stockValue = pendingChanges[item.id]?.stock ?? item.stock
+                              const numValue = typeof stockValue === 'number' ? stockValue : parseFloat(stockValue || 0)
+                              if (numValue > 0) {
+                                return "bg-green-100 text-green-800 hover:bg-green-100"
+                              } else if (numValue === 0) {
+                                return "bg-gray-100 text-gray-800 hover:bg-gray-100"
+                              } else {
+                                return "bg-red-100 text-red-800 hover:bg-red-100"
+                              }
+                            })()}>
+                              {(() => {
+                                const val = pendingChanges[item.id]?.stock ?? item.stock
+                                return typeof val === 'number' ? val.toFixed(2) : parseFloat(val || 0).toFixed(2)
+                              })()}
+                            </Badge>
                           </div>
                         </TableCell>
                       </TableRow>

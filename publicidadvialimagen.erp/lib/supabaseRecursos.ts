@@ -9,7 +9,7 @@ export interface RecursoSupabase {
   nombre: string
   imagen_portada?: string
   categoria: 'Insumos' | 'Mano de Obra' | 'Suministros'
-  formato?: { formato: string; cantidad: number; unidad_medida: string } | null
+  formato?: Array<{ formato: string; cantidad: number; unidad_medida: string }> | null
   responsable: string
   unidad_medida: string
   coste: number
@@ -143,17 +143,23 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     }
   }
 
-  // Parsear formato (JSONB)
-  let formato: { formato: string; cantidad: number; unidad_medida: string } | null = null
+  // Parsear formato (JSONB) - puede ser objeto único o array
+  let formato: Array<{ formato: string; cantidad: number; unidad_medida: string }> | null = null
   if (record.formato) {
     try {
       if (typeof record.formato === 'string') {
         const parsed = JSON.parse(record.formato)
-        if (parsed && typeof parsed === 'object' && parsed.formato) {
+        if (Array.isArray(parsed)) {
           formato = parsed
+        } else if (parsed && typeof parsed === 'object' && parsed.formato) {
+          // Compatibilidad con formato antiguo (objeto único)
+          formato = [parsed]
         }
-      } else if (typeof record.formato === 'object' && record.formato.formato) {
+      } else if (Array.isArray(record.formato)) {
         formato = record.formato
+      } else if (typeof record.formato === 'object' && record.formato.formato) {
+        // Compatibilidad con formato antiguo (objeto único)
+        formato = [record.formato]
       }
     } catch (e) {
       console.error('❌ Error parseando formato:', e)
@@ -209,9 +215,13 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
         : 'Insumos'
   }
 
-  // Formato como JSONB
+  // Formato como JSONB (array)
   if (recurso.formato !== undefined) {
-    fields.formato = recurso.formato || null
+    if (Array.isArray(recurso.formato) && recurso.formato.length > 0) {
+      fields.formato = recurso.formato
+    } else {
+      fields.formato = null
+    }
   }
 
   if (recurso.responsable != null) fields.responsable = recurso.responsable

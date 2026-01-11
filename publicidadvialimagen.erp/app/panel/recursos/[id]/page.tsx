@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { ArrowLeft, Save, Trash2, Image as ImageIcon, Plus, X, Info, List, Palette, Check, Edit } from "lucide-react"
+import { ArrowLeft, Save, Trash2, Plus, X, Info, List, Palette, Check, Edit } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
@@ -24,7 +23,6 @@ interface Recurso {
   id: string
   codigo: string
   nombre: string
-  imagen_portada?: string
   categoria: string
   formato?: string | null
   responsable: string
@@ -44,7 +42,6 @@ export default function RecursoDetailPage() {
   const [recurso, setRecurso] = useState<Recurso | null>(null)
   const [loading, setLoading] = useState(!isNewRecurso) // No cargar si es nuevo
   const [saving, setSaving] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState(false)
   const [editing, setEditing] = useState(true)
   
   // Estados para variantes del recurso
@@ -76,7 +73,6 @@ export default function RecursoDetailPage() {
   const [formData, setFormData] = useState({
     codigo: "",
     nombre: "",
-    imagen_portada: "",
     categoria: "Insumos",
     formato: [] as Array<{ formato: string; cantidad: number; unidad_medida: string }>,
     responsable: "",
@@ -176,7 +172,6 @@ export default function RecursoDetailPage() {
         setFormData({
           codigo: data.codigo || "",
           nombre: data.nombre || "",
-          imagen_portada: data.imagen_portada || "",
           categoria: data.categoria || "Insumos",
           formato: formatosArray,
           responsable: data.responsable || "",
@@ -468,7 +463,6 @@ export default function RecursoDetailPage() {
       const dataToSend = {
         codigo: formData.codigo.trim(),
         nombre: formData.nombre.trim(),
-        imagen_portada: formData.imagen_portada || null,
         categoria: formData.categoria,
         formato: formData.formato,
         responsable: formData.responsable.trim(),
@@ -540,58 +534,6 @@ export default function RecursoDetailPage() {
     }
   }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("La imagen no puede superar los 5MB")
-      e.target.value = ''
-      return
-    }
-
-    if (!file.type.startsWith('image/')) {
-      toast.error("El archivo debe ser una imagen (JPG, PNG, GIF)")
-      e.target.value = ''
-      return
-    }
-
-    setUploadingImage(true)
-    try {
-      const formDataUpload = new FormData()
-      formDataUpload.set('file', file)
-      
-      toast.loading("Subiendo imagen...", { id: 'upload-image' })
-      
-      const uploadTargetId = isNewRecurso ? 'new' : id
-      const response = await fetch(`/api/recursos/${uploadTargetId}/image`, { 
-        method: 'POST', 
-        body: formDataUpload 
-      })
-      
-      const responseData = await response.json().catch(() => ({}))
-      
-      if (response.ok && responseData.success !== false) {
-        const publicUrl = responseData.data?.publicUrl
-        if (publicUrl) {
-          handleChange("imagen_portada", publicUrl)
-          toast.success("Imagen subida a Supabase Storage correctamente", { id: 'upload-image' })
-        } else {
-          throw new Error("No se recibió la URL de la imagen")
-        }
-      } else {
-        const errorMessage = responseData.error || "Error al cargar la imagen"
-        console.error("❌ [FRONTEND] Error en respuesta de upload:", errorMessage)
-        toast.error(errorMessage, { id: 'upload-image' })
-      }
-    } catch (error) {
-      console.error("Error uploading image:", error)
-      toast.error("Error de conexión al subir la imagen", { id: 'upload-image' })
-    } finally {
-      setUploadingImage(false)
-      e.target.value = ''
-    }
-  }
 
   // Handlers para variantes del recurso
   const handleOpenVarianteDialog = (varianteId?: number) => {
@@ -813,7 +755,6 @@ export default function RecursoDetailPage() {
         const dataToSend = {
           codigo: formData.codigo.trim(),
           nombre: formData.nombre.trim(),
-          imagen_portada: formData.imagen_portada || null,
           categoria: formData.categoria,
           formato: formData.formato,
           responsable: formData.responsable.trim(),
@@ -1152,84 +1093,28 @@ export default function RecursoDetailPage() {
 
           {/* Columna Derecha */}
           <div className="space-y-8">
-            {/* Imagen Principal */}
+            {/* Resumen */}
             <Card>
               <CardHeader>
-                <CardTitle>Imagen Principal</CardTitle>
-                <CardDescription>Agrega una imagen de portada</CardDescription>
+                <CardTitle>Resumen</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 pb-4">
-                {editing ? (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex justify-center">
-                        {formData.imagen_portada ? (
-                          <div className="relative group">
-                            <div className="aspect-square w-32 overflow-hidden rounded-md border-2 border-gray-200 bg-gray-100 relative">
-                              <Image 
-                                src={formData.imagen_portada} 
-                                alt="Imagen de portada" 
-                                fill
-                                className="object-cover"
-                                sizes="128px"
-                                loading="lazy"
-                                onError={(e) => {
-                                  const target = e.currentTarget
-                                  target.style.display = 'none'
-                                  const parent = target.parentElement
-                                  if (parent) {
-                                    parent.innerHTML = '<div class="flex items-center justify-center h-full"><span class="text-gray-400 text-xs">Error</span></div>'
-                                  }
-                                }}
-                              />
-                            </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="absolute top-1 right-1 opacity-90 hover:opacity-100 h-6 px-2"
-                              onClick={() => handleChange("imagen_portada", "")}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="aspect-square w-32 flex flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 hover:border-gray-400 transition-colors">
-                            <ImageIcon className="w-8 h-8 text-gray-400 mb-1" />
-                            <p className="text-xs text-gray-500">Sin imagen</p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <input
-                          id="imagen_portada"
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          disabled={uploadingImage}
-                          onClick={() => {
-                            const input = document.getElementById('imagen_portada') as HTMLInputElement
-                            input?.click()
-                          }}
-                        >
-                          <ImageIcon className="w-4 h-4 mr-2" />
-                          {uploadingImage 
-                            ? 'Subiendo...' 
-                            : formData.imagen_portada 
-                              ? 'Cambiar imagen' 
-                              : 'Seleccionar imagen'
-                          }
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500 text-center">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
-                    </div>
-                  </>
-                ) : null}
+              <CardContent className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Código:</span>
+                  <span className="font-mono text-sm">{formData.codigo || "-"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Categoría:</span>
+                  <Badge variant="secondary">{formData.categoria}</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Unidad:</span>
+                  <span>{formData.unidad_medida}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Coste:</span>
+                  <span className="font-semibold">Bs {parseFloat(formData.coste || "0").toFixed(2)}</span>
+                </div>
               </CardContent>
             </Card>
 

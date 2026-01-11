@@ -14,8 +14,6 @@ import {
   XCircle,
   Copy,
   X,
-  LayoutGrid,
-  List,
   Download
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -352,8 +350,6 @@ export default function RecursosPage() {
   const [bulkAction, setBulkAction] = useState<string>("")
   const [bulkValue, setBulkValue] = useState<string>("")
   
-  // Estado para vista (lista o galería)
-  const [viewMode, setViewMode] = useState<"list" | "gallery">("list")
 
   // Filtrar items basado en búsqueda y categoría (ya filtrado en fetchItems si hay búsqueda)
   const filteredItems = items.filter(item => {
@@ -881,31 +877,11 @@ export default function RecursosPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Lista de Recursos ({filteredItems.length})</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className={viewMode === "list" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
-                >
-                  <List className="h-4 w-4 mr-2" />
-                  Lista
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setViewMode("gallery")}
-                  className={viewMode === "gallery" ? "bg-white text-gray-900 border-red-500 border-2" : ""}
-                >
-                  <LayoutGrid className="h-4 w-4 mr-2" />
-                  Galería
-                </Button>
-              </div>
             </div>
           </CardHeader>
           <CardContent>
-            {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
-            {viewMode === "list" && someSelected && (
+            {/* Barra azul unificada de acciones masivas */}
+            {someSelected && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -1034,79 +1010,6 @@ export default function RecursosPage() {
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {searchTerm || selectedCategory ? "No se encontraron items" : "No hay items en los recursos"}
-              </div>
-            ) : viewMode === "gallery" ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-3">
-                {filteredItems.map((item) => (
-                  <Card 
-                    key={item.id} 
-                    className="overflow-hidden transition-all cursor-pointer hover:shadow-lg p-0"
-                  >
-                    <div 
-                      className="relative aspect-square w-full bg-gray-100 group cursor-pointer"
-                      onClick={() => handleEdit(item.id)}
-                    >
-                      {item.imagen_portada ? (
-                        <img
-                          src={item.imagen_portada}
-                          alt={item.nombre}
-                          className="h-full w-full object-cover transition-transform group-hover:scale-105 rounded-t-lg"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full w-full bg-gradient-to-br from-gray-200 to-gray-300 rounded-t-lg">
-                          <span className="text-gray-400 text-sm font-medium">Sin imagen</span>
-                        </div>
-                      )}
-                    </div>
-                    <CardContent className="p-2">
-                      <div className="space-y-1.5">
-                        <div>
-                          <p className="text-[10px] font-mono text-gray-500 mb-0.5">{item.codigo}</p>
-                          <h3 className="font-semibold text-xs line-clamp-2 min-h-[2rem] leading-tight">{item.nombre}</h3>
-                        </div>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                            {item.categoria || 'Sin categoría'}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] px-1 py-0">
-                            {item.unidad_medida || 'Sin unidad'}
-                          </Badge>
-                        </div>
-                        <div className="space-y-0.5 pt-1 border-t">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-gray-600">Stock:</span>
-                            <span className="font-medium">{item.cantidad}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-gray-600">Coste:</span>
-                            <span className="font-medium text-green-600">Bs {item.coste.toFixed(2)}/{item.unidad_medida || ''}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-0.5 pt-1 border-t">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Editar"
-                            onClick={() => handleEdit(item.id)}
-                            className="flex-1 text-[10px] h-6 px-1"
-                          >
-                            <Edit className="w-2.5 h-2.5 mr-0.5" />
-                            Editar
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Eliminar"
-                            onClick={() => handleDelete(item.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
-                          >
-                            <Trash2 className="w-2.5 h-2.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
               </div>
             ) : (
               <Table>

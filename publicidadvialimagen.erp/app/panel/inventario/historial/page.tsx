@@ -137,7 +137,7 @@ export default function HistorialPage() {
       }
       
       if (busqueda) {
-        params.append('referencia_codigo', busqueda)
+        params.append('search', busqueda)
       }
 
       const response = await fetch(`/api/inventario/historial?${params.toString()}`)
@@ -302,7 +302,7 @@ export default function HistorialPage() {
     }
     
     if (busqueda) {
-      params.append('referencia_codigo', busqueda)
+      params.append('search', busqueda)
     }
     
     return params
@@ -466,7 +466,7 @@ export default function HistorialPage() {
             <div className="space-y-2">
               <Label>Buscar</Label>
               <Input
-                placeholder="Código de referencia..."
+                placeholder="Buscar por Código, Ítem o usuario..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 onKeyDown={(e) => {

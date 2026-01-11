@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const fechaHasta = searchParams.get('fecha_hasta')
     const itemId = searchParams.get('item_id')
     const referenciaCodigo = searchParams.get('referencia_codigo')
+    const search = searchParams.get('search')
 
     let query = supabase
       .from('historial_stock')
@@ -54,10 +55,16 @@ export async function GET(request: NextRequest) {
       query = query.ilike('referencia_codigo', `%${referenciaCodigo}%`)
     }
 
-    // Paginación
-    const from = (page - 1) * limit
-    const to = from + limit - 1
-    query = query.range(from, to)
+    // Búsqueda general: código del ítem, nombre del ítem o código de referencia
+    // Si hay búsqueda, no aplicar paginación todavía (se hará después de filtrar por usuario)
+    if (search) {
+      query = query.or(`item_codigo.ilike.%${search}%,item_nombre.ilike.%${search}%,referencia_codigo.ilike.%${search}%`)
+    } else {
+      // Solo aplicar paginación si no hay búsqueda
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+      query = query.range(from, to)
+    }
 
     const { data, error, count } = await query
 
@@ -67,7 +74,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Para registros de cotizaciones, obtener el usuario que aprobó desde la cotización
-    const dataConUsuario = await Promise.all((data || []).map(async (entry: any) => {
+    let dataConUsuario = await Promise.all((data || []).map(async (entry: any) => {
       // Si el origen es una cotizacion y hay referencia_id, buscar el usuario que aprobó
       if (
         (entry.origen === 'cotizacion_aprobada' || 
@@ -172,6 +179,45 @@ export async function GET(request: NextRequest) {
       }
       return entry
     }))
+
+    // Si hay búsqueda, filtrar también por usuario_nombre (después de obtener los datos con usuario)
+    if (search) {
+      const searchLower = search.toLowerCase()
+      dataConUsuario = dataConUsuario.filter((entry: any) => {
+        // Ya se filtró por item_codigo, item_nombre y referencia_codigo en la query
+        // Ahora filtrar también por usuario_nombre
+        const itemCodigo = (entry.item_codigo || '').toLowerCase()
+        const itemNombre = (entry.item_nombre || '').toLowerCase()
+        const referenciaCodigo = (entry.referencia_codigo || '').toLowerCase()
+        const usuarioNombre = (entry.usuario_nombre || '').toLowerCase()
+        
+        // Buscar en cualquiera de estos campos
+        return itemCodigo.includes(searchLower) ||
+               itemNombre.includes(searchLower) ||
+               referenciaCodigo.includes(searchLower) ||
+               usuarioNombre.includes(searchLower)
+      })
+      
+      // Recalcular total después del filtro
+      const totalFiltrado = dataConUsuario.length
+      const totalPagesFiltrado = Math.ceil(totalFiltrado / limit)
+      
+      // Aplicar paginación manualmente después del filtro
+      const from = (page - 1) * limit
+      const to = from + limit
+      const dataPaginada = dataConUsuario.slice(from, to)
+      
+      return NextResponse.json({
+        success: true,
+        data: dataPaginada || [],
+        pagination: {
+          page,
+          limit,
+          total: totalFiltrado,
+          totalPages: totalPagesFiltrado
+        }
+      })
+    }
 
     return NextResponse.json({
       success: true,

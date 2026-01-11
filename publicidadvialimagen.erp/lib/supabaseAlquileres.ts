@@ -216,29 +216,19 @@ export async function getAlquileres(options?: {
   }
 
   // Recalcular estados de los alquileres y mapear código y título del soporte
-  let alquileresConEstadoActualizado = await Promise.all(
-    dataConSoportes.map(async (alquiler: any) => {
-      const estadoCalculado = recalcularEstadoAlquiler(alquiler as Alquiler);
-      
-      // Obtener código y título del soporte desde los mapas
-      const soporteCodigo = alquiler.soporte_id ? codigosSoportes[alquiler.soporte_id] || null : null;
-      const soporteTitulo = alquiler.soporte_id ? titulosSoportes[alquiler.soporte_id] || null : null;
-      const soporteCiudad = alquiler.soporte_id ? ciudadesSoportes[alquiler.soporte_id] || null : null;
-      
-      // Si el estado calculado es diferente al guardado, actualizarlo
-      if (alquiler.estado !== estadoCalculado) {
-        try {
-          const actualizado = await updateAlquiler(alquiler.id, { estado: estadoCalculado });
-          return { ...actualizado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
-        } catch (error) {
-          console.warn(`⚠️ [getAlquileres] Error actualizando estado para ${alquiler.id}:`, error);
-          return { ...alquiler, estado: estadoCalculado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
-        }
-      }
-      
-      return { ...alquiler, estado: estadoCalculado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
-    })
-  );
+  // IMPORTANTE: Solo calculamos el estado, NO lo persistimos en la DB durante una operación de lectura
+  // Esto evita bucles infinitos y escrituras innecesarias durante GET requests
+  let alquileresConEstadoActualizado = dataConSoportes.map((alquiler: any) => {
+    const estadoCalculado = recalcularEstadoAlquiler(alquiler as Alquiler);
+    
+    // Obtener código y título del soporte desde los mapas
+    const soporteCodigo = alquiler.soporte_id ? codigosSoportes[alquiler.soporte_id] || null : null;
+    const soporteTitulo = alquiler.soporte_id ? titulosSoportes[alquiler.soporte_id] || null : null;
+    const soporteCiudad = alquiler.soporte_id ? ciudadesSoportes[alquiler.soporte_id] || null : null;
+    
+    // Retornar el alquiler con el estado calculado (sin persistir en DB)
+    return { ...alquiler, estado: estadoCalculado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
+  });
 
   // Aplicar paginación si es necesario (ya que agregamos alquileres por soporte)
   let finalData = alquileresConEstadoActualizado;

@@ -215,7 +215,7 @@ export function FormatosRecursosModal({ open, onOpenChange }: FormatosRecursosMo
                 <Input
                   value={formato}
                   onChange={(e) => setFormato(e.target.value)}
-                  placeholder="Ej: A4, A3, etc."
+                  placeholder="Ej: Rollo, bote, etc"
                 />
               </div>
               <div className="space-y-2">

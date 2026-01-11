@@ -24,7 +24,6 @@ interface Consumible {
   responsable: string
   unidad_medida: string
   coste: number
-  stock: number
 }
 
 export default function ConsumibleDetailPage() {
@@ -53,8 +52,7 @@ export default function ConsumibleDetailPage() {
     formato: [] as Array<{ formato: string; cantidad: number; unidad_medida: string }>,
     responsable: "",
     unidad_medida: "unidad",
-    coste: "0",
-    stock: "0"
+    coste: "0"
   })
   
   // Estado para el input de formato
@@ -120,7 +118,6 @@ export default function ConsumibleDetailPage() {
         
         setConsumible(data)
         const costeRedondeado = data.coste ? Math.round(data.coste * 100) / 100 : 0
-        const stockRedondeado = data.stock ? Math.round(data.stock * 100) / 100 : 0
         
         // Parsear formato: puede ser null, objeto único, o array
         let formatosArray: Array<{ formato: string; cantidad: number; unidad_medida: string }> = []
@@ -151,8 +148,7 @@ export default function ConsumibleDetailPage() {
           formato: formatosArray,
           responsable: data.responsable || "",
           unidad_medida: data.unidad_medida || "unidad",
-          coste: costeRedondeado.toFixed(2),
-          stock: stockRedondeado.toFixed(2)
+          coste: costeRedondeado.toFixed(2)
         })
       } else {
         console.error('❌ Error en respuesta:', result)
@@ -337,8 +333,7 @@ export default function ConsumibleDetailPage() {
         formato: formData.formato,
         responsable: formData.responsable.trim() || null,
         unidad_medida: formData.unidad_medida,
-        coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
-        stock: Math.round((parseFloat(formData.stock) || 0) * 100) / 100
+        coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100
       }
 
       console.log("💾 Guardando consumible:", { id, isNewConsumible, dataToSend })
@@ -633,28 +628,16 @@ export default function ConsumibleDetailPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="stock">Stock</Label>
+                  <Label htmlFor="coste">Coste (Bs)</Label>
                   <Input
-                    id="stock"
+                    id="coste"
                     type="number"
                     step="0.01"
-                    value={formData.stock}
-                    onChange={(e) => handleChange("stock", e.target.value)}
-                    placeholder="0"
+                    value={formData.coste}
+                    onChange={(e) => handleChange("coste", e.target.value)}
+                    placeholder="0.00"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="coste">Coste (Bs)</Label>
-                <Input
-                  id="coste"
-                  type="number"
-                  step="0.01"
-                  value={formData.coste}
-                  onChange={(e) => handleChange("coste", e.target.value)}
-                  placeholder="0.00"
-                />
               </div>
             </CardContent>
           </Card>
@@ -678,10 +661,6 @@ export default function ConsumibleDetailPage() {
               <div className="flex justify-between">
                 <span className="text-gray-600">Unidad:</span>
                 <span>{formData.unidad_medida}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Stock:</span>
-                <span>{formData.stock || "0"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Coste:</span>

@@ -46,6 +46,7 @@ interface AjusteInventarioItem {
   nombre: string
   sucursal: string
   varianteCombinacion: string // Descripción de la combinación de variantes
+  formato: string | null // Formato del ítem (primer formato si hay varios)
   unidad_medida: string
   diferenciaPrecio: number
   precioVariante: number
@@ -122,6 +123,42 @@ function generateVarianteKey(combinacion: any): string {
     })
   
   return parts.join("|")
+}
+
+// Función para obtener el primer formato de un ítem (recurso o consumible)
+function getPrimerFormato(item: any): string | null {
+  if (!item.formato) return null
+  
+  try {
+    let formatosArray: Array<{ formato: string; cantidad: number; unidad_medida: string }> = []
+    
+    if (Array.isArray(item.formato)) {
+      formatosArray = item.formato
+    } else if (typeof item.formato === 'string') {
+      try {
+        const parsed = JSON.parse(item.formato)
+        formatosArray = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : [])
+      } catch {
+        try {
+          const obj = typeof item.formato === 'object' ? item.formato : JSON.parse(item.formato)
+          formatosArray = obj ? [obj] : []
+        } catch {
+          formatosArray = []
+        }
+      }
+    } else if (typeof item.formato === 'object') {
+      formatosArray = [item.formato]
+    }
+    
+    // Retornar el formato del primer elemento (solo el nombre, sin cantidad ni unidad)
+    if (formatosArray.length > 0 && formatosArray[0].formato) {
+      return formatosArray[0].formato
+    }
+  } catch (e) {
+    console.error('Error parseando formato:', e)
+  }
+  
+  return null
 }
 
 function AjustesInventarioPageContent() {
@@ -291,6 +328,9 @@ function AjustesInventarioPageContent() {
           // Crear combinación con sucursal incluida
           const combinacionConSucursal = { ...combinacion, Sucursal: sucursal }
           
+          // Obtener el primer formato del recurso
+          const formato = getPrimerFormato(recurso)
+          
           ajustes.push({
             id,
             recursoId: recurso.id,
@@ -298,6 +338,7 @@ function AjustesInventarioPageContent() {
             nombre: recurso.nombre,
             sucursal,
             varianteCombinacion: varianteDesc,
+            formato,
             unidad_medida: recurso.unidad_medida || '',
             diferenciaPrecio,
             precioVariante,
@@ -329,6 +370,9 @@ function AjustesInventarioPageContent() {
         // Crear combinación con sucursal incluida
         const combinacionConSucursal = { Sucursal: sucursal }
         
+        // Obtener el primer formato del consumible
+        const formato = getPrimerFormato(consumible)
+        
         ajustes.push({
           id,
           recursoId: consumible.id,
@@ -336,6 +380,7 @@ function AjustesInventarioPageContent() {
           nombre: consumible.nombre,
           sucursal,
           varianteCombinacion: "Sin variantes",
+          formato,
           unidad_medida: consumible.unidad_medida || '',
           diferenciaPrecio,
           precioVariante,
@@ -441,7 +486,7 @@ function AjustesInventarioPageContent() {
     // Filtro por categoría
     let matchesCategoria = true
     if (selectedCategoria !== "all") {
-      if (selectedCategoria === "Unimos") {
+      if (selectedCategoria === "Insumos") {
         matchesCategoria = item.tipo !== 'consumible'
       } else if (selectedCategoria === "Consumibles") {
         matchesCategoria = item.tipo === 'consumible'
@@ -996,7 +1041,8 @@ function AjustesInventarioPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Categorías</SelectItem>
-                      <SelectItem value="Unimos">Unimos</SelectItem>
+                      <SelectItem value="Insumos">Insumos</SelectItem>
+                      <SelectItem value="Consumibles">Consumibles</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1116,6 +1162,7 @@ function AjustesInventarioPageContent() {
                       <TableHead>Nombre</TableHead>
                       <TableHead className="w-24">Sucursal</TableHead>
                       <TableHead className="min-w-[200px]">Variantes</TableHead>
+                      <TableHead className="w-20">Formato</TableHead>
                       <TableHead className="w-20">Unidad</TableHead>
                       <TableHead className="text-center w-32">Diferencia Precio</TableHead>
                       <TableHead className="text-right w-28">Precio Variante</TableHead>
@@ -1174,6 +1221,9 @@ function AjustesInventarioPageContent() {
                           <div className="text-sm text-gray-600 break-words">
                             {item.varianteCombinacion || "Sin variantes"}
                           </div>
+                        </TableCell>
+                        <TableCell className="w-20">
+                          <Badge variant="secondary">{item.formato || 'Sin formato'}</Badge>
                         </TableCell>
                         <TableCell className="w-20">
                           <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">

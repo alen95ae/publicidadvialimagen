@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -203,17 +203,9 @@ export default function PlanificacionPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const hadDataRef = useRef(false)
   const reloadAttemptedRef = useRef(false)
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 100,
-    total: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrev: false,
-  })
 
   // Cargar alquileres desde la API
-  const loadAlquileres = async () => {
+  const loadAlquileres = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -317,6 +309,10 @@ export default function PlanificacionPage() {
         const nuevosVendedores = Array.from(new Set(alquileres.map(a => a.vendedor).filter(Boolean))) as string[]
         setVendedoresUnicos(prev => {
           const combined = [...new Set([...prev, ...nuevosVendedores])]
+          // Solo actualizar si realmente hay cambios
+          if (combined.length === prev.length && combined.every((v, i) => v === prev[i])) {
+            return prev
+          }
           return combined.sort()
         })
         
@@ -341,7 +337,7 @@ export default function PlanificacionPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [año, filtroVendedor, filtroEstado])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -349,7 +345,7 @@ export default function PlanificacionPage() {
 
   useEffect(() => {
     loadAlquileres()
-  }, [año, searchTerm, filtroVendedor, filtroEstado, currentPage])
+  }, [loadAlquileres])
 
   const filteredSoportes = soportesPlanificacion.filter(soporte => {
     const matchesSearch = soporte.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -460,76 +456,94 @@ export default function PlanificacionPage() {
   }
 
   // Agrupar TODOS los soportes (sin filtrar por búsqueda aún, para mantener orden global)
-  const todosLosGrupos = agruparSoportes(soportesPlanificacion)
+  // Memoizado para evitar recálculos innecesarios
+  const todosLosGrupos = useMemo(() => {
+    return agruparSoportes(soportesPlanificacion)
+  }, [soportesPlanificacion, agrupador])
   
   // Aplanar todos los grupos en una lista única manteniendo el orden
-  const todosLosSoportesAplanados: Array<{ grupo: string | null, soporte: SoportePlanificacion }> = []
-  todosLosGrupos.forEach(grupoData => {
-    grupoData.soportes.forEach(soporte => {
-      todosLosSoportesAplanados.push({ grupo: grupoData.grupo, soporte })
+  // Memoizado para evitar recálculos innecesarios
+  const todosLosSoportesAplanados = useMemo(() => {
+    const aplanados: Array<{ grupo: string | null, soporte: SoportePlanificacion }> = []
+    todosLosGrupos.forEach(grupoData => {
+      grupoData.soportes.forEach(soporte => {
+        aplanados.push({ grupo: grupoData.grupo, soporte })
+      })
     })
-  })
+    return aplanados
+  }, [todosLosGrupos])
   
   // Aplicar filtro de búsqueda a los soportes aplanados
-  const soportesFiltradosAplanados = todosLosSoportesAplanados.filter(({ soporte }) => {
-    const matchesSearch = soporte.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      soporte.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      soporte.alquileres.some(a => 
-        (a.cliente && a.cliente.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (a.vendedor && a.vendedor.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (a.codigo && a.codigo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (a.soporte_codigo && a.soporte_codigo.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-    return matchesSearch
-  })
+  // Memoizado para evitar recálculos innecesarios
+  const soportesFiltradosAplanados = useMemo(() => {
+    return todosLosSoportesAplanados.filter(({ soporte }) => {
+      const searchLower = searchTerm.toLowerCase()
+      return soporte.codigo.toLowerCase().includes(searchLower) ||
+        soporte.titulo.toLowerCase().includes(searchLower) ||
+        soporte.alquileres.some(a => 
+          (a.cliente && a.cliente.toLowerCase().includes(searchLower)) ||
+          (a.vendedor && a.vendedor.toLowerCase().includes(searchLower)) ||
+          (a.codigo && a.codigo.toLowerCase().includes(searchLower)) ||
+          (a.soporte_codigo && a.soporte_codigo.toLowerCase().includes(searchLower))
+        )
+    })
+  }, [todosLosSoportesAplanados, searchTerm])
   
   // Calcular total de soportes ÚNICOS (no instancias duplicadas por agrupación)
   // Esto asegura que el total sea consistente independientemente de la agrupación
-  const soportesUnicosFiltrados = new Set(
-    soportesFiltradosAplanados.map(({ soporte }) => soporte.id)
-  )
-  const total = soportesUnicosFiltrados.size
-  const totalPages = Math.ceil(total / 100)
-  const from = (currentPage - 1) * 100
-  const to = from + 100
-  const soportesPaginados = soportesFiltradosAplanados.slice(from, to)
-  
-  // Reconstruir la estructura de grupos para la página actual
-  const gruposMapPaginados = new Map<string | null, SoportePlanificacion[]>()
-  soportesPaginados.forEach(({ grupo, soporte }) => {
-    if (!gruposMapPaginados.has(grupo)) {
-      gruposMapPaginados.set(grupo, [])
+  // Memoizado para evitar recálculos innecesarios
+  const { total, totalPages, soportesPaginados, gruposSoportes } = useMemo(() => {
+    const soportesUnicosFiltrados = new Set(
+      soportesFiltradosAplanados.map(({ soporte }) => soporte.id)
+    )
+    const totalCalculado = soportesUnicosFiltrados.size
+    const totalPagesCalculado = Math.ceil(totalCalculado / 100)
+    const from = (currentPage - 1) * 100
+    const to = from + 100
+    const soportesPaginadosCalculados = soportesFiltradosAplanados.slice(from, to)
+    
+    // Reconstruir la estructura de grupos para la página actual
+    const gruposMapPaginados = new Map<string | null, SoportePlanificacion[]>()
+    soportesPaginadosCalculados.forEach(({ grupo, soporte }) => {
+      if (!gruposMapPaginados.has(grupo)) {
+        gruposMapPaginados.set(grupo, [])
+      }
+      gruposMapPaginados.get(grupo)!.push(soporte)
+    })
+    
+    const gruposSoportesCalculados = Array.from(gruposMapPaginados.entries()).map(([grupo, soportes]) => ({
+      grupo,
+      soportes: soportes.sort((a, b) => {
+        // Mantener orden alfabético dentro del grupo
+        const codigoA = (a.codigo || '').toLowerCase()
+        const codigoB = (b.codigo || '').toLowerCase()
+        return codigoA.localeCompare(codigoB)
+      })
+    })).sort((a, b) => {
+      // Ordenar grupos alfabéticamente
+      if (a.grupo === null && b.grupo === null) return 0
+      if (a.grupo === null) return 1
+      if (b.grupo === null) return -1
+      return a.grupo.localeCompare(b.grupo)
+    })
+    
+    return {
+      total: totalCalculado,
+      totalPages: totalPagesCalculado,
+      soportesPaginados: soportesPaginadosCalculados,
+      gruposSoportes: gruposSoportesCalculados
     }
-    gruposMapPaginados.get(grupo)!.push(soporte)
-  })
+  }, [soportesFiltradosAplanados, currentPage])
   
-  const gruposSoportes = Array.from(gruposMapPaginados.entries()).map(([grupo, soportes]) => ({
-    grupo,
-    soportes: soportes.sort((a, b) => {
-      // Mantener orden alfabético dentro del grupo
-      const codigoA = (a.codigo || '').toLowerCase()
-      const codigoB = (b.codigo || '').toLowerCase()
-      return codigoA.localeCompare(codigoB)
-    })
-  })).sort((a, b) => {
-    // Ordenar grupos alfabéticamente
-    if (a.grupo === null && b.grupo === null) return 0
-    if (a.grupo === null) return 1
-    if (b.grupo === null) return -1
-    return a.grupo.localeCompare(b.grupo)
-  })
-  
-  // Sincronizar estado de paginación
-  useEffect(() => {
-    setPagination({
-      page: currentPage,
-      limit: 100,
-      total,
-      totalPages,
-      hasNext: currentPage < totalPages,
-      hasPrev: currentPage > 1
-    })
-  }, [total, totalPages, currentPage])
+  // Calcular valores de paginación para usar directamente en el renderizado
+  const pagination = useMemo(() => ({
+    page: currentPage,
+    limit: 100,
+    total,
+    totalPages,
+    hasNext: currentPage < totalPages,
+    hasPrev: currentPage > 1
+  }), [currentPage, total, totalPages])
 
   // Función para detectar si dos alquileres se solapan
   const seSolapan = (alq1: { mes: string; duracion: number }, alq2: { mes: string; duracion: number }): boolean => {

@@ -250,6 +250,7 @@ export default function EditarCotizacionPage() {
         totalM2: linea.total_m2 || linea.totalM2 || 0,
         udm: (linea.unidad_medida === 'm2' ? 'm²' : (linea.unidad_medida || linea.udm || 'm²')),
         precio: linea.precio_unitario || linea.precio || 0,
+        precioOriginal: linea.precio_unitario || linea.precio || 0, // Guardar precio original para validación
         comision: linea.comision_porcentaje || linea.comision || 0,
         conIVA: conIVA,
         conIT: conIT,
@@ -308,6 +309,7 @@ export default function EditarCotizacionPage() {
         totalM2: linea.total_m2 || linea.totalM2 || 0,
         udm: (linea.unidad_medida === 'm2' ? 'm²' : (linea.unidad_medida || linea.udm || 'm²')),
         precio: linea.precio_unitario || linea.precio || 0,
+        precioOriginal: linea.precio_unitario || linea.precio || 0, // Guardar precio original para validación
         comision: linea.comision_porcentaje || linea.comision || 0,
         conIVA: conIVA,
         conIT: conIT,
@@ -334,6 +336,7 @@ export default function EditarCotizacionPage() {
       totalM2: 0,
       udm: "m²",
       precio: 0,
+      precioOriginal: 0, // Guardar precio original para validación
       comision: 0,
       conIVA: true,
       conIT: true,
@@ -455,6 +458,26 @@ export default function EditarCotizacionPage() {
           // Asegurar que cantidad sea mínimo 1 (solo si no es string vacío)
           if (campo === 'cantidad' && valor !== '' && valor < 1) {
             valor = 1
+          }
+
+          // Validación: Si no tiene permiso "modificar precio cotización", solo permitir aumentar el precio
+          if (campo === 'precio') {
+            const puedeModificarPrecio = tieneFuncionTecnica("modificar precio cotización")
+            if (!puedeModificarPrecio) {
+              // Obtener precio original (si existe) o precio actual como mínimo
+              const precioOriginal = (producto as any).precioOriginal !== undefined 
+                ? (producto as any).precioOriginal 
+                : producto.precio
+              
+              const valorNum = typeof valor === 'string' ? (valor === '' ? 0 : parseFloat(valor) || 0) : valor
+              
+              // Si intenta bajar el precio, mantener el precio actual y mostrar mensaje
+              if (valorNum < precioOriginal) {
+                toast.error("No tienes permiso para reducir el precio. Solo puedes aumentarlo.")
+                // Mantener el precio actual (no cambiar)
+                return producto
+              }
+            }
           }
 
           const productoActualizado = { ...producto, [campo]: valor }
@@ -730,6 +753,7 @@ export default function EditarCotizacionPage() {
               totalM2: linea.totalM2 || 0,
               udm: linea.udm || 'm²',
               precio: linea.precio || 0,
+              precioOriginal: linea.precio || 0, // Guardar precio original para validación
               comision: linea.comision || 0,
               conIVA: linea.conIVA !== undefined ? linea.conIVA : true,
               conIT: linea.conIT !== undefined ? linea.conIT : true,
@@ -1047,6 +1071,7 @@ export default function EditarCotizacionPage() {
           producto_id: item.id, // Guardar ID del producto para obtener precios por variante
           descripcion: descripcionFinal,
           precio: precioFinal,
+          precioOriginal: precioFinal, // Guardar precio original para validación
           udm: udmFinal,
           esSoporte: esSoporte,
           dimensionesBloqueadas: esSoporte,

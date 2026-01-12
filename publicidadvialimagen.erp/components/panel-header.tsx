@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { User, Bell, Mail, FileText } from "lucide-react"
 import { usePermisosContext } from "@/hooks/permisos-provider"
@@ -70,8 +70,10 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     title: "Ventas",
     navItems: [
       { label: "Cotizaciones", href: "/panel/ventas/cotizaciones" },
-      { label: "Pipeline", href: "/panel/ventas/pipeline" },
       { label: "Solicitudes de cotización", href: "/panel/ventas/solicitudes" },
+      { label: "Alquileres", href: "/panel/soportes/alquileres" },
+      { label: "Productos", href: "/panel/inventario" },
+      { label: "Pipeline", href: "/panel/ventas/pipeline" },
     ],
   },
   inventario: {
@@ -232,8 +234,22 @@ const moduleConfigs: Record<string, ModuleConfig> = {
   },
 }
 
-// Función para detectar el módulo actual basado en el pathname
-function getModuleConfig(pathname: string): ModuleConfig | null {
+// Función para detectar el módulo actual basado en el pathname y searchParams
+function getModuleConfig(pathname: string, searchParams?: URLSearchParams): ModuleConfig | null {
+  // Verificar si hay un parámetro 'from' que indique desde qué módulo se accedió
+  const fromModule = searchParams?.get('from')
+  
+  // Si estamos en alquileres y venimos desde ventas, mantener el módulo de ventas
+  if (pathname.startsWith("/panel/soportes/alquileres") && fromModule === 'ventas') {
+    return moduleConfigs.ventas
+  }
+  
+  // Si estamos en productos (inventario) y venimos desde ventas, mantener el módulo de ventas
+  if (pathname === "/panel/inventario" && fromModule === 'ventas') {
+    return moduleConfigs.ventas
+  }
+  
+  // Lógica normal de detección de módulo
   if (pathname.startsWith("/panel/soportes")) {
     return moduleConfigs.soportes
   }
@@ -285,6 +301,7 @@ interface Notification {
 export default function PanelHeader() {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { tieneFuncionTecnica, puedeVer, esAdmin } = usePermisosContext()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -295,7 +312,7 @@ export default function PanelHeader() {
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set())
 
-  const moduleConfig = getModuleConfig(pathname)
+  const moduleConfig = getModuleConfig(pathname, searchParams)
 
   useEffect(() => {
     fetchUser()
@@ -831,20 +848,30 @@ export default function PanelHeader() {
                       }
                       return true;
                     })
-                    .map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        scroll={false}
-                        className={`text-sm font-medium whitespace-nowrap transition-colors ${
-                          isActive(item.href)
-                            ? "text-[#D54644] hover:text-[#D54644]/80"
-                            : "text-gray-600 hover:text-[#D54644]"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
+                    .map((item) => {
+                      // Si estamos en el módulo de ventas y el link es a Alquileres o Productos, agregar ?from=ventas
+                      let href = item.href
+                      if (moduleConfig?.title === "Ventas") {
+                        if (item.href === "/panel/soportes/alquileres" || item.href === "/panel/inventario") {
+                          href = `${item.href}?from=ventas`
+                        }
+                      }
+                      
+                      return (
+                        <Link
+                          key={item.href}
+                          href={href}
+                          scroll={false}
+                          className={`text-sm font-medium whitespace-nowrap transition-colors ${
+                            isActive(item.href)
+                              ? "text-[#D54644] hover:text-[#D54644]/80"
+                              : "text-gray-600 hover:text-[#D54644]"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      )
+                    })}
                 </div>
               )}
             </>

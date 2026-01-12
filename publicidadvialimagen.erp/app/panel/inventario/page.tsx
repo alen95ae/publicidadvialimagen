@@ -2,7 +2,7 @@
 
 import type React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { 
   Plus, 
   Search, 
@@ -194,8 +194,15 @@ const inventarioItems = [
 
 
 export default function InventarioPage() {
-  const { tieneFuncionTecnica, puedeEditar } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeEditar, puedeVer, esAdmin } = usePermisosContext()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // Detectar si viene desde ventas y tiene solo permiso de ver en ventas (sin permisos de inventario)
+  const fromVentas = searchParams?.get('from') === 'ventas'
+  const tienePermisoInventario = puedeVer("inventario") || puedeEditar("inventario") || esAdmin("inventario")
+  const tienePermisoVentas = puedeVer("ventas")
+  const esSoloLecturaDesdeVentas = fromVentas && !tienePermisoInventario && tienePermisoVentas
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -1012,23 +1019,25 @@ export default function InventarioPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Filtros y Búsqueda</CardTitle>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAjustesModalOpen(true)}
-                        className="h-9 w-9 p-0"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Ajustes de Productos</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                {!esSoloLecturaDesdeVentas && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAjustesModalOpen(true)}
+                          className="h-9 w-9 p-0"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Ajustes de Productos</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -1111,13 +1120,15 @@ export default function InventarioPage() {
                       Exportar
                     </Button>
                   )}
-                  <Button 
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                    onClick={handleNewProduct}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Item
-                  </Button>
+                  {!esSoloLecturaDesdeVentas && (
+                    <Button 
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                      onClick={handleNewProduct}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nuevo Item
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -1174,7 +1185,7 @@ export default function InventarioPage() {
             )}
 
             {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
-            {viewMode === "list" && puedeEditar("inventario") && someSelected && (
+            {viewMode === "list" && puedeEditar("inventario") && !esSoloLecturaDesdeVentas && someSelected && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -1307,27 +1318,29 @@ export default function InventarioPage() {
                             <span className="font-medium text-green-600">Bs {item.precio_venta.toFixed(2)}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-0.5 pt-1 border-t">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Editar"
-                            onClick={() => handleEdit(item.id)}
-                            className="flex-1 text-[10px] h-6 px-1"
-                          >
-                            <Edit className="w-2.5 h-2.5 mr-0.5" />
-                            Editar
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Eliminar"
-                            onClick={() => handleDelete(item.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
-                          >
-                            <Trash2 className="w-2.5 h-2.5" />
-                          </Button>
-                        </div>
+                        {!esSoloLecturaDesdeVentas && (
+                          <div className="flex items-center gap-0.5 pt-1 border-t">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Editar"
+                              onClick={() => handleEdit(item.id)}
+                              className="flex-1 text-[10px] h-6 px-1"
+                            >
+                              <Edit className="w-2.5 h-2.5 mr-0.5" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Eliminar"
+                              onClick={() => handleDelete(item.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1337,7 +1350,7 @@ export default function InventarioPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {puedeEditar("inventario") && (
+                    {/* Casillas de selección - siempre visibles para permitir descargar catálogo */}
                     <TableHead className="w-10">
                       <Checkbox
                         checked={allSelected ? true : (someSelected ? 'indeterminate' : false)}
@@ -1345,22 +1358,21 @@ export default function InventarioPage() {
                         aria-label="Seleccionar todo"
                       />
                     </TableHead>
-                    )}
                     <TableHead>Código</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Unidad</TableHead>
-                    <TableHead>Coste</TableHead>
+                    {!esSoloLecturaDesdeVentas && <TableHead>Coste</TableHead>}
                     <TableHead>Precio Venta</TableHead>
-                    <TableHead>% Utilidad</TableHead>
-                    <TableHead>Mostrar en Web</TableHead>
-                    <TableHead className="text-center">Acciones</TableHead>
+                    {!esSoloLecturaDesdeVentas && <TableHead>% Utilidad</TableHead>}
+                    {!esSoloLecturaDesdeVentas && <TableHead>Mostrar en Web</TableHead>}
+                    {!esSoloLecturaDesdeVentas && <TableHead className="text-center">Acciones</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map((item) => (
                     <TableRow key={item.id}>
-                      {puedeEditar("inventario") && (
+                      {/* Casillas de selección - siempre visibles para permitir descargar catálogo */}
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[item.id]}
@@ -1370,9 +1382,8 @@ export default function InventarioPage() {
                           aria-label={`Seleccionar ${item.codigo}`}
                         />
                       </TableCell>
-                      )}
                       <TableCell className="whitespace-nowrap">
-                        {selected[item.id] && puedeEditar("inventario") ? (
+                        {selected[item.id] && puedeEditar("inventario") && !esSoloLecturaDesdeVentas ? (
                           <Input
                             value={editedItems[item.id]?.codigo ?? item.codigo}
                             onChange={(e) => handleFieldChange(item.id, 'codigo', e.target.value)}
@@ -1392,7 +1403,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[42ch]">
-                        {selected[item.id] && puedeEditar("inventario") ? (
+                        {selected[item.id] && puedeEditar("inventario") && !esSoloLecturaDesdeVentas ? (
                           <Input
                             value={editedItems[item.id]?.nombre ?? item.nombre}
                             onChange={(e) => handleFieldChange(item.id, 'nombre', e.target.value)}
@@ -1424,7 +1435,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {selected[item.id] && puedeEditar("inventario") ? (
+                        {selected[item.id] && puedeEditar("inventario") && !esSoloLecturaDesdeVentas ? (
                           <Select 
                             value={(editedItems[item.id]?.categoria ?? item.categoria) || undefined}
                             onValueChange={(value) => {
@@ -1451,7 +1462,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {selected[item.id] && puedeEditar("inventario") ? (
+                        {selected[item.id] && puedeEditar("inventario") && !esSoloLecturaDesdeVentas ? (
                           <Select 
                             value={(editedItems[item.id]?.unidad_medida ?? item.unidad_medida) || undefined}
                             onValueChange={(value) => {
@@ -1479,66 +1490,74 @@ export default function InventarioPage() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
-                        Bs {item.coste.toFixed(2)}/{item.unidad_medida || ''}
-                      </TableCell>
+                      {!esSoloLecturaDesdeVentas && (
+                        <TableCell>
+                          Bs {item.coste.toFixed(2)}/{item.unidad_medida || ''}
+                        </TableCell>
+                      )}
                       <TableCell>
                         Bs {item.precio_venta.toFixed(2)}
                       </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const utilidadNeta = calcularUtilidadNetaPorcentual(item)
-                          if (utilidadNeta === null) {
-                            return <span className="text-gray-400">-</span>
-                          }
-                          return (
-                            <span className={`font-medium ${
-                              utilidadNeta > 30 
-                                ? 'text-green-600' 
-                                : utilidadNeta >= 10 
-                                ? 'text-yellow-600' 
-                                : utilidadNeta < 0
-                                ? 'text-black'
-                                : 'text-red-600'
-                            }`}>
-                              {utilidadNeta.toFixed(1)}%
-                            </span>
-                          )
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center">
-                          <Switch
-                            checked={editedItems[item.id]?.mostrar_en_web ?? item.mostrar_en_web ?? false}
-                            onCheckedChange={(checked) => {
-                              handleImmediateSave(item.id, { mostrar_en_web: checked })
-                            }}
-                            className="data-[state=checked]:bg-red-500 data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-red-600 data-[state=unchecked]:hover:bg-gray-400 transition-colors"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Editar"
-                            onClick={() => handleEdit(item.id)}
-                            className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Eliminar"
-                            onClick={() => handleDelete(item.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {!esSoloLecturaDesdeVentas && (
+                        <TableCell>
+                          {(() => {
+                            const utilidadNeta = calcularUtilidadNetaPorcentual(item)
+                            if (utilidadNeta === null) {
+                              return <span className="text-gray-400">-</span>
+                            }
+                            return (
+                              <span className={`font-medium ${
+                                utilidadNeta > 30 
+                                  ? 'text-green-600' 
+                                  : utilidadNeta >= 10 
+                                  ? 'text-yellow-600' 
+                                  : utilidadNeta < 0
+                                  ? 'text-black'
+                                  : 'text-red-600'
+                              }`}>
+                                {utilidadNeta.toFixed(1)}%
+                              </span>
+                            )
+                          })()}
+                        </TableCell>
+                      )}
+                      {!esSoloLecturaDesdeVentas && (
+                        <TableCell>
+                          <div className="flex items-center justify-center">
+                            <Switch
+                              checked={editedItems[item.id]?.mostrar_en_web ?? item.mostrar_en_web ?? false}
+                              onCheckedChange={(checked) => {
+                                handleImmediateSave(item.id, { mostrar_en_web: checked })
+                              }}
+                              className="data-[state=checked]:bg-red-500 data-[state=unchecked]:bg-gray-300 hover:data-[state=checked]:bg-red-600 data-[state=unchecked]:hover:bg-gray-400 transition-colors"
+                            />
+                          </div>
+                        </TableCell>
+                      )}
+                      {!esSoloLecturaDesdeVentas && (
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Editar"
+                              onClick={() => handleEdit(item.id)}
+                              className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Eliminar"
+                              onClick={() => handleDelete(item.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

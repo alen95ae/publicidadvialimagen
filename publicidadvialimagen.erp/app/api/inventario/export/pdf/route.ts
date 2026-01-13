@@ -120,7 +120,7 @@ async function loadImage(imageUrl: string): Promise<{ base64: string | null; for
       
       // Cargar imagen en canvas
       const img = await canvasLoadImage(buffer)
-      const imgCanvas = createCanvas(img.width, img.height)
+      let imgCanvas = createCanvas(img.width, img.height)
       const imgCtx = imgCanvas.getContext('2d')
       imgCtx.drawImage(img, 0, 0)
       
@@ -138,24 +138,44 @@ async function loadImage(imageUrl: string): Promise<{ base64: string | null; for
         }
       }
       
-      // Estrategia de compresión conservadora
+      // Optimización de tamaño: reducir calidad y redimensionar si es muy grande
+      const maxDimension = 1200 // Máxima dimensión en píxeles para optimizar tamaño
+      let finalWidth = img.width
+      let finalHeight = img.height
+      
+      if (img.width > maxDimension || img.height > maxDimension) {
+        const ratio = Math.min(maxDimension / img.width, maxDimension / img.height)
+        finalWidth = Math.round(img.width * ratio)
+        finalHeight = Math.round(img.height * ratio)
+      }
+      
+      // Redimensionar si es necesario
+      if (finalWidth !== img.width || finalHeight !== img.height) {
+        const resizedCanvas = createCanvas(finalWidth, finalHeight)
+        const resizedCtx = resizedCanvas.getContext('2d')
+        resizedCtx.drawImage(img, 0, 0, finalWidth, finalHeight)
+        imgCanvas = resizedCanvas
+      }
+      
+      // Estrategia de compresión optimizada para reducir tamaño
+      // Calidad reducida de 0.89 a 0.75 para reducir significativamente el tamaño
       if (isPNG && !hasAlpha) {
-        // PNG sin transparencia → JPEG progresivo 89%
+        // PNG sin transparencia → JPEG progresivo 75%
         const compressedBuffer = imgCanvas.toBuffer('image/jpeg', { 
-          quality: 0.89, 
+          quality: 0.75, 
           progressive: true,
-          chromaSubsampling: false 
+          chromaSubsampling: true // Habilitar subsampling para reducir más el tamaño
         })
         return {
           base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
           format: 'JPEG'
         }
       } else if (format === 'JPEG' || isWEBP) {
-        // JPEG/WEBP → recomprimir a JPEG progresivo 89%
+        // JPEG/WEBP → recomprimir a JPEG progresivo 75%
         const compressedBuffer = imgCanvas.toBuffer('image/jpeg', { 
-          quality: 0.89, 
+          quality: 0.75, 
           progressive: true,
-          chromaSubsampling: false 
+          chromaSubsampling: true // Habilitar subsampling para reducir más el tamaño
         })
         return {
           base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
@@ -569,11 +589,18 @@ export async function GET(request: NextRequest) {
 
     // Obtener los productos específicos
     const productos = []
+    const productosSinImagen: string[] = []
+    
     for (const id of productIds) {
       try {
         const producto = await getProductoById(id)
         if (producto) {
-          productos.push(producto)
+          // Validar que el producto tenga imagen
+          if (!producto.imagen_portada) {
+            productosSinImagen.push(producto.nombre || producto.codigo || id)
+          } else {
+            productos.push(producto)
+          }
         }
       } catch (error) {
         console.error(`Error fetching product ${id}:`, error)
@@ -582,6 +609,17 @@ export async function GET(request: NextRequest) {
 
     if (productos.length === 0) {
       return NextResponse.json({ error: "No se encontraron productos" }, { status: 404 })
+    }
+
+    // Si hay productos sin imagen, retornar error específico
+    if (productosSinImagen.length > 0) {
+      const mensaje = productosSinImagen.length === 1
+        ? `El producto "${productosSinImagen[0]}" no tiene imagen. Por favor, agrega una imagen antes de generar el catálogo.`
+        : `Los siguientes productos no tienen imagen: ${productosSinImagen.join(', ')}. Por favor, agrega imágenes a estos productos antes de generar el catálogo.`
+      return NextResponse.json({ 
+        error: mensaje,
+        productosSinImagen: productosSinImagen 
+      }, { status: 400 })
     }
 
     // Generar PDF

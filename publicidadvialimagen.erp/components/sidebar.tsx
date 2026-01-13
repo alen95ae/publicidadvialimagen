@@ -2,7 +2,7 @@
 
 import type React from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
   Calendar,
@@ -49,6 +49,7 @@ interface SidebarProps {
 export default function Sidebar({ children }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const { permisos, puedeVer, puedeEditar, esAdmin, loading } = usePermisosContext()
 
@@ -230,12 +231,35 @@ export default function Sidebar({ children }: SidebarProps) {
                 return null
               }
               
-              // Para el módulo inventario, también considerar activo cuando estamos en insumos
+              // Para el módulo inventario, considerar activo cuando estamos en:
+              // - Página principal de inventario (productos) - PERO NO cuando accedemos desde ventas
+              // - Ver/editar producto (/panel/inventario/[id])
+              // - Historial (/panel/inventario/historial)
+              // - Registro de movimiento (/panel/inventario/registro-movimiento)
+              // - Recursos (/panel/recursos y /panel/recursos/[id])
+              // - Consumibles (/panel/consumibles y /panel/consumibles/[id])
+              // - Control de stock (/panel/ajustes-inventario)
+              // - Insumos (/panel/insumos)
               // Para facturas, considerar activo cuando estamos en cualquier ruta de facturas dentro de contabilidad
+              // Para ventas, considerar activo cuando estamos en cualquier ruta de ventas o cuando accedemos desde ventas
+              // Para soportes, considerar activo cuando estamos en cualquier ruta de soportes
+              // PERO NO cuando accedemos a alquileres desde ventas (para evitar que ambos se activen)
               const isActive = module.key === 'inventario' 
-                ? (pathname === module.href || pathname === '/panel/insumos')
+                ? ((pathname.startsWith('/panel/inventario') && 
+                    !(pathname === '/panel/inventario' && searchParams?.get('from') === 'ventas')) ||
+                   pathname.startsWith('/panel/recursos') ||
+                   pathname.startsWith('/panel/consumibles') ||
+                   pathname.startsWith('/panel/ajustes-inventario') ||
+                   pathname === '/panel/insumos')
                 : module.key === 'facturas'
                 ? pathname.startsWith('/panel/contabilidad/facturas')
+                : module.key === 'ventas'
+                ? (pathname.startsWith('/panel/ventas') || 
+                   (pathname.startsWith('/panel/soportes/alquileres') && searchParams?.get('from') === 'ventas') ||
+                   (pathname === '/panel/inventario' && searchParams?.get('from') === 'ventas'))
+                : module.key === 'soportes'
+                ? (pathname.startsWith('/panel/soportes') && 
+                   !(pathname.startsWith('/panel/soportes/alquileres') && searchParams?.get('from') === 'ventas'))
                 : pathname === module.href || pathname.startsWith(module.href + '/')
               
               return (

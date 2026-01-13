@@ -55,6 +55,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
+import { Toaster } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { includesIgnoreAccents, normalizeText } from "@/lib/utils"
 import { usePermisosContext } from "@/hooks/permisos-provider"
@@ -203,6 +204,8 @@ export default function InventarioPage() {
   const tienePermisoInventario = puedeVer("inventario") || puedeEditar("inventario") || esAdmin("inventario")
   const tienePermisoVentas = puedeVer("ventas")
   const esSoloLecturaDesdeVentas = fromVentas && !tienePermisoInventario && tienePermisoVentas
+  // Cuando se accede desde ventas, ocultar ciertos elementos independientemente de permisos
+  const ocultarElementosDesdeVentas = fromVentas
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -735,28 +738,6 @@ export default function InventarioPage() {
       return
     }
     
-    // Validar que todos los productos seleccionados tengan imagen
-    const productosSinImagen = ids.filter(id => {
-      // Buscar primero en filteredItems (lo que se muestra), luego en items
-      const producto = filteredItems.find(p => p.id === id) || items.find(p => p.id === id)
-      return !producto?.imagen_portada
-    })
-    
-    if (productosSinImagen.length > 0) {
-      const nombresSinImagen = productosSinImagen
-        .map(id => {
-          const producto = filteredItems.find(p => p.id === id) || items.find(p => p.id === id)
-          return producto?.nombre || producto?.codigo || id
-        })
-        .join(', ')
-      
-      toast.error(
-        `No se puede generar el catálogo. Los siguientes productos no tienen imagen: ${nombresSinImagen}. Por favor, agrega una imagen a estos productos antes de generar el catálogo.`,
-        { duration: 6000 }
-      )
-      return
-    }
-    
     const downloadPromise = async () => {
       // Obtener el email y número del usuario actual
       let userEmail = ''
@@ -817,7 +798,36 @@ export default function InventarioPage() {
       })
       
       if (!response.ok) {
-        throw new Error('Error al generar el PDF')
+        // Intentar obtener el mensaje de error específico del servidor
+        let errorMessage = 'Error al generar el catálogo PDF'
+        try {
+          // Intentar leer como JSON primero
+          const contentType = response.headers.get('content-type')
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json()
+            if (errorData.error) {
+              errorMessage = errorData.error
+            }
+          } else {
+            // Si no es JSON, intentar leer como texto
+            const errorText = await response.text()
+            if (errorText) {
+              try {
+                const errorData = JSON.parse(errorText)
+                if (errorData.error) {
+                  errorMessage = errorData.error
+                }
+              } catch {
+                // Si no se puede parsear, usar el texto como mensaje
+                errorMessage = errorText || errorMessage
+              }
+            }
+          }
+        } catch (e) {
+          // Si no se puede parsear el error, usar el mensaje por defecto
+          console.error('Error parseando respuesta de error:', e)
+        }
+        throw new Error(errorMessage)
       }
       
       // Obtener el nombre del archivo del header Content-Disposition
@@ -857,7 +867,7 @@ export default function InventarioPage() {
     toast.promise(downloadPromise(), {
       loading: 'Generando catálogo PDF...',
       success: (count) => `Catálogo PDF generado para ${count} producto(s)`,
-      error: 'Error al generar el catálogo PDF'
+      error: (err) => err instanceof Error ? err.message : 'Error al generar el catálogo PDF'
     })
   }
 
@@ -1009,7 +1019,9 @@ export default function InventarioPage() {
 
 
   return (
-    <div className="p-6">
+    <>
+      <Toaster position="top-right" />
+      <div className="p-6">
 
       {/* Main Content */}
       <main className="w-full max-w-full px-4 sm:px-6 py-8 overflow-hidden">
@@ -1120,7 +1132,7 @@ export default function InventarioPage() {
                       Exportar
                     </Button>
                   )}
-                  {!esSoloLecturaDesdeVentas && (
+                  {!ocultarElementosDesdeVentas && (
                     <Button 
                       className="bg-red-600 hover:bg-red-700 text-white"
                       onClick={handleNewProduct}
@@ -1365,7 +1377,7 @@ export default function InventarioPage() {
                     {!esSoloLecturaDesdeVentas && <TableHead>Coste</TableHead>}
                     <TableHead>Precio Venta</TableHead>
                     {!esSoloLecturaDesdeVentas && <TableHead>% Utilidad</TableHead>}
-                    {!esSoloLecturaDesdeVentas && <TableHead>Mostrar en Web</TableHead>}
+                    {!ocultarElementosDesdeVentas && <TableHead>Mostrar en Web</TableHead>}
                     {!esSoloLecturaDesdeVentas && <TableHead className="text-center">Acciones</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -1521,7 +1533,7 @@ export default function InventarioPage() {
                           })()}
                         </TableCell>
                       )}
-                      {!esSoloLecturaDesdeVentas && (
+                      {!ocultarElementosDesdeVentas && (
                         <TableCell>
                           <div className="flex items-center justify-center">
                             <Switch
@@ -1636,6 +1648,7 @@ export default function InventarioPage() {
         }}
       />
     </div>
+    </>
   )
 }
 

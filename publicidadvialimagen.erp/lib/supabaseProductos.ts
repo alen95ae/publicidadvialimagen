@@ -1,5 +1,6 @@
 import { getSupabaseServer } from './supabaseServer'
 import { normalizeText } from './utils'
+import { validateCategoria } from './validateCategoria'
 
 // Usar el cliente del servidor que bypassa RLS
 const supabase = getSupabaseServer()
@@ -34,35 +35,14 @@ export function supabaseToProducto(record: any): ProductoSupabase {
     unidadMedida = 'm2'
   }
   
-  // Normalizar categoría
-  let categoriaRaw = record.categoria || 'Categoria general'
-  if (typeof categoriaRaw === 'string') {
-    categoriaRaw = categoriaRaw
-      .replace(/["""''']+/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }
-  
-  const valoresValidosExactos: Record<string, string> = {
-    'categoria general': 'Categoria general',
-    'impresion digital': 'Impresion Digital',
-    'corte y grabado': 'Corte y Grabado',
-    'displays': 'Displays'
-  }
-  
-  const categoriaLower = categoriaRaw.toLowerCase()
-  let categoriaFinal = valoresValidosExactos[categoriaLower]
-  
-  if (!categoriaFinal) {
-    if (categoriaLower.includes('impresion')) {
-      categoriaFinal = 'Impresion Digital'
-    } else if (categoriaLower.includes('corte') && categoriaLower.includes('grabado')) {
-      categoriaFinal = 'Corte y Grabado'
-    } else if (categoriaLower.includes('display')) {
-      categoriaFinal = 'Displays'
-    } else {
-      categoriaFinal = 'Categoria general'
-    }
+  // Preservar categoría exactamente como está en la BD (sin mapeos ni normalizaciones)
+  // La validación se hace en el backend API antes de guardar
+  let categoriaFinal = record.categoria
+  if (typeof categoriaFinal === 'string') {
+    categoriaFinal = categoriaFinal.trim()
+  } else if (!categoriaFinal) {
+    // Si no hay categoría, usar string vacío (será validado en el backend)
+    categoriaFinal = ''
   }
   
   // Parsear JSONB fields
@@ -171,35 +151,14 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
     fields.imagen_principal = producto.imagen_portada || null
   }
   
+  // Preservar categoría exactamente como viene del frontend (sin mapeos ni normalizaciones)
+  // La validación se hace en el backend API antes de guardar usando validateCategoria()
   if (producto.categoria !== undefined && producto.categoria !== null) {
-    let categoriaValor = String(producto.categoria)
-      .replace(/["""''']+/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    
-    const valoresValidosExactos: Record<string, string> = {
-      'categoria general': 'Categoria general',
-      'impresion digital': 'Impresion Digital',
-      'corte y grabado': 'Corte y Grabado',
-      'displays': 'Displays'
+    const categoriaValor = String(producto.categoria).trim()
+    // Solo asignar si no está vacío (el backend validará contra la tabla categorias)
+    if (categoriaValor) {
+      fields.categoria = categoriaValor
     }
-    
-    const categoriaLower = categoriaValor.toLowerCase()
-    let categoriaFinal = valoresValidosExactos[categoriaLower]
-    
-    if (!categoriaFinal) {
-      if (categoriaLower.includes('impresion')) {
-        categoriaFinal = 'Impresion Digital'
-      } else if (categoriaLower.includes('corte') && categoriaLower.includes('grabado')) {
-        categoriaFinal = 'Corte y Grabado'
-      } else if (categoriaLower.includes('display')) {
-        categoriaFinal = 'Displays'
-      } else {
-        categoriaFinal = 'Categoria general'
-      }
-    }
-    
-    fields.categoria = categoriaFinal
   }
   
   if (producto.responsable !== undefined && producto.responsable !== null) {
@@ -488,6 +447,11 @@ export async function getProductoById(id: string) {
 // Crear nuevo producto
 export async function createProducto(producto: Partial<ProductoSupabase>) {
   try {
+    // Validar categoría antes de convertir
+    if (producto.categoria !== undefined && producto.categoria !== null) {
+      await validateCategoria(producto.categoria, 'Inventario', 'Productos')
+    }
+    
     const fields = productoToSupabase(producto)
     
     // Log de campos que se van a insertar (para debugging)
@@ -523,6 +487,11 @@ export async function createProducto(producto: Partial<ProductoSupabase>) {
 // Actualizar producto
 export async function updateProducto(id: string, producto: Partial<ProductoSupabase>) {
   try {
+    // Validar categoría antes de convertir
+    if (producto.categoria !== undefined && producto.categoria !== null) {
+      await validateCategoria(producto.categoria, 'Inventario', 'Productos')
+    }
+    
     console.log('🔄 updateProducto llamado con:')
     console.log('   - ID:', id)
     console.log('   - Producto recibido:', JSON.stringify(producto, null, 2))

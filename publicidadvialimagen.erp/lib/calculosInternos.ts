@@ -27,6 +27,63 @@ export function calcularTotalM2(ancho: number, alto: number): number {
 }
 
 /**
+ * Calcula el precio unitario FINAL incluyendo comisión
+ * 
+ * Este precio unitario debe ser usado tanto en UI como en PDF para garantizar
+ * que: Precio Unitario × Cantidad = Precio Total (antes de impuestos)
+ * 
+ * IMPORTANTE: Esta función NO aplica impuestos (IVA/IT). Los impuestos se aplican
+ * al total de la línea, no al precio unitario.
+ * 
+ * Flujo de precios:
+ * 1. Precio base (por unidad o por m²)
+ * 2. Precio unitario final = precio base × (1 + comision/100)
+ * 3. Subtotal línea = precio unitario final × cantidad
+ * 4. Total línea = subtotal + impuestos (si aplican)
+ * 
+ * @param precioBase Precio base por unidad o por m²
+ * @param comision Porcentaje de comisión (ej: 12 para 12%)
+ * @param ancho Ancho del producto (para m², 0 para unidades)
+ * @param alto Alto del producto (para m², 0 para unidades)
+ * @param esSoporte Si es un soporte
+ * @param udm Unidad de medida (m², unidad, unidades)
+ * @returns Precio unitario final con comisión incluida (redondeado a 2 decimales)
+ */
+export function calcularPrecioUnitarioFinal(
+  precioBase: number,
+  comision: number,
+  ancho: number = 0,
+  alto: number = 0,
+  esSoporte: boolean = false,
+  udm?: string
+): number {
+  // Calcular precio unitario base (sin comisión)
+  let precioUnitarioBase: number
+  
+  if (esSoporte) {
+    // Para soportes: precio directamente
+    precioUnitarioBase = precioBase
+  } else {
+    const udmLower = (udm || '').toLowerCase().trim()
+    if (udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade') {
+      // Para unidades: precio directamente
+      precioUnitarioBase = precioBase
+    } else {
+      // Para m²: precio × ancho × alto
+      precioUnitarioBase = precioBase * ancho * alto
+    }
+  }
+  
+  // Aplicar comisión al precio unitario
+  // Si comisión es 0, el precio unitario final = precio unitario base
+  const comisionUnitaria = precioUnitarioBase * (comision / 100)
+  const precioUnitarioFinal = precioUnitarioBase + comisionUnitaria
+  
+  // Redondear a 2 decimales
+  return redondearADosDecimales(precioUnitarioFinal)
+}
+
+/**
  * Calcula el total de una línea de producto
  * 
  * NOTA: Esta función mantiene EXACTAMENTE la misma lógica que existía antes.

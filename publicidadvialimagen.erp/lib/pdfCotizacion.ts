@@ -1,5 +1,10 @@
 import jsPDF from 'jspdf'
 
+// Función auxiliar para redondear a 2 decimales
+function redondearADosDecimales(num: number): number {
+  return Math.round(num * 100) / 100
+}
+
 interface ProductoItem {
   id: string
   tipo: 'producto'
@@ -399,23 +404,23 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
       // Cantidad: solo mostrar el número
       pdf.text(producto.cantidad.toString(), tableX + colWidths[0] + colWidths[1] + colWidths[2] + 2, datosY)
       
-      // CALCULAR Precio Unitario SOLO para el PDF (no viene de BD)
-      // Para soportes: usar precio directamente
-      // Para productos con unidad "unidades": usar precio directamente
-      // Para productos con unidad m²: precio × ancho × alto
-      // Para PRO-001: comportamiento dinámico (si tiene ancho/alto > 0, como m², sino como unidades)
-      const udmLower = (producto.udm || '').toLowerCase().trim()
-      const esUnidades = udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade'
-      
-      // Detectar si es PRO-001 (servicio general con comportamiento dinámico)
-      const esPRO001 = producto.producto?.includes('PRO-001')
-      // PRO-001: Si tiene ancho y alto > 0, funciona como m², sino como unidades
-      const esPRO001ConDimensiones = esPRO001 && producto.ancho > 0 && producto.alto > 0
-      const esPRO001SinDimensiones = esPRO001 && (producto.ancho === 0 || producto.alto === 0)
-      
-      const precioUnitarioCalculado = producto.esSoporte || esUnidades || esPRO001SinDimensiones
-        ? producto.precio 
-        : (producto.precio * producto.ancho * producto.alto)
+      // CALCULAR Precio Unitario desde el Total del ERP
+      // 
+      // REGLA CRÍTICA: El PDF NUNCA recalcula precios. Usa los valores del ERP.
+      // El precio unitario se deriva del total para garantizar consistencia matemática:
+      // Precio Unitario = Total / Cantidad (redondeado a 2 decimales)
+      //
+      // Esto garantiza que: Precio Unitario × Cantidad = Total (siempre)
+      // y elimina diferencias de redondeo entre ERP y PDF.
+      //
+      // El total (producto.total) viene del ERP y ya incluye:
+      // - Precio base
+      // - Comisión (si aplica)
+      // - Impuestos IVA/IT (si aplican)
+      // - Descuentos (si no tiene IVA/IT)
+      const precioUnitarioCalculado = producto.cantidad > 0
+        ? redondearADosDecimales(producto.total / producto.cantidad)
+        : 0
       
       // Precio unitario y Total: usar formato completo
       const precioUnitTexto = formatearNumero(precioUnitarioCalculado)

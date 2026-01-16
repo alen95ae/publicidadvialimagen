@@ -1,4 +1,5 @@
 import { getSupabaseServer } from './supabaseServer'
+import { validateCategoria } from './validateCategoria'
 
 // Usar el cliente del servidor que bypassa RLS
 const supabase = getSupabaseServer()
@@ -206,6 +207,11 @@ export async function getConsumibleById(id: string) {
 
 export async function createConsumible(consumible: Partial<ConsumibleSupabase>) {
   try {
+    // Validar categoría antes de convertir
+    if (consumible.categoria !== undefined && consumible.categoria !== null) {
+      await validateCategoria(consumible.categoria, 'Inventario', 'Consumibles')
+    }
+    
     const fields = consumibleToSupabase(consumible)
     console.log('📤 Campos a insertar:', JSON.stringify(fields, null, 2))
 
@@ -235,6 +241,11 @@ export async function createConsumible(consumible: Partial<ConsumibleSupabase>) 
 
 export async function updateConsumible(id: string, consumible: Partial<ConsumibleSupabase>) {
   try {
+    // Validar categoría antes de convertir
+    if (consumible.categoria !== undefined && consumible.categoria !== null) {
+      await validateCategoria(consumible.categoria, 'Inventario', 'Consumibles')
+    }
+    
     const fields = consumibleToSupabase(consumible)
 
     const { data, error } = await supabase

@@ -30,29 +30,30 @@ export async function GET(request: NextRequest) {
     const supabaseClient = supabase || getSupabaseAdmin();
 
     // Buscar recursos directamente en Supabase
-    let queryBuilder = supabaseClient
+    const search = `%${query}%`
+
+    const { data, error } = await supabaseClient
       .from('recursos')
       .select('*')
+      .or(
+        `codigo.ilike.${search},nombre.ilike.${search},categoria.ilike.${search}`
+      )
       .limit(limit)
-    
-    // Búsqueda en código, nombre y categoría
-    const searchTerm = `%${query}%`
-    queryBuilder = queryBuilder.or(
-      `codigo.ilike.${searchTerm},nombre.ilike.${searchTerm},categoria.ilike.${searchTerm}`
-    )
-    
-    queryBuilder = queryBuilder.order('fecha_creacion', { ascending: false })
-    
-    const { data, error } = await queryBuilder
+      .order('fecha_creacion', { ascending: false })
     
     if (error) {
       console.error('❌ Error de Supabase en búsqueda:', error)
+      console.error('❌ Detalles del error:', JSON.stringify(error, null, 2))
       throw new Error(`Error buscando recursos: ${error.message}`)
     }
     
     const recursos = (data || []).map(supabaseToRecurso)
     
-    console.log('📊 Resultados de búsqueda:', recursos.length, 'recursos encontrados')
+    console.log(
+      '🔎 OR QUERY:',
+      `codigo.ilike.${search},nombre.ilike.${search},categoria.ilike.${search}`
+    )
+    console.log('📊 Recursos encontrados:', data?.length ?? 0)
 
     return NextResponse.json({
       success: true,

@@ -102,6 +102,7 @@ export default function ProductoDetailPage() {
   // Estados para calculadora de costes
   const [recursos, setRecursos] = useState<any[]>([])
   const costRowIdCounterRef = useRef(2) // Usar ref para mantener el contador entre renders
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Ref para debounce de búsqueda
   const [costRows, setCostRows] = useState([{
     id: 1,
     selectedRecurso: null as any,
@@ -2106,6 +2107,15 @@ export default function ProductoDetailPage() {
     }
   }, [editing])
 
+  // Limpiar timeout cuando el componente se desmonte
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [])
+
   // Actualizar fila de coste en calculadora de precios cuando cambie el coste calculado
   useEffect(() => {
     if (editing && totalCost > 0) {
@@ -2402,17 +2412,47 @@ export default function ProductoDetailPage() {
 
   // Handlers para calculadora de costes
   const handleCostSearchChange = async (rowId: number, searchTerm: string) => {
+    // Actualizar el término de búsqueda inmediatamente
     setCostRows(prev => prev.map(row =>
       row.id === rowId
         ? { ...row, searchTerm, selectedRecurso: null }
         : row
     ))
 
+    // Limpiar timeout anterior si existe
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
     if (searchTerm.trim().length > 0) {
-      // Cargar recursos de forma asíncrona
-      const recursosEncontrados = await loadRecursos(searchTerm)
-      setFilteredRecursos(recursosEncontrados)
+      // Mostrar el dropdown inmediatamente mientras se cargan los recursos
       setShowCostDropdown(rowId)
+      // Limpiar resultados anteriores mientras se cargan los nuevos
+      setFilteredRecursos([])
+      
+      // Usar debounce para evitar demasiadas llamadas a la API
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const recursosEncontrados = await loadRecursos(searchTerm)
+          // Solo actualizar si el dropdown sigue siendo para esta fila
+          setShowCostDropdown(prev => {
+            if (prev === rowId) {
+              setFilteredRecursos(recursosEncontrados)
+              return rowId
+            }
+            return prev
+          })
+        } catch (error) {
+          console.error('Error cargando recursos:', error)
+          setShowCostDropdown(prev => {
+            if (prev === rowId) {
+              setFilteredRecursos([])
+              return rowId
+            }
+            return prev
+          })
+        }
+      }, 300) // 300ms de debounce
     } else {
       setFilteredRecursos([])
       setShowCostDropdown(null)
@@ -3403,7 +3443,6 @@ export default function ProductoDetailPage() {
 
                 <div className="space-y-3">
                   {costRows.map((row, index) => {
-                    console.log(`🟢 Renderizando costRow con ID: ${row.id}`)
                     return (
                       <div key={`cost-row-${row.id}-${index}`} className="space-y-2">
                         <div className="grid grid-cols-12 gap-2">
@@ -3416,17 +3455,23 @@ export default function ProductoDetailPage() {
                               onFocus={() => setShowCostDropdown(row.id)}
                               className="h-9 text-sm"
                             />
-                            {showCostDropdown === row.id && filteredRecursos.length > 0 && (
+                            {showCostDropdown === row.id && row.searchTerm.trim().length > 0 && (
                               <div className="absolute z-[999] w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                                {filteredRecursos.map((recurso: any) => (
-                                  <div
-                                    key={recurso.id}
-                                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm"
-                                    onClick={() => handleRecursoSelect(row.id, recurso)}
-                                  >
-                                    <div className="font-medium">{recurso.nombre}</div>
+                                {filteredRecursos.length > 0 ? (
+                                  filteredRecursos.map((recurso: any) => (
+                                    <div
+                                      key={recurso.id}
+                                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm"
+                                      onClick={() => handleRecursoSelect(row.id, recurso)}
+                                    >
+                                      <div className="font-medium">{recurso.nombre}</div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-2 text-sm text-gray-500">
+                                    No se encontraron recursos
                                   </div>
-                                ))}
+                                )}
                               </div>
                             )}
                           </div>

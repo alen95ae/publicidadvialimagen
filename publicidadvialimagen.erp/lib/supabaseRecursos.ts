@@ -1,4 +1,5 @@
 import { getSupabaseServer } from './supabaseServer'
+import { validateCategoria } from './validateCategoria'
 
 // Usar el cliente del servidor que bypassa RLS
 const supabase = getSupabaseServer()
@@ -175,7 +176,9 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     codigo: record.codigo || '',
     nombre: record.nombre || '',
     imagen_portada: imagenPortada,
-    categoria: record.categoria || 'Insumos',
+    // Preservar categoría exactamente como está en la BD (sin fallbacks)
+    // La validación se hace en el backend API antes de guardar
+    categoria: record.categoria || '',
     formato,
     responsable: record.responsable || '',
     unidad_medida: unidadMedida,
@@ -205,14 +208,14 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
     fields.imagen_principal = recurso.imagen_portada || null
   }
 
+  // Preservar categoría exactamente como viene (sin mapeos ni fallbacks)
+  // La validación se hace en el backend API antes de guardar usando validateCategoria()
   if (recurso.categoria != null) {
-    const cat = recurso.categoria
-    fields.categoria =
-      cat === 'Mano de Obra'
-        ? 'Mano de Obra'
-        : cat === 'Suministros'
-        ? 'Suministros'
-        : 'Insumos'
+    const categoriaValor = String(recurso.categoria).trim()
+    // Solo asignar si no está vacío (el backend validará contra la tabla categorias)
+    if (categoriaValor) {
+      fields.categoria = categoriaValor
+    }
   }
 
   // Formato como JSONB (array)
@@ -342,6 +345,11 @@ export async function getRecursoById(id: string) {
 
 export async function createRecurso(recurso: Partial<RecursoSupabase>) {
   try {
+    // Validar categoría antes de convertir
+    if (recurso.categoria !== undefined && recurso.categoria !== null) {
+      await validateCategoria(recurso.categoria, 'Inventario', 'Recursos')
+    }
+    
     const fields = recursoToSupabase(recurso)
 
     const { data, error } = await supabase
@@ -361,6 +369,11 @@ export async function createRecurso(recurso: Partial<RecursoSupabase>) {
 
 export async function updateRecurso(id: string, recurso: Partial<RecursoSupabase>) {
   try {
+    // Validar categoría antes de convertir
+    if (recurso.categoria !== undefined && recurso.categoria !== null) {
+      await validateCategoria(recurso.categoria, 'Inventario', 'Recursos')
+    }
+    
     const fields = recursoToSupabase(recurso)
 
     const { data, error } = await supabase

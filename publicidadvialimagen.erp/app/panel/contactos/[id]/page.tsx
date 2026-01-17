@@ -9,8 +9,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Building2, User } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { ArrowLeft, Save, Building2, User, Check, X } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 interface SalesOwner {
   id: string
@@ -31,6 +34,9 @@ export default function EditarContactoPage() {
     relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH",
     displayName: "",
     company: "",
+    companyId: "", // ID del contacto empresa (para Individual)
+    razonSocial: "",
+    personaContacto: [] as Array<{ id: string; nombre: string }>, // Array de personas de contacto (para Compañía)
     taxId: "",
     phone: "",
     email: "",
@@ -42,12 +48,125 @@ export default function EditarContactoPage() {
     notes: "",
   })
 
+  // Estados para autocompletar de empresa (Individual)
+  const [openEmpresaCombobox, setOpenEmpresaCombobox] = useState(false)
+  const [todosLosContactos, setTodosLosContactos] = useState<any[]>([])
+  const [filteredEmpresas, setFilteredEmpresas] = useState<any[]>([])
+  const [cargandoEmpresas, setCargandoEmpresas] = useState(false)
+
+  // Estados para autocompletar de persona de contacto (Compañía)
+  const [openPersonaContactoCombobox, setOpenPersonaContactoCombobox] = useState(false)
+  const [filteredPersonasContacto, setFilteredPersonasContacto] = useState<any[]>([])
+  const [personaContactoInputValue, setPersonaContactoInputValue] = useState("")
+
   useEffect(() => {
     if (id) {
-      fetchContact()
       fetchSalesOwners()
+      // Cargar contactos primero para que estén disponibles cuando se cargue el contacto
+      fetchContactos().then(() => {
+        fetchContact()
+      })
     }
   }, [id])
+
+  // Actualizar el nombre de la empresa cuando se carguen todosLosContactos (para Individual con companyId)
+  useEffect(() => {
+    if (todosLosContactos.length > 0 && formData.companyId && formData.kind === "INDIVIDUAL") {
+      console.log('🔄 [useEffect] Actualizando nombre de empresa:', {
+        companyId: formData.companyId,
+        todosLosContactosLength: todosLosContactos.length
+      })
+      const empresaEncontrada = todosLosContactos.find(c => c.id === formData.companyId && c.kind === 'COMPANY')
+      console.log('🏢 [useEffect] Empresa encontrada:', empresaEncontrada?.displayName || 'NO ENCONTRADA')
+      if (empresaEncontrada) {
+        // Actualizar siempre el nombre de la empresa desde la lista de contactos
+        setFormData(prev => ({
+          ...prev,
+          company: empresaEncontrada.displayName
+        }))
+        console.log('✅ [useEffect] Nombre de empresa actualizado:', empresaEncontrada.displayName)
+      }
+    }
+  }, [todosLosContactos, formData.companyId, formData.kind])
+
+  // Cargar todos los contactos para autocompletar
+  const fetchContactos = async () => {
+    setCargandoEmpresas(true)
+    try {
+      const response = await fetch('/api/contactos')
+      if (response.ok) {
+        const data = await response.json()
+        const contactos = data.data || []
+        setTodosLosContactos(contactos)
+        // Filtrar solo compañías para el autocompletar de empresa
+        const empresas = contactos.filter((c: any) => c.kind === 'COMPANY')
+        setFilteredEmpresas(empresas.slice(0, 50))
+        // Para personas de contacto, usar todos los contactos (individuales y compañías)
+        setFilteredPersonasContacto(contactos.slice(0, 50))
+      }
+    } catch (error) {
+      console.error('Error cargando contactos:', error)
+    } finally {
+      setCargandoEmpresas(false)
+    }
+  }
+
+  // Filtrar empresas (solo compañías)
+  const filtrarEmpresas = (query: string) => {
+    if (!query || query.trim() === '') {
+      const empresas = todosLosContactos.filter((c: any) => c.kind === 'COMPANY')
+      setFilteredEmpresas(empresas.slice(0, 50))
+      return
+    }
+
+    const search = query.toLowerCase().trim()
+    const empresas = todosLosContactos.filter((c: any) => {
+      if (c.kind !== 'COMPANY') return false
+      const nombre = (c.displayName || '').toLowerCase()
+      const empresa = (c.legalName || c.company || '').toLowerCase()
+      return nombre.includes(search) || empresa.includes(search)
+    }).slice(0, 100)
+
+    setFilteredEmpresas(empresas)
+  }
+
+  // Filtrar personas de contacto (todos los contactos)
+  const filtrarPersonasContacto = (query: string) => {
+    if (!query || query.trim() === '') {
+      setFilteredPersonasContacto(todosLosContactos.slice(0, 50))
+      return
+    }
+
+    const search = query.toLowerCase().trim()
+    const filtered = todosLosContactos.filter((c: any) => {
+      const nombre = (c.displayName || '').toLowerCase()
+      const empresa = (c.legalName || c.company || '').toLowerCase()
+      return nombre.includes(search) || empresa.includes(search)
+    }).slice(0, 100)
+
+    setFilteredPersonasContacto(filtered)
+  }
+
+  // Agregar persona de contacto
+  const agregarPersonaContacto = (contacto: any) => {
+    const yaExiste = formData.personaContacto.some(p => p.id === contacto.id)
+    if (!yaExiste) {
+      setFormData(prev => ({
+        ...prev,
+        personaContacto: [...prev.personaContacto, { id: contacto.id, nombre: contacto.displayName }]
+      }))
+    }
+    setPersonaContactoInputValue("")
+    setOpenPersonaContactoCombobox(false)
+  }
+
+  // Remover persona de contacto
+  const removerPersonaContacto = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      personaContacto: prev.personaContacto.filter(p => p.id !== id)
+    }))
+  }
 
   const fetchContact = async () => {
     try {
@@ -55,20 +174,117 @@ export default function EditarContactoPage() {
       const response = await fetch(`/api/contactos/${id}`)
       if (response.ok) {
         const data = await response.json()
+        console.log('📋 [fetchContact] Datos RAW de la API:', JSON.stringify(data, null, 2))
+        console.log('📋 [fetchContact] Datos recibidos:', {
+          kind: data.kind,
+          companyId: data.companyId,
+          company: data.company,
+          razonSocial: data.razonSocial,
+          taxId: data.taxId,
+          website: data.website,
+          address: data.address,
+          address1: data.address1,
+          city: data.city,
+          todosLosContactosLength: todosLosContactos.length
+        })
+        
+        // La API devuelve personaContacto (camelCase) ya parseado desde supabaseToContacto
+        let personaContacto: Array<{ id: string; nombre: string }> = []
+        if (data.personaContacto) {
+          if (Array.isArray(data.personaContacto)) {
+            personaContacto = data.personaContacto
+          }
+        }
+
+        // Si hay companyId, buscar el nombre de la empresa
+        // Primero intentar desde todosLosContactos si ya están cargados
+        // Si no, usar el valor de data.company que viene de la API
+        let companyName = data.company || ""
+        let companyIdValue = data.companyId || ""
+        
+        console.log('🔍 [fetchContact] Buscando empresa:', {
+          companyIdValue,
+          companyName,
+          todosLosContactosLength: todosLosContactos.length,
+          dataCompany: data.company,
+          dataCompanyId: data.companyId
+        })
+        
+        if (companyIdValue) {
+          if (todosLosContactos.length > 0) {
+            const empresaEncontrada = todosLosContactos.find(c => c.id === companyIdValue && c.kind === 'COMPANY')
+            console.log('🏢 [fetchContact] Empresa encontrada en todosLosContactos:', empresaEncontrada?.displayName || 'NO ENCONTRADA')
+            if (empresaEncontrada) {
+              companyName = empresaEncontrada.displayName
+            } else if (!companyName) {
+              // Si no se encuentra y no hay nombre, mantener vacío (el useEffect lo actualizará)
+              console.log('⚠️ [fetchContact] No se encontró empresa con ID:', companyIdValue)
+            }
+          } else {
+            // Si no están cargados los contactos aún, usar el nombre que viene de la API
+            // Si no hay nombre, el useEffect lo actualizará cuando se carguen
+            console.log('⏳ [fetchContact] Contactos no cargados aún, usando nombre de API:', companyName)
+          }
+        }
+
+        console.log('✅ [fetchContact] Valores finales:', {
+          company: companyName,
+          companyId: companyIdValue
+        })
+
+        // Mapear relación de español a inglés si viene de BD
+        const relationMap: { [key: string]: "CUSTOMER" | "SUPPLIER" | "BOTH" } = {
+          'Cliente': 'CUSTOMER',
+          'Proveedor': 'SUPPLIER',
+          'Ambos': 'BOTH',
+          'CUSTOMER': 'CUSTOMER',
+          'SUPPLIER': 'SUPPLIER',
+          'BOTH': 'BOTH'
+        }
+        const relationValue = data.relation || 'Cliente'
+        const mappedRelation = relationMap[relationValue] || 'CUSTOMER'
+        
+        console.log('🔄 [fetchContact] Mapeando relación:', {
+          original: relationValue,
+          mapeado: mappedRelation
+        })
+
         setFormData({
           kind: data.kind || "COMPANY",
-          relation: data.relation || "CUSTOMER",
+          relation: mappedRelation,
           displayName: data.displayName || "",
-          company: data.company || "",
+          company: companyName,
+          companyId: companyIdValue, // ID de la empresa si es Individual
+          razonSocial: data.razon_social || data.razonSocial || "",
+          personaContacto: personaContacto,
           taxId: data.taxId || "",
           phone: data.phone || "",
           email: data.email || "",
           website: data.website || "",
-          address1: data.address || "",
+          address1: data.address || data.address1 || "", // Mapear address → address1
           city: data.city || "",
-          country: data.country || "",
+          country: data.country || data.pais || "",
           salesOwnerId: data.salesOwnerId || "none",
           notes: data.notes || "",
+        })
+        
+        console.log('📋 [fetchContact] Datos RAW de la API:', {
+          razonSocial: data.razonSocial || data.razon_social,
+          taxId: data.taxId,
+          website: data.website,
+          address: data.address,
+          address1: data.address1,
+          city: data.city,
+          country: data.country || data.pais
+        })
+        
+        console.log('✅ [fetchContact] Datos cargados en formulario:', {
+          razonSocial: data.razon_social || data.razonSocial || "",
+          taxId: data.taxId || "",
+          website: data.website || "",
+          address1: data.address || data.address1 || "",
+          city: data.city || "",
+          country: data.country || data.pais || ""
         })
       } else {
         toast.error("Contacto no encontrado")
@@ -116,8 +332,24 @@ export default function EditarContactoPage() {
     try {
       const submitData = {
         ...formData,
-        salesOwnerId: formData.salesOwnerId === "none" ? null : formData.salesOwnerId
+        salesOwnerId: formData.salesOwnerId === "none" ? null : formData.salesOwnerId,
+        // Para Individual: enviar companyId y company (nombre), para Compañía: enviar personaContacto como JSON
+        ...(formData.kind === "INDIVIDUAL" 
+          ? { 
+              companyId: formData.companyId || null,
+              company: formData.company || null // Guardar también el nombre de la empresa
+            }
+          : { personaContacto: formData.personaContacto.length > 0 ? formData.personaContacto : null }
+        )
       }
+      
+      console.log('💾 [handleSubmit] Datos a guardar:', {
+        razonSocial: submitData.razonSocial,
+        taxId: submitData.taxId,
+        website: submitData.website,
+        address1: submitData.address1,
+        city: submitData.city
+      })
       
       const response = await fetch(`/api/contactos/${id}`, {
         method: "PUT",
@@ -156,11 +388,35 @@ export default function EditarContactoPage() {
         {/* Main Content */}
         <main className="container mx-auto px-6 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Editar Contacto</h1>
-          <p className="text-gray-600">Modifica la información del contacto</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800 mb-2">Editar Contacto</h1>
+              <p className="text-gray-600">Modifica la información del contacto</p>
+            </div>
+            {/* Acciones */}
+            <div className="flex gap-4">
+              <Link href="/panel/contactos">
+                <Button variant="outline">Descartar</Button>
+              </Link>
+              <Button 
+                type="submit" 
+                form="contacto-form"
+                className="bg-[#D54644] hover:bg-[#B03A38]"
+                disabled={saving}
+                onClick={(e) => {
+                  e.preventDefault()
+                  const form = document.getElementById('contacto-form') as HTMLFormElement
+                  if (form) form.requestSubmit()
+                }}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form id="contacto-form" onSubmit={handleSubmit}>
           {/* Información Básica */}
           <Card className="mb-6">
             <CardHeader>
@@ -215,14 +471,209 @@ export default function EditarContactoPage() {
                   />
                 </div>
 
-                {/* Empresa */}
+                {/* Empresa (Individual) o Persona de Contacto (Compañía) */}
+                {formData.kind === "INDIVIDUAL" ? (
+                  <div>
+                    <Label htmlFor="company">Empresa</Label>
+                    <Popover open={openEmpresaCombobox} onOpenChange={setOpenEmpresaCombobox}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between",
+                            !formData.companyId && "text-muted-foreground"
+                          )}
+                        >
+                          <span className="truncate">
+                            {formData.company || formData.companyId
+                              ? (formData.company || todosLosContactos.find(c => c.id === formData.companyId && c.kind === 'COMPANY')?.displayName || "Seleccionar empresa")
+                              : "Seleccionar empresa"}
+                          </span>
+                          <Check className={cn("ml-2 h-4 w-4 shrink-0", formData.companyId ? "opacity-100" : "opacity-0")} />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command shouldFilter={false} className="overflow-visible">
+                          <CommandInput
+                            placeholder="Buscar empresa..."
+                            className="h-9 border-0 focus:ring-0"
+                            onValueChange={filtrarEmpresas}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {cargandoEmpresas ? "Cargando..." : "No se encontraron empresas."}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredEmpresas.map((c) => (
+                                <CommandItem
+                                  key={c.id}
+                                  value={c.displayName}
+                                  onSelect={async () => {
+                                    // Cargar datos completos de la empresa
+                                    try {
+                                      const empresaRes = await fetch(`/api/contactos/${c.id}`)
+                                      if (empresaRes.ok) {
+                                        const empresaData = await empresaRes.json()
+                                        console.log('📋 Datos RAW de empresa:', JSON.stringify(empresaData, null, 2))
+                                        
+                                        // Importar datos de la empresa al nuevo contacto
+                                        setFormData(prev => {
+                                          const nuevosDatos = {
+                                            ...prev,
+                                            companyId: c.id,
+                                            company: c.displayName,
+                                            // Importar razón social: solo si el campo actual está vacío
+                                            razonSocial: prev.razonSocial?.trim() 
+                                              ? prev.razonSocial 
+                                              : (empresaData.razonSocial || empresaData.razon_social || ""),
+                                            // Importar NIT: mapear nit → taxId
+                                            taxId: prev.taxId?.trim() 
+                                              ? prev.taxId 
+                                              : (empresaData.taxId || empresaData.nit || ""),
+                                            // Importar sitio web: mapear sitio_web → website
+                                            website: prev.website?.trim() 
+                                              ? prev.website 
+                                              : (empresaData.website || empresaData.sitio_web || ""),
+                                            // Importar dirección: mapear address/direccion → address1
+                                            address1: prev.address1?.trim() 
+                                              ? prev.address1 
+                                              : (empresaData.address || empresaData.address1 || empresaData.direccion || ""),
+                                            // Importar ciudad: mapear ciudad → city
+                                            city: prev.city?.trim() 
+                                              ? prev.city 
+                                              : (empresaData.city || empresaData.ciudad || "")
+                                          }
+                                          console.log('✅ Datos importados al formulario:', {
+                                            razonSocial: nuevosDatos.razonSocial,
+                                            taxId: nuevosDatos.taxId,
+                                            website: nuevosDatos.website,
+                                            address1: nuevosDatos.address1,
+                                            city: nuevosDatos.city
+                                          })
+                                          return nuevosDatos
+                                        })
+                                      } else {
+                                        console.error('❌ Error cargando empresa:', empresaRes.status)
+                                        // Si no se puede cargar, al menos guardar el ID y nombre
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          companyId: c.id,
+                                          company: c.displayName
+                                        }))
+                                      }
+                                    } catch (error) {
+                                      console.error('❌ Error cargando datos de empresa:', error)
+                                      // En caso de error, al menos guardar el ID y nombre
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        companyId: c.id,
+                                        company: c.displayName
+                                      }))
+                                    }
+                                    setOpenEmpresaCombobox(false)
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", formData.companyId === c.id ? "opacity-100" : "opacity-0")} />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{c.displayName}</span>
+                                    {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Persona de Contacto</Label>
+                    <Popover open={openPersonaContactoCombobox} onOpenChange={setOpenPersonaContactoCombobox}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          <span className="text-muted-foreground">Buscar y agregar persona de contacto...</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command shouldFilter={false} className="overflow-visible">
+                          <CommandInput
+                            placeholder="Buscar contacto..."
+                            className="h-9 border-0 focus:ring-0"
+                            value={personaContactoInputValue}
+                            onValueChange={(value) => {
+                              setPersonaContactoInputValue(value)
+                              filtrarPersonasContacto(value)
+                            }}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {cargandoEmpresas ? "Cargando..." : "No se encontraron contactos."}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredPersonasContacto.map((c) => {
+                                const yaExiste = formData.personaContacto.some(p => p.id === c.id)
+                                return (
+                                  <CommandItem
+                                    key={c.id}
+                                    value={c.displayName}
+                                    onSelect={() => agregarPersonaContacto(c)}
+                                    className={cn("cursor-pointer", yaExiste && "opacity-50")}
+                                    disabled={yaExiste}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", yaExiste ? "opacity-100" : "opacity-0")} />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{c.displayName}</span>
+                                      {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                    </div>
+                                  </CommandItem>
+                                )
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    
+                    {/* Chips de personas de contacto seleccionadas */}
+                    {formData.personaContacto && formData.personaContacto.length > 0 && (
+                      <div className="min-h-[60px] w-full rounded-md border border-gray-200 bg-white p-3 mt-2">
+                        <div className="flex flex-wrap gap-2">
+                          {formData.personaContacto.map((persona) => (
+                            <div
+                              key={persona.id}
+                              className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800"
+                            >
+                              <span>{persona.nombre}</span>
+                              <button
+                                type="button"
+                                onClick={() => removerPersonaContacto(persona.id)}
+                                className="ml-1 hover:bg-gray-200 rounded-full p-0.5 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Razón Social */}
                 <div>
-                  <Label htmlFor="company">Empresa</Label>
+                  <Label htmlFor="razonSocial">Razón Social</Label>
                   <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => handleChange("company", e.target.value)}
-                    placeholder="Nombre de la empresa"
+                    id="razonSocial"
+                    value={formData.razonSocial}
+                    onChange={(e) => handleChange("razonSocial", e.target.value)}
+                    placeholder="Razón social"
                   />
                 </div>
 
@@ -239,9 +690,15 @@ export default function EditarContactoPage() {
                   </div>
                   <div>
                     <Label htmlFor="relation">Relación *</Label>
-                    <Select value={formData.relation} onValueChange={(value) => handleChange("relation", value)}>
-                      <SelectTrigger>
-                        <SelectValue />
+                    <Select 
+                      value={formData.relation || "CUSTOMER"} 
+                      onValueChange={(value) => {
+                        console.log('🔄 Cambiando relación a:', value)
+                        handleChange("relation", value)
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar relación" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="CUSTOMER">Cliente</SelectItem>
@@ -367,21 +824,6 @@ export default function EditarContactoPage() {
               />
             </CardContent>
           </Card>
-
-          {/* Acciones */}
-          <div className="flex gap-4 justify-end">
-            <Link href="/panel/contactos">
-              <Button variant="outline">Cancelar</Button>
-            </Link>
-            <Button 
-              type="submit" 
-              className="bg-[#D54644] hover:bg-[#B03A38]"
-              disabled={saving}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? "Guardando..." : "Guardar Cambios"}
-            </Button>
-          </div>
         </form>
         </main>
       </div>

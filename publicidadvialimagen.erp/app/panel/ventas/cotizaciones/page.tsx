@@ -559,66 +559,37 @@ export default function CotizacionesPage() {
       const cotizacion = data.data.cotizacion
       const lineas = data.data.lineas || []
       
-      // Función para calcular el subtotal sin impuestos
-      // REGLA: El frontend NUNCA aplica IVA ni IT. Solo calcula subtotal sin impuestos.
-      const calcularSubtotalSinImpuestos = (cantidad: number, totalM2: number, precio: number, comision: number, esSoporte: boolean = false, udm?: string) => {
-        let subtotal: number
-        if (esSoporte) {
-          subtotal = cantidad * precio
-        } else {
-          const udmLower = (udm || '').toLowerCase().trim()
-          if (udmLower === 'unidad' || udmLower === 'unidades' || udmLower === 'unidade') {
-            subtotal = cantidad * precio
-          } else {
-            subtotal = cantidad * totalM2 * precio
-          }
-        }
-        
-        const comisionTotal = subtotal * (comision / 100)
-        
-        // NUNCA aplicar IVA/IT aquí - eso lo hace el backend
-        return subtotal + comisionTotal
-      }
+      // ============================================================================
+      // VALIDACIÓN DE CONSISTENCIA INTERNA (no recalcula, solo valida datos almacenados)
+      // ============================================================================
+      // REGLA: Validar que la suma de subtotal_linea sea consistente con total_final
+      // Esto protege contra manipulación manual sin comparar contra recálculos históricos
+      // Tolerancia: 0.05 Bs para errores de redondeo
       
-      // Validar cada producto individualmente
       const lineasProductos = lineas.filter((linea: any) => 
         linea.tipo === 'Producto' || linea.tipo === 'producto' || (linea.nombre_producto || linea.codigo_producto)
       )
       
-      for (const linea of lineasProductos) {
-        const esUnidades = (linea.unidad_medida || '').toLowerCase().trim() === 'unidad' || 
-                          (linea.unidad_medida || '').toLowerCase().trim() === 'unidades' || 
-                          (linea.unidad_medida || '').toLowerCase().trim() === 'unidade'
-        
-        const subtotalCalculado = calcularSubtotalSinImpuestos(
-          linea.cantidad || 1,
-          linea.total_m2 || 0,
-          linea.precio_unitario || 0,
-          linea.comision_porcentaje || linea.comision || 0,
-          linea.es_soporte || esUnidades,
-          linea.unidad_medida
-        )
-        
-        const subtotalLinea = linea.subtotal_linea || 0
-        
-        if (subtotalLinea < subtotalCalculado * 0.99) { // Tolerancia del 1% para redondeos
-          const nombreProducto = linea.nombre_producto || linea.codigo_producto || 'Producto'
-          toast.error(`El producto "${nombreProducto}" tiene un subtotal (${subtotalLinea.toFixed(2)}) menor al calculado (${subtotalCalculado.toFixed(2)}). Por favor corrige antes de descargar.`)
-          setDescargandoPDF(null)
-          return
-        }
-      }
-      
-      // Calcular el subtotal general (sin impuestos) sumando todos los productos
-      let subtotalGeneral = 0
-      lineasProductos.forEach((linea: any) => {
-        subtotalGeneral += linea.subtotal_linea || 0
-      })
+      // Sumar todos los subtotal_linea de productos
+      const sumaSubtotales = lineasProductos.reduce((sum: number, linea: any) => {
+        return sum + (linea.subtotal_linea || 0)
+      }, 0)
       
       const totalFinal = cotizacion.total_final || 0
       
-      // El total_final del backend ya incluye IVA/IT, no necesitamos validar aquí
-      // La validación de precios mínimos ya se hizo arriba para cada línea
+      // Validar consistencia interna con tolerancia para redondeos
+      const TOLERANCIA_CONSISTENCIA = 0.05 // 5 centavos de tolerancia
+      const diferencia = Math.abs(totalFinal - sumaSubtotales)
+      
+      if (diferencia > TOLERANCIA_CONSISTENCIA) {
+        toast.error(
+          `No se puede descargar. Inconsistencia en los totales: ` +
+          `Suma de líneas (${sumaSubtotales.toFixed(2)}) vs Total final (${totalFinal.toFixed(2)}). ` +
+          `Diferencia: ${diferencia.toFixed(2)} Bs. Por favor corrige antes de descargar.`
+        )
+        setDescargandoPDF(null)
+        return
+      }
       
       // Obtener el email y número del comercial asignado a la cotización
       let vendedorEmail: string | undefined = undefined

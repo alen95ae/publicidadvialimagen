@@ -112,6 +112,24 @@ export async function POST(req: Request) {
       contactoData.company = body.company.trim()
     }
     
+    if (body.razonSocial && typeof body.razonSocial === 'string' && body.razonSocial.trim()) {
+      contactoData.razonSocial = body.razonSocial.trim()
+    }
+
+    // personaContacto: array de objetos { id, nombre }
+    if (body.personaContacto && Array.isArray(body.personaContacto) && body.personaContacto.length > 0) {
+      contactoData.personaContacto = body.personaContacto
+    }
+
+    // companyId: para Individual, obtener el nombre de la empresa desde el contacto
+    if (body.companyId && typeof body.companyId === 'string') {
+      // El companyId se usará para obtener el nombre de la empresa
+      // Por ahora, si viene companyId, usamos company como nombre
+      if (body.company && typeof body.company === 'string') {
+        contactoData.company = body.company.trim()
+      }
+    }
+    
     if (body.email && typeof body.email === 'string' && body.email.trim()) {
       contactoData.email = body.email.trim()
     }

@@ -9,6 +9,9 @@ export interface ContactoSupabase {
   nombre: string
   tipo_contacto: 'Individual' | 'Compañía'
   empresa?: string | null
+  company_id?: string | null // ID del contacto empresa (para Individual)
+  razon_social?: string | null
+  persona_contacto?: any | null // JSONB: Array<{ id: string; nombre: string }>
   relacion: 'Cliente' | 'Proveedor' | 'Ambos'
   email?: string | null
   telefono?: string | null
@@ -31,6 +34,9 @@ export interface Contacto {
   displayName: string
   legalName: string
   company: string
+  companyId?: string // ID del contacto empresa (para Individual)
+  razonSocial?: string
+  personaContacto?: Array<{ id: string; nombre: string }> // Array de personas de contacto (para Compañía)
   kind: 'INDIVIDUAL' | 'COMPANY'
   email: string
   phone: string
@@ -52,11 +58,40 @@ export interface Contacto {
  * Convertir contacto de Supabase al formato esperado por el frontend
  */
 export function supabaseToContacto(record: ContactoSupabase): Contacto {
+  // Parsear persona_contacto desde JSON si existe
+  let personaContacto: Array<{ id: string; nombre: string }> | undefined = undefined
+  if (record.persona_contacto) {
+    try {
+      if (typeof record.persona_contacto === 'string') {
+        personaContacto = JSON.parse(record.persona_contacto)
+      } else if (Array.isArray(record.persona_contacto)) {
+        personaContacto = record.persona_contacto
+      }
+    } catch (e) {
+      console.error('Error parseando persona_contacto:', e)
+    }
+  }
+
+  // Mapear relación de español a inglés para el frontend
+  const relationMap: { [key: string]: string } = {
+    'Cliente': 'CUSTOMER',
+    'Proveedor': 'SUPPLIER',
+    'Ambos': 'BOTH',
+    'CUSTOMER': 'CUSTOMER',
+    'SUPPLIER': 'SUPPLIER',
+    'BOTH': 'BOTH'
+  }
+  const relationValue = record.relacion || 'Cliente'
+  const mappedRelation = relationMap[relationValue] || 'CUSTOMER'
+
   return {
     id: record.id,
     displayName: record.nombre || '',
     legalName: record.empresa || '',
     company: record.empresa || '',
+    companyId: record.company_id || '',
+    razonSocial: record.razon_social || '',
+    personaContacto: personaContacto,
     kind: record.tipo_contacto === 'Individual' ? 'INDIVIDUAL' : 'COMPANY',
     email: record.email || '',
     phone: record.telefono || '',
@@ -65,7 +100,7 @@ export function supabaseToContacto(record: ContactoSupabase): Contacto {
     city: record.ciudad || '',
     postalCode: '',
     country: record.pais || 'Bolivia',
-    relation: record.relacion || 'Cliente',
+    relation: mappedRelation,
     website: record.sitio_web || '',
     status: 'activo',
     notes: record.notas || '',
@@ -108,6 +143,24 @@ export function contactoToSupabase(contacto: Partial<Contacto>): Partial<Contact
   // Campos opcionales (nullable)
   if (contacto.company !== undefined) {
     supabaseData.empresa = contacto.company?.trim() || null
+  }
+
+  // company_id: ID del contacto empresa (para Individual)
+  if (contacto.companyId !== undefined) {
+    supabaseData.company_id = contacto.companyId?.trim() || null
+  }
+  
+  if (contacto.razonSocial !== undefined) {
+    supabaseData.razon_social = contacto.razonSocial?.trim() || null
+  }
+
+  // persona_contacto: guardar como JSONB (array de objetos)
+  if (contacto.personaContacto !== undefined) {
+    if (Array.isArray(contacto.personaContacto) && contacto.personaContacto.length > 0) {
+      supabaseData.persona_contacto = contacto.personaContacto
+    } else {
+      supabaseData.persona_contacto = null
+    }
   }
   
   if (contacto.email !== undefined) {
@@ -348,6 +401,9 @@ export async function createContacto(contactoData: Partial<Contacto>): Promise<C
 
   // Agregar campos opcionales solo si tienen valor (solo columnas que existen en la tabla)
   if (supabaseData.empresa !== undefined) insertData.empresa = supabaseData.empresa
+  if (supabaseData.company_id !== undefined) insertData.company_id = supabaseData.company_id
+  if (supabaseData.razon_social !== undefined) insertData.razon_social = supabaseData.razon_social
+  if (supabaseData.persona_contacto !== undefined) insertData.persona_contacto = supabaseData.persona_contacto
   if (supabaseData.email !== undefined) insertData.email = supabaseData.email
   if (supabaseData.telefono !== undefined) insertData.telefono = supabaseData.telefono
   if (supabaseData.nit !== undefined) insertData.nit = supabaseData.nit
@@ -397,6 +453,25 @@ export async function updateContacto(
   // Convertir updates del frontend al formato de Supabase
   const supabaseUpdates = contactoToSupabase(updates)
   
+  console.log('🔄 [updateContacto] Datos recibidos del frontend:', {
+    razonSocial: updates.razonSocial,
+    taxId: updates.taxId,
+    website: updates.website,
+    address: updates.address,
+    address1: (updates as any).address1,
+    city: updates.city,
+    companyId: updates.companyId
+  })
+  
+  console.log('🔄 [updateContacto] Datos convertidos a Supabase:', {
+    razon_social: supabaseUpdates.razon_social,
+    nit: supabaseUpdates.nit,
+    sitio_web: supabaseUpdates.sitio_web,
+    direccion: supabaseUpdates.direccion,
+    ciudad: supabaseUpdates.ciudad,
+    company_id: supabaseUpdates.company_id
+  })
+  
   // Construir updateData solo con columnas que existen en la tabla
   const updateData: any = {
     ...supabaseUpdates,
@@ -405,14 +480,28 @@ export async function updateContacto(
 
   // Eliminar cualquier campo que no exista en la tabla (por seguridad)
   const validColumns = [
-    'nombre', 'tipo_contacto', 'relacion', 'empresa', 'email', 'telefono',
+    'nombre', 'tipo_contacto', 'relacion', 'empresa', 'company_id', 'razon_social', 'persona_contacto', 'email', 'telefono',
     'nit', 'direccion', 'ciudad', 'pais', 'sitio_web', 'notas', 'comercial',
     'fecha_creacion', 'fecha_actualizacion', 'created_at', 'updated_at'
   ]
   
   Object.keys(updateData).forEach(key => {
     if (!validColumns.includes(key)) {
+      console.log(`⚠️ [updateContacto] Eliminando campo inválido: ${key}`)
       delete updateData[key]
+    }
+  })
+
+  console.log('📋 [updateContacto] Datos finales a actualizar:', {
+    id,
+    campos: Object.keys(updateData),
+    valores: {
+      razon_social: updateData.razon_social,
+      nit: updateData.nit,
+      sitio_web: updateData.sitio_web,
+      direccion: updateData.direccion,
+      ciudad: updateData.ciudad,
+      company_id: updateData.company_id
     }
   })
 

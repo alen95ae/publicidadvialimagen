@@ -26,7 +26,10 @@ import {
   FileText,
   Loader2,
   CheckCircle,
-  XCircle
+  XCircle,
+  Copy,
+  Building2,
+  User
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -403,6 +406,42 @@ export default function EditarCotizacionPage() {
     setProductosList(newList)
   }
 
+  const duplicarItem = (index: number) => {
+    const item = productosList[index]
+    if (!item) return
+
+    // Crear una copia completa del item con nuevo ID
+    const itemDuplicado: ItemLista = {
+      ...item,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    }
+
+    // Si es un producto, asegurar que se copien todas las propiedades
+    if (item.tipo === 'producto') {
+      const producto = item as ProductoItem
+      const productoDuplicado: ProductoItem = {
+        ...producto,
+        id: itemDuplicado.id,
+        // Copiar todas las propiedades específicas del producto
+        imagen: producto.imagen,
+        imagenOriginalUrl: producto.imagenOriginalUrl,
+        variantes: producto.variantes ? { ...producto.variantes } : null,
+        totalManual: producto.totalManual
+      }
+      // Insertar después del item actual
+      const newList = [...productosList]
+      newList.splice(index + 1, 0, productoDuplicado)
+      setProductosList(newList)
+    } else {
+      // Para notas y secciones, simplemente duplicar
+      const newList = [...productosList]
+      newList.splice(index + 1, 0, itemDuplicado)
+      setProductosList(newList)
+    }
+
+    toast.success("Item duplicado")
+  }
+
   // Estados para drag and drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
@@ -411,6 +450,36 @@ export default function EditarCotizacionPage() {
   const [todosLosClientes, setTodosLosClientes] = useState<any[]>([])
   const [filteredClientes, setFilteredClientes] = useState<any[]>([])
   const [cargandoClientes, setCargandoClientes] = useState(false)
+  const [clienteSearchValue, setClienteSearchValue] = useState("")
+
+  // Estados para el modal de nuevo cliente
+  const [openNuevoClienteModal, setOpenNuevoClienteModal] = useState(false)
+  const [nuevoClienteFormData, setNuevoClienteFormData] = useState({
+    kind: "COMPANY" as "INDIVIDUAL" | "COMPANY",
+    relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH",
+    displayName: "",
+    company: "",
+    companyId: "",
+    razonSocial: "",
+    personaContacto: [] as Array<{ id: string; nombre: string }>,
+    taxId: "",
+    phone: "",
+    email: "",
+    website: "",
+    address1: "",
+    city: "",
+    country: "Bolivia",
+    salesOwnerId: "none",
+    notes: "",
+  })
+  const [nuevoClienteLoading, setNuevoClienteLoading] = useState(false)
+  const [nuevoClienteTodosLosContactos, setNuevoClienteTodosLosContactos] = useState<any[]>([])
+  const [nuevoClienteFilteredEmpresas, setNuevoClienteFilteredEmpresas] = useState<any[]>([])
+  const [nuevoClienteOpenEmpresaCombobox, setNuevoClienteOpenEmpresaCombobox] = useState(false)
+  const [nuevoClienteFilteredPersonasContacto, setNuevoClienteFilteredPersonasContacto] = useState<any[]>([])
+  const [nuevoClienteOpenPersonaContactoCombobox, setNuevoClienteOpenPersonaContactoCombobox] = useState(false)
+  const [nuevoClientePersonaContactoInputValue, setNuevoClientePersonaContactoInputValue] = useState("")
+  const [nuevoClienteSalesOwners, setNuevoClienteSalesOwners] = useState<any[]>([])
 
   // Estados para el combobox de comerciales
   const [openComercialCombobox, setOpenComercialCombobox] = useState(false)
@@ -923,6 +992,7 @@ export default function EditarCotizacionPage() {
 
   // Función de filtrado para clientes
   const filtrarClientes = (query: string) => {
+    setClienteSearchValue(query)
     if (!query || query.trim() === '') {
       setFilteredClientes(todosLosClientes.slice(0, 50))
       return
@@ -938,6 +1008,177 @@ export default function EditarCotizacionPage() {
     }).slice(0, 100)
 
     setFilteredClientes(filtered)
+  }
+
+  // Cargar contactos para el modal de nuevo cliente
+  useEffect(() => {
+    if (openNuevoClienteModal) {
+      const cargarDatos = async () => {
+        try {
+          // Cargar contactos
+          const contactosRes = await fetch('/api/contactos')
+          if (contactosRes.ok) {
+            const contactosData = await contactosRes.json()
+            const contactos = contactosData.data || []
+            setNuevoClienteTodosLosContactos(contactos)
+            const empresas = contactos.filter((c: any) => c.kind === 'COMPANY')
+            setNuevoClienteFilteredEmpresas(empresas.slice(0, 50))
+            setNuevoClienteFilteredPersonasContacto(contactos.slice(0, 50))
+          }
+          
+          // Cargar comerciales
+          const comercialesRes = await fetch('/api/public/comerciales')
+          if (comercialesRes.ok) {
+            const comercialesData = await comercialesRes.json()
+            setNuevoClienteSalesOwners(comercialesData.users || [])
+          }
+        } catch (error) {
+          console.error('Error cargando datos para nuevo cliente:', error)
+        }
+      }
+      cargarDatos()
+    }
+  }, [openNuevoClienteModal])
+
+  // Filtrar empresas para el modal
+  const nuevoClienteFiltrarEmpresas = (query: string) => {
+    if (!query || query.trim() === '') {
+      const empresas = nuevoClienteTodosLosContactos.filter((c: any) => c.kind === 'COMPANY')
+      setNuevoClienteFilteredEmpresas(empresas.slice(0, 50))
+      return
+    }
+    const search = query.toLowerCase().trim()
+    const empresas = nuevoClienteTodosLosContactos.filter((c: any) => {
+      if (c.kind !== 'COMPANY') return false
+      const nombre = (c.displayName || '').toLowerCase()
+      const empresa = (c.legalName || c.company || '').toLowerCase()
+      return nombre.includes(search) || empresa.includes(search)
+    }).slice(0, 100)
+    setNuevoClienteFilteredEmpresas(empresas)
+  }
+
+  // Filtrar personas de contacto para el modal
+  const nuevoClienteFiltrarPersonasContacto = (query: string) => {
+    if (!query || query.trim() === '') {
+      setNuevoClienteFilteredPersonasContacto(nuevoClienteTodosLosContactos.slice(0, 50))
+      return
+    }
+    const search = query.toLowerCase().trim()
+    const filtered = nuevoClienteTodosLosContactos.filter((c: any) => {
+      const nombre = (c.displayName || '').toLowerCase()
+      const empresa = (c.legalName || c.company || '').toLowerCase()
+      return nombre.includes(search) || empresa.includes(search)
+    }).slice(0, 100)
+    setNuevoClienteFilteredPersonasContacto(filtered)
+  }
+
+  // Agregar persona de contacto en el modal
+  const nuevoClienteAgregarPersonaContacto = (contacto: any) => {
+    const yaExiste = nuevoClienteFormData.personaContacto.some(p => p.id === contacto.id)
+    if (!yaExiste) {
+      setNuevoClienteFormData(prev => ({
+        ...prev,
+        personaContacto: [...prev.personaContacto, { id: contacto.id, nombre: contacto.displayName }]
+      }))
+    }
+    setNuevoClientePersonaContactoInputValue("")
+    setNuevoClienteOpenPersonaContactoCombobox(false)
+  }
+
+  // Remover persona de contacto en el modal
+  const nuevoClienteRemoverPersonaContacto = (id: string) => {
+    setNuevoClienteFormData(prev => ({
+      ...prev,
+      personaContacto: prev.personaContacto.filter(p => p.id !== id)
+    }))
+  }
+
+  // Guardar nuevo cliente
+  const guardarNuevoCliente = async () => {
+    if (!nuevoClienteFormData.displayName) {
+      toast.error("El nombre es requerido")
+      return
+    }
+
+    setNuevoClienteLoading(true)
+    try {
+      const submitData = {
+        ...nuevoClienteFormData,
+        salesOwnerId: nuevoClienteFormData.salesOwnerId === "none" ? null : nuevoClienteFormData.salesOwnerId,
+        ...(nuevoClienteFormData.kind === "INDIVIDUAL" 
+          ? { 
+              companyId: nuevoClienteFormData.companyId || null,
+              company: nuevoClienteFormData.company || null
+            }
+          : { personaContacto: nuevoClienteFormData.personaContacto.length > 0 ? nuevoClienteFormData.personaContacto : null }
+        )
+      }
+
+      const response = await fetch("/api/contactos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submitData)
+      })
+
+      if (response.ok) {
+        const nuevoContacto = await response.json()
+        toast.success("Cliente creado correctamente")
+        
+        // Recargar lista de clientes
+        const clientesRes = await fetch('/api/contactos?relation=Cliente')
+        const clientesData = await clientesRes.json()
+        setTodosLosClientes(clientesData.data || [])
+        
+        // Seleccionar el nuevo cliente
+        setCliente(nuevoContacto.id)
+        setOpenClienteCombobox(false)
+        setOpenNuevoClienteModal(false)
+        
+        // Limpiar formulario
+        setNuevoClienteFormData({
+          kind: "COMPANY",
+          relation: "CUSTOMER",
+          displayName: "",
+          company: "",
+          companyId: "",
+          razonSocial: "",
+          personaContacto: [],
+          taxId: "",
+          phone: "",
+          email: "",
+          website: "",
+          address1: "",
+          city: "",
+          country: "Bolivia",
+          salesOwnerId: "none",
+          notes: "",
+        })
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Error al crear el cliente")
+      }
+    } catch (error) {
+      console.error("Error guardando nuevo cliente:", error)
+      toast.error("Error de conexión")
+    } finally {
+      setNuevoClienteLoading(false)
+    }
+  }
+
+  // Abrir modal de nuevo cliente (con nombre prellenado si viene de búsqueda)
+  const abrirModalNuevoCliente = (nombrePrellenado?: string) => {
+    console.log('🚀 Abriendo modal de nuevo cliente, nombre prellenado:', nombrePrellenado)
+    setNuevoClienteFormData(prev => {
+      const nuevoEstado = {
+        ...prev,
+        displayName: nombrePrellenado || "",
+        relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH" // Asegurar valor por defecto
+      }
+      console.log('📝 Estado inicial del formulario:', nuevoEstado)
+      return nuevoEstado
+    })
+    setOpenNuevoClienteModal(true)
+    setOpenClienteCombobox(false)
   }
 
   // Función de filtrado para comerciales
@@ -1830,10 +2071,45 @@ export default function EditarCotizacionPage() {
         return
       }
 
-      // Validar que el subtotal general no sea menor al calculado (con tolerancia del 1%)
-      if (totalGeneralReal < totalCalculado * 0.99) {
-        toast.error(`No se puede descargar. El subtotal (${totalGeneralReal.toFixed(2)}) es menor al calculado (${totalCalculado.toFixed(2)}). Por favor corrige antes de descargar.`)
-        return
+      // ============================================================================
+      // VALIDACIÓN DE CONSISTENCIA INTERNA (contra datos almacenados)
+      // ============================================================================
+      // Validar que la suma de subtotal_linea sea consistente con total_final almacenado
+      // Esto protege contra manipulación manual sin comparar contra recálculos históricos
+      
+      try {
+        const response = await fetch(`/api/cotizaciones/${cotizacionId}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            const cotizacion = data.data.cotizacion
+            const lineas = data.data.lineas || []
+            
+            const lineasProductos = lineas.filter((linea: any) => 
+              linea.tipo === 'Producto' || linea.tipo === 'producto' || (linea.nombre_producto || linea.codigo_producto)
+            )
+            
+            const sumaSubtotales = lineasProductos.reduce((sum: number, linea: any) => {
+              return sum + (linea.subtotal_linea || 0)
+            }, 0)
+            
+            const totalFinal = cotizacion.total_final || 0
+            const TOLERANCIA_CONSISTENCIA = 0.05 // 5 centavos de tolerancia
+            const diferencia = Math.abs(totalFinal - sumaSubtotales)
+            
+            if (diferencia > TOLERANCIA_CONSISTENCIA) {
+              toast.error(
+                `No se puede descargar. Inconsistencia en los totales: ` +
+                `Suma de líneas (${sumaSubtotales.toFixed(2)}) vs Total final (${totalFinal.toFixed(2)}). ` +
+                `Diferencia: ${diferencia.toFixed(2)} Bs. Por favor corrige antes de descargar.`
+              )
+              return
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error validando consistencia:', error)
+        // Continuar si falla la validación (no bloquear por error técnico)
       }
 
       const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
@@ -1876,10 +2152,20 @@ export default function EditarCotizacionPage() {
         console.error('Error obteniendo datos del comercial asignado:', error)
       }
 
+      // Determinar qué mostrar como información secundaria del cliente
+      let clienteInfoSecundaria = ''
+      if (clienteSeleccionado) {
+        if (clienteSeleccionado.kind === 'INDIVIDUAL' && clienteSeleccionado.legalName) {
+          clienteInfoSecundaria = clienteSeleccionado.legalName
+        } else if (clienteSeleccionado.kind === 'COMPANY' && clienteSeleccionado.personaContacto && clienteSeleccionado.personaContacto.length > 0) {
+          clienteInfoSecundaria = clienteSeleccionado.personaContacto[0].nombre
+        }
+      }
+
       await generarPDFCotizacion({
         codigo: codigoCotizacion || 'SIN-CODIGO',
         cliente: clienteSeleccionado?.displayName || cliente,
-        clienteNombreCompleto: clienteSeleccionado?.legalName || clienteSeleccionado?.displayName,
+        clienteNombreCompleto: clienteInfoSecundaria || clienteSeleccionado?.displayName,
         sucursal: sucursal || '',
         vendedor: nombreVendedor,
         vendedorEmail: vendedorEmail,
@@ -2075,7 +2361,13 @@ export default function EditarCotizacionPage() {
                                 <Check className={cn("mr-2 h-4 w-4", cliente === c.id ? "opacity-100" : "opacity-0")} />
                                 <div className="flex flex-col">
                                   <span className="font-medium">{c.displayName}</span>
-                                  {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                  {/* Mostrar empresa si es Individual, o primera persona de contacto si es Compañía */}
+                                  {c.kind === 'INDIVIDUAL' && c.legalName && (
+                                    <span className="text-xs text-gray-500">{c.legalName}</span>
+                                  )}
+                                  {c.kind === 'COMPANY' && c.personaContacto && c.personaContacto.length > 0 && (
+                                    <span className="text-xs text-gray-500">{c.personaContacto[0].nombre}</span>
+                                  )}
                                 </div>
                               </CommandItem>
                             ))}
@@ -2430,6 +2722,15 @@ export default function EditarCotizacionPage() {
                                   <ChevronDown className="w-2.5 h-2.5 text-gray-400" />
                                 </Button>
                               </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => duplicarItem(index)}
+                                className="h-3 w-3 p-0 hover:bg-transparent ml-0.5"
+                                title="Duplicar item"
+                              >
+                                <Copy className="w-2.5 h-2.5 text-gray-400" />
+                              </Button>
                             </div>
                           </td>
                           <td className="py-2 px-2">
@@ -3421,6 +3722,446 @@ export default function EditarCotizacionPage() {
                   </>
                 ) : (
                   'Confirmar y Aprobar'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de Nuevo Cliente */}
+        <Dialog open={openNuevoClienteModal} onOpenChange={setOpenNuevoClienteModal}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Crear Nuevo Cliente</DialogTitle>
+              <DialogDescription>Completa los datos del nuevo cliente</DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6 py-4">
+              {/* Tipo de contacto */}
+              <div className="flex gap-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="nuevo-kind-company"
+                    name="nuevo-kind"
+                    value="COMPANY"
+                    checked={nuevoClienteFormData.kind === "COMPANY"}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, kind: e.target.value as "INDIVIDUAL" | "COMPANY" }))}
+                    className="w-4 h-4 text-[#D54644]"
+                  />
+                  <Label htmlFor="nuevo-kind-company" className="flex items-center gap-2 cursor-pointer">
+                    <Building2 className="w-4 h-4" />
+                    Compañía
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="nuevo-kind-individual"
+                    name="nuevo-kind"
+                    value="INDIVIDUAL"
+                    checked={nuevoClienteFormData.kind === "INDIVIDUAL"}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, kind: e.target.value as "INDIVIDUAL" | "COMPANY" }))}
+                    className="w-4 h-4 text-[#D54644]"
+                  />
+                  <Label htmlFor="nuevo-kind-individual" className="flex items-center gap-2 cursor-pointer">
+                    <User className="w-4 h-4" />
+                    Individual
+                  </Label>
+                </div>
+              </div>
+
+              {/* Nombre del contacto */}
+              <div>
+                <Label htmlFor="nuevo-displayName">Nombre del Contacto *</Label>
+                <Input
+                  id="nuevo-displayName"
+                  value={nuevoClienteFormData.displayName}
+                  onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, displayName: e.target.value }))}
+                  placeholder={nuevoClienteFormData.kind === "COMPANY" ? "Nombre de la empresa" : "Nombre completo"}
+                  required
+                />
+              </div>
+
+              {/* Empresa (Individual) o Persona de Contacto (Compañía) */}
+              {nuevoClienteFormData.kind === "INDIVIDUAL" ? (
+                <div>
+                  <Label htmlFor="nuevo-company">Empresa</Label>
+                  <Popover open={nuevoClienteOpenEmpresaCombobox} onOpenChange={setNuevoClienteOpenEmpresaCombobox}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-between",
+                          !nuevoClienteFormData.companyId && "text-muted-foreground"
+                        )}
+                      >
+                        <span className="truncate">
+                          {nuevoClienteFormData.company || nuevoClienteFormData.companyId
+                            ? (nuevoClienteFormData.company || nuevoClienteTodosLosContactos.find(c => c.id === nuevoClienteFormData.companyId && c.kind === 'COMPANY')?.displayName || "Seleccionar empresa")
+                            : "Seleccionar empresa"}
+                        </span>
+                        <Check className={cn("ml-2 h-4 w-4 shrink-0", nuevoClienteFormData.companyId ? "opacity-100" : "opacity-0")} />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false} className="overflow-visible">
+                        <CommandInput
+                          placeholder="Buscar empresa..."
+                          className="h-9 border-0 focus:ring-0"
+                          onValueChange={nuevoClienteFiltrarEmpresas}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No se encontraron empresas.</CommandEmpty>
+                          <CommandGroup>
+                            {nuevoClienteFilteredEmpresas.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.displayName}
+                                onSelect={async () => {
+                                  // Cargar datos completos de la empresa
+                                  try {
+                                    const empresaRes = await fetch(`/api/contactos/${c.id}`)
+                                    if (empresaRes.ok) {
+                                      const empresaData = await empresaRes.json()
+                                      console.log('📋 Datos RAW de empresa:', JSON.stringify(empresaData, null, 2))
+                                      
+                                      // Importar datos de la empresa al nuevo contacto
+                                      setNuevoClienteFormData(prev => {
+                                        const nuevosDatos = {
+                                          ...prev,
+                                          companyId: c.id,
+                                          company: c.displayName,
+                                          // Importar razón social: solo si el campo actual está vacío
+                                          razonSocial: prev.razonSocial?.trim() 
+                                            ? prev.razonSocial 
+                                            : (empresaData.razonSocial || empresaData.razon_social || ""),
+                                          // Importar NIT: mapear nit → taxId
+                                          taxId: prev.taxId?.trim() 
+                                            ? prev.taxId 
+                                            : (empresaData.taxId || empresaData.nit || ""),
+                                          // Importar sitio web: mapear sitio_web → website
+                                          website: prev.website?.trim() 
+                                            ? prev.website 
+                                            : (empresaData.website || empresaData.sitio_web || ""),
+                                          // Importar dirección: mapear address/direccion → address1
+                                          address1: prev.address1?.trim() 
+                                            ? prev.address1 
+                                            : (empresaData.address || empresaData.address1 || empresaData.direccion || ""),
+                                          // Importar ciudad: mapear ciudad → city
+                                          city: prev.city?.trim() 
+                                            ? prev.city 
+                                            : (empresaData.city || empresaData.ciudad || "")
+                                        }
+                                        console.log('✅ Datos importados al formulario:', {
+                                          razonSocial: nuevosDatos.razonSocial,
+                                          taxId: nuevosDatos.taxId,
+                                          website: nuevosDatos.website,
+                                          address1: nuevosDatos.address1,
+                                          city: nuevosDatos.city
+                                        })
+                                        
+                                        // Forzar re-render después de un pequeño delay para asegurar que los campos se actualicen
+                                        setTimeout(() => {
+                                          console.log('🔄 Verificando estado después de importación:', {
+                                            razonSocial: nuevosDatos.razonSocial,
+                                            taxId: nuevosDatos.taxId,
+                                            website: nuevosDatos.website,
+                                            address1: nuevosDatos.address1,
+                                            city: nuevosDatos.city
+                                          })
+                                        }, 100)
+                                        
+                                        return nuevosDatos
+                                      })
+                                    } else {
+                                      console.error('❌ Error cargando empresa:', empresaRes.status)
+                                      // Si no se puede cargar, al menos guardar el ID y nombre
+                                      setNuevoClienteFormData(prev => ({
+                                        ...prev,
+                                        companyId: c.id,
+                                        company: c.displayName
+                                      }))
+                                    }
+                                  } catch (error) {
+                                    console.error('❌ Error cargando datos de empresa:', error)
+                                    // En caso de error, al menos guardar el ID y nombre
+                                    setNuevoClienteFormData(prev => ({
+                                      ...prev,
+                                      companyId: c.id,
+                                      company: c.displayName
+                                    }))
+                                  }
+                                  setNuevoClienteOpenEmpresaCombobox(false)
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", nuevoClienteFormData.companyId === c.id ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{c.displayName}</span>
+                                  {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              ) : (
+                <div>
+                  <Label>Persona de Contacto</Label>
+                  <Popover open={nuevoClienteOpenPersonaContactoCombobox} onOpenChange={setNuevoClienteOpenPersonaContactoCombobox}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between"
+                      >
+                        <span className="text-muted-foreground">Buscar y agregar persona de contacto...</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false} className="overflow-visible">
+                        <CommandInput
+                          placeholder="Buscar contacto..."
+                          className="h-9 border-0 focus:ring-0"
+                          value={nuevoClientePersonaContactoInputValue}
+                          onValueChange={(value) => {
+                            setNuevoClientePersonaContactoInputValue(value)
+                            nuevoClienteFiltrarPersonasContacto(value)
+                          }}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No se encontraron contactos.</CommandEmpty>
+                          <CommandGroup>
+                            {nuevoClienteFilteredPersonasContacto.map((c) => {
+                              const yaExiste = nuevoClienteFormData.personaContacto.some(p => p.id === c.id)
+                              return (
+                                <CommandItem
+                                  key={c.id}
+                                  value={c.displayName}
+                                  onSelect={() => nuevoClienteAgregarPersonaContacto(c)}
+                                  className={cn("cursor-pointer", yaExiste && "opacity-50")}
+                                  disabled={yaExiste}
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", yaExiste ? "opacity-100" : "opacity-0")} />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{c.displayName}</span>
+                                    {c.legalName && <span className="text-xs text-gray-500">{c.legalName}</span>}
+                                  </div>
+                                </CommandItem>
+                              )
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  
+                  {/* Chips de personas de contacto */}
+                  {nuevoClienteFormData.personaContacto && nuevoClienteFormData.personaContacto.length > 0 && (
+                    <div className="min-h-[60px] w-full rounded-md border border-gray-200 bg-white p-3 mt-2">
+                      <div className="flex flex-wrap gap-2">
+                        {nuevoClienteFormData.personaContacto.map((persona) => (
+                          <div
+                            key={persona.id}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800"
+                          >
+                            <span>{persona.nombre}</span>
+                            <button
+                              type="button"
+                              onClick={() => nuevoClienteRemoverPersonaContacto(persona.id)}
+                              className="ml-1 hover:bg-gray-200 rounded-full p-0.5 transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Razón Social */}
+              <div>
+                <Label htmlFor="nuevo-razonSocial">Razón Social</Label>
+                <Input
+                  id="nuevo-razonSocial"
+                  value={nuevoClienteFormData.razonSocial}
+                  onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, razonSocial: e.target.value }))}
+                  placeholder="Razón social"
+                />
+              </div>
+
+              {/* NIT y Relación */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="nuevo-taxId">NIT</Label>
+                  <Input
+                    id="nuevo-taxId"
+                    value={nuevoClienteFormData.taxId}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, taxId: e.target.value }))}
+                    placeholder="Número de identificación tributaria"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nuevo-relation">Relación *</Label>
+                  <Select 
+                    value={nuevoClienteFormData.relation || "CUSTOMER"} 
+                    onValueChange={(value) => {
+                      console.log('🔄 Cambiando relación a:', value)
+                      setNuevoClienteFormData(prev => ({ ...prev, relation: value as "CUSTOMER" | "SUPPLIER" | "BOTH" }))
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar relación" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CUSTOMER">Cliente</SelectItem>
+                      <SelectItem value="SUPPLIER">Proveedor</SelectItem>
+                      <SelectItem value="BOTH">Ambos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+              </div>
+
+              {/* Información de contacto */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="nuevo-phone">Teléfono</Label>
+                  <Input
+                    id="nuevo-phone"
+                    value={nuevoClienteFormData.phone}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+591 2 123456"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nuevo-email">Email</Label>
+                  <Input
+                    id="nuevo-email"
+                    type="email"
+                    value={nuevoClienteFormData.email}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="contacto@empresa.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nuevo-website">Sitio Web</Label>
+                  <Input
+                    id="nuevo-website"
+                    value={nuevoClienteFormData.website}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, website: e.target.value }))}
+                    placeholder="https://www.empresa.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nuevo-salesOwnerId">Comercial Asignado</Label>
+                  <Select value={nuevoClienteFormData.salesOwnerId} onValueChange={(value) => setNuevoClienteFormData(prev => ({ ...prev, salesOwnerId: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar comercial" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin asignar</SelectItem>
+                      {nuevoClienteSalesOwners.map(owner => (
+                        <SelectItem key={owner.id} value={owner.id}>{owner.nombre || owner.name || ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Dirección */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="nuevo-address1">Dirección</Label>
+                  <Input
+                    id="nuevo-address1"
+                    value={nuevoClienteFormData.address1}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, address1: e.target.value }))}
+                    placeholder="Calle y número"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nuevo-city">Ciudad</Label>
+                  <Input
+                    id="nuevo-city"
+                    value={nuevoClienteFormData.city}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, city: e.target.value }))}
+                    placeholder="Ciudad"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nuevo-country">País</Label>
+                  <Input
+                    id="nuevo-country"
+                    value={nuevoClienteFormData.country}
+                    onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, country: e.target.value }))}
+                    placeholder="País"
+                  />
+                </div>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <Label htmlFor="nuevo-notes">Notas</Label>
+                <Textarea
+                  id="nuevo-notes"
+                  placeholder="Escribe notas adicionales sobre este contacto..."
+                  value={nuevoClienteFormData.notes}
+                  onChange={(e) => setNuevoClienteFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  rows={4}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpenNuevoClienteModal(false)
+                  setNuevoClienteFormData({
+                    kind: "COMPANY",
+                    relation: "CUSTOMER",
+                    displayName: "",
+                    company: "",
+                    companyId: "",
+                    razonSocial: "",
+                    personaContacto: [],
+                    taxId: "",
+                    phone: "",
+                    email: "",
+                    website: "",
+                    address1: "",
+                    city: "",
+                    country: "Bolivia",
+                    salesOwnerId: "none",
+                    notes: "",
+                  })
+                }}
+                disabled={nuevoClienteLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={guardarNuevoCliente}
+                disabled={nuevoClienteLoading || !nuevoClienteFormData.displayName}
+                className="bg-[#D54644] hover:bg-[#B03A38]"
+              >
+                {nuevoClienteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Guardar
+                  </>
                 )}
               </Button>
             </DialogFooter>

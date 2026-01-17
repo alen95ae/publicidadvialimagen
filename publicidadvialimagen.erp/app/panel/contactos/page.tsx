@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle } from "lucide-react"
+import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle, X } from "lucide-react"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { PermisoEliminar } from "@/components/permiso"
@@ -76,11 +76,70 @@ export default function ContactosPage() {
     relation: "ALL",
     kind: "ALL"
   })
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
+
+  // 1) Cargar los filtros una sola vez al montar
+  useEffect(() => {
+    const saved = sessionStorage.getItem("contactos_filtros")
+    
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        setFilters({
+          q: f.q ?? "",
+          relation: f.relation ?? "ALL",
+          kind: f.kind ?? "ALL"
+        })
+      } catch (error) {
+        console.error('❌ Error parseando filtros guardados:', error)
+      }
+    }
+    
+    setFiltersLoaded(true)
+  }, [])
+
+  // 2) Guardar los filtros cuando cambien
+  useEffect(() => {
+    if (!filtersLoaded) return
+    
+    sessionStorage.setItem("contactos_filtros", JSON.stringify({
+      q: filters.q,
+      relation: filters.relation,
+      kind: filters.kind
+    }))
+  }, [filters, filtersLoaded])
+
+  // Función para eliminar un filtro específico
+  const eliminarFiltro = (tipo: 'busqueda' | 'relacion' | 'tipo') => {
+    switch (tipo) {
+      case 'busqueda':
+        setFilters(prev => ({ ...prev, q: "" }))
+        break
+      case 'relacion':
+        setFilters(prev => ({ ...prev, relation: "ALL" }))
+        break
+      case 'tipo':
+        setFilters(prev => ({ ...prev, kind: "ALL" }))
+        break
+    }
+  }
+
+  // Función para limpiar todos los filtros
+  const limpiarTodosFiltros = () => {
+    setFilters({
+      q: "",
+      relation: "ALL",
+      kind: "ALL"
+    })
+    sessionStorage.removeItem('contactos_filtros')
+  }
 
   useEffect(() => {
-    fetchContacts(1)
-    fetchSalesOwners()
-  }, [filters])
+    if (filtersLoaded) {
+      fetchContacts(1)
+      fetchSalesOwners()
+    }
+  }, [filters, filtersLoaded])
 
   const fetchSalesOwners = async () => {
     try {
@@ -515,6 +574,62 @@ export default function ContactosPage() {
 
         {/* Barra superior sticky */}
         <div className="sticky top-0 z-10 bg-white border border-gray-200 rounded-lg p-4 mb-6 shadow-sm">
+          {/* Etiquetas de filtros activos */}
+          {(filters.q || filters.relation !== "ALL" || filters.kind !== "ALL") && (
+            <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
+              {filters.q && (
+                <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Búsqueda:</span>
+                  <span className="text-gray-700">{filters.q}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('busqueda')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {filters.relation !== "ALL" && (
+                <div className="flex items-center gap-1 bg-green-100 hover:bg-green-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Relación:</span>
+                  <span className="text-gray-700">{getRelationLabel(filters.relation)}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('relacion')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {filters.kind !== "ALL" && (
+                <div className="flex items-center gap-1 bg-purple-100 hover:bg-purple-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Tipo:</span>
+                  <span className="text-gray-700">{filters.kind === "INDIVIDUAL" ? "Individual" : "Compañía"}</span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('tipo')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
+              {/* Botón para limpiar todos */}
+              <button
+                type="button"
+                onClick={limpiarTodosFiltros}
+                className="text-sm text-gray-500 hover:text-gray-700 underline ml-2"
+              >
+                Limpiar todo
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-3 items-center">
             {/* Búsqueda - Izquierda */}
             <div className="flex-1 min-w-[200px] max-w-md">

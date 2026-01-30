@@ -12,17 +12,19 @@ import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown } from "lucide-react"
+import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown, BookOpen } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
 import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta, Auxiliar } from "@/lib/types/contabilidad"
+import { LcModal, type LcRegistroDatos } from "./LcModal"
 
 interface ComprobanteFormProps {
   comprobante: Comprobante | null
   onNew: () => void
   onSave: () => void
-  plantillaParaAplicar?: string // Código de plantilla para aplicar automáticamente
+  /** Se llama al aprobar; el padre puede actualizar la selección para habilitar Exportar PDF */
+  onAprobado?: (comprobante: Comprobante) => void
 }
 
 const ORIGENES: OrigenComprobante[] = ["Contabilidad", "Ventas", "Tesorería", "Activos", "Planillas"]
@@ -79,7 +81,22 @@ const MESES = [
   { value: 12, label: "Diciembre" },
 ]
 
-export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaParaAplicar }: ComprobanteFormProps) {
+/** Una línea vacía por defecto para que el detalle tenga siempre al menos una fila */
+function createDefaultDetalleLine(): ComprobanteDetalle {
+  return {
+    cuenta: "",
+    auxiliar: null,
+    glosa: null,
+    debe_bs: 0,
+    haber_bs: 0,
+    debe_usd: 0,
+    haber_usd: 0,
+    orden: 1,
+    esCalculado: false,
+  }
+}
+
+export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado }: ComprobanteFormProps) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
@@ -100,11 +117,15 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   const [cargandoContactos, setCargandoContactos] = useState(false)
   const [beneficiarioId, setBeneficiarioId] = useState<string | null>(null)
 
-  // Estados para plantillas contables
-  const [plantillas, setPlantillas] = useState<any[]>([])
-  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState<string>("")
-  const [aplicandoPlantilla, setAplicandoPlantilla] = useState(false)
   const [guardandoComprobante, setGuardandoComprobante] = useState(false)
+
+  // Libro de Compras (LC): un registro por línea de detalle (cada línea tiene su propio LC en BD)
+  const [lcModalOpen, setLcModalOpen] = useState(false)
+  const [lcOpenedFromLineIndex, setLcOpenedFromLineIndex] = useState<number | null>(null)
+  const [lcLineIndex, setLcLineIndex] = useState<number | null>(null)
+  const [lcDataByLineIndex, setLcDataByLineIndex] = useState<Record<number, LcRegistroDatos>>({})
+  const [lcDraftByLineIndex, setLcDraftByLineIndex] = useState<Record<number, LcRegistroDatos>>({})
+  const [lcSaving, setLcSaving] = useState(false)
 
   // Estado del formulario
   const [formData, setFormData] = useState<Partial<Comprobante>>({
@@ -115,11 +136,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     periodo: new Date().getMonth() + 1,
     gestion: new Date().getFullYear(),
     moneda: "BS",
-    tipo_cambio: 1,
+    tipo_cambio: 6.96,
     estado: "BORRADOR",
   })
 
-  const [detalles, setDetalles] = useState<ComprobanteDetalle[]>([])
+  const [detalles, setDetalles] = useState<ComprobanteDetalle[]>(() => [createDefaultDetalleLine()])
 
   // Cargar cuentas transaccionales
   useEffect(() => {
@@ -150,23 +171,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     cargarContactos()
   }, [])
 
-  // Cargar plantillas contables
-  useEffect(() => {
-    const cargarPlantillas = async () => {
-      try {
-        const response = await fetch('/api/contabilidad/plantillas')
-        if (response.ok) {
-          const data = await response.json()
-          setPlantillas(data.data || [])
-        }
-      } catch (error) {
-        console.error('Error cargando plantillas:', error)
-      }
-    }
-
-    cargarPlantillas()
-  }, [])
-
   // Sincronizar beneficiarioId cuando se cargan los contactos y hay un comprobante con beneficiario
   useEffect(() => {
     if (comprobante?.beneficiario && todosLosContactos.length > 0) {
@@ -184,22 +188,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       setBeneficiarioId(null)
     }
   }, [comprobante?.beneficiario, todosLosContactos.length])
-
-  // Abrir automáticamente el diálogo de plantilla si se pasa plantillaParaAplicar
-  useEffect(() => {
-    if (plantillaParaAplicar && comprobante && comprobante.estado === "BORRADOR" && plantillas.length > 0) {
-      const plantillaExiste = plantillas.find((p) => p.codigo === plantillaParaAplicar)
-      if (plantillaExiste) {
-        setPlantillaSeleccionada(plantillaParaAplicar)
-        // Pequeño delay para asegurar que el comprobante esté cargado
-        setTimeout(() => {
-          setPlantillaSeleccionada(plantillaParaAplicar)
-          handleAplicarPlantilla()
-          console.log("📋 Aplicando plantilla automáticamente:", plantillaParaAplicar)
-        }, 300) // Aumentado a 300ms para dar tiempo a que se carguen los detalles
-      }
-    }
-  }, [plantillaParaAplicar, comprobante?.id, plantillas.length])
 
   // Inicializar filtros cuando se cargan las cuentas y hay detalles
   useEffect(() => {
@@ -248,7 +236,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
         periodo: comprobante.periodo,
         gestion: comprobante.gestion,
         moneda: comprobante.moneda,
-        tipo_cambio: comprobante.tipo_cambio,
+        tipo_cambio: 6.96,
         concepto: comprobante.concepto || "",
         beneficiario: comprobante.beneficiario || "",
         nro_cheque: comprobante.nro_cheque || "",
@@ -276,13 +264,61 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
         console.log("📡 Cargando detalles desde API para comprobante:", comprobante.id)
         fetchDetalles(comprobante.id)
       } else {
-        setDetalles([])
+        setDetalles([createDefaultDetalleLine()])
         setFilteredCuentas({})
+        setFilteredAuxiliares({})
       }
     } else {
       resetForm()
     }
   }, [comprobante])
+
+  // Cargar registros LC del comprobante (un LC por línea; linea_orden en BD)
+  useEffect(() => {
+    if (!comprobante?.id) {
+      setLcDataByLineIndex({})
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      try {
+        const response = await api(
+          `/api/contabilidad/libro-compras?comprobante_id=${encodeURIComponent(String(comprobante.id))}`
+        )
+        if (!response.ok || cancelled) return
+        const result = await response.json()
+        const list = result.data || []
+        if (!cancelled) {
+          const byLine: Record<number, LcRegistroDatos> = {}
+          list.forEach((row: any, i: number) => {
+            const lineIdx = row.linea_orden != null && Number.isInteger(row.linea_orden) ? row.linea_orden : i
+            byLine[lineIdx] = {
+              id: row.id,
+              nro_dui: row.nro_dui ?? "",
+              nro_documento: row.nro_documento ?? "",
+              fecha: row.fecha ?? "",
+              cotizacion: row.cotizacion ?? 6.96,
+              proveedor_id: row.proveedor_id,
+              proveedor_nombre: row.proveedor_nombre ?? "",
+              proveedor_nit: row.nit ?? "",
+              autorizacion: row.nro_autorizacion ?? "",
+              codigo_control: row.codigo_control ?? "",
+              importe_no_sujeto_credito_fiscal: row.importe_no_sujeto_cf ?? 0,
+              descuentos_rebajas: row.descuentos_rebajas ?? 0,
+              detalle_glosa: row.glosa ?? "",
+              monto: row.monto ?? 0,
+              credito_fiscal: row.credito_fiscal ?? 0,
+            }
+          })
+          setLcDataByLineIndex(byLine)
+        }
+      } catch (e) {
+        if (!cancelled) console.error("Error cargando libro de compras:", e)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [comprobante?.id])
 
   const fetchCuentasTransaccionales = async () => {
     try {
@@ -340,82 +376,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
           detallesData = result.detalles
         }
         
-        // Si los detalles no tienen rol/lado/porcentaje, intentar recuperarlos
-        // Esto ocurre cuando se carga un comprobante guardado
-        const detallesSinPlantilla = detallesData.some((d: any) => !d.rol && !d.lado && !d.porcentaje)
-        
-        if (detallesSinPlantilla && detallesData.length > 0) {
-          console.log("⚠️ Detalles sin información de plantilla, intentando recuperar...")
-          
-          // Intentar recuperar información de plantilla basándose en las cuentas
-          // Buscar plantillas que coincidan con las cuentas de los detalles
-          try {
-            const plantillasResponse = await api("/api/contabilidad/plantillas")
-            if (plantillasResponse.ok) {
-              const plantillasData = await plantillasResponse.json()
-              const plantillas = plantillasData.data || []
-              
-              // Buscar plantilla que coincida con las cuentas
-              for (const plantilla of plantillas) {
-                if (!plantilla.activa) continue
-                
-                // Obtener detalles de la plantilla
-                const detallesPlantillaResponse = await api(`/api/contabilidad/plantillas/${plantilla.id}/detalles`)
-                if (detallesPlantillaResponse.ok) {
-                  const detallesPlantillaData = await detallesPlantillaResponse.json()
-                  const detallesPlantilla = detallesPlantillaData.data || []
-                  
-                  // Verificar si las cuentas coinciden (orden y cuenta)
-                  let coincide = true
-                  if (detallesPlantilla.length !== detallesData.length) {
-                    coincide = false
-                  } else {
-                    for (let i = 0; i < detallesPlantilla.length; i++) {
-                      const detPlantilla = detallesPlantilla[i]
-                      const detCargado = detallesData[i]
-                      
-                      // Si la plantilla tiene cuenta_fija, debe coincidir
-                      // Si no tiene cuenta_fija pero es IVA, verificar cuenta de config
-                      if (detPlantilla.cuenta_fija) {
-                        if (detCargado.cuenta !== detPlantilla.cuenta_fija) {
-                          coincide = false
-                          break
-                        }
-                      } else if (detPlantilla.rol === "IVA_CREDITO" || detPlantilla.rol === "IVA_DEBITO") {
-                        // Para IVA, verificar si la cuenta coincide con la configurada
-                        // (esto es más flexible)
-                        continue
-                      }
-                    }
-                  }
-                  
-                  if (coincide) {
-                    console.log("✅ Plantilla encontrada:", plantilla.codigo)
-                    // Aplicar información de plantilla a los detalles
-                    detallesData = detallesData.map((det: any, index: number) => {
-                      const detPlantilla = detallesPlantilla[index]
-                      return {
-                        ...det,
-                        rol: detPlantilla.rol,
-                        lado: detPlantilla.lado,
-                        porcentaje: detPlantilla.porcentaje,
-                        permite_seleccionar_cuenta: detPlantilla.permite_seleccionar_cuenta,
-                        permite_auxiliar: detPlantilla.permite_auxiliar,
-                        // esCalculado se calcula basado en bloqueado (no usar rol)
-                        esCalculado: detPlantilla.bloqueado === true,
-                      }
-                    })
-                    break
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            console.warn("⚠️ No se pudo recuperar información de plantilla:", error)
-          }
-        }
-        
-        // Asegurar que esCalculado esté definido para todos los detalles
+        // Asegurar que esCalculado esté definido para todos los detalles (sin usar plantillas)
         detallesData = detallesData.map((det: any) => ({
           ...det,
           // esCalculado se calcula basado en bloqueado (no usar rol)
@@ -448,11 +409,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       } else {
         const errorData = await response.json().catch(() => ({}))
         console.error("❌ Error en respuesta:", response.status, errorData)
-        setDetalles([])
+        setDetalles([createDefaultDetalleLine()])
       }
     } catch (error) {
       console.error("❌ Error fetching detalles:", error)
-      setDetalles([])
+      setDetalles([createDefaultDetalleLine()])
     }
   }
 
@@ -464,11 +425,14 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
       fecha: new Date().toISOString().split("T")[0],
       periodo: new Date().getMonth() + 1,
       gestion: new Date().getFullYear(),
-      moneda: "BS",
-      tipo_cambio: 1,
-      estado: "BORRADOR",
+    moneda: "BS",
+    tipo_cambio: 6.96,
+    estado: "BORRADOR",
     })
-    setDetalles([])
+    setDetalles([createDefaultDetalleLine()])
+    setLcDataByLineIndex({})
+    setLcDraftByLineIndex({})
+    setLcLineIndex(null)
   }
 
   const handleAddDetalle = () => {
@@ -496,6 +460,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   }
 
   const handleRemoveDetalle = (index: number) => {
+    if (detalles.length <= 1) return
     const detalleAEliminar = detalles[index]
     const newDetalles = detalles.filter((_, i) => i !== index)
     setDetalles(newDetalles)
@@ -587,9 +552,24 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
         setDetalles(nuevosDetalles)
         return
       } else {
-        // No hay plantilla, actualizar solo el campo editado
+        // No hay plantilla: actualizar campo editado y recalcular solo el par BS ↔ USD de esa línea (tipo cambio 6.96)
+        const tipoCambio = formData.tipo_cambio ?? 6.96
         const updated = [...detalles]
-        updated[index] = { ...updated[index], [field]: valorNumerico }
+        const det = { ...updated[index] }
+        if (field === "debe_bs") {
+          det.debe_bs = valorNumerico
+          det.debe_usd = Math.round((valorNumerico / tipoCambio) * 100) / 100
+        } else if (field === "haber_bs") {
+          det.haber_bs = valorNumerico
+          det.haber_usd = Math.round((valorNumerico / tipoCambio) * 100) / 100
+        } else if (field === "debe_usd") {
+          det.debe_usd = valorNumerico
+          det.debe_bs = Math.round((valorNumerico * tipoCambio) * 100) / 100
+        } else if (field === "haber_usd") {
+          det.haber_usd = valorNumerico
+          det.haber_bs = Math.round((valorNumerico * tipoCambio) * 100) / 100
+        }
+        updated[index] = det
         setDetalles(updated)
         return
       }
@@ -660,225 +640,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
 
   // NOTA: La función recalcularMontos() fue eliminada porque usaba 'rol' que ya no existe.
   // Todo el cálculo ahora se hace en calcularMontosPlantilla() usando porcentaje + lado.
-
-  // Función para guardar comprobante si es nuevo
-  const guardarComprobanteSiEsNuevo = async (): Promise<string | null> => {
-    if (comprobante?.id) {
-      console.log("✅ Comprobante ya tiene ID:", comprobante.id)
-      return comprobante.id
-    }
-
-    console.log("🔄 Comprobante nuevo, guardando primero...")
-    setGuardandoComprobante(true)
-
-    try {
-      const fecha = new Date(formData.fecha)
-      const payload = {
-        origen: "Contabilidad",
-        tipo_comprobante: formData.tipo_comprobante,
-        tipo_asiento: formData.tipo_asiento || "Normal",
-        fecha: formData.fecha,
-        periodo: fecha.getMonth() + 1,
-        gestion: fecha.getFullYear(),
-        moneda: formData.moneda || "BS",
-        tipo_cambio: formData.tipo_cambio || (formData.moneda === "USD" ? 6.96 : 1),
-        concepto: formData.concepto || "",
-        beneficiario: formData.beneficiario || null,
-        nro_cheque: formData.nro_cheque || null,
-        estado: "BORRADOR",
-        detalles: [], // Array vacío - los detalles se agregarán al aplicar la plantilla
-      }
-
-      const response = await api("/api/contabilidad/comprobantes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error(error.error || "Error al crear el comprobante")
-        return null
-      }
-
-      const newComp = await response.json()
-      const comprobanteCreado = newComp.data
-      const comprobanteId = comprobanteCreado?.id
-
-      if (!comprobanteId) {
-        toast.error("Error: No se pudo obtener el ID del comprobante")
-        return null
-      }
-
-      console.log("✅ Comprobante creado con ID:", comprobanteId)
-      console.log("📋 Comprobante completo:", comprobanteCreado)
-      toast.success("Comprobante guardado. Aplicando plantilla...")
-      
-      // Recargar la lista para que el comprobante aparezca
-      onSave()
-      
-      return comprobanteId
-    } catch (error: any) {
-      console.error("Error guardando comprobante:", error)
-      toast.error("Error al guardar el comprobante: " + error.message)
-      return null
-    } finally {
-      setGuardandoComprobante(false)
-    }
-  }
-
-  // Función para aplicar plantilla (solo estructura, sin montos)
-  const handleAplicarPlantilla = async () => {
-    if (!plantillaSeleccionada) {
-      toast.error("Debe seleccionar una plantilla")
-      return
-    }
-
-    // Guardar comprobante si es nuevo
-    let comprobanteId = comprobante?.id
-    if (!comprobanteId) {
-      comprobanteId = await guardarComprobanteSiEsNuevo()
-      if (!comprobanteId) {
-        return // Error ya mostrado
-      }
-    }
-
-    // Verificar estado del comprobante
-    if (comprobante?.estado && comprobante.estado !== "BORRADOR") {
-      toast.error("Solo se pueden aplicar plantillas a comprobantes en estado BORRADOR")
-      return
-    }
-
-    setAplicandoPlantilla(true)
-
-    try {
-      console.log("🔄 Aplicando estructura de plantilla:", plantillaSeleccionada)
-      console.log("🆔 Comprobante ID:", comprobanteId)
-
-      const response = await fetch(`/api/contabilidad/comprobantes/${comprobanteId}/aplicar-plantilla-estructura`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plantilla_codigo: plantillaSeleccionada,
-        }),
-      })
-
-      const data = await response.json()
-
-      console.log("📥 Respuesta del endpoint:", JSON.stringify(data, null, 2))
-
-      if (!response.ok) {
-        const errorMsg = data.error || "Error al aplicar plantilla"
-        toast.error(errorMsg)
-        return
-      }
-
-      // Cargar detalles con información de plantilla
-      if (data.data?.detalles) {
-        // Asegurar que las cuentas estén cargadas antes de mostrar los detalles
-        if (cuentas.length === 0) {
-          await fetchCuentasTransaccionales()
-          // Esperar un pequeño delay para asegurar que el estado se actualice
-          await new Promise(resolve => setTimeout(resolve, 100))
-        }
-        
-        // 1️⃣ NORMALIZAR PLANTILLA: Ordenar por orden y forzar primera línea como base
-        const detallesOrdenados = [...data.data.detalles].sort((a: any, b: any) => {
-          const ordenA = a.orden || 0
-          const ordenB = b.orden || 0
-          return ordenA - ordenB
-        })
-        
-        const detallesConPlantilla = detallesOrdenados.map((det: any, index: number) => {
-          // FORZAR PRIMERA LÍNEA COMO BASE (índice 0)
-          const esPrimeraLinea = index === 0
-          const bloqueadoNormalizado = esPrimeraLinea 
-            ? false  // Primera línea SIEMPRE es base (editable)
-            : (det.bloqueado === true || (det.porcentaje && det.porcentaje > 0))
-          
-          // IMPORTANTE: Preservar el porcentaje de la línea base si existe
-          // El motor necesita este porcentaje para calcular BASE = valorIntroducido / (porcentaje / 100)
-          const porcentajeNormalizado = esPrimeraLinea 
-            ? (det.porcentaje || null)  // Preservar porcentaje de la línea base
-            : (det.porcentaje || null)
-          
-          const esCalculado = bloqueadoNormalizado === true
-          
-          return {
-            ...det,
-            esCalculado: esCalculado,
-            bloqueado: bloqueadoNormalizado,
-            porcentaje: porcentajeNormalizado,
-            // Preservar cuenta_sugerida y cuenta_es_fija del backend
-            cuenta_sugerida: det.cuenta_sugerida || "",
-            cuenta_es_fija: det.cuenta_es_fija === true,
-            lado: det.lado || "DEBE",
-            permite_auxiliar: det.permite_auxiliar === true,
-          }
-        })
-        
-        // 🧠 LOG: Plantilla normalizada
-        console.log("🧠 [Plantillas] Plantilla normalizada al aplicar", {
-          total_lineas: detallesConPlantilla.length,
-          primera_linea: {
-            cuenta: detallesConPlantilla[0]?.cuenta,
-            bloqueado: detallesConPlantilla[0]?.bloqueado,
-            porcentaje: detallesConPlantilla[0]?.porcentaje,
-            lado: detallesConPlantilla[0]?.lado
-          },
-          todas_las_lineas: detallesConPlantilla.map((d: any, idx: number) => ({
-            index: idx,
-            cuenta: d.cuenta,
-            bloqueado: d.bloqueado,
-            porcentaje: d.porcentaje,
-            lado: d.lado
-          }))
-        })
-        
-        setDetalles(detallesConPlantilla)
-        
-        // 🟠 LOG DE DIAGNÓSTICO: Estado de detalles después de aplicar plantilla
-        console.log("🟠 FRONTEND plantilla aplicada - detalles iniciales", detallesConPlantilla.map(d => ({
-          cuenta: d.cuenta,
-          cuenta_sugerida: (d as any).cuenta_sugerida,
-          porcentaje: (d as any).porcentaje,
-          lado: (d as any).lado,
-          bloqueado: (d as any).bloqueado,
-          esCalculado: d.esCalculado,
-          cuenta_es_fija: (d as any).cuenta_es_fija,
-          permite_auxiliar: (d as any).permite_auxiliar
-        })))
-        
-        // Inicializar filtros para las nuevas líneas (usar cuentas actualizadas)
-        const initialFilters: Record<number, Cuenta[]> = {}
-        const initialFiltersAuxiliares: Record<number, Auxiliar[]> = {}
-        detallesConPlantilla.forEach((_, idx) => {
-          initialFilters[idx] = cuentas.length > 0 ? cuentas.slice(0, 20) : []
-          initialFiltersAuxiliares[idx] = auxiliares.length > 0 ? auxiliares.slice(0, 20) : []
-        })
-        setFilteredCuentas(initialFilters)
-        setFilteredAuxiliares(initialFiltersAuxiliares)
-      } else if (comprobanteId) {
-        await fetchDetalles(comprobanteId)
-      }
-
-      toast.success("Estructura de plantilla aplicada correctamente")
-      console.log("✅ Estructura de plantilla aplicada al comprobante:", comprobanteId)
-      
-      // Limpiar plantilla seleccionada después de aplicar
-      setPlantillaSeleccionada("")
-      
-      // Recargar la lista para que se actualice
-      onSave()
-    } catch (error: any) {
-      console.error("Error aplicando plantilla:", error)
-      toast.error("Error al aplicar plantilla: " + error.message)
-    } finally {
-      setAplicandoPlantilla(false)
-    }
-  }
 
   // Función para seleccionar cuenta
   const seleccionarCuenta = (detalleIndex: number, cuenta: Cuenta) => {
@@ -1176,7 +937,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
     }
 
     // 6. CALCULAR USD AUTOMÁTICAMENTE desde BS usando tipo de cambio
-    const tipoCambio = formData.tipo_cambio || 1
+    const tipoCambio = formData.tipo_cambio ?? 6.96
     
     if (campo === "debe_bs" || campo === "haber_bs") {
       // Si se editó BS, calcular USD
@@ -1248,7 +1009,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
 
   const diferenciaBs = totales.debe_bs - totales.haber_bs
   const diferenciaUsd = totales.debe_usd - totales.haber_usd
-  const isBalanced = Math.abs(diferenciaBs) < 0.01 && Math.abs(diferenciaUsd) < 0.01
+  // Tolerancia 0.02 por redondeos (ej. crédito fiscal 13/87)
+  const isBalanced = Math.abs(diferenciaBs) < 0.02 && Math.abs(diferenciaUsd) < 0.02
 
   const handleSave = async () => {
     try {
@@ -1309,8 +1071,50 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
 
         if (response.ok) {
           const newComp = await response.json()
+          const newId = newComp.data?.id
+          // Persistir cada LC en borrador con su linea_orden
+          const draftEntries = Object.entries(lcDraftByLineIndex)
+          if (draftEntries.length > 0 && newId) {
+            for (const [lineIndexStr, lcDraft] of draftEntries) {
+              const lineaOrden = parseInt(lineIndexStr, 10)
+              if (Number.isNaN(lineaOrden)) continue
+              try {
+                const lcBody = {
+                  comprobante_id: String(newId),
+                  linea_orden: lineaOrden,
+                  empresa_id: formData.empresa_id ?? 1,
+                  nro_dui: lcDraft.nro_dui || null,
+                  nro_documento: lcDraft.nro_documento || null,
+                  fecha: lcDraft.fecha,
+                  cotizacion: lcDraft.cotizacion ?? 6.96,
+                  proveedor_id: lcDraft.proveedor_id ?? null,
+                  proveedor_nombre: lcDraft.proveedor_nombre || null,
+                  nit: lcDraft.proveedor_nit || null,
+                  nro_autorizacion: lcDraft.autorizacion || null,
+                  codigo_control: lcDraft.codigo_control || null,
+                  importe_no_sujeto_cf: lcDraft.importe_no_sujeto_credito_fiscal ?? 0,
+                  descuentos_rebajas: lcDraft.descuentos_rebajas ?? 0,
+                  glosa: lcDraft.detalle_glosa || null,
+                  monto: lcDraft.monto ?? 0,
+                  credito_fiscal: lcDraft.credito_fiscal ?? 0,
+                  estado: "BORRADOR",
+                }
+                const lcRes = await api("/api/contabilidad/libro-compras", {
+                  method: "POST",
+                  body: JSON.stringify(lcBody),
+                })
+                const lcResult = await lcRes.json().catch(() => ({}))
+                if (!lcRes.ok) {
+                  toast.error(lcResult.error || lcResult.details || "No se pudo guardar el registro en Libro de Compras")
+                }
+              } catch (e) {
+                console.error("Error persistiendo LC al crear comprobante:", e)
+                toast.error("No se pudo guardar el registro en Libro de Compras")
+              }
+            }
+            setLcDraftByLineIndex({})
+          }
           toast.success("Comprobante creado correctamente")
-          // Si el nuevo comprobante tiene detalles, mantenerlos
           if (newComp.data?.detalles) {
             setDetalles(newComp.data.detalles)
           }
@@ -1330,32 +1134,107 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
   }
 
   const handleAprobar = async () => {
-    if (!comprobante?.id) {
-      toast.error("Debe guardar el comprobante antes de aprobarlo")
-      return
-    }
-
     if (!isBalanced) {
       toast.error("El comprobante debe estar balanceado (Debe = Haber) para poder aprobarlo")
       return
     }
 
-    if (!confirm("¿Estás seguro de que quieres aprobar este comprobante? No podrá ser editado después.")) {
+    const tieneAlgunLc = Object.keys(lcDataByLineIndex).length > 0 || Object.keys(lcDraftByLineIndex).length > 0
+    const mensajeAviso = !tieneAlgunLc
+      ? "\n\nAviso: no hay registro en Libro de Compras para este comprobante. ¿Desea aprobar igual?"
+      : ""
+    if (!confirm("¿Estás seguro de que quieres aprobar este comprobante? No podrá ser editado después." + mensajeAviso)) {
       return
     }
 
     try {
       setSaving(true)
-      const response = await api(`/api/contabilidad/comprobantes/${comprobante.id}/aprobar`, {
+      let comprobanteId = comprobante?.id
+
+      // Si es comprobante nuevo, primero guardar (crear) y luego aprobar
+      if (!comprobanteId) {
+        if (detalles.length === 0) {
+          toast.error("Debe agregar al menos un detalle al comprobante")
+          setSaving(false)
+          return
+        }
+        const detallesInvalidos = detalles.some((d) => !d.cuenta)
+        if (detallesInvalidos) {
+          toast.error("Todos los detalles deben tener una cuenta asignada")
+          setSaving(false)
+          return
+        }
+        const payload = {
+          ...formData,
+          detalles: detalles.map((d, index) => ({ ...d, orden: index + 1 })),
+        }
+        const createRes = await api("/api/contabilidad/comprobantes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}))
+          toast.error(err.error || "Error al guardar el comprobante")
+          setSaving(false)
+          return
+        }
+        const newComp = await createRes.json()
+        comprobanteId = newComp.data?.id
+        if (!comprobanteId) {
+          toast.error("No se obtuvo el id del comprobante creado")
+          setSaving(false)
+          return
+        }
+        // Persistir cada LC en borrador con su linea_orden
+        const draftEntries = Object.entries(lcDraftByLineIndex)
+        for (const [lineIndexStr, lcDraft] of draftEntries) {
+          const lineaOrden = parseInt(lineIndexStr, 10)
+          if (Number.isNaN(lineaOrden)) continue
+          try {
+            const lcBody = {
+              comprobante_id: String(comprobanteId),
+              linea_orden: lineaOrden,
+              empresa_id: formData.empresa_id ?? 1,
+              nro_dui: lcDraft.nro_dui || null,
+              nro_documento: lcDraft.nro_documento || null,
+              fecha: lcDraft.fecha,
+              cotizacion: lcDraft.cotizacion ?? 6.96,
+              proveedor_id: lcDraft.proveedor_id ?? null,
+              proveedor_nombre: lcDraft.proveedor_nombre || null,
+              nit: lcDraft.proveedor_nit || null,
+              nro_autorizacion: lcDraft.autorizacion || null,
+              codigo_control: lcDraft.codigo_control || null,
+              importe_no_sujeto_cf: lcDraft.importe_no_sujeto_credito_fiscal ?? 0,
+              descuentos_rebajas: lcDraft.descuentos_rebajas ?? 0,
+              glosa: lcDraft.detalle_glosa || null,
+              monto: lcDraft.monto ?? 0,
+              credito_fiscal: lcDraft.credito_fiscal ?? 0,
+              estado: "BORRADOR",
+            }
+            await api("/api/contabilidad/libro-compras", { method: "POST", body: JSON.stringify(lcBody) })
+          } catch (e) {
+            console.error("Error persistiendo LC al aprobar:", e)
+          }
+        }
+        if (draftEntries.length > 0) setLcDraftByLineIndex({})
+      }
+
+      const response = await api(`/api/contabilidad/comprobantes/${comprobanteId}/aprobar`, {
         method: "POST",
       })
 
       if (response.ok) {
+        const result = await response.json().catch(() => ({}))
         toast.success("Comprobante aprobado correctamente")
         onSave()
+        if (result.data && onAprobado) onAprobado(result.data)
       } else {
-        const error = await response.json()
-        toast.error(error.error || "Error al aprobar el comprobante")
+        const error = await response.json().catch(() => ({}))
+        const msg = error.detalles?.diferencia_bs != null
+          ? `${error.error || "No balanceado"} (diferencia Bs: ${error.detalles.diferencia_bs?.toFixed(2) ?? "?"})`
+          : (error.error || "Error al aprobar el comprobante")
+        toast.error(msg)
       }
     } catch (error) {
       console.error("Error aprobando comprobante:", error)
@@ -1395,7 +1274,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? "Guardando..." : "Guardar"}
               </Button>
-              {comprobante?.id && !isReadOnly && (
+              {!isReadOnly && (
                 <Button
                   size="sm"
                   onClick={handleAprobar}
@@ -1422,7 +1301,41 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
               />
             </div>
 
-            {/* Origen */}
+            {/* Estado */}
+            <div className="space-y-2">
+              <Label htmlFor="estado">Estado</Label>
+              <Input
+                id="estado"
+                value={formData.estado || "BORRADOR"}
+                disabled
+                className="bg-gray-50 font-semibold"
+              />
+            </div>
+
+            {/* Columna izquierda: Tipo de Comprobante, Fecha, Gestión, Tipo de Cambio */}
+            {/* Columna derecha: Origen, Tipo de Asiento, Periodo, Moneda */}
+            {/* Fila 1 */}
+            <div className="space-y-2">
+              <Label htmlFor="tipo_comprobante">Tipo de Comprobante</Label>
+              <Select
+                value={formData.tipo_comprobante || "Diario"}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, tipo_comprobante: value as TipoComprobante })
+                }
+                disabled={isReadOnly}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_COMPROBANTE.map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="origen">Origen</Label>
               <Select
@@ -1445,30 +1358,17 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
               </Select>
             </div>
 
-            {/* Tipo de Comprobante */}
+            {/* Fila 2 */}
             <div className="space-y-2">
-              <Label htmlFor="tipo_comprobante">Tipo de Comprobante</Label>
-              <Select
-                value={formData.tipo_comprobante || "Diario"}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, tipo_comprobante: value as TipoComprobante })
-                }
+              <Label htmlFor="fecha">Fecha</Label>
+              <Input
+                id="fecha"
+                type="date"
+                value={formData.fecha || ""}
+                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
                 disabled={isReadOnly}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIPOS_COMPROBANTE.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
-
-            {/* Tipo de Asiento */}
             <div className="space-y-2">
               <Label htmlFor="tipo_asiento">Tipo de Asiento</Label>
               <Select
@@ -1491,19 +1391,21 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
               </Select>
             </div>
 
-            {/* Fecha */}
+            {/* Fila 3 */}
             <div className="space-y-2">
-              <Label htmlFor="fecha">Fecha</Label>
+              <Label htmlFor="gestion">Gestión</Label>
               <Input
-                id="fecha"
-                type="date"
-                value={formData.fecha || ""}
-                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                id="gestion"
+                type="number"
+                min="2000"
+                max="2100"
+                value={formData.gestion || new Date().getFullYear()}
+                onChange={(e) =>
+                  setFormData({ ...formData, gestion: parseInt(e.target.value) || new Date().getFullYear() })
+                }
                 disabled={isReadOnly}
               />
             </div>
-
-            {/* Periodo */}
             <div className="space-y-2">
               <Label htmlFor="periodo">Periodo</Label>
               <Select
@@ -1526,33 +1428,24 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
               </Select>
             </div>
 
-            {/* Gestión */}
+            {/* Fila 4 */}
             <div className="space-y-2">
-              <Label htmlFor="gestion">Gestión</Label>
+              <Label htmlFor="tipo_cambio">Tipo de Cambio</Label>
               <Input
-                id="gestion"
+                id="tipo_cambio"
                 type="number"
-                min="2000"
-                max="2100"
-                value={formData.gestion || new Date().getFullYear()}
-                onChange={(e) =>
-                  setFormData({ ...formData, gestion: parseInt(e.target.value) || new Date().getFullYear() })
-                }
-                disabled={isReadOnly}
+                step="0.0001"
+                value="6.96"
+                disabled
+                className="bg-gray-50 font-mono"
               />
             </div>
-
-            {/* Moneda */}
             <div className="space-y-2">
               <Label htmlFor="moneda">Moneda</Label>
               <Select
                 value={formData.moneda || "BS"}
                 onValueChange={(value) => {
-                  const nuevaMoneda = value as Moneda
-                  // Establecer tipo de cambio según moneda (solo informativo para PDF)
-                  // BS = 1, USD = 6.96
-                  const nuevoTipoCambio = nuevaMoneda === "USD" ? 6.96 : 1
-                  setFormData({ ...formData, moneda: nuevaMoneda, tipo_cambio: nuevoTipoCambio })
+                  setFormData({ ...formData, moneda: value as Moneda })
                 }}
                 disabled={isReadOnly}
               >
@@ -1567,35 +1460,6 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            {/* Tipo de Cambio */}
-            <div className="space-y-2">
-              <Label htmlFor="tipo_cambio">Tipo de Cambio</Label>
-              <Input
-                id="tipo_cambio"
-                type="number"
-                step="0.0001"
-                min="0"
-                value={formData.tipo_cambio || (formData.moneda === "USD" ? 6.96 : 1)}
-                onChange={(e) => {
-                  const nuevoTipoCambio = parseFloat(e.target.value) || (formData.moneda === "USD" ? 6.96 : 1)
-                  setFormData({ ...formData, tipo_cambio: nuevoTipoCambio })
-                }}
-                disabled={isReadOnly}
-              />
-            </div>
-
-            {/* Concepto */}
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="concepto">Concepto</Label>
-              <Input
-                id="concepto"
-                value={formData.concepto || ""}
-                onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
-                disabled={isReadOnly}
-                placeholder="Descripción general del comprobante"
-              />
             </div>
 
             {/* Beneficiario */}
@@ -1686,50 +1550,17 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
               />
             </div>
 
-            {/* Estado */}
-            <div className="space-y-2">
-              <Label htmlFor="estado">Estado</Label>
+            {/* Concepto (debajo de Beneficiario y Nro. Cheque) */}
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="concepto">Concepto</Label>
               <Input
-                id="estado"
-                value={formData.estado || "BORRADOR"}
-                disabled
-                className="bg-gray-50 font-semibold"
+                id="concepto"
+                value={formData.concepto || ""}
+                onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
+                disabled={isReadOnly}
+                placeholder="Descripción general del comprobante"
               />
             </div>
-
-            {/* Plantilla Contable - Solo visible si está en BORRADOR o es nuevo comprobante */}
-            {(!comprobante || comprobante.estado === "BORRADOR") && (
-              <div className="space-y-2">
-                <Label htmlFor="plantilla">Plantilla contable</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={plantillaSeleccionada}
-                    onValueChange={(value) => {
-                      setPlantillaSeleccionada(value)
-                    }}
-                    disabled={isReadOnly}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Seleccionar plantilla..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {plantillas.map((plantilla) => (
-                        <SelectItem key={plantilla.codigo} value={plantilla.codigo}>
-                          {plantilla.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-          <Button
-            onClick={handleAplicarPlantilla}
-            disabled={!plantillaSeleccionada || isReadOnly || aplicandoPlantilla}
-            variant="outline"
-          >
-            {aplicandoPlantilla ? "Aplicando..." : "Aplicar plantilla"}
-          </Button>
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -1760,6 +1591,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                 <TableRow>
                   <TableHead className="w-[250px]">Cuenta</TableHead>
                   <TableHead className="w-24">Auxiliar</TableHead>
+                  <TableHead className="w-10 px-1 text-center">LC</TableHead>
                   <TableHead>Glosa</TableHead>
                   <TableHead className="w-24 text-right">Debe Bs</TableHead>
                   <TableHead className="w-24 text-right">Haber Bs</TableHead>
@@ -1771,7 +1603,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
               <TableBody>
                 {detalles.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={9} className="text-center text-gray-500 py-8">
                       No hay líneas agregadas. Click en "Agregar Línea" para comenzar.
                     </TableCell>
                   </TableRow>
@@ -2050,6 +1882,34 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                           </PopoverContent>
                         </Popover>
                       </TableCell>
+                      <TableCell className="w-10 px-1 text-center align-middle">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className={cn(
+                                  "h-8 w-8 shrink-0",
+                                  (lcDataByLineIndex[index] || lcDraftByLineIndex[index]) && "bg-gray-200 text-gray-600 hover:bg-gray-300 hover:text-gray-700"
+                                )}
+                                disabled={isReadOnly}
+                                onClick={() => {
+                                  setLcOpenedFromLineIndex(index)
+                                  setLcModalOpen(true)
+                                }}
+                                aria-label="Registro en Libro de Compras"
+                              >
+                                <BookOpen className={cn("h-4 w-4", (lcDataByLineIndex[index] || lcDraftByLineIndex[index]) && "text-gray-600")} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Registro en Libro de Compras</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
                       <TableCell>
                         <Input
                           value={detalle.glosa || ""}
@@ -2149,8 +2009,9 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveDetalle(index)}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || detalles.length <= 1}
                           className="text-red-600 hover:text-red-700"
+                          title={detalles.length <= 1 ? "Debe haber al menos una línea" : "Eliminar línea"}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -2225,6 +2086,126 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, plantillaP
         </CardContent>
       </Card>
 
+      {/* Modal Libro de Compras (LC) - un LC por línea; borrador local si comprobante sin id */}
+      <LcModal
+        open={lcModalOpen}
+        onOpenChange={setLcModalOpen}
+        initialData={
+          lcModalOpen && lcOpenedFromLineIndex !== null
+            ? (comprobante?.id ? lcDataByLineIndex[lcOpenedFromLineIndex] : lcDraftByLineIndex[lcOpenedFromLineIndex]) ?? {
+                fecha: formData.fecha ?? new Date().toISOString().split("T")[0],
+                cotizacion: formData.tipo_cambio ?? 6.96,
+              }
+            : undefined
+        }
+        fechaComprobante={formData.fecha}
+        cotizacionComprobante={formData.tipo_cambio ?? 6.96}
+        onSave={async (data) => {
+          const lineN = lcOpenedFromLineIndex ?? 0
+          setLcModalOpen(false)
+          setLcLineIndex(lineN)
+
+          // Integración LC → Comprobante: solo la línea N recibe glosa y monto de este LC
+          setDetalles((prev) => {
+            if (prev.length === 0) return prev
+            const tipoCambio = formData.tipo_cambio ?? 6.96
+            let next = prev.map((det, idx) => {
+              if (idx === lineN) {
+                const glosa = (det.glosa ?? "").trim() ? det.glosa : (data.detalle_glosa || null)
+                const debe_bs = data.monto ?? det.debe_bs ?? 0
+                const debe_usd = Math.round((debe_bs / tipoCambio) * 100) / 100
+                return { ...det, glosa, debe_bs, debe_usd }
+              }
+              // Solo para la primera línea (línea 0) actualizar también línea 1 y añadir 116001001 si aplica
+              if (lineN === 0 && idx === 1 && data.credito_fiscal != null && data.credito_fiscal > 0) {
+                const glosa = (det.glosa ?? "").trim() ? det.glosa : "Crédito fiscal"
+                const debe_bs = data.credito_fiscal ?? det.debe_bs ?? 0
+                const debe_usd = Math.round((debe_bs / tipoCambio) * 100) / 100
+                return { ...det, glosa, debe_bs, debe_usd }
+              }
+              return det
+            })
+            if (lineN === 0) {
+              const montoFilled = data.monto != null && Number(data.monto) > 0
+              const yaTieneLinea116 = next.some((d) => d.cuenta === "116001001")
+              if (montoFilled && !yaTieneLinea116) {
+                const creditoFiscalBs = data.credito_fiscal ?? 0
+                const creditoFiscalUsd = Math.round((creditoFiscalBs / tipoCambio) * 100) / 100
+                next = [
+                  ...next,
+                  {
+                    cuenta: "116001001",
+                    auxiliar: null,
+                    glosa: "Crédito fiscal",
+                    debe_bs: creditoFiscalBs,
+                    haber_bs: 0,
+                    debe_usd: creditoFiscalUsd,
+                    haber_usd: 0,
+                    orden: next.length + 1,
+                    esCalculado: false,
+                  } as ComprobanteDetalle,
+                ]
+              }
+            }
+            return next
+          })
+          if (lineN === 0) {
+            const montoFilled = data.monto != null && Number(data.monto) > 0
+            const yaTieneLinea116 = detalles.some((d) => d.cuenta === "116001001")
+            if (montoFilled && !yaTieneLinea116) {
+              setFilteredCuentas((prev) => ({ ...prev, [detalles.length]: cuentas.slice(0, 20) }))
+              setFilteredAuxiliares((prev) => ({ ...prev, [detalles.length]: auxiliares.slice(0, 20) }))
+            }
+          }
+
+          if (!comprobante?.id) {
+            setLcDraftByLineIndex((prev) => ({ ...prev, [lineN]: data }))
+            toast.success("Datos LC en borrador. Guarde el comprobante para registrar en Libro de Compras.")
+            return
+          }
+
+          setLcSaving(true)
+          try {
+            const body = {
+              id: lcDataByLineIndex[lineN]?.id ?? undefined,
+              comprobante_id: String(comprobante.id),
+              linea_orden: lineN,
+              empresa_id: formData.empresa_id ?? 1,
+              nro_dui: data.nro_dui || null,
+              nro_documento: data.nro_documento || null,
+              fecha: data.fecha,
+              cotizacion: data.cotizacion ?? 6.96,
+              proveedor_id: data.proveedor_id ?? null,
+              proveedor_nombre: data.proveedor_nombre || null,
+              nit: data.proveedor_nit || null,
+              nro_autorizacion: data.autorizacion || null,
+              codigo_control: data.codigo_control || null,
+              importe_no_sujeto_cf: data.importe_no_sujeto_credito_fiscal ?? 0,
+              descuentos_rebajas: data.descuentos_rebajas ?? 0,
+              glosa: data.detalle_glosa || null,
+              monto: data.monto ?? 0,
+              credito_fiscal: data.credito_fiscal ?? 0,
+              estado: "BORRADOR",
+            }
+            const response = await api("/api/contabilidad/libro-compras", {
+              method: "POST",
+              body: JSON.stringify(body),
+            })
+            const result = await response.json().catch(() => ({}))
+            if (response.ok && result.data) {
+              setLcDataByLineIndex((prev) => ({ ...prev, [lineN]: { ...data, id: result.data.id } }))
+              toast.success("Registro LC guardado")
+            } else if (!response.ok) {
+              toast.error(result.error || "Error al guardar registro LC")
+            }
+          } catch (e) {
+            console.error("Error guardando LC:", e)
+            toast.error("Error al guardar registro LC")
+          } finally {
+            setLcSaving(false)
+          }
+        }}
+      />
     </div>
   )
 }

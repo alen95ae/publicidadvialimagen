@@ -134,7 +134,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
       { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
       { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
-      { label: "Plantillas de Comprobantes", href: "/panel/contabilidad/parametros/plantillas" },
     ],
     // Submenú de Informes
     informesItems: [
@@ -153,7 +152,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     mainSections: [
       { label: "Contabilidad", href: "/panel/contabilidad", hasDropdown: true, dropdownItems: "nav" },
       { label: "Facturas", href: "/panel/contabilidad/facturas/manuales", hasDropdown: true, dropdownItems: "facturas" },
-      { label: "Almacenes", href: "/panel/contabilidad/almacenes" },
       { label: "Activos", href: "/panel/contabilidad/activos/registro-activos", hasDropdown: true, dropdownItems: "activos" },
       { label: "Planillas", href: "/panel/contabilidad/planillas", hasDropdown: true, dropdownItems: "planillas" },
       { label: "Parámetros", href: "/panel/contabilidad/parametros-global", hasDropdown: true, dropdownItems: "parametrosGlobal" },
@@ -207,7 +205,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
       { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
       { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
-      { label: "Plantillas de Comprobantes", href: "/panel/contabilidad/parametros/plantillas" },
       // Parámetros de Activos
       { label: "Grupos de Activos Fijos", href: "/panel/contabilidad/activos/parametros/grupos-activos-fijos" },
       { label: "Gestiones para la Depreciación de Activos", href: "/panel/contabilidad/activos/parametros/gestiones-depreciacion-activos" },
@@ -232,6 +229,33 @@ const moduleConfigs: Record<string, ModuleConfig> = {
       { label: "Reporte de Facturación", href: "/panel/contabilidad/facturas/informes/reporte-facturacion" },
     ],
   },
+}
+
+// Indicadores de estado (verde = listo, amarillo = en desarrollo) para ítems del módulo Contabilidad
+const CONTABILIDAD_INDICATOR_GREEN = new Set([
+  "/panel/contabilidad/plan-cuentas",
+  "/panel/contabilidad/comprobantes",
+  "/panel/contabilidad/informes/libro-diario",
+  "/panel/contabilidad/informes/balance-sumas-saldos",
+])
+const CONTABILIDAD_INDICATOR_YELLOW = new Set([
+  "/panel/contabilidad/facturas/manuales",
+  "/panel/contabilidad/facturas/contabilizacion",
+  "/panel/contabilidad/informes/plan-cuentas",
+  "/panel/contabilidad/informes/libro-auxiliares",
+  "/panel/contabilidad/informes/balance-general",
+  "/panel/contabilidad/parametros/comprobantes-prueba",
+  "/panel/contabilidad/parametros/contabilidad",
+  "/panel/contabilidad/informes/libro-mayor",
+])
+function ContabilidadIndicator({ href }: { href: string }) {
+  if (CONTABILIDAD_INDICATOR_GREEN.has(href)) {
+    return <span className="inline-block w-2 h-2 rounded-full bg-green-500 shrink-0 ml-1.5" aria-hidden />
+  }
+  if (CONTABILIDAD_INDICATOR_YELLOW.has(href)) {
+    return <span className="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0 ml-1.5" aria-hidden />
+  }
+  return null
 }
 
 // Función para detectar el módulo actual basado en el pathname y searchParams
@@ -692,7 +716,8 @@ export default function PanelHeader() {
                         <DropdownMenu key={section.href}>
                           <DropdownMenuTrigger asChild>
                             <button
-                              className={`text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
+                              type="button"
+                              className={`outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
                                 (section.dropdownItems === "parametros" && pathname.startsWith("/panel/contabilidad/parametros")) ||
                                 (section.dropdownItems === "informes" && pathname.startsWith("/panel/contabilidad/informes")) ||
                                 (section.dropdownItems === "activos" && pathname.startsWith("/panel/contabilidad/activos")) ||
@@ -712,7 +737,6 @@ export default function PanelHeader() {
                                 // si no, pinta en rojo Facturas/Activos/Planillas cuando estás en /panel/contabilidad.
                                 (section.dropdownItems === "nav" && pathname.startsWith("/panel/contabilidad") && 
                                 !pathname.startsWith("/panel/contabilidad/facturas") &&
-                                !pathname.startsWith("/panel/contabilidad/almacenes") &&
                                 !pathname.startsWith("/panel/contabilidad/activos") &&
                                 !pathname.startsWith("/panel/contabilidad/planillas") &&
                                 !pathname.startsWith("/panel/contabilidad/parametros") &&
@@ -755,23 +779,27 @@ export default function PanelHeader() {
                                   return (
                                     <DropdownMenuSub key={item.href}>
                                       <DropdownMenuSubTrigger
-                                        className={isActive(item.href) ? "text-[#D54644] font-semibold" : ""}
+                                        className={`outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 border-0 shadow-none focus:shadow-none flex items-center ${isActive(item.href) ? "text-[#D54644] font-semibold" : ""}`}
                                       >
                                         {item.label}
+                                        <ContabilidadIndicator href={item.href} />
                                       </DropdownMenuSubTrigger>
                                       <DropdownMenuSubContent align="end" sideOffset={8} className="w-56">
                                         {submenuItems.map((subItem) => (
-                                          <DropdownMenuItem key={subItem.href} asChild>
+                                          <DropdownMenuItem key={subItem.href} asChild className="outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 border-0 focus:border-0 shadow-none focus:shadow-none">
                                             <Link
                                               href={subItem.href}
                                               scroll={false}
-                                              className={`w-full ${
+                                              className={`w-full flex items-center ${
+                                                subItem.href === "/panel/contabilidad/parametros/contabilidad" ? "whitespace-nowrap" : ""
+                                              } ${
                                                 isActive(subItem.href)
                                                   ? "text-[#D54644] font-semibold"
                                                   : ""
                                               }`}
                                             >
                                               {subItem.label}
+                                              <ContabilidadIndicator href={subItem.href} />
                                             </Link>
                                           </DropdownMenuItem>
                                         ))}
@@ -782,17 +810,20 @@ export default function PanelHeader() {
                               }
                               // Item normal sin submenu
                               return (
-                                <DropdownMenuItem key={item.href} asChild>
+                                <DropdownMenuItem key={item.href} asChild className="outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 border-0 focus:border-0 shadow-none focus:shadow-none">
                                   <Link
                                     href={item.href}
                                     scroll={false}
-                                    className={`w-full ${
+                                    className={`w-full flex items-center ${
+                                      (item.href === "/panel/contabilidad/plan-cuentas" || item.href === "/panel/contabilidad/parametros/contabilidad") ? "whitespace-nowrap" : ""
+                                    } ${
                                       isActive(item.href)
                                         ? "text-[#D54644] font-semibold"
                                         : ""
                                     }`}
                                   >
                                     {item.label}
+                                    <ContabilidadIndicator href={item.href} />
                                   </Link>
                                 </DropdownMenuItem>
                               )

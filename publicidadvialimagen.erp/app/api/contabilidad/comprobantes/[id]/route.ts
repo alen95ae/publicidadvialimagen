@@ -8,9 +8,10 @@ import type { Comprobante, ComprobanteDetalle } from "@/lib/types/contabilidad"
 // GET - Obtener un comprobante por ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params
     // Verificar permisos
     const permiso = await requirePermiso("contabilidad", "ver")
     if (permiso instanceof Response) {
@@ -29,12 +30,12 @@ export async function GET(
         *,
         detalles:comprobante_detalle(*)
       `)
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("empresa_id", 1)
       .single()
 
-    // Si hay error, intentar con admin
-    if (error) {
+    // Si hay error o no hay datos (p. ej. RLS oculta la fila), intentar con admin
+    if (error || !data) {
       const supabaseAdmin = getSupabaseAdmin()
       const { data: adminData, error: adminError } = await supabaseAdmin
         .from("comprobantes")
@@ -42,7 +43,7 @@ export async function GET(
           *,
           detalles:comprobante_detalle(*)
         `)
-        .eq("id", params.id)
+        .eq("id", id)
         .eq("empresa_id", 1)
         .single()
 
@@ -83,9 +84,10 @@ export async function GET(
 // PUT - Actualizar un comprobante
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params
     // Verificar permisos
     const permiso = await requirePermiso("contabilidad", "editar")
     if (permiso instanceof Response) {
@@ -99,7 +101,7 @@ export async function PUT(
     const { data: comprobanteActual } = await supabase
       .from("comprobantes")
       .select("estado")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("empresa_id", 1)
       .single()
 
@@ -155,7 +157,7 @@ export async function PUT(
     const { data: comprobanteActualizado, error: errorUpdate } = await supabase
       .from("comprobantes")
       .update(updateData)
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("empresa_id", 1)
       .select()
       .single()
@@ -172,7 +174,7 @@ export async function PUT(
     const { error: errorDelete } = await supabase
       .from("comprobante_detalle")
       .delete()
-      .eq("comprobante_id", params.id)
+      .eq("comprobante_id", id)
 
     if (errorDelete) {
       console.error("Error deleting detalles:", errorDelete)
@@ -180,7 +182,7 @@ export async function PUT(
 
     // Insertar nuevos detalles
     const detallesData = detalles.map((det: ComprobanteDetalle, index: number) => ({
-      comprobante_id: params.id, // UUID string, no necesita parseInt
+      comprobante_id: id,
       cuenta: det.cuenta, // string "111001003"
       auxiliar: det.auxiliar ?? null, // string o null
       glosa: det.glosa ?? null,
@@ -211,7 +213,7 @@ export async function PUT(
         *,
         detalles:comprobante_detalle(*)
       `)
-      .eq("id", params.id)
+      .eq("id", id)
       .single()
 
     return NextResponse.json({

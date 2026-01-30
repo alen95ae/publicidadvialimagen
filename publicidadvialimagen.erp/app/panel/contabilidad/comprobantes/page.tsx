@@ -12,12 +12,9 @@ export default function ComprobantesPage() {
   const [selectedComprobante, setSelectedComprobante] = useState<Comprobante | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [exportingPDF, setExportingPDF] = useState(false)
-  const [plantillaParaAplicar, setPlantillaParaAplicar] = useState<string | undefined>(undefined)
 
   const handleComprobanteSelect = (comprobante: Comprobante | null) => {
     setSelectedComprobante(comprobante)
-    // Limpiar plantillaParaAplicar al seleccionar otro comprobante
-    setPlantillaParaAplicar(undefined)
   }
 
   const handleNew = () => {
@@ -99,7 +96,7 @@ export default function ComprobantesPage() {
               comprobante={selectedComprobante}
               onNew={handleNew}
               onSave={handleSave}
-              plantillaParaAplicar={plantillaParaAplicar}
+              onAprobado={(comp) => setSelectedComprobante(comp)}
             />
           </div>
 

@@ -9,9 +9,6 @@ export const metadata: Metadata = {
   title: 'ERP | Publicidad Vial Imagen',
   description: 'Sistema de gestión empresarial para Publicidad Vial Imagen',
   generator: 'v0.app',
-  icons: {
-    icon: '/favicon.svg',
-  },
 }
 
 export default function RootLayout({

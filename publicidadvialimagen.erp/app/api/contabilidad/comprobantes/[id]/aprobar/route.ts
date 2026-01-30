@@ -7,9 +7,10 @@ import { requirePermiso } from "@/lib/permisos"
 // POST - Aprobar un comprobante
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params
     // Verificar permisos
     const permiso = await requirePermiso("contabilidad", "editar")
     if (permiso instanceof Response) {
@@ -26,7 +27,7 @@ export async function POST(
         *,
         detalles:comprobante_detalle(*)
       `)
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("empresa_id", 1)
       .single()
 
@@ -58,8 +59,8 @@ export async function POST(
 
     const diferenciaBs = Math.abs(totales.debe_bs - totales.haber_bs)
     const diferenciaUsd = Math.abs(totales.debe_usd - totales.haber_usd)
-
-    if (diferenciaBs > 0.01 || diferenciaUsd > 0.01) {
+    // Tolerancia 0.02 por redondeos (ej. crédito fiscal 13/87)
+    if (diferenciaBs > 0.02 || diferenciaUsd > 0.02) {
       return NextResponse.json(
         {
           error: "El comprobante no está balanceado. Debe = Haber para poder aprobarlo.",
@@ -106,7 +107,7 @@ export async function POST(
         estado: "APROBADO",
         numero: siguienteNumero
       })
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("empresa_id", 1)
       .select(`
         *,
@@ -121,6 +122,13 @@ export async function POST(
         { status: 500 }
       )
     }
+
+    // Si existe registro en Libro de Compras para este comprobante, marcarlo APROBADO
+    await supabase
+      .from("libro_compras")
+      .update({ estado: "APROBADO", updated_at: new Date().toISOString() })
+      .eq("comprobante_id", id)
+      .eq("empresa_id", 1)
 
     return NextResponse.json({
       success: true,

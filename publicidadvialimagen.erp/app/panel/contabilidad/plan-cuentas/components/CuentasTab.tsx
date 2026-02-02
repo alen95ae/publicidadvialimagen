@@ -10,14 +10,98 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Save, Trash2, X } from "lucide-react"
+import { Plus, Save, Trash2, ChevronsUpDown, Check } from "lucide-react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Cuenta, CuentaSaldos, TipoCuenta, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { cn } from "@/lib/utils"
+import type { Cuenta, TipoCuenta, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
 interface CuentasTabProps {
   empresaId?: string
+}
+
+/** Buscador tipo combobox para filtrar cuentas (misma UX que en detalle del comprobante) */
+function BuscadorCuentas({
+  cuentas,
+  loading,
+  value,
+  onChange,
+  onSelectCuenta,
+  placeholder,
+  className,
+}: {
+  cuentas: Cuenta[]
+  loading: boolean
+  value: string
+  onChange: (v: string) => void
+  onSelectCuenta?: (c: Cuenta) => void
+  placeholder?: string
+  className?: string
+}) {
+  const search = (value || "").toLowerCase().trim()
+  const options = !search
+    ? cuentas.slice(0, 50)
+    : cuentas
+        .filter((c) => {
+          const codigo = (c.cuenta || "").toLowerCase()
+          const desc = (c.descripcion || "").toLowerCase()
+          return codigo.includes(search) || desc.includes(search)
+        })
+        .slice(0, 50)
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("justify-between text-sm", className)}
+        >
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value || placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0" align="end">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={placeholder}
+            className="h-9 border-0 focus:ring-0"
+            value={value}
+            onValueChange={onChange}
+          />
+          <CommandList>
+            <CommandEmpty>{loading ? "Cargando..." : "No se encontraron cuentas."}</CommandEmpty>
+            {options.length > 0 && (
+              <CommandGroup>
+                {options.map((cuenta) => (
+                  <CommandItem
+                    key={cuenta.id}
+                    value={`${cuenta.cuenta} ${cuenta.descripcion}`}
+                    onSelect={() => {
+                      onSelectCuenta?.(cuenta)
+                      setOpen(false)
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Check className="mr-2 h-4 w-4 opacity-0" />
+                    <span className="font-mono font-medium">{cuenta.cuenta}</span>
+                    <span className="text-gray-600 truncate ml-2">{cuenta.descripcion}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 const TIPOS_CUENTA: TipoCuenta[] = ["Activo", "Pasivo", "Patrimonio", "Ingreso", "Gasto"]
@@ -30,8 +114,10 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
   const [selectedCuenta, setSelectedCuenta] = useState<Cuenta | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saldos, setSaldos] = useState<CuentaSaldos[]>([])
   const [currentPage, setCurrentPage] = useState(1)
+  const [searchCuenta, setSearchCuenta] = useState("")
+  const [filterToCuentaId, setFilterToCuentaId] = useState<number | null>(null)
+  const [filteredCuentasForList, setFilteredCuentasForList] = useState<Cuenta[]>([])
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [total, setTotal] = useState(0)
@@ -62,7 +148,6 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
 
   useEffect(() => {
     if (selectedCuenta) {
-      // Mapear datos de DB → UI
       setFormData({
         empresa_id: selectedCuenta.empresa_id || empresaId,
         clasificador: selectedCuenta.clasificador || "",
@@ -81,11 +166,30 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
         transaccional: selectedCuenta.transaccional ?? false,
         vigente: selectedCuenta.vigente ?? true,
       })
-      fetchSaldos(selectedCuenta.id)
     } else {
       resetForm()
     }
   }, [selectedCuenta])
+
+  // Filtrar listado de cuentas por búsqueda o por ítem seleccionado en el desplegable
+  useEffect(() => {
+    if (filterToCuentaId != null) {
+      const one = cuentas.filter((c) => c.id === filterToCuentaId)
+      setFilteredCuentasForList(one)
+      return
+    }
+    if (!searchCuenta || searchCuenta.trim() === "") {
+      setFilteredCuentasForList(cuentas)
+      return
+    }
+    const search = searchCuenta.toLowerCase().trim()
+    const filtered = cuentas.filter((c) => {
+      const codigo = (c.cuenta || "").toLowerCase()
+      const desc = (c.descripcion || "").toLowerCase()
+      return codigo.includes(search) || desc.includes(search)
+    })
+    setFilteredCuentasForList(filtered)
+  }, [cuentas, searchCuenta, filterToCuentaId])
 
   const fetchCuentas = async (page: number = 1, append: boolean = false) => {
     try {
@@ -172,18 +276,6 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
     }
   }, [hasMore, loadingMore, loading, currentPage])
 
-  const fetchSaldos = async (cuentaId: number) => {
-    try {
-      const response = await api(`/api/contabilidad/cuentas/${cuentaId}/saldos`)
-      if (response.ok) {
-        const data = await response.json()
-        setSaldos(data.data || [])
-      }
-    } catch (error) {
-      console.error("Error fetching saldos:", error)
-    }
-  }
-
   const resetForm = () => {
     setFormData({
       empresa_id: empresaId,
@@ -203,7 +295,6 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
       transaccional: false,
       vigente: true,
     })
-    setSaldos([])
   }
 
   const handleSave = async () => {
@@ -284,14 +375,31 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
 
   return (
     <div className="flex flex-col gap-4 h-full overflow-hidden">
-      {/* Fila superior: Tabla de cuentas y Panel de saldos */}
+      {/* Tabla de cuentas con buscador */}
       <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
-        {/* Contenedor principal - Tabla de cuentas */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <Card className="h-full flex flex-col">
-            <CardHeader className="flex-shrink-0">
-              <CardTitle>Cuentas</CardTitle>
-              <CardDescription>Lista de cuentas contables</CardDescription>
+            <CardHeader className="flex-shrink-0 flex flex-row items-center gap-4 flex-wrap">
+              <div>
+                <CardTitle>Cuentas</CardTitle>
+                <CardDescription>Lista de cuentas contables</CardDescription>
+              </div>
+              <BuscadorCuentas
+                cuentas={cuentas}
+                loading={loading}
+                value={searchCuenta}
+                onChange={(v) => {
+                  setSearchCuenta(v)
+                  setFilterToCuentaId(null)
+                }}
+                onSelectCuenta={(c) => {
+                  setSelectedCuenta(c)
+                  setSearchCuenta(c.cuenta ?? "")
+                  setFilterToCuentaId(c.id)
+                }}
+                placeholder="Buscar por código o descripción..."
+                className="w-[360px]"
+              />
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
               {loading ? (
@@ -314,14 +422,14 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cuentas.length === 0 ? (
+                      {filteredCuentasForList.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                             No hay cuentas registradas
                           </TableCell>
                         </TableRow>
                       ) : (
-                        cuentas.map((cuenta) => (
+                        filteredCuentasForList.map((cuenta) => (
                           <TableRow
                             key={cuenta.id}
                             onClick={() => setSelectedCuenta(cuenta)}
@@ -387,7 +495,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
                   {/* Información de paginación */}
                   {!loadingMore && cuentas.length > 0 && (
                     <div className="text-center py-2 text-sm text-gray-500 border-t">
-                      Mostrando {cuentas.length} de {total} cuentas
+                      Mostrando {filteredCuentasForList.length} de {total} cuentas
                       {hasMore && " - Desplázate hacia abajo para cargar más"}
                     </div>
                   )}
@@ -396,72 +504,6 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
             </CardContent>
           </Card>
         </div>
-
-        {/* Panel lateral de saldos */}
-        <Card className="w-80 flex-shrink-0 overflow-hidden flex flex-col max-h-full">
-          <CardHeader className="flex-shrink-0">
-            <CardTitle>Saldos de Cuenta</CardTitle>
-            <CardDescription>Saldo por gestión</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
-            {!selectedCuenta ? (
-              <div className="text-center text-gray-500 py-8">
-                Seleccione una cuenta para ver sus saldos
-              </div>
-            ) : saldos.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                No hay saldos registrados
-              </div>
-            ) : (
-              <div className="space-y-4 flex-1 overflow-hidden flex flex-col min-h-0">
-                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
-                  <Table className="min-w-full">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Gestión</TableHead>
-                        <TableHead className="text-right">Inicial</TableHead>
-                        <TableHead className="text-right">Debe</TableHead>
-                        <TableHead className="text-right">Haber</TableHead>
-                        <TableHead className="text-right">Saldo</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {saldos.map((saldo, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{saldo.gestion}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {saldo.inicial.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {saldo.debe.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {saldo.haber.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold">
-                            {saldo.saldo.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
         {/* Formulario inferior - Todo el ancho */}

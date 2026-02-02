@@ -17,6 +17,7 @@ import {
   Camera,
   Calculator,
   Save,
+  ArrowLeft,
   Check,
   ChevronUp,
   ChevronDown,
@@ -1785,18 +1786,22 @@ export default function NuevaCotizacionPage() {
         {/* Main Content */}
         <main className="container mx-auto px-6 py-8">
           {/* Barra de botones */}
-          <div className="flex justify-end gap-4 mb-6">
+          <div className="flex justify-end gap-2 mb-6">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => router.push('/panel/ventas/cotizaciones')}
               disabled={guardando}
             >
+              <ArrowLeft className="w-4 h-4 mr-2" />
               Descartar
             </Button>
             <Button
+              variant="default"
+              size="sm"
               onClick={handleGuardar}
               disabled={guardando}
-              className="bg-[#D54644] hover:bg-[#B03A38] text-white"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               <Save className="w-4 h-4 mr-2" />
               {guardando ? 'Guardando...' : 'Guardar'}
@@ -1811,25 +1816,49 @@ export default function NuevaCotizacionPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Información General</CardTitle>
-                {/* Botones de estado */}
-                <div className="flex gap-2">
+                {/* Botones de estado y descarga */}
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => actualizarEstado("Rechazada")}
                     disabled={guardando || !cotizacionId || estadoCotizacion === "Rechazada"}
+                    className="text-red-600 hover:text-red-700 border-red-600 hover:bg-red-50"
                   >
                     <XCircle className="w-4 h-4 mr-2" />
                     Rechazada
                   </Button>
                   <Button
+                    variant="outline"
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="text-green-600 hover:text-green-700 border-green-600 hover:bg-green-50"
                     onClick={() => actualizarEstado("Aprobada")}
                     disabled={guardando || !cotizacionId || estadoCotizacion === "Aprobada"}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Aprobada
+                  </Button>
+                  {tieneFuncionTecnica("descargar ot") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!cotizacionId}
+                      onClick={descargarOTPDF}
+                      title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
+                    >
+                      <Hammer className="w-4 h-4 mr-2" />
+                      Descargar OT
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={descargarCotizacionPDF}
+                    disabled={!cotizacionId}
+                    title={!cotizacionId ? "Guarda la cotización antes de descargarla" : ""}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descargar Cotización
                   </Button>
                 </div>
               </div>
@@ -2028,37 +2057,6 @@ export default function NuevaCotizacionPage() {
                     placeholder="Ej: 5 días hábiles"
                     className="h-9"
                   />
-                </div>
-
-                {/* Descargar OT */}
-                {tieneFuncionTecnica("descargar ot") && (
-                  <div className="space-y-2 w-48">
-                    <Label>&nbsp;</Label>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      disabled={!cotizacionId}
-                      onClick={descargarOTPDF}
-                      title={!cotizacionId ? "Guarda la cotización antes de descargar la OT" : ""}
-                    >
-                      <Hammer className="w-4 h-4 mr-2" />
-                      Descargar OT
-                    </Button>
-                  </div>
-                )}
-
-                {/* Descargar Cotización */}
-                <div className="space-y-2 w-48">
-                  <Label>&nbsp;</Label>
-                  <Button
-                    onClick={descargarCotizacionPDF}
-                    className="w-full bg-[#D54644] hover:bg-[#B03A38] text-white"
-                    disabled={!cotizacionId}
-                    title={!cotizacionId ? "Guarda la cotización antes de descargarla" : ""}
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Descargar Cotización
-                  </Button>
                 </div>
               </div>
             </CardContent>

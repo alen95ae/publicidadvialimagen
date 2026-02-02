@@ -9,11 +9,100 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Save, Trash2 } from "lucide-react"
+import { Plus, Save, Trash2, ChevronsUpDown, Check } from "lucide-react"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { Auxiliar, AuxiliarSaldos, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { cn } from "@/lib/utils"
+import type { Auxiliar, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
+
+/** Buscador tipo combobox para filtrar auxiliares (misma UX que en detalle del comprobante) */
+function BuscadorAuxiliares({
+  auxiliares,
+  loading,
+  value,
+  onChange,
+  onSelectAuxiliar,
+  placeholder,
+  className,
+}: {
+  auxiliares: Auxiliar[]
+  loading: boolean
+  value: string
+  onChange: (v: string) => void
+  onSelectAuxiliar?: (a: Auxiliar) => void
+  placeholder?: string
+  className?: string
+}) {
+  const search = (value || "").toLowerCase().trim()
+  const options = !search
+    ? auxiliares.slice(0, 50)
+    : auxiliares
+        .filter((a) => {
+          const contacto = a.contactos
+          const nombre = (contacto?.nombre ?? a.nombre ?? "").toLowerCase()
+          const codigo = (a.codigo || "").toLowerCase()
+          return nombre.includes(search) || codigo.includes(search)
+        })
+        .slice(0, 50)
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("justify-between text-sm", className)}
+        >
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value || placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0" align="end">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={placeholder}
+            className="h-9 border-0 focus:ring-0"
+            value={value}
+            onValueChange={onChange}
+          />
+          <CommandList>
+            <CommandEmpty>{loading ? "Cargando..." : "No se encontraron auxiliares."}</CommandEmpty>
+            {options.length > 0 && (
+              <CommandGroup>
+                {options.map((auxiliar) => {
+                  const contacto = auxiliar.contactos
+                  const nombre = contacto?.nombre ?? auxiliar.nombre ?? auxiliar.nombre
+                  return (
+                    <CommandItem
+                      key={auxiliar.id}
+                      value={`${auxiliar.codigo} ${nombre}`}
+                      onSelect={() => {
+                        onSelectAuxiliar?.(auxiliar)
+                        setOpen(false)
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <Check className="mr-2 h-4 w-4 opacity-0" />
+                      <span className="truncate">{nombre}</span>
+                      <span className="text-gray-400 text-xs font-mono ml-auto">{auxiliar.codigo}</span>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Banco", "Caja", "Empleado", "Otro"]
 // Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
@@ -24,7 +113,9 @@ export default function AuxiliaresTab() {
   const [selectedAuxiliar, setSelectedAuxiliar] = useState<Auxiliar | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saldos, setSaldos] = useState<AuxiliarSaldos[]>([])
+  const [searchAuxiliar, setSearchAuxiliar] = useState("")
+  const [filterToAuxiliarId, setFilterToAuxiliarId] = useState<string | null>(null)
+  const [filteredAuxiliaresForList, setFilteredAuxiliaresForList] = useState<Auxiliar[]>([])
   
   // Estado del formulario
   const [formData, setFormData] = useState<any>({
@@ -62,7 +153,6 @@ export default function AuxiliaresTab() {
 
   useEffect(() => {
     if (selectedAuxiliar) {
-      // Priorizar datos de contactos si existen, sino usar datos de auxiliar
       const contacto = selectedAuxiliar.contactos
       const nombre = contacto?.nombre ?? selectedAuxiliar.nombre ?? ""
       const telefono = contacto?.telefono ?? selectedAuxiliar.telefono ?? ""
@@ -84,11 +174,31 @@ export default function AuxiliaresTab() {
         autorizacion: selectedAuxiliar.autorizacion || "",
         vigente: (selectedAuxiliar as any).vigente ?? true,
       })
-      fetchSaldos(selectedAuxiliar.id)
     } else {
       resetForm()
     }
   }, [selectedAuxiliar])
+
+  // Filtrar listado de auxiliares por búsqueda o por ítem seleccionado en el desplegable
+  useEffect(() => {
+    if (filterToAuxiliarId != null) {
+      const one = auxiliares.filter((a) => a.id === filterToAuxiliarId)
+      setFilteredAuxiliaresForList(one)
+      return
+    }
+    if (!searchAuxiliar || searchAuxiliar.trim() === "") {
+      setFilteredAuxiliaresForList(auxiliares)
+      return
+    }
+    const search = searchAuxiliar.toLowerCase().trim()
+    const filtered = auxiliares.filter((a) => {
+      const contacto = a.contactos
+      const nombre = (contacto?.nombre ?? a.nombre ?? "").toLowerCase()
+      const codigo = (a.codigo || "").toLowerCase()
+      return nombre.includes(search) || codigo.includes(search)
+    })
+    setFilteredAuxiliaresForList(filtered)
+  }, [auxiliares, searchAuxiliar, filterToAuxiliarId])
 
   const fetchAuxiliares = async () => {
     try {
@@ -130,18 +240,6 @@ export default function AuxiliaresTab() {
     }
   }
 
-  const fetchSaldos = async (auxiliarId: string) => {
-    try {
-      const response = await api(`/api/contabilidad/auxiliares/${auxiliarId}/saldos`)
-      if (response.ok) {
-        const data = await response.json()
-        setSaldos(data.data || [])
-      }
-    } catch (error) {
-      console.error("Error fetching saldos:", error)
-    }
-  }
-
   const resetForm = () => {
     setFormData({
       tipo_auxiliar: "",
@@ -158,7 +256,6 @@ export default function AuxiliaresTab() {
       autorizacion: "",
       vigente: true,
     })
-    setSaldos([])
   }
 
   const handleSave = async () => {
@@ -239,14 +336,32 @@ export default function AuxiliaresTab() {
 
   return (
     <div className="flex flex-col gap-4 h-full overflow-hidden">
-      {/* Fila superior: Tabla de auxiliares y Panel de saldos */}
+      {/* Tabla de auxiliares con buscador */}
       <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
-        {/* Contenedor principal - Tabla de auxiliares */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <Card className="h-full flex flex-col">
-            <CardHeader className="flex-shrink-0">
-              <CardTitle>Auxiliares</CardTitle>
-              <CardDescription>Lista de auxiliares contables</CardDescription>
+            <CardHeader className="flex-shrink-0 flex flex-row items-center gap-4 flex-wrap">
+              <div>
+                <CardTitle>Auxiliares</CardTitle>
+                <CardDescription>Lista de auxiliares contables</CardDescription>
+              </div>
+              <BuscadorAuxiliares
+                auxiliares={auxiliares}
+                loading={loading}
+                value={searchAuxiliar}
+                onChange={(v) => {
+                  setSearchAuxiliar(v)
+                  setFilterToAuxiliarId(null)
+                }}
+                onSelectAuxiliar={(a) => {
+                  setSelectedAuxiliar(a)
+                  const nombre = a.contactos?.nombre ?? a.nombre ?? a.codigo ?? ""
+                  setSearchAuxiliar(nombre)
+                  setFilterToAuxiliarId(a.id)
+                }}
+                placeholder="Buscar por nombre o código..."
+                className="w-[360px]"
+              />
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
               {loading ? (
@@ -267,14 +382,14 @@ export default function AuxiliaresTab() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {auxiliares.length === 0 ? (
+                      {filteredAuxiliaresForList.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center text-gray-500 py-8">
                             No hay auxiliares registrados
                           </TableCell>
                         </TableRow>
                       ) : (
-                        auxiliares.map((auxiliar) => {
+                        filteredAuxiliaresForList.map((auxiliar) => {
                           // Priorizar nombre de contactos si existe
                           const contacto = auxiliar.contactos
                           const nombre = contacto?.nombre ?? auxiliar.nombre ?? '—'
@@ -329,51 +444,6 @@ export default function AuxiliaresTab() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Panel lateral de saldos */}
-        <Card className="w-80 flex-shrink-0 overflow-hidden flex flex-col max-h-full">
-          <CardHeader className="flex-shrink-0">
-            <CardTitle>Saldos por Gestión</CardTitle>
-            <CardDescription>Saldo del auxiliar por gestión</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden flex flex-col min-h-0">
-            {!selectedAuxiliar ? (
-              <div className="text-center text-gray-500 py-8">
-                Seleccione un auxiliar para ver sus saldos
-              </div>
-            ) : saldos.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                No hay saldos registrados
-              </div>
-            ) : (
-              <div className="space-y-4 flex-1 overflow-hidden flex flex-col min-h-0">
-                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
-                  <Table className="min-w-full">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Gestión</TableHead>
-                        <TableHead className="text-right">Saldo</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {saldos.map((saldo, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{saldo.gestion}</TableCell>
-                          <TableCell className="text-right font-mono font-semibold">
-                            {saldo.saldo.toLocaleString("es-BO", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Formulario inferior - Todo el ancho */}

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,6 @@ import {
   Plus, 
   Search, 
   Filter, 
-  Download, 
   Edit,
   Trash2,
   Clock,
@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Loader2,
   FileText,
+  FileSpreadsheet,
   X,
   Copy
 } from "lucide-react"
@@ -40,7 +41,7 @@ interface Cotizacion {
   vendedor: string
   sucursal: string
   total_final: number | null
-  estado: "Pendiente" | "Aprobada" | "Rechazada" | "Vencida"
+  estado: "Pendiente" | "Aprobada" | "Rechazada" | "Vencida" | "Facturada"
   subtotal?: number | null
   total_iva?: number | null
   total_it?: number | null
@@ -63,6 +64,7 @@ const ESTADO_META = {
   'Rechazada': { label: 'Rechazada', className: 'bg-red-100 text-red-800' },
   'Pendiente': { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
   'Vencida': { label: 'Vencida', className: 'bg-gray-100 text-gray-800' },
+  'Facturada': { label: 'Facturada', className: 'bg-purple-100 text-purple-800' },
 } as const
 
 const getEstadoColor = (estado: string) => {
@@ -75,6 +77,8 @@ const getEstadoColor = (estado: string) => {
       return "bg-yellow-100 text-yellow-800"
     case "Vencida":
       return "bg-gray-100 text-gray-800"
+    case "Facturada":
+      return "bg-purple-100 text-purple-800"
     default:
       return "bg-gray-100 text-gray-800"
   }
@@ -90,12 +94,15 @@ const getEstadoIcon = (estado: string) => {
       return <AlertCircle className="w-4 h-4" />
     case "Vencida":
       return <Clock className="w-4 h-4" />
+    case "Facturada":
+      return <FileText className="w-4 h-4" />
     default:
       return <AlertCircle className="w-4 h-4" />
   }
 }
 
 export default function CotizacionesPage() {
+  const router = useRouter()
   const { tieneFuncionTecnica, loading, puedeEliminar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCotizaciones, setSelectedCotizaciones] = useState<string[]>([])
@@ -817,21 +824,24 @@ export default function CotizacionesPage() {
                 </Select>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 {!loading && tieneFuncionTecnica("ver boton exportar") && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
+                  <Button
+                    variant="outline"
+                    size="default"
                     onClick={handleExport}
                     disabled={exporting || cotizaciones.length === 0}
                   >
-                    <Download className="w-4 h-4 mr-2" />
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
                     {exporting ? 'Exportando...' : 'Exportar'}
                   </Button>
                 )}
                 {currentUserVendedor && (
                   <Link href="/panel/ventas/nuevo">
-                    <Button className="bg-[#D54644] hover:bg-[#B03A38] text-white">
+                    <Button
+                      size="default"
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
                       <Plus className="w-4 h-4 mr-2" />
                       Nueva Cotización
                     </Button>
@@ -932,16 +942,33 @@ export default function CotizacionesPage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    {/* Solo mostrar duplicar cuando hay 1 seleccionada */}
                     {selectedCotizaciones.length === 1 && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleDuplicate(selectedCotizaciones[0])}
-                      >
-                        <Copy className="w-4 h-4 mr-2" />
-                        Duplicar cotización
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDuplicate(selectedCotizaciones[0])}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Duplicar cotización
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const cot = cotizaciones.find((c) => c.id === selectedCotizaciones[0]) ?? filteredCotizaciones.find((c) => c.id === selectedCotizaciones[0])
+                            if (!cot) return
+                            if (cot.estado !== "Aprobada") {
+                              toast.error("Solo se puede crear factura desde una cotización aprobada.")
+                              return
+                            }
+                            router.push(`/panel/contabilidad/facturas/manuales/nueva?cotizacion_id=${selectedCotizaciones[0]}`)
+                          }}
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          Crear factura
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

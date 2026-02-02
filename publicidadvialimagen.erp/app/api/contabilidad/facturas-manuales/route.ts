@@ -7,6 +7,25 @@ import { requirePermiso } from "@/lib/permisos";
 const EMPRESA_ID = 1;
 const COTIZACION_FIJA = 6.96;
 
+/** Obtiene el siguiente número de factura libre (FAC-0001, FAC-0002, ...). */
+async function obtenerSiguienteNumero(supabase: ReturnType<typeof getSupabaseAdmin>): Promise<string> {
+  const { data: facturas } = await supabase
+    .from("facturas_manuales")
+    .select("numero")
+    .not("numero", "is", null)
+    .like("numero", "FAC-%")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const numeros = (facturas || [])
+    .map((row: any) => {
+      const match = String(row.numero || "").match(/^FAC-(\d+)$/i);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter((n: number) => !isNaN(n) && n > 0);
+  const siguiente = numeros.length > 0 ? Math.max(...numeros) + 1 : 1;
+  return `FAC-${siguiente.toString().padStart(4, "0")}`;
+}
+
 /** GET - Listar facturas manuales (o exportar CSV si format=csv) */
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("facturas_manuales")
-      .select("id, numero, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion, tipo_cambio, subtotal, total, estado, created_at, updated_at", format === "csv" ? {} : { count: "exact" })
+      .select("id, numero, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion_id, tipo_cambio, subtotal, total, estado, created_at, updated_at", format === "csv" ? {} : { count: "exact" })
       .eq("empresa_id", EMPRESA_ID)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false });
@@ -67,9 +86,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const list = (data || []).map((f: any) => ({ ...f, cotizacion: f.cotizacion_id ?? f.cotizacion }));
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data: list,
       pagination: {
         page,
         limit,
@@ -116,10 +136,13 @@ export async function POST(request: NextRequest) {
     const subtotal = total;
 
     // creado_por y vendedor_id tienen FK a auth.users(id); la app usa public.usuarios(id).
-    // Se envían como null para evitar 500 por violación de FK. Ver comentario en código para SQL alternativo.
+    // cotizacion en la tabla es numeric(12,4); el UUID de la cotización (documento) va en cotizacion_id.
+    const cotizacionUuidVal = (cotizacionId != null && String(cotizacionId).trim() !== "") ? String(cotizacionId).trim() : null;
+    const numeroVal = (numero != null && String(numero).trim() !== "") ? String(numero).trim() : null;
+    const numeroFinal = numeroVal ?? await obtenerSiguienteNumero(supabase);
     const row = {
       empresa_id: EMPRESA_ID,
-      numero: numero ?? null,
+      numero: numeroFinal,
       fecha: fecha || new Date().toISOString().split("T")[0],
       vendedor_id: null,
       creado_por: null,
@@ -127,7 +150,7 @@ export async function POST(request: NextRequest) {
       cliente_nit: (cliente_nit ?? "").trim() || "",
       glosa: glosa ?? null,
       moneda: moneda ?? "BOB",
-      cotizacion: cotizacionId ?? null,
+      cotizacion_id: cotizacionUuidVal,
       tipo_cambio: tipo_cambio != null ? Number(tipo_cambio) : COTIZACION_FIJA,
       subtotal: Number(subtotal) || 0,
       total: Number(total) || 0,
@@ -176,6 +199,24 @@ export async function POST(request: NextRequest) {
           { error: "Error al guardar ítems de la factura", details: errItems.message },
           { status: 500 }
         );
+      }
+    }
+
+    // Si la factura tiene cotización vinculada, marcar la cotización en estado "Borrador" (no fallar la respuesta si falla el update)
+    if (cotizacionUuidVal) {
+      try {
+        const { error: errCot } = await supabase
+          .from("cotizaciones")
+          .update({
+            estado: "Borrador",
+            fecha_actualizacion: new Date().toISOString(),
+          })
+          .eq("id", cotizacionUuidVal);
+        if (errCot) {
+          console.error("Error actualizando estado cotización a Borrador:", errCot);
+        }
+      } catch (e) {
+        console.error("Excepción al actualizar cotización a Borrador:", e);
       }
     }
 

@@ -51,6 +51,7 @@ export async function GET(
       success: true,
       data: {
         ...factura,
+        cotizacion: factura.cotizacion_id ?? factura.cotizacion,
         items: items || [],
       },
     });
@@ -113,7 +114,10 @@ export async function PUT(
       updated_at: new Date().toISOString(),
       ...(estado != null && estado !== undefined ? { estado } : {}),
     };
-    if (Object.prototype.hasOwnProperty.call(body, "cotizacion")) updateRow.cotizacion = (cotizacionId ?? "") === "" ? null : cotizacionId
+    if (Object.prototype.hasOwnProperty.call(body, "cotizacion")) {
+      const uuidVal = (cotizacionId ?? "") === "" ? null : cotizacionId;
+      updateRow.cotizacion_id = uuidVal;
+    }
     if (tipo_cambio != null) updateRow.tipo_cambio = Number(tipo_cambio)
 
     const { data: factura, error: errUpdate } = await supabase
@@ -121,7 +125,7 @@ export async function PUT(
       .update(updateRow)
       .eq("id", id)
       .eq("empresa_id", EMPRESA_ID)
-      .select("id, numero, fecha, total, estado, cotizacion")
+      .select("id, numero, fecha, total, estado, cotizacion_id")
       .single();
 
     if (errUpdate) {
@@ -178,33 +182,37 @@ export async function PUT(
       }
     }
 
-    // Si la factura se marca como aprobada (FACTURADA) y está vinculada a una cotización, actualizar la cotización a "Facturada" (morado)
-    const cotizacionUuid = ((cotizacionId ?? (factura as any)?.cotizacion) ?? "").trim()
-    if (estado === "FACTURADA" && cotizacionUuid) {
-      const { error: errCot } = await supabase
-        .from("cotizaciones")
-        .update({
-          estado: "Facturada",
-          fecha_actualizacion: new Date().toISOString(),
-        })
-        .eq("id", cotizacionUuid)
-      if (errCot) {
-        console.error("Error actualizando estado cotización a Facturada:", errCot)
-        // No fallar la respuesta: la factura ya se actualizó correctamente
-      }
-    }
-
-    // Si la factura se anula (ANULADA) y estaba vinculada a una cotización Facturada, devolver la cotización a "Aprobada"
-    if (estado === "ANULADA" && cotizacionUuid) {
-      const { error: errCotAnul } = await supabase
-        .from("cotizaciones")
-        .update({
-          estado: "Aprobada",
-          fecha_actualizacion: new Date().toISOString(),
-        })
-        .eq("id", cotizacionUuid)
-      if (errCotAnul) {
-        console.error("Error actualizando estado cotización a Aprobada:", errCotAnul)
+    // Si la factura está vinculada a una cotización, actualizar el estado de la cotización según el estado de la factura
+    const cotizacionUuid = ((cotizacionId ?? (factura as any)?.cotizacion_id) ?? "").trim();
+    if (cotizacionUuid) {
+      if (estado === "FACTURADA") {
+        const { error: errCot } = await supabase
+          .from("cotizaciones")
+          .update({
+            estado: "Facturada",
+            fecha_actualizacion: new Date().toISOString(),
+          })
+          .eq("id", cotizacionUuid);
+        if (errCot) console.error("Error actualizando estado cotización a Facturada:", errCot);
+      } else if (estado === "ANULADA") {
+        const { error: errCotAnul } = await supabase
+          .from("cotizaciones")
+          .update({
+            estado: "Aprobada",
+            fecha_actualizacion: new Date().toISOString(),
+          })
+          .eq("id", cotizacionUuid);
+        if (errCotAnul) console.error("Error actualizando estado cotización a Aprobada:", errCotAnul);
+      } else {
+        // Guardar con estado BORRADOR (o cualquier otro): cotización en "Borrador"
+        const { error: errCotBorrador } = await supabase
+          .from("cotizaciones")
+          .update({
+            estado: "Borrador",
+            fecha_actualizacion: new Date().toISOString(),
+          })
+          .eq("id", cotizacionUuid);
+        if (errCotBorrador) console.error("Error actualizando estado cotización a Borrador:", errCotBorrador);
       }
     }
 

@@ -233,10 +233,10 @@ export async function GET(
       codigo: 18,
       cantidad: 14,
       unidad: 12,
-      descripcion: 58,
-      precio: 22,
+      descripcion: 82,
+      precio: 18,
       descuento: 18,
-      importe: 28,
+      importe: 18,
     };
 
     pdf.setFontSize(8);
@@ -245,21 +245,22 @@ export async function GET(
     pdf.setDrawColor(200, 200, 200);
     const headerH = 8;
     pdf.rect(15, yPosition - 5, tableWidth, headerH, "FD");
+    const headerTextY = yPosition - 5 + headerH / 2 + 1.5;
     let xP = 15;
-    pdf.text("Código", xP + 2, yPosition);
+    pdf.text("Código", xP + 2, headerTextY);
     xP += colWidths.codigo;
-    pdf.text("Cant.", xP + colWidths.cantidad / 2, yPosition, { align: "center" });
+    pdf.text("Cant.", xP + colWidths.cantidad / 2, headerTextY, { align: "center" });
     xP += colWidths.cantidad;
-    pdf.text("Unidad", xP + colWidths.unidad / 2, yPosition, { align: "center" });
+    pdf.text("Unidad", xP + colWidths.unidad / 2, headerTextY, { align: "center" });
     xP += colWidths.unidad;
-    pdf.text("Descripción", xP + 2, yPosition);
+    pdf.text("Descripción", xP + 2, headerTextY);
     xP += colWidths.descripcion;
-    pdf.text("P. unit.", xP + colWidths.precio / 2, yPosition, { align: "center" });
+    pdf.text("P. unit.", xP + colWidths.precio / 2, headerTextY, { align: "center" });
     xP += colWidths.precio;
-    pdf.text("Descuento", xP + colWidths.descuento / 2, yPosition, { align: "center" });
+    pdf.text("Descuento", xP + colWidths.descuento / 2, headerTextY, { align: "center" });
     xP += colWidths.descuento;
-    pdf.text("Subtotal", xP + colWidths.importe / 2, yPosition, { align: "center" });
-    yPosition += 8;
+    pdf.text("Subtotal", xP + colWidths.importe / 2, headerTextY, { align: "center" });
+    yPosition += headerH;
     pdf.setFont("helvetica", "normal");
 
     let totalImporte = 0;
@@ -310,6 +311,14 @@ export async function GET(
       pdf.text(formatearNumero(importeItem), xP + colWidths.importe / 2, yPosition, { align: "center" });
       yPosition += rowH;
     });
+
+    const gapCierre = 3;
+    const yCierre = yPosition + gapCierre;
+    pdf.setDrawColor(80, 80, 80);
+    pdf.setLineWidth(0.6);
+    pdf.line(15, yCierre, 15 + tableWidth, yCierre);
+    pdf.setLineWidth(0.3);
+    yPosition = yCierre + gapCierre;
 
     const subtotalDoc = Number(factura.subtotal) ?? totalImporte;
     const descuentoDoc = Number(factura.descuento) || 0;

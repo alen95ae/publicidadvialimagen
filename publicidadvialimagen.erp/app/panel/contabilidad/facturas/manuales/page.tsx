@@ -188,27 +188,35 @@ export default function FacturasManualesListPage() {
 
   const handleDuplicate = async (id: string) => {
     try {
-      const res = await api(`/api/contabilidad/facturas-manuales/${id}`)
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.success) {
+      const [resFactura, resNumero] = await Promise.all([
+        api(`/api/contabilidad/facturas-manuales/${id}`),
+        api("/api/contabilidad/facturas-manuales/generar-numero"),
+      ])
+      const json = await resFactura.json().catch(() => ({}))
+      if (!resFactura.ok || !json.success) {
         toast.error(json.error || "Error al cargar factura")
         return
       }
+      const numeroJson = await resNumero.json().catch(() => ({}))
+      const siguienteCodigo = numeroJson.success && numeroJson.codigo ? numeroJson.codigo : null
       const { data } = json
       const payload = {
-        numero: null,
+        numero: siguienteCodigo,
         fecha: data.fecha,
         vendedor_id: data.vendedor_id,
         cliente_nombre: data.cliente_nombre,
         cliente_nit: data.cliente_nit,
         glosa: data.glosa,
         moneda: data.moneda,
+        tipo_cambio: data.tipo_cambio,
         cotizacion: data.cotizacion,
         items: (data.items || []).map((it: any) => ({
-          nro_cont: it.nro_cont,
+          codigo_producto: it.codigo_producto,
           descripcion: it.descripcion,
           cantidad: it.cantidad,
+          unidad_medida: it.unidad_medida,
           precio_unitario: it.precio_unitario,
+          descuento: it.descuento,
           importe: it.importe,
         })),
       }
@@ -452,7 +460,7 @@ export default function FacturasManualesListPage() {
                 </Link>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto w-full">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
@@ -481,7 +489,9 @@ export default function FacturasManualesListPage() {
                           />
                         </td>
                         <td className="py-3 px-4 align-middle">
-                          <span className="font-mono text-xs text-gray-800">{f.numero || "—"}</span>
+                          <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200 whitespace-nowrap">
+                            {f.numero || "—"}
+                          </span>
                         </td>
                         <td className="py-3 px-4 align-middle text-sm text-gray-600">
                           {new Date(f.fecha).toLocaleDateString("es-ES")}

@@ -41,7 +41,7 @@ interface Cotizacion {
   vendedor: string
   sucursal: string
   total_final: number | null
-  estado: "Pendiente" | "Aprobada" | "Rechazada" | "Vencida" | "Facturada"
+  estado: "Pendiente" | "Aprobada" | "Rechazada" | "Vencida" | "Facturada" | "Borrador"
   subtotal?: number | null
   total_iva?: number | null
   total_it?: number | null
@@ -65,6 +65,7 @@ const ESTADO_META = {
   'Pendiente': { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800' },
   'Vencida': { label: 'Vencida', className: 'bg-gray-100 text-gray-800' },
   'Facturada': { label: 'Facturada', className: 'bg-purple-100 text-purple-800' },
+  'Borrador': { label: 'Borrador', className: 'bg-slate-100 text-slate-800' },
 } as const
 
 const getEstadoColor = (estado: string) => {
@@ -79,6 +80,8 @@ const getEstadoColor = (estado: string) => {
       return "bg-gray-100 text-gray-800"
     case "Facturada":
       return "bg-purple-100 text-purple-800"
+    case "Borrador":
+      return "bg-slate-100 text-slate-800"
     default:
       return "bg-gray-100 text-gray-800"
   }
@@ -95,6 +98,8 @@ const getEstadoIcon = (estado: string) => {
     case "Vencida":
       return <Clock className="w-4 h-4" />
     case "Facturada":
+      return <FileText className="w-4 h-4" />
+    case "Borrador":
       return <FileText className="w-4 h-4" />
     default:
       return <AlertCircle className="w-4 h-4" />

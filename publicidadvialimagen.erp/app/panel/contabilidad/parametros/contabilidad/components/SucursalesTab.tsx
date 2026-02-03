@@ -6,23 +6,31 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
+import type { Sucursal } from "@/lib/types/contabilidad"
 import type { Empresa } from "@/lib/types/contabilidad"
 
-export default function EmpresasTab() {
+type SucursalConEmpresa = Sucursal & {
+  empresas?: { codigo: string; nombre: string } | null
+}
+
+export default function SucursalesTab() {
+  const [sucursales, setSucursales] = useState<SucursalConEmpresa[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null)
+  const [selectedSucursal, setSelectedSucursal] = useState<SucursalConEmpresa | null>(null)
 
-  const [formData, setFormData] = useState<Partial<Empresa>>({
+  const [formData, setFormData] = useState<Partial<Sucursal>>({
+    empresa_id: "",
     codigo: "",
     nombre: "",
     representante: "",
     direccion: "",
-    casilla: "",
+    sucursal: "",
     telefonos: "",
     email: "",
     pais: "",
@@ -33,31 +41,32 @@ export default function EmpresasTab() {
 
   useEffect(() => {
     fetchEmpresas()
+    fetchSucursales()
   }, [])
 
   useEffect(() => {
-    if (selectedEmpresa) {
+    if (selectedSucursal) {
       setFormData({
-        codigo: selectedEmpresa.codigo,
-        nombre: selectedEmpresa.nombre,
-        representante: selectedEmpresa.representante || "",
-        direccion: selectedEmpresa.direccion || "",
-        casilla: selectedEmpresa.casilla || "",
-        telefonos: selectedEmpresa.telefonos || "",
-        email: selectedEmpresa.email || "",
-        pais: selectedEmpresa.pais || "",
-        ciudad: selectedEmpresa.ciudad || "",
-        localidad: selectedEmpresa.localidad || "",
-        nit: selectedEmpresa.nit || "",
+        empresa_id: selectedSucursal.empresa_id,
+        codigo: selectedSucursal.codigo,
+        nombre: selectedSucursal.nombre,
+        representante: selectedSucursal.representante || "",
+        direccion: selectedSucursal.direccion || "",
+        sucursal: selectedSucursal.sucursal || "",
+        telefonos: selectedSucursal.telefonos || "",
+        email: selectedSucursal.email || "",
+        pais: selectedSucursal.pais || "",
+        ciudad: selectedSucursal.ciudad || "",
+        localidad: selectedSucursal.localidad || "",
+        nit: selectedSucursal.nit || "",
       })
     } else {
       resetForm()
     }
-  }, [selectedEmpresa])
+  }, [selectedSucursal])
 
   const fetchEmpresas = async () => {
     try {
-      setLoading(true)
       const response = await api("/api/contabilidad/empresas?limit=1000")
       if (response.ok) {
         const data = await response.json()
@@ -68,6 +77,22 @@ export default function EmpresasTab() {
     } catch (error) {
       console.error("Error fetching empresas:", error)
       setEmpresas([])
+    }
+  }
+
+  const fetchSucursales = async () => {
+    try {
+      setLoading(true)
+      const response = await api("/api/contabilidad/sucursales?limit=1000")
+      if (response.ok) {
+        const data = await response.json()
+        setSucursales(data.data || [])
+      } else {
+        setSucursales([])
+      }
+    } catch (error) {
+      console.error("Error fetching sucursales:", error)
+      setSucursales([])
     } finally {
       setLoading(false)
     }
@@ -75,11 +100,12 @@ export default function EmpresasTab() {
 
   const resetForm = () => {
     setFormData({
+      empresa_id: "",
       codigo: "",
       nombre: "",
       representante: "",
       direccion: "",
-      casilla: "",
+      sucursal: "",
       telefonos: "",
       email: "",
       pais: "",
@@ -90,53 +116,51 @@ export default function EmpresasTab() {
   }
 
   const handleNew = () => {
-    setSelectedEmpresa(null)
+    setSelectedSucursal(null)
     resetForm()
   }
 
   const handleSave = async () => {
-    if (!formData.codigo || !formData.nombre) {
-      toast.error("Código y nombre son requeridos")
+    if (!formData.empresa_id || !formData.codigo || !formData.nombre) {
+      toast.error("Empresa, código y nombre son requeridos")
       return
     }
 
     try {
       setSaving(true)
 
-      if (selectedEmpresa?.id) {
-        // Actualizar
-        const response = await api(`/api/contabilidad/empresas/${selectedEmpresa.id}`, {
+      if (selectedSucursal?.id) {
+        const response = await api(`/api/contabilidad/sucursales/${selectedSucursal.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData),
         })
 
         if (response.ok) {
-          toast.success("Empresa actualizada correctamente")
-          fetchEmpresas()
+          toast.success("Sucursal actualizada correctamente")
+          fetchSucursales()
         } else {
           const error = await response.json()
-          toast.error(error.error || "Error al actualizar la empresa")
+          toast.error(error.error || "Error al actualizar la sucursal")
         }
       } else {
-        // Crear
-        const response = await api("/api/contabilidad/empresas", {
+        const response = await api("/api/contabilidad/sucursales", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData),
         })
 
         if (response.ok) {
-          toast.success("Empresa creada correctamente")
+          toast.success("Sucursal creada correctamente")
           resetForm()
-          fetchEmpresas()
+          fetchSucursales()
         } else {
           const error = await response.json()
-          toast.error(error.error || "Error al crear la empresa")
+          toast.error(error.error || "Error al crear la sucursal")
         }
       }
     } catch (error) {
-      console.error("Error saving empresa:", error)
+      console.error("Error saving sucursal:", error)
       toast.error("Error de conexión")
     } finally {
       setSaving(false)
@@ -144,47 +168,48 @@ export default function EmpresasTab() {
   }
 
   const handleDelete = async () => {
-    if (!selectedEmpresa?.id) {
-      toast.error("Debe seleccionar una empresa para eliminar")
+    if (!selectedSucursal?.id) {
+      toast.error("Debe seleccionar una sucursal para eliminar")
       return
     }
 
-    if (!confirm(`¿Estás seguro de que quieres eliminar la empresa "${selectedEmpresa.nombre}"?`)) {
+    if (!confirm(`¿Estás seguro de que quieres eliminar la sucursal "${selectedSucursal.nombre}"?`)) {
       return
     }
 
     try {
       setSaving(true)
-      const response = await api(`/api/contabilidad/empresas/${selectedEmpresa.id}`, {
+      const response = await api(`/api/contabilidad/sucursales/${selectedSucursal.id}`, {
         method: "DELETE",
       })
 
       if (response.ok) {
-        toast.success("Empresa eliminada correctamente")
-        setSelectedEmpresa(null)
+        toast.success("Sucursal eliminada correctamente")
+        setSelectedSucursal(null)
         resetForm()
-        fetchEmpresas()
+        fetchSucursales()
       } else {
         const error = await response.json()
-        toast.error(error.error || "Error al eliminar la empresa")
+        toast.error(error.error || "Error al eliminar la sucursal")
       }
     } catch (error) {
-      console.error("Error deleting empresa:", error)
+      console.error("Error deleting sucursal:", error)
       toast.error("Error de conexión")
     } finally {
       setSaving(false)
     }
   }
 
-  const isEditing = !!selectedEmpresa?.id
+  const isEditing = !!selectedSucursal?.id
+  const empresaNombre = (s: SucursalConEmpresa) =>
+    s.empresas ? `${s.empresas.codigo} - ${s.empresas.nombre}` : s.empresa_id || "—"
 
   return (
     <div className="space-y-6">
-      {/* Tabla de empresas */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Empresas</CardTitle>
-          <CardDescription>Selecciona una empresa para ver o editar</CardDescription>
+          <CardTitle>Lista de Sucursales</CardTitle>
+          <CardDescription>Selecciona una sucursal para ver o editar</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -196,34 +221,34 @@ export default function EmpresasTab() {
                   <TableRow>
                     <TableHead>Código</TableHead>
                     <TableHead>Nombre</TableHead>
-                    <TableHead>NIT</TableHead>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Sucursal</TableHead>
                     <TableHead>Ciudad</TableHead>
                     <TableHead>Teléfonos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {empresas.length === 0 ? (
+                  {sucursales.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-gray-500 py-8">
-                        No hay empresas registradas
+                      <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                        No hay sucursales registradas
                       </TableCell>
                     </TableRow>
                   ) : (
-                    empresas.map((empresa) => (
+                    sucursales.map((suc) => (
                       <TableRow
-                        key={empresa.id}
-                        onClick={() => setSelectedEmpresa(empresa)}
+                        key={suc.id}
+                        onClick={() => setSelectedSucursal(suc)}
                         className={`cursor-pointer ${
-                          selectedEmpresa?.id === empresa.id ? "bg-blue-50" : ""
+                          selectedSucursal?.id === suc.id ? "bg-blue-50" : ""
                         }`}
                       >
-                        <TableCell className="font-mono font-semibold">
-                          {empresa.codigo}
-                        </TableCell>
-                        <TableCell className="font-semibold">{empresa.nombre}</TableCell>
-                        <TableCell className="font-mono">{empresa.nit || "—"}</TableCell>
-                        <TableCell>{empresa.ciudad || "—"}</TableCell>
-                        <TableCell>{empresa.telefonos || "—"}</TableCell>
+                        <TableCell className="font-mono font-semibold">{suc.codigo}</TableCell>
+                        <TableCell className="font-semibold">{suc.nombre}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{empresaNombre(suc)}</TableCell>
+                        <TableCell>{suc.sucursal || "—"}</TableCell>
+                        <TableCell>{suc.ciudad || "—"}</TableCell>
+                        <TableCell>{suc.telefonos || "—"}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -234,18 +259,17 @@ export default function EmpresasTab() {
         </CardContent>
       </Card>
 
-      {/* Formulario */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>
-                {isEditing ? `Editar Empresa ${selectedEmpresa?.codigo}` : "Nueva Empresa"}
+                {isEditing ? `Editar Sucursal ${selectedSucursal?.codigo}` : "Nueva Sucursal"}
               </CardTitle>
               <CardDescription>
                 {isEditing
-                  ? "Edita la información de la empresa"
-                  : "Complete la información para crear una nueva empresa"}
+                  ? "Edita la información de la sucursal"
+                  : "Complete la información para crear una nueva sucursal"}
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -278,6 +302,27 @@ export default function EmpresasTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Empresa */}
+            <div className="space-y-2">
+              <Label htmlFor="empresa_id">Empresa *</Label>
+              <Select
+                value={formData.empresa_id || ""}
+                onValueChange={(v) => setFormData({ ...formData, empresa_id: v })}
+                disabled={isEditing}
+              >
+                <SelectTrigger id="empresa_id">
+                  <SelectValue placeholder="Seleccionar empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.codigo} - {e.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Código */}
             <div className="space-y-2">
               <Label htmlFor="codigo">Código *</Label>
@@ -298,7 +343,18 @@ export default function EmpresasTab() {
                 id="nombre"
                 value={formData.nombre || ""}
                 onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Nombre de la empresa"
+                placeholder="Nombre de la sucursal"
+              />
+            </div>
+
+            {/* Sucursal */}
+            <div className="space-y-2">
+              <Label htmlFor="sucursal">Sucursal</Label>
+              <Input
+                id="sucursal"
+                value={formData.sucursal || ""}
+                onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                placeholder="Ej: La Paz, Santa Cruz"
               />
             </div>
 
@@ -321,17 +377,6 @@ export default function EmpresasTab() {
                 value={formData.direccion || ""}
                 onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
                 placeholder="Dirección completa"
-              />
-            </div>
-
-            {/* Casilla */}
-            <div className="space-y-2">
-              <Label htmlFor="casilla">Casilla</Label>
-              <Input
-                id="casilla"
-                value={formData.casilla || ""}
-                onChange={(e) => setFormData({ ...formData, casilla: e.target.value })}
-                placeholder="Número de casilla"
               />
             </div>
 

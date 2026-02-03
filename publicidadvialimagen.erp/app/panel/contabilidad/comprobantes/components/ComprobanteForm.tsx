@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown, BookOpen } from "lucide-react"
+import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown, BookOpen, FileDown } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
@@ -25,6 +25,11 @@ interface ComprobanteFormProps {
   onSave: () => void
   /** Se llama al aprobar; el padre puede actualizar la selección para habilitar Exportar PDF */
   onAprobado?: (comprobante: Comprobante) => void
+  onExportPDF?: () => void
+  exportingPDF?: boolean
+  /** Incrementado por la página para disparar guardado; el formulario reacciona en useEffect */
+  triggerSave?: number
+  onSavingChange?: (saving: boolean) => void
 }
 
 const ORIGENES: OrigenComprobante[] = ["Contabilidad", "Ventas", "Tesorería", "Activos", "Planillas"]
@@ -96,7 +101,7 @@ function createDefaultDetalleLine(): ComprobanteDetalle {
   }
 }
 
-export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado }: ComprobanteFormProps) {
+export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado, onExportPDF, exportingPDF = false, triggerSave = 0, onSavingChange }: ComprobanteFormProps) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
@@ -647,12 +652,9 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     setOpenCuentaCombobox(prev => ({ ...prev, [detalleIndex]: false }))
   }
 
-  // Función para seleccionar auxiliar
+  // Función para seleccionar auxiliar (guardar código para backend; legacy guardaba nombre)
   const seleccionarAuxiliar = (detalleIndex: number, auxiliar: Auxiliar) => {
-    // Guardar solo el nombre del auxiliar (priorizando contactos si existe)
-    const contacto = auxiliar.contactos
-    const nombre = contacto?.nombre ?? auxiliar.nombre ?? auxiliar.nombre
-    handleDetalleChange(detalleIndex, "auxiliar", nombre)
+    handleDetalleChange(detalleIndex, "auxiliar", auxiliar.codigo)
     setOpenAuxiliarCombobox(prev => ({ ...prev, [detalleIndex]: false }))
   }
 
@@ -990,10 +992,16 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     return nuevosDetalles
   }
 
-  // Obtener el texto a mostrar para el auxiliar seleccionado (solo nombre)
-  const getAuxiliarDisplayText = (auxiliarNombre: string | null | undefined) => {
-    if (!auxiliarNombre) return "Seleccionar auxiliar..."
-    return auxiliarNombre
+  // Obtener el texto a mostrar: por código (nuevo) o por nombre (legacy)
+  const getAuxiliarDisplayText = (auxiliarVal: string | null | undefined) => {
+    if (!auxiliarVal) return "Seleccionar auxiliar..."
+    const a = auxiliares.find(
+      (x) =>
+        x.codigo === auxiliarVal ||
+        (x.contactos?.nombre ?? x.nombre) === auxiliarVal
+    )
+    if (a) return a.contactos?.nombre ?? a.nombre ?? a.codigo
+    return auxiliarVal
   }
 
   // Calcular totales
@@ -1264,25 +1272,28 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                   : "Complete la información para crear un nuevo comprobante"}
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={saving || isReadOnly}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {saving ? "Guardando..." : "Guardar"}
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
               {!isReadOnly && (
                 <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleAprobar}
                   disabled={saving || !isBalanced}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="text-green-600 hover:text-green-700 border-green-600 hover:bg-green-50"
                 >
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Aprobar
+                </Button>
+              )}
+              {onExportPDF && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onExportPDF}
+                  disabled={!comprobante || comprobante.estado !== "APROBADO" || exportingPDF}
+                >
+                  <FileDown className="w-4 h-4 mr-2" />
+                  {exportingPDF ? "Exportando..." : "Exportar PDF"}
                 </Button>
               )}
             </div>
@@ -1727,7 +1738,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                                     role="combobox"
                                     disabled={isReadOnly || esFija}
                                     className={cn(
-                                      "w-[250px] h-9 justify-between font-mono text-sm overflow-hidden",
+                                      "w-[250px] h-9 justify-between text-sm overflow-hidden",
                                       !detalle.cuenta && "text-muted-foreground",
                                       esFija && "bg-gray-50 cursor-not-allowed"
                                     )}
@@ -1789,12 +1800,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                           onOpenChange={(open) => {
                             setOpenAuxiliarCombobox(prev => ({ ...prev, [index]: open }))
                             if (open) {
-                              // Si hay un auxiliar seleccionado, buscarlo y ponerlo primero
+                              // Si hay un auxiliar seleccionado, buscarlo (por código o por nombre legacy) y ponerlo primero
                               if (detalle.auxiliar) {
                                 const auxiliarEncontrado = auxiliares.find(a => {
-                                  const contacto = a.contactos
-                                  const nombre = contacto?.nombre ?? a.nombre ?? a.nombre
-                                  return nombre === detalle.auxiliar
+                                  const nombre = a.contactos?.nombre ?? a.nombre
+                                  return a.codigo === detalle.auxiliar || nombre === detalle.auxiliar
                                 })
                                 if (auxiliarEncontrado) {
                                   // Poner el auxiliar seleccionado primero
@@ -1848,10 +1858,9 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                                 {(filteredAuxiliares[index] || []).length > 0 && (
                                   <CommandGroup>
                                     {(filteredAuxiliares[index] || []).map((auxiliar) => {
-                                      // Priorizar nombre de contactos si existe
-                                      const contacto = auxiliar.contactos
-                                      const nombre = contacto?.nombre ?? auxiliar.nombre ?? auxiliar.nombre
-                                      const isSelected = detalle.auxiliar === nombre
+                                      const nombre = auxiliar.contactos?.nombre ?? auxiliar.nombre ?? auxiliar.nombre
+                                      const isSelected =
+                                        detalle.auxiliar === auxiliar.codigo || detalle.auxiliar === nombre
                                       
                                       return (
                                         <CommandItem

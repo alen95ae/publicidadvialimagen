@@ -272,10 +272,47 @@ export default function BalanceSumasSaldosReporte() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>BALANCE DE SUMAS Y SALDOS</CardTitle>
-        <CardDescription>
-          Configure los filtros para generar el balance de sumas y saldos
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>BALANCE DE SUMAS Y SALDOS</CardTitle>
+            <CardDescription>
+              Configure los filtros para generar el balance de sumas y saldos
+            </CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleExportarExcel}
+              disabled={exportingPDF || exportingExcel}
+              variant="outline"
+              size="sm"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              {exportingExcel ? "Exportando..." : "Exportar Excel"}
+            </Button>
+            <Button
+              onClick={handleExportarPDF}
+              disabled={exportingPDF || exportingExcel}
+              variant="outline"
+              size="sm"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              {exportingPDF ? "Exportando..." : "Exportar PDF"}
+            </Button>
+            <Button
+              onClick={handleGenerarReporte}
+              disabled={loading || exportingPDF || exportingExcel}
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              Generar Reporte
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Filtros Principales */}
@@ -426,48 +463,6 @@ export default function BalanceSumasSaldosReporte() {
         </div>
 
         <Separator />
-
-        {/* Acciones */}
-        <div className="flex justify-end gap-4 pt-4">
-          <Button
-            onClick={handleExportarPDF}
-            disabled={exportingPDF || exportingExcel}
-            variant="outline"
-            className="border-red-600 text-red-600 hover:bg-red-50"
-          >
-            {exportingPDF ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <FileDown className="w-4 h-4 mr-2" />
-            )}
-            Exportar PDF
-          </Button>
-          <Button
-            onClick={handleExportarExcel}
-            disabled={exportingPDF || exportingExcel}
-            variant="outline"
-            className="border-green-600 text-green-600 hover:bg-green-50"
-          >
-            {exportingExcel ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-            )}
-            Exportar Excel
-          </Button>
-          <Button
-            onClick={handleGenerarReporte}
-            disabled={loading || exportingPDF || exportingExcel}
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Play className="w-4 h-4 mr-2" />
-            )}
-            Generar Reporte
-          </Button>
-        </div>
 
         {/* Tabla de Resultados */}
         {data.length > 0 && (

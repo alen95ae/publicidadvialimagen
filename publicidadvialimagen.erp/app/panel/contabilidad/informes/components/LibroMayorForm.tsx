@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,29 +9,25 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { FileDown, Play } from "lucide-react"
+import { FileDown, FileSpreadsheet, Play, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
+import type { Empresa } from "@/lib/types/contabilidad"
+import type { Sucursal } from "@/lib/types/contabilidad"
 
 interface LibroMayorFilters {
-  // Sección Empresa
-  empresa: string
-  regional: string
-  sucursal: string
-  // Sección Filtros
+  empresa_id: string
+  sucursal_id: string
   clasificador: string
   desde_cuenta: string
   hasta_cuenta: string
-  // Sección Fechas
   fecha_inicial: string
   fecha_final: string
-  // Sección Moneda
   moneda: string
-  // Sección Estado
   estado: string
 }
 
-interface MovimientoLibroMayor {
+interface MovimientoConSaldo {
   cuenta: string
   descripcion_cuenta: string
   fecha: string
@@ -41,19 +37,26 @@ interface MovimientoLibroMayor {
   glosa_detalle: string
   debe: number
   haber: number
-  orden: number
+  saldo: number
+  orden?: number
 }
 
-interface MovimientoConSaldo extends MovimientoLibroMayor {
-  saldo: number
-}
+const CLASIFICADORES = [
+  { value: "todos", label: "Todas" },
+  { value: "Activo", label: "Activo" },
+  { value: "Pasivo", label: "Pasivo" },
+  { value: "Patrimonio", label: "Patrimonio" },
+  { value: "Ingreso", label: "Ingreso" },
+  { value: "Gasto", label: "Gasto" },
+]
 
 export default function LibroMayorForm() {
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [filters, setFilters] = useState<LibroMayorFilters>({
-    empresa: "001",
-    regional: "01",
-    sucursal: "001",
-    clasificador: "",
+    empresa_id: "todos",
+    sucursal_id: "todos",
+    clasificador: "todos",
     desde_cuenta: "",
     hasta_cuenta: "",
     fecha_inicial: new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0],
@@ -63,69 +66,100 @@ export default function LibroMayorForm() {
   })
 
   const [loading, setLoading] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
   const [movimientos, setMovimientos] = useState<MovimientoConSaldo[]>([])
+  const [hasGenerated, setHasGenerated] = useState(false)
+
+  const monedaSufijo = filters.moneda === "USD" ? "$" : "Bs"
+
+  useEffect(() => {
+    const loadEmpresas = async () => {
+      try {
+        const res = await api("/api/contabilidad/empresas?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          setEmpresas(data.data || [])
+        }
+      } catch (e) {
+        console.error("Error loading empresas:", e)
+      }
+    }
+    loadEmpresas()
+  }, [])
+
+  useEffect(() => {
+    const loadSucursales = async () => {
+      try {
+        const params = new URLSearchParams()
+        params.set("limit", "1000")
+        if (filters.empresa_id && filters.empresa_id !== "todos") {
+          params.set("empresa_id", filters.empresa_id)
+        }
+        const res = await api(`/api/contabilidad/sucursales?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          setSucursales(data.data || [])
+        } else {
+          setSucursales([])
+        }
+      } catch (e) {
+        console.error("Error loading sucursales:", e)
+        setSucursales([])
+      }
+    }
+    loadSucursales()
+  }, [filters.empresa_id])
 
   const handleFilterChange = (field: keyof LibroMayorFilters, value: string) => {
-    setFilters((prev) => ({ ...prev, [field]: value }))
+    setFilters((prev) => {
+      const next = { ...prev, [field]: value }
+      if (field === "empresa_id") next.sucursal_id = "todos"
+      return next
+    })
+  }
+
+  const buildParams = () => {
+    const params = new URLSearchParams()
+    if (filters.empresa_id && filters.empresa_id !== "todos") {
+      params.set("empresa_id", filters.empresa_id)
+    }
+    if (filters.sucursal_id && filters.sucursal_id !== "todos") {
+      params.set("sucursal_id", filters.sucursal_id)
+    }
+    if (filters.clasificador && filters.clasificador !== "todos") {
+      params.set("clasificador", filters.clasificador)
+    }
+    if (filters.desde_cuenta) params.set("desde_cuenta", filters.desde_cuenta)
+    if (filters.hasta_cuenta) params.set("hasta_cuenta", filters.hasta_cuenta)
+    if (filters.fecha_inicial) params.set("fecha_inicial", filters.fecha_inicial)
+    if (filters.fecha_final) params.set("fecha_final", filters.fecha_final)
+    if (filters.moneda) params.set("moneda", filters.moneda)
+    if (filters.estado && filters.estado !== "Todos") {
+      params.set("estado", filters.estado)
+    }
+    return params
   }
 
   const fetchLibroMayor = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams()
-      
-      // Construir query params desde filtros
-      params.append("empresa_id", "1") // Por ahora hardcodeado
-      if (filters.desde_cuenta) {
-        params.append("desde_cuenta", filters.desde_cuenta)
-      }
-      if (filters.hasta_cuenta) {
-        params.append("hasta_cuenta", filters.hasta_cuenta)
-      }
-      if (filters.fecha_inicial) {
-        params.append("fecha_inicial", filters.fecha_inicial)
-      }
-      if (filters.fecha_final) {
-        params.append("fecha_final", filters.fecha_final)
-      }
-      if (filters.estado && filters.estado !== "Todos") {
-        params.append("estado", filters.estado)
-      }
-      if (filters.moneda) {
-        params.append("moneda", filters.moneda)
-      }
-
+      setHasGenerated(true)
+      const params = buildParams()
       const response = await api(`/api/contabilidad/informes/libro-mayor?${params.toString()}`)
-      
+
       if (response.ok) {
         const data = await response.json()
-        const movimientosData: MovimientoLibroMayor[] = data.data || []
-        
-        // Calcular saldo acumulado en frontend
-        let saldoActual = 0
-        let cuentaAnterior = ""
-        
-        const movimientosConSaldo: MovimientoConSaldo[] = movimientosData.map((mov) => {
-          // Si cambió la cuenta, reiniciar saldo
-          if (cuentaAnterior !== "" && cuentaAnterior !== mov.cuenta) {
-            saldoActual = 0
-          }
-          
-          // Calcular saldo: saldo = saldo + debe - haber
-          saldoActual = saldoActual + mov.debe - mov.haber
-          cuentaAnterior = mov.cuenta
-          
-          return {
-            ...mov,
-            saldo: saldoActual,
-          }
-        })
-        
-        setMovimientos(movimientosConSaldo)
-        toast.success(`Se encontraron ${movimientosConSaldo.length} movimientos`)
+        const list: MovimientoConSaldo[] = data.data || []
+        setMovimientos(list)
+        if (list.length === 0) {
+          toast.info("No existen movimientos en el periodo seleccionado")
+        } else {
+          toast.success(`Se encontraron ${list.length} movimientos`)
+        }
       } else {
-        const error = await response.json()
-        toast.error(error.error || "Error al cargar el libro mayor")
+        const err = await response.json()
+        toast.error(err.error || "Error al cargar el libro mayor")
         setMovimientos([])
       }
     } catch (error) {
@@ -137,62 +171,176 @@ export default function LibroMayorForm() {
     }
   }
 
-  const handleGenerarReporte = () => {
-    fetchLibroMayor()
+  const handleExportarExcel = async () => {
+    try {
+      setExportingExcel(true)
+      const params = buildParams()
+      const url = `/api/contabilidad/informes/libro-mayor/excel?${params.toString()}`
+      const response = await fetch(url, { credentials: "include" })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        toast.error(err.error || "Error al exportar el Excel")
+        return
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      const hoy = new Date()
+      const d = String(hoy.getDate()).padStart(2, "0")
+      const m = String(hoy.getMonth() + 1).padStart(2, "0")
+      const y = hoy.getFullYear()
+      a.download = `libro_mayor_${d}-${m}-${y}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+      toast.success("Excel exportado correctamente")
+    } catch (error) {
+      console.error("Error exporting Excel:", error)
+      toast.error("Error al exportar el Excel")
+    } finally {
+      setExportingExcel(false)
+    }
   }
 
-  const handleExportarPDF = () => {
-    console.log("Exportar PDF - Filtros:", filters)
-    toast.info("Funcionalidad de exportación PDF en desarrollo")
+  const handleExportarPDF = async () => {
+    try {
+      setExportingPdf(true)
+      const params = buildParams()
+      const url = `/api/contabilidad/informes/libro-mayor/pdf?${params.toString()}`
+      const response = await fetch(url, { credentials: "include" })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        toast.error(err.error || "Error al exportar el PDF")
+        return
+      }
+
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      const hoy = new Date()
+      const d = String(hoy.getDate()).padStart(2, "0")
+      const m = String(hoy.getMonth() + 1).padStart(2, "0")
+      const y = hoy.getFullYear()
+      a.download = `libro_mayor_${d}-${m}-${y}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+      toast.success("PDF exportado correctamente")
+    } catch (error) {
+      console.error("Error exporting PDF:", error)
+      toast.error("Error al exportar el PDF")
+    } finally {
+      setExportingPdf(false)
+    }
   }
 
   return (
     <div className="space-y-6">
-      {/* Formulario de Filtros */}
       <Card>
         <CardHeader>
-          <CardTitle>Configuración del Reporte</CardTitle>
-          <CardDescription>
-            Configure los filtros para generar el libro mayor
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Configuración del Reporte</CardTitle>
+              <CardDescription>
+                Configure los filtros para generar el libro mayor
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleExportarExcel}
+                variant="outline"
+                size="sm"
+                disabled={exportingExcel || exportingPdf || loading || movimientos.length === 0}
+              >
+                {exportingExcel ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                )}
+                {exportingExcel ? "Exportando..." : "Exportar Excel"}
+              </Button>
+              <Button
+                onClick={handleExportarPDF}
+                variant="outline"
+                size="sm"
+                disabled={exportingPdf || exportingExcel || loading || movimientos.length === 0}
+              >
+                {exportingPdf ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <FileDown className="w-4 h-4 mr-2" />
+                )}
+                {exportingPdf ? "Exportando..." : "Exportar PDF"}
+              </Button>
+              <Button
+                onClick={fetchLibroMayor}
+                size="sm"
+                disabled={loading}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4 mr-2" />
+                )}
+                {loading ? "Generando..." : "Generar Reporte"}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Sección Empresa */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700">Sección Empresa</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="empresa" className="text-xs text-gray-600">
                   Empresa
                 </Label>
-                <Input
-                  id="empresa"
-                  value={filters.empresa}
-                  readOnly
-                  className="mt-1 bg-gray-50"
-                />
-              </div>
-              <div>
-                <Label htmlFor="regional" className="text-xs text-gray-600">
-                  Regional
-                </Label>
-                <Input
-                  id="regional"
-                  value={filters.regional}
-                  readOnly
-                  className="mt-1 bg-gray-50"
-                />
+                <Select
+                  value={filters.empresa_id}
+                  onValueChange={(v) => handleFilterChange("empresa_id", v)}
+                >
+                  <SelectTrigger id="empresa" className="mt-1">
+                    <SelectValue placeholder="Seleccionar empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas</SelectItem>
+                    {empresas.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.codigo} - {e.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="sucursal" className="text-xs text-gray-600">
                   Sucursal
                 </Label>
-                <Input
-                  id="sucursal"
-                  value={filters.sucursal}
-                  readOnly
-                  className="mt-1 bg-gray-50"
-                />
+                <Select
+                  value={filters.sucursal_id}
+                  onValueChange={(v) => handleFilterChange("sucursal_id", v)}
+                >
+                  <SelectTrigger id="sucursal" className="mt-1">
+                    <SelectValue placeholder="Seleccionar sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas</SelectItem>
+                    {sucursales.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.codigo} - {s.sucursal || s.nombre || ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -207,13 +355,21 @@ export default function LibroMayorForm() {
                 <Label htmlFor="clasificador" className="text-xs text-gray-600">
                   Clasificador
                 </Label>
-                <Input
-                  id="clasificador"
+                <Select
                   value={filters.clasificador}
-                  onChange={(e) => handleFilterChange("clasificador", e.target.value)}
-                  placeholder="Clasificador"
-                  className="mt-1"
-                />
+                  onValueChange={(v) => handleFilterChange("clasificador", v)}
+                >
+                  <SelectTrigger id="clasificador" className="mt-1">
+                    <SelectValue placeholder="Clasificador" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLASIFICADORES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="desde_cuenta" className="text-xs text-gray-600">
@@ -277,19 +433,19 @@ export default function LibroMayorForm() {
 
           <Separator />
 
-          {/* Sección Moneda */}
+          {/* Sección Moneda y Estado */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700">Sección Moneda</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <h3 className="text-sm font-semibold text-gray-700">Moneda y Estado</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="moneda" className="text-xs text-gray-600">
                   Moneda
                 </Label>
                 <Select
                   value={filters.moneda}
-                  onValueChange={(value) => handleFilterChange("moneda", value)}
+                  onValueChange={(v) => handleFilterChange("moneda", v)}
                 >
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger id="moneda" className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -298,62 +454,34 @@ export default function LibroMayorForm() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-xs text-gray-600 mb-2 block">Estado del comprobante</Label>
+                <RadioGroup
+                  value={filters.estado}
+                  onValueChange={(v) => handleFilterChange("estado", v)}
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="Aprobado" id="estado-aprobado" />
+                    <Label htmlFor="estado-aprobado" className="text-sm font-normal cursor-pointer">
+                      Aprobado
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="Borrador" id="estado-borrador" />
+                    <Label htmlFor="estado-borrador" className="text-sm font-normal cursor-pointer">
+                      Borrador
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="Todos" id="estado-todos" />
+                    <Label htmlFor="estado-todos" className="text-sm font-normal cursor-pointer">
+                      Todos
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
-          </div>
-
-          <Separator />
-
-          {/* Sección Estado */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700">Sección Estado</h3>
-            <div>
-              <Label className="text-xs text-gray-600 mb-2 block">
-                Estado del comprobante
-              </Label>
-              <RadioGroup
-                value={filters.estado}
-                onValueChange={(value) => handleFilterChange("estado", value)}
-                className="flex gap-6"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Aprobado" id="estado-aprobado" />
-                  <Label htmlFor="estado-aprobado" className="text-sm font-normal cursor-pointer">
-                    Aprobado
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Borrador" id="estado-borrador" />
-                  <Label htmlFor="estado-borrador" className="text-sm font-normal cursor-pointer">
-                    Borrador
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Todos" id="estado-todos" />
-                  <Label htmlFor="estado-todos" className="text-sm font-normal cursor-pointer">
-                    Todos
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Acciones */}
-          <div className="flex justify-end gap-4 pt-4">
-            <Button
-              onClick={handleExportarPDF}
-              variant="outline"
-              disabled
-              className="opacity-50 cursor-not-allowed"
-            >
-              <FileDown className="w-4 h-4 mr-2" />
-              Exportar PDF
-            </Button>
-            <Button onClick={handleGenerarReporte} className="bg-red-600 hover:bg-red-700 text-white">
-              <Play className="w-4 h-4 mr-2" />
-              Generar Reporte
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -365,7 +493,9 @@ export default function LibroMayorForm() {
           <CardDescription>
             {movimientos.length > 0
               ? `${movimientos.length} movimientos encontrados`
-              : "Los resultados del libro mayor se mostrarán aquí después de generar el reporte"}
+              : hasGenerated
+                ? "No existen movimientos en el periodo seleccionado"
+                : "Configure los filtros y haga clic en Generar Reporte para ver los resultados"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -375,44 +505,56 @@ export default function LibroMayorForm() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-32">Fecha</TableHead>
-                    <TableHead className="w-32">Comprobante</TableHead>
-                    <TableHead className="w-32">Cuenta</TableHead>
+                    <TableHead className="w-32">Nº Comprobante</TableHead>
+                    <TableHead className="w-28">Cuenta</TableHead>
                     <TableHead>Descripción</TableHead>
-                    <TableHead className="w-32 text-right">Debe</TableHead>
-                    <TableHead className="w-32 text-right">Haber</TableHead>
-                    <TableHead className="w-32 text-right">Saldo</TableHead>
+                    <TableHead>Glosa</TableHead>
+                    <TableHead className="w-28 text-right">Debe ({monedaSufijo})</TableHead>
+                    <TableHead className="w-28 text-right">Haber ({monedaSufijo})</TableHead>
+                    <TableHead className="w-28 text-right">Saldo ({monedaSufijo})</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                        Cargando libro mayor...
+                      <TableCell colSpan={8} className="text-center text-gray-500 py-12">
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                        Generando reporte...
                       </TableCell>
                     </TableRow>
                   ) : movimientos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                        No hay datos. Configure los filtros y haga clic en "Generar Reporte" para ver los resultados.
+                      <TableCell colSpan={8} className="text-center text-gray-500 py-12">
+                        {hasGenerated
+                          ? "No existen movimientos en el periodo seleccionado"
+                          : "Configure los filtros y haga clic en Generar Reporte para ver los resultados"}
                       </TableCell>
                     </TableRow>
                   ) : (
                     movimientos.map((mov, index) => (
-                      <TableRow key={index}>
+                      <TableRow key={`${mov.cuenta}-${mov.fecha}-${mov.numero_comprobante}-${index}`}>
                         <TableCell className="font-mono text-sm">
-                          {new Date(mov.fecha).toLocaleDateString("es-BO")}
+                          {mov.fecha ? new Date(mov.fecha).toLocaleDateString("es-BO") : "-"}
                         </TableCell>
                         <TableCell className="font-mono font-semibold">
-                          {mov.numero_comprobante}
+                          {mov.numero_comprobante || "-"}
                         </TableCell>
-                        <TableCell className="font-mono">{mov.cuenta}</TableCell>
+                        <TableCell className="font-mono font-medium">
+                          {mov.cuenta}
+                        </TableCell>
                         <TableCell>
-                          <div>
-                            <div className="font-medium">{mov.descripcion_cuenta || "-"}</div>
-                            {mov.glosa_detalle && (
-                              <div className="text-xs text-gray-500 mt-1">{mov.glosa_detalle}</div>
-                            )}
-                          </div>
+                          {mov.descripcion_cuenta ? (
+                            <span className="text-sm">{mov.descripcion_cuenta}</span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {mov.glosa_comprobante ? (
+                            <span className="text-sm">{mov.glosa_comprobante}</span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {mov.debe !== 0
@@ -448,5 +590,3 @@ export default function LibroMayorForm() {
     </div>
   )
 }
-
-

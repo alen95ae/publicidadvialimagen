@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     // Aumentar límite por defecto para cargar todos los auxiliares (2284+ registros)
     const limit = parseInt(searchParams.get("limit") || "10000")
     const offset = (page - 1) * limit
+    const tipoAuxiliar = searchParams.get("tipo_auxiliar") || ""
 
     // Obtener auxiliares directamente desde la tabla (sin filtros por empresa_id)
     // Primero intentar con usuario autenticado
@@ -33,7 +34,11 @@ export async function GET(request: NextRequest) {
       .select("*", { count: "exact" })
       .order("tipo_auxiliar", { ascending: true })
       .order("codigo", { ascending: true })
-      .range(offset, offset + limit - 1)
+
+    if (tipoAuxiliar) {
+      query = query.eq("tipo_auxiliar", tipoAuxiliar)
+    }
+    query = query.range(offset, offset + limit - 1)
 
     let { data, error, count } = await query
 
@@ -49,15 +54,16 @@ export async function GET(request: NextRequest) {
       console.log("⚠️ [GET /auxiliares] Sin datos con user, intentando con admin...")
       const supabaseAdmin = getSupabaseAdmin()
       
-      const adminQuery = supabaseAdmin
+      let adminQuery = supabaseAdmin
         .from("auxiliares")
         .select("*", { count: "exact" })
         .order("tipo_auxiliar", { ascending: true })
         .order("codigo", { ascending: true })
-        .range(offset, offset + limit - 1)
-      
-      const { data: adminData, error: adminError, count: adminCount } = await adminQuery
-      
+      if (tipoAuxiliar) {
+        adminQuery = adminQuery.eq("tipo_auxiliar", tipoAuxiliar)
+      }
+      const { data: adminData, error: adminError, count: adminCount } = await adminQuery.range(offset, offset + limit - 1)
+
       if (!adminError && adminData) {
         console.log("✅ [GET /auxiliares] Admin encontró", adminCount, "registros")
         data = adminData

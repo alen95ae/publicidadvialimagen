@@ -131,9 +131,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     // Submenú de Parametros
     parametrosItems: [
       { label: "Parametros de contabilidad", href: "/panel/contabilidad/parametros/contabilidad" },
-      { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
-      { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
-      { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
     ],
     // Submenú de Informes
     informesItems: [
@@ -202,9 +199,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     parametrosGlobalItems: [
       // Parámetros de Contabilidad
       { label: "Parametros de contabilidad", href: "/panel/contabilidad/parametros/contabilidad" },
-      { label: "Parametros generales", href: "/panel/contabilidad/parametros/generales" },
-      { label: "Comprobantes de prueba", href: "/panel/contabilidad/parametros/comprobantes-prueba" },
-      { label: "Numeracion de comprobantes", href: "/panel/contabilidad/parametros/numeracion-comprobantes" },
       // Parámetros de Activos
       { label: "Grupos de Activos Fijos", href: "/panel/contabilidad/activos/parametros/grupos-activos-fijos" },
       { label: "Gestiones para la Depreciación de Activos", href: "/panel/contabilidad/activos/parametros/gestiones-depreciacion-activos" },
@@ -238,15 +232,14 @@ const CONTABILIDAD_INDICATOR_GREEN = new Set([
   "/panel/contabilidad/informes/libro-diario",
   "/panel/contabilidad/informes/balance-sumas-saldos",
   "/panel/contabilidad/facturas/manuales",
+  "/panel/contabilidad/informes/libro-mayor",
+  "/panel/contabilidad/parametros/contabilidad",
+  "/panel/contabilidad/informes/libro-auxiliares",
 ])
 const CONTABILIDAD_INDICATOR_YELLOW = new Set([
   "/panel/contabilidad/facturas/contabilizacion",
   "/panel/contabilidad/informes/plan-cuentas",
-  "/panel/contabilidad/informes/libro-auxiliares",
   "/panel/contabilidad/informes/balance-general",
-  "/panel/contabilidad/parametros/comprobantes-prueba",
-  "/panel/contabilidad/parametros/contabilidad",
-  "/panel/contabilidad/informes/libro-mayor",
 ])
 function ContabilidadIndicator({ href }: { href: string }) {
   if (CONTABILIDAD_INDICATOR_GREEN.has(href)) {

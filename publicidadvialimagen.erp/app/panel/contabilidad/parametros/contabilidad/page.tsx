@@ -3,11 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import EmpresasTab from "./components/EmpresasTab"
-import RegionalesTab from "./components/RegionalesTab"
-import ClasifCuentasTab from "./components/ClasifCuentasTab"
-import GestionesTab from "./components/GestionesTab"
-import ContabilizacionesTab from "./components/ContabilizacionesTab"
-import CotizacionesTab from "./components/CotizacionesTab"
+import SucursalesTab from "./components/SucursalesTab"
 
 export default function ParametrosContabilidadPage() {
   return (
@@ -24,37 +20,17 @@ export default function ParametrosContabilidadPage() {
       <Card>
         <CardContent className="pt-6">
           <Tabs defaultValue="empresas" className="w-full">
-            <TabsList className="mb-6 w-full grid grid-cols-3 lg:grid-cols-6 gap-2">
+            <TabsList className="mb-6 w-full grid grid-cols-1 sm:grid-cols-2 gap-2">
               <TabsTrigger value="empresas" className="text-xs lg:text-sm">Empresas</TabsTrigger>
-              <TabsTrigger value="regionales" className="text-xs lg:text-sm">Regionales</TabsTrigger>
-              <TabsTrigger value="clasificacion" className="text-xs lg:text-sm">Clasificación de Cuentas</TabsTrigger>
-              <TabsTrigger value="gestiones" className="text-xs lg:text-sm">Gestiones</TabsTrigger>
-              <TabsTrigger value="contabilizaciones" className="text-xs lg:text-sm">Contabilizaciones</TabsTrigger>
-              <TabsTrigger value="cotizaciones" className="text-xs lg:text-sm">Cotizaciones</TabsTrigger>
+              <TabsTrigger value="sucursales" className="text-xs lg:text-sm">Sucursales</TabsTrigger>
             </TabsList>
 
             <TabsContent value="empresas" className="mt-0">
               <EmpresasTab />
             </TabsContent>
 
-            <TabsContent value="regionales" className="mt-0">
-              <RegionalesTab />
-            </TabsContent>
-
-            <TabsContent value="clasificacion" className="mt-0">
-              <ClasifCuentasTab />
-            </TabsContent>
-
-            <TabsContent value="gestiones" className="mt-0">
-              <GestionesTab />
-            </TabsContent>
-
-            <TabsContent value="contabilizaciones" className="mt-0">
-              <ContabilizacionesTab />
-            </TabsContent>
-
-            <TabsContent value="cotizaciones" className="mt-0">
-              <CotizacionesTab />
+            <TabsContent value="sucursales" className="mt-0">
+              <SucursalesTab />
             </TabsContent>
           </Tabs>
         </CardContent>

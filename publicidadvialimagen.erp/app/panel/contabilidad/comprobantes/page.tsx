@@ -2,7 +2,7 @@
 
 import { Toaster } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Plus, Download } from "lucide-react"
+import { Plus, Save } from "lucide-react"
 import ComprobantesList from "./components/ComprobantesList"
 import ComprobanteForm from "./components/ComprobanteForm"
 import { useState } from "react"
@@ -12,6 +12,8 @@ export default function ComprobantesPage() {
   const [selectedComprobante, setSelectedComprobante] = useState<Comprobante | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [exportingPDF, setExportingPDF] = useState(false)
+  const [formSaving, setFormSaving] = useState(false)
+  const [triggerSave, setTriggerSave] = useState(0)
 
   const handleComprobanteSelect = (comprobante: Comprobante | null) => {
     setSelectedComprobante(comprobante)
@@ -61,29 +63,27 @@ export default function ComprobantesPage() {
     <>
       <Toaster position="top-right" />
       <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
+        {/* Header: título a la izquierda, Nuevo y Guardar a la derecha (siempre visibles) */}
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Comprobantes</h1>
             <p className="text-gray-600 mt-2">
               Gestión de asientos contables y comprobantes
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleExportPDF}
-              disabled={!selectedComprobante || selectedComprobante.estado !== "APROBADO" || exportingPDF}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {exportingPDF ? "Exportando..." : "Exportar PDF"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleNew}
-            >
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-2" />
               Nuevo
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setTriggerSave((s) => s + 1)}
+              disabled={formSaving || selectedComprobante?.estado === "APROBADO"}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {formSaving ? "Guardando..." : "Guardar"}
             </Button>
           </div>
         </div>
@@ -97,6 +97,10 @@ export default function ComprobantesPage() {
               onNew={handleNew}
               onSave={handleSave}
               onAprobado={(comp) => setSelectedComprobante(comp)}
+              onExportPDF={handleExportPDF}
+              exportingPDF={exportingPDF}
+              triggerSave={triggerSave}
+              onSavingChange={setFormSaving}
             />
           </div>
 

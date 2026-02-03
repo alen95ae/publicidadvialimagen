@@ -1,14 +1,23 @@
+export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
+import * as XLSX from "xlsx"
+
+function formatearNumero(numero: number): string {
+  const n = Number(numero)
+  const numeroFormateado = n.toFixed(2)
+  const [parteEntera, parteDecimal] = numeroFormateado.split(".")
+  const parteEnteraConSeparador = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  return `${parteEnteraConSeparador},${parteDecimal}`
+}
 
 /**
- * GET - Informe Libro Mayor
- * Misma lógica que Libro Diario: comprobantes APROBADOS por defecto,
- * unión comprobantes + comprobante_detalle + plan_cuentas.
- * Orden: cuenta, fecha, número comprobante. Saldo acumulado por cuenta.
+ * GET - Generar Excel Libro Mayor
+ * Misma lógica que GET libro-mayor: comprobantes APROBADOS por defecto,
+ * comprobantes + comprobante_detalle + plan_cuentas, saldo acumulado.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +27,6 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin()
     const { searchParams } = new URL(request.url)
     const empresa_id = searchParams.get("empresa_id") || ""
-    const sucursal_id = searchParams.get("sucursal_id") || ""
     const clasificador = searchParams.get("clasificador") || ""
     const desde_cuenta = searchParams.get("desde_cuenta") || ""
     const hasta_cuenta = searchParams.get("hasta_cuenta") || ""
@@ -27,7 +35,8 @@ export async function GET(request: NextRequest) {
     const estadoParam = searchParams.get("estado") || "Aprobado"
     const moneda = searchParams.get("moneda") || "BOB"
 
-    // Paso 1: Comprobantes (estado por defecto APROBADO, igual que Libro Diario)
+    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+
     let comprobantesQuery = supabase
       .from("comprobantes")
       .select("id, numero, fecha, tipo_asiento, concepto, estado")
@@ -39,76 +48,33 @@ export async function GET(request: NextRequest) {
     const estadoFiltro =
       estadoParam && estadoParam !== "Todos" ? estadoParam.toUpperCase() : "APROBADO"
     comprobantesQuery = comprobantesQuery.eq("estado", estadoFiltro)
-
     if (fecha_inicial) comprobantesQuery = comprobantesQuery.gte("fecha", fecha_inicial)
     if (fecha_final) comprobantesQuery = comprobantesQuery.lte("fecha", fecha_final)
 
-    // sucursal_id: reservado para cuando comprobantes tenga columna sucursal_id (sin modificar estructura)
-
     const { data: comprobantes, error: comprobantesError } = await comprobantesQuery
 
-    if (comprobantesError) {
-      console.error("Error fetching comprobantes:", comprobantesError)
-      if (
-        comprobantesError.code === "PGRST116" ||
-        comprobantesError.code === "42P01" ||
-        comprobantesError.message?.includes("does not exist") ||
-        comprobantesError.message?.includes("relation") ||
-        comprobantesError.message?.includes("operator does not exist") ||
-        comprobantesError.message?.includes("invalid input syntax")
-      ) {
-        return NextResponse.json({
-          success: true,
-          data: [],
-          total: 0,
-          message: "Tabla comprobantes no disponible o filtros no aplicables",
-        })
-      }
+    if (comprobantesError || !comprobantes || comprobantes.length === 0) {
       return NextResponse.json(
-        { error: "Error al obtener los comprobantes", details: comprobantesError.message },
-        { status: 500 }
+        { error: "No hay comprobantes para exportar con los filtros seleccionados" },
+        { status: 400 }
       )
     }
 
-    if (!comprobantes || comprobantes.length === 0) {
-      return NextResponse.json({ success: true, data: [], total: 0 })
-    }
-
     const comprobanteIds = comprobantes.map((c: any) => c.id)
-
     let detallesQuery = supabase
       .from("comprobante_detalle")
-      .select("comprobante_id, cuenta, auxiliar, glosa, debe_bs, haber_bs, debe_usd, haber_usd, orden")
+      .select("comprobante_id, cuenta, glosa, debe_bs, haber_bs, debe_usd, haber_usd, orden")
       .in("comprobante_id", comprobanteIds)
-
     if (desde_cuenta) detallesQuery = detallesQuery.gte("cuenta", desde_cuenta)
     if (hasta_cuenta) detallesQuery = detallesQuery.lte("cuenta", hasta_cuenta)
 
     const { data: detalles, error: detallesError } = await detallesQuery
 
-    if (detallesError) {
-      console.error("Error fetching detalles:", detallesError)
-      if (
-        detallesError.code === "PGRST116" ||
-        detallesError.code === "42P01" ||
-        detallesError.message?.includes("does not exist") ||
-        detallesError.message?.includes("relation")
-      ) {
-        return NextResponse.json({
-          success: true,
-          data: [],
-          total: 0,
-          message: "Tabla comprobante_detalle no encontrada",
-        })
-      }
+    if (detallesError || !detalles || detalles.length === 0) {
       return NextResponse.json(
-        { error: "Error al obtener los detalles", details: detallesError.message },
-        { status: 500 }
+        { error: "No hay movimientos para exportar con los filtros seleccionados" },
+        { status: 400 }
       )
-    }
-
-    if (!detalles || detalles.length === 0) {
-      return NextResponse.json({ success: true, data: [], total: 0 })
     }
 
     const cuentaCodes = [...new Set(detalles.map((d: any) => d.cuenta))]
@@ -120,7 +86,6 @@ export async function GET(request: NextRequest) {
         .from("plan_cuentas")
         .select("cuenta, descripcion, tipo_cuenta")
         .in("cuenta", cuentaCodes)
-
       if (cuentas) {
         cuentas.forEach((c: any) => {
           cuentasMap[c.cuenta] = c.descripcion || ""
@@ -138,17 +103,14 @@ export async function GET(request: NextRequest) {
       .map((det: any) => {
         const comprobante = comprobantesMap[det.comprobante_id]
         if (!comprobante) return null
-
         const debe = moneda === "USD" ? Number(det.debe_usd || 0) : Number(det.debe_bs || 0)
         const haber = moneda === "USD" ? Number(det.haber_usd || 0) : Number(det.haber_bs || 0)
-
         return {
           cuenta: det.cuenta,
           descripcion_cuenta: cuentasMap[det.cuenta] || "",
           tipo_cuenta: cuentaTipoMap[det.cuenta] || "",
           fecha: comprobante.fecha || "",
           numero_comprobante: comprobante.numero || "",
-          tipo_asiento: comprobante.tipo_asiento || "",
           glosa_comprobante: comprobante.concepto || "",
           glosa_detalle: det.glosa || "",
           debe,
@@ -160,20 +122,22 @@ export async function GET(request: NextRequest) {
       .sort((a: any, b: any) => {
         if (a.cuenta !== b.cuenta) return a.cuenta.localeCompare(b.cuenta)
         if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha)
-        if (a.numero_comprobante !== b.numero_comprobante) {
-          return String(a.numero_comprobante).localeCompare(String(b.numero_comprobante))
-        }
-        return (a.orden || 0) - (b.orden || 0)
+        return String(a.numero_comprobante).localeCompare(String(b.numero_comprobante))
       })
 
-    // Filtro por clasificador (tipo_cuenta del plan de cuentas)
     if (clasificador && clasificador !== "todos") {
       movimientos = movimientos.filter(
         (m: any) => (m.tipo_cuenta || "").toLowerCase() === clasificador.toLowerCase()
       )
     }
 
-    // Calcular saldo acumulado por cuenta
+    if (movimientos.length === 0) {
+      return NextResponse.json(
+        { error: "No hay movimientos para exportar con los filtros seleccionados" },
+        { status: 400 }
+      )
+    }
+
     let saldoActual = 0
     let cuentaAnterior = ""
     const movimientosConSaldo = movimientos.map((m: any) => {
@@ -183,15 +147,52 @@ export async function GET(request: NextRequest) {
       return { ...m, saldo: saldoActual }
     })
 
-    return NextResponse.json({
-      success: true,
-      data: movimientosConSaldo,
-      total: movimientosConSaldo.length,
+    const headers = [
+      "Fecha",
+      "Nº Comprobante",
+      "Cuenta",
+      "Descripción",
+      "Glosa",
+      `Debe (${monedaSufijo})`,
+      `Haber (${monedaSufijo})`,
+      `Saldo (${monedaSufijo})`,
+    ]
+
+    const dataRows = movimientosConSaldo.map((m: any) => [
+      m.fecha ? new Date(m.fecha).toLocaleDateString("es-ES") : "",
+      m.numero_comprobante || "",
+      m.cuenta || "",
+      m.descripcion_cuenta || "",
+      m.glosa_comprobante || "",
+      m.debe !== 0 ? formatearNumero(m.debe) : "",
+      m.haber !== 0 ? formatearNumero(m.haber) : "",
+      formatearNumero(m.saldo),
+    ])
+
+    const datos = [headers, ...dataRows]
+    const ws = XLSX.utils.aoa_to_sheet(datos)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Libro Mayor")
+
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
+    const hoy = new Date()
+    const d = String(hoy.getDate()).padStart(2, "0")
+    const m = String(hoy.getMonth() + 1).padStart(2, "0")
+    const y = hoy.getFullYear()
+    const nombreArchivo = `libro_mayor_${d}-${m}-${y}.xlsx`
+
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${nombreArchivo}"`,
+      },
     })
   } catch (error: any) {
-    console.error("Error in GET /api/contabilidad/informes/libro-mayor:", error)
+    console.error("Error in GET /api/contabilidad/informes/libro-mayor/excel:", error)
     return NextResponse.json(
-      { error: "Error interno del servidor", details: error?.message },
+      { error: "Error al generar el Excel", details: error?.message },
       { status: 500 }
     )
   }

@@ -203,3 +203,21 @@ export interface Empresa {
   updated_at?: string
 }
 
+export interface Sucursal {
+  id: string
+  empresa_id: string
+  codigo: string
+  nombre: string
+  representante?: string | null
+  direccion?: string | null
+  sucursal?: string | null
+  telefonos?: string | null
+  email?: string | null
+  pais?: string | null
+  ciudad?: string | null
+  localidad?: string | null
+  nit?: string | null
+  created_at?: string
+  updated_at?: string
+}
+

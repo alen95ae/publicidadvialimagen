@@ -141,6 +141,7 @@ export default function NuevaCotizacionPage() {
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
   const [plazo, setPlazo] = useState("")
+  const [tipoCambio, setTipoCambio] = useState("6.96")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
   const [cotizacionId, setCotizacionId] = useState<string>("")
@@ -1708,6 +1709,7 @@ export default function NuevaCotizacionPage() {
         }
       }
 
+      const tc = parseFloat(tipoCambio) || 6.96
       await generarPDFCotizacion({
         codigo: codigoCotizacion || 'NUEVA',
         cliente: clienteSeleccionado?.displayName || '',
@@ -1715,16 +1717,90 @@ export default function NuevaCotizacionPage() {
         sucursal: sucursal || '',
         vendedor: nombreVendedor || vendedor || '',
         vendedorEmail: vendedorEmail,
-        vendedorNumero: vendedorNumero, // Usar el número del comercial asignado, no del usuario que descarga
+        vendedorNumero: vendedorNumero,
         productos: productosList,
         totalGeneral: totalGeneral,
         vigencia: vigencia ? parseInt(vigencia) : 30,
-        plazo: plazo || null
+        plazo: plazo || null,
+        tipoCambio: tc
       })
 
       toast.success("Cotización descargada exitosamente")
     } catch (error) {
       console.error("Error generando PDF:", error)
+      toast.error("Error al generar el PDF")
+    }
+  }
+
+  const descargarCotizacionPDFUSD = async () => {
+    try {
+      if (!cotizacionId) {
+        toast.error("Por favor guarda la cotización antes de descargarla")
+        return
+      }
+      if (!cliente) {
+        toast.error("Por favor selecciona un cliente")
+        return
+      }
+      const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
+      let vendedorEmail: string | undefined
+      let vendedorNumero: string | null = null
+      let nombreVendedor = ''
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      try {
+        const comercialesResponse = await fetch(`/api/public/comerciales`)
+        if (comercialesResponse.ok) {
+          const comercialesData = await comercialesResponse.json()
+          let comercialEncontrado = null
+          if (vendedor && uuidRegex.test(vendedor)) {
+            comercialEncontrado = comercialesData.users?.find((u: any) => u.id === vendedor)
+          } else if (vendedor) {
+            comercialEncontrado = comercialesData.users?.find((u: any) =>
+              u.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+            )
+          }
+          if (comercialEncontrado) {
+            vendedorEmail = comercialEncontrado.email
+            vendedorNumero = comercialEncontrado.numero || null
+            nombreVendedor = comercialEncontrado.nombre || ''
+          }
+        }
+      } catch (_) {}
+      if (!nombreVendedor && vendedor) {
+        const cf = todosLosComerciales.find(c => c.id === vendedor)
+        if (cf) nombreVendedor = cf.nombre || ''
+        else if (!uuidRegex.test(vendedor)) {
+          const cf2 = todosLosComerciales.find(c => c.nombre?.toLowerCase().includes(vendedor.toLowerCase()))
+          if (cf2) nombreVendedor = cf2.nombre || ''
+        }
+      }
+      let clienteInfoSecundaria = ''
+      if (clienteSeleccionado) {
+        if (clienteSeleccionado.kind === 'INDIVIDUAL' && clienteSeleccionado.legalName) {
+          clienteInfoSecundaria = clienteSeleccionado.legalName
+        } else if (clienteSeleccionado.kind === 'COMPANY' && clienteSeleccionado.personaContacto?.length) {
+          clienteInfoSecundaria = clienteSeleccionado.personaContacto[0].nombre
+        }
+      }
+      const tc = parseFloat(tipoCambio) || 6.96
+      await generarPDFCotizacion({
+        codigo: codigoCotizacion || 'NUEVA',
+        cliente: clienteSeleccionado?.displayName || '',
+        clienteNombreCompleto: clienteInfoSecundaria || clienteSeleccionado?.displayName,
+        sucursal: sucursal || '',
+        vendedor: nombreVendedor || vendedor || '',
+        vendedorEmail,
+        vendedorNumero,
+        productos: productosList,
+        totalGeneral: totalGeneral,
+        vigencia: vigencia ? parseInt(vigencia) : 30,
+        plazo: plazo || null,
+        enDolares: true,
+        tipoCambio: tc
+      })
+      toast.success("Cotización en USD descargada exitosamente")
+    } catch (error) {
+      console.error("Error generando PDF USD:", error)
       toast.error("Error al generar el PDF")
     }
   }
@@ -1850,6 +1926,16 @@ export default function NuevaCotizacionPage() {
                       Descargar OT
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={descargarCotizacionPDFUSD}
+                    disabled={!cotizacionId}
+                    title={!cotizacionId ? "Guarda la cotización antes de descargar en USD" : "Cotización en dólares (tipo de cambio 6.96)"}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descargar Cotización $
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -2056,6 +2142,20 @@ export default function NuevaCotizacionPage() {
                     onChange={(e) => setPlazo(e.target.value)}
                     placeholder="Ej: 5 días hábiles"
                     className="h-9"
+                  />
+                </div>
+
+                {/* Tipo de cambio */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="tipoCambio">Tipo de cambio</Label>
+                  <Input
+                    id="tipoCambio"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={tipoCambio}
+                    readOnly
+                    className="h-9 bg-muted"
                   />
                 </div>
               </div>

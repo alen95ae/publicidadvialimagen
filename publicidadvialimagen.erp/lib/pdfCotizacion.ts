@@ -51,6 +51,10 @@ interface DatosCotizacion {
   totalGeneral: number
   vigencia?: number | null // Días de validez
   plazo?: string | null // Plazo de entrega
+  /** Si true, se convierte a USD con tipoCambio y se muestra $ en el PDF */
+  enDolares?: boolean
+  /** Tipo de cambio Bs/USD (ej. 6.96). Se muestra en la sección Información. Si enDolares, se usa para convertir importes. */
+  tipoCambio?: number
 }
 
 // Función auxiliar para cargar el logo
@@ -69,19 +73,20 @@ async function cargarLogo(): Promise<string | null> {
   }
 }
 
-// Función para formatear números con separador de miles y decimales
+// Función para formatear números con separador de miles y decimales (Bs)
 function formatearNumero(numero: number): string {
-  // Formatear con 2 decimales
   const numeroFormateado = numero.toFixed(2)
-  
-  // Separar parte entera y decimal
   const [parteEntera, parteDecimal] = numeroFormateado.split('.')
-  
-  // Agregar separador de miles (punto)
   const parteEnteraConSeparador = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  
-  // Devolver con formato: 1.164.026,00 Bs
   return `${parteEnteraConSeparador},${parteDecimal} Bs`
+}
+
+// Formato USD (para cotización en dólares)
+function formatearNumeroUSD(numero: number): string {
+  const numeroFormateado = numero.toFixed(2)
+  const [parteEntera, parteDecimal] = numeroFormateado.split('.')
+  const parteEnteraConSeparador = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${parteEnteraConSeparador},${parteDecimal} $`
 }
 
 // Función para obtener el email a mostrar en el footer
@@ -249,10 +254,18 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   // Cliente debajo de fecha, a la izquierda
   const textoCliente = `Cliente: ${datos.clienteNombreCompleto || datos.cliente}`
   pdf.text(textoCliente, xPosition, yPosition)
-  
-  yPosition += 12
+  yPosition += 6
+
+  // Tipo de cambio solo en PDF en dólares (en Bs no se muestra)
+  if (datos.enDolares) {
+    const tcValor = datos.tipoCambio ?? 6.96
+    pdf.text(`Tipo de cambio: ${tcValor.toFixed(2)}`, xPosition, yPosition)
+    yPosition += 12
+  }
 
   // Tabla de productos
+  const enDolares = !!datos.enDolares
+  const tc = datos.tipoCambio ?? 6.96
   pdf.setFontSize(12) // Más grande
   pdf.setFont('helvetica', 'bold')
   pdf.text('Detalle', 15, yPosition)
@@ -418,13 +431,15 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
       // - Comisión (si aplica)
       // - Impuestos IVA/IT (si aplican)
       // - Descuentos (si no tiene IVA/IT)
+      const totalBs = producto.total
+      const totalMostrar = enDolares ? redondearADosDecimales(totalBs / tc) : totalBs
       const precioUnitarioCalculado = producto.cantidad > 0
-        ? redondearADosDecimales(producto.total / producto.cantidad)
+        ? redondearADosDecimales(totalMostrar / producto.cantidad)
         : 0
       
-      // Precio unitario y Total: usar formato completo
-      const precioUnitTexto = formatearNumero(precioUnitarioCalculado)
-      const precioTotalTexto = formatearNumero(producto.total)
+      // Precio unitario y Total: Bs o USD según enDolares
+      const precioUnitTexto = enDolares ? formatearNumeroUSD(precioUnitarioCalculado) : formatearNumero(precioUnitarioCalculado)
+      const precioTotalTexto = enDolares ? formatearNumeroUSD(totalMostrar) : formatearNumero(totalBs)
       
       // Ajustar texto dentro de la celda para que no se salga
       const precioUnitLineas = pdf.splitTextToSize(precioUnitTexto, colWidths[4] - 6)
@@ -492,11 +507,13 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   pdf.rect(tableX, yPosition, tableWidth, totalRowHeight)
   
   // Texto en blanco (centrado verticalmente igual que el header)
+  const totalGeneralMostrar = enDolares ? redondearADosDecimales(datos.totalGeneral / tc) : datos.totalGeneral
+  const totalTexto = enDolares ? formatearNumeroUSD(totalGeneralMostrar) : formatearNumero(datos.totalGeneral)
   pdf.setTextColor(255, 255, 255)
   pdf.setFontSize(12)
   pdf.setFont('helvetica', 'bold')
   pdf.text('TOTAL:', tableX + 3, yPosition + 6)
-  pdf.text(formatearNumero(datos.totalGeneral), tableX + tableWidth - 3, yPosition + 6, { align: 'right' })
+  pdf.text(totalTexto, tableX + tableWidth - 3, yPosition + 6, { align: 'right' })
   
   // Resetear color de texto
   pdf.setTextColor(0, 0, 0)
@@ -588,7 +605,7 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
     pdf.text(`${i}/${totalPages}`, 205, footerTextY, { align: 'right' })
   }
 
-  const nombreArchivo = `${datos.codigo}.pdf`
+  const nombreArchivo = datos.enDolares ? `${datos.codigo}-USD.pdf` : `${datos.codigo}.pdf`
   pdf.save(nombreArchivo)
 }
 

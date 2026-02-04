@@ -154,6 +154,7 @@ export default function EditarCotizacionPage() {
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
   const [plazo, setPlazo] = useState("")
+  const [tipoCambio, setTipoCambio] = useState("6.96")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
   const [productosList, setProductosList] = useState<ItemLista[]>([
@@ -2163,6 +2164,7 @@ export default function EditarCotizacionPage() {
         }
       }
 
+      const tc = parseFloat(tipoCambio) || 6.96
       await generarPDFCotizacion({
         codigo: codigoCotizacion || 'SIN-CODIGO',
         cliente: clienteSeleccionado?.displayName || cliente,
@@ -2174,13 +2176,105 @@ export default function EditarCotizacionPage() {
         productos: productosList,
         totalGeneral: totalGeneral,
         vigencia: vigencia ? parseInt(vigencia) : 30,
-        plazo: plazo || null
+        plazo: plazo || null,
+        tipoCambio: tc
       })
 
       toast.success("Cotización descargada exitosamente")
     } catch (error) {
       console.error("Error generando PDF:", error)
       toast.error("Error al generar el PDF")
+    }
+  }
+
+  const descargarCotizacionPDFUSD = async () => {
+    try {
+      if (!cliente) {
+        toast.error("Por favor selecciona un cliente")
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/cotizaciones/${cotizacionId}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            const cotizacion = data.data.cotizacion
+            const lineas = data.data.lineas || []
+            const lineasProductos = lineas.filter((linea: any) =>
+              linea.tipo === 'Producto' || linea.tipo === 'producto' || (linea.nombre_producto || linea.codigo_producto)
+            )
+            const sumaSubtotales = lineasProductos.reduce((sum: number, linea: any) => sum + (linea.subtotal_linea || 0), 0)
+            const totalFinal = cotizacion.total_final || 0
+            const TOLERANCIA_CONSISTENCIA = 0.05
+            if (Math.abs(totalFinal - sumaSubtotales) > TOLERANCIA_CONSISTENCIA) {
+              toast.error(
+                `No se puede descargar. Inconsistencia en los totales: Suma de líneas (${sumaSubtotales.toFixed(2)}) vs Total final (${totalFinal.toFixed(2)}). Por favor corrige antes de descargar.`
+              )
+              return
+            }
+          }
+        }
+      } catch {
+        // Continuar si falla la validación
+      }
+
+      const clienteSeleccionado = todosLosClientes.find(c => c.id === cliente)
+      let vendedorEmail: string | undefined = undefined
+      let vendedorNumero: string | null = null
+      let nombreVendedor: string = vendedor || ''
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      try {
+        const comercialesResponse = await fetch(`/api/public/comerciales`)
+        if (comercialesResponse.ok) {
+          const comercialesData = await comercialesResponse.json()
+          let comercialEncontrado = null
+          if (vendedor && uuidRegex.test(vendedor)) {
+            comercialEncontrado = comercialesData.users?.find((u: any) => u.id === vendedor)
+          } else if (vendedor) {
+            comercialEncontrado = comercialesData.users?.find((u: any) =>
+              u.nombre?.toLowerCase().includes(vendedor.toLowerCase())
+            )
+          }
+          if (comercialEncontrado) {
+            vendedorEmail = comercialEncontrado.email
+            vendedorNumero = comercialEncontrado.numero || null
+            nombreVendedor = comercialEncontrado.nombre || vendedor
+          }
+        }
+      } catch {
+        // ignorar
+      }
+
+      let clienteInfoSecundaria = ''
+      if (clienteSeleccionado) {
+        if (clienteSeleccionado.kind === 'INDIVIDUAL' && clienteSeleccionado.legalName) {
+          clienteInfoSecundaria = clienteSeleccionado.legalName
+        } else if (clienteSeleccionado.kind === 'COMPANY' && clienteSeleccionado.personaContacto?.length) {
+          clienteInfoSecundaria = clienteSeleccionado.personaContacto[0].nombre
+        }
+      }
+
+      const tc = parseFloat(tipoCambio) || 6.96
+      await generarPDFCotizacion({
+        codigo: codigoCotizacion || 'SIN-CODIGO',
+        cliente: clienteSeleccionado?.displayName || cliente,
+        clienteNombreCompleto: clienteInfoSecundaria || clienteSeleccionado?.displayName,
+        sucursal: sucursal || '',
+        vendedor: nombreVendedor,
+        vendedorEmail: vendedorEmail,
+        vendedorNumero: vendedorNumero,
+        productos: productosList,
+        totalGeneral: totalGeneral,
+        vigencia: vigencia ? parseInt(vigencia) : 30,
+        plazo: plazo || null,
+        tipoCambio: tc,
+        enDolares: true
+      })
+      toast.success("Cotización en USD descargada exitosamente")
+    } catch (error) {
+      console.error("Error generando PDF USD:", error)
+      toast.error("Error al generar el PDF en USD")
     }
   }
 
@@ -2310,6 +2404,15 @@ export default function EditarCotizacionPage() {
                       Descargar OT
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={descargarCotizacionPDFUSD}
+                    title="Cotización en dólares (tipo de cambio del campo Tipo de cambio)"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descargar Cotización $
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -2520,6 +2623,20 @@ export default function EditarCotizacionPage() {
                     onChange={(e) => setPlazo(e.target.value)}
                     placeholder="Ej: 5 días hábiles"
                     className="h-9"
+                  />
+                </div>
+
+                {/* Tipo de cambio */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="tipoCambio">Tipo de cambio</Label>
+                  <Input
+                    id="tipoCambio"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={tipoCambio}
+                    readOnly
+                    className="h-9 bg-muted"
                   />
                 </div>
               </div>

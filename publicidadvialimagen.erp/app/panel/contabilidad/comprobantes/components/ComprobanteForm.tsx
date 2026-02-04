@@ -22,7 +22,8 @@ import { LcModal, type LcRegistroDatos } from "./LcModal"
 interface ComprobanteFormProps {
   comprobante: Comprobante | null
   onNew: () => void
-  onSave: () => void
+  /** Se llama tras guardar; si se pasa comprobante, el padre debe seleccionarlo (evita duplicado al aprobar después) */
+  onSave: (comprobanteGuardado?: Comprobante | null) => void
   /** Se llama al aprobar; el padre puede actualizar la selección para habilitar Exportar PDF */
   onAprobado?: (comprobante: Comprobante) => void
   onExportPDF?: () => void
@@ -123,6 +124,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   const [beneficiarioId, setBeneficiarioId] = useState<string | null>(null)
 
   const [guardandoComprobante, setGuardandoComprobante] = useState(false)
+  const lastTriggerSaveRef = useRef(0)
 
   // Libro de Compras (LC): un registro por línea de detalle (cada línea tiene su propio LC en BD)
   const [lcModalOpen, setLcModalOpen] = useState(false)
@@ -1054,6 +1056,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   const handleSave = async () => {
     try {
       setSaving(true)
+      onSavingChange?.(true)
 
       // Validar que haya al menos un detalle
       if (detalles.length === 0) {
@@ -1070,6 +1073,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
 
       const payload = {
         ...formData,
+        estado: "BORRADOR",
         detalles: detallesAjustados.map((d, index) => ({
           ...d,
           orden: index + 1,
@@ -1077,7 +1081,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
       }
 
       if (comprobante?.id) {
-        // Actualizar
+        // Actualizar (siempre como BORRADOR al usar Guardar)
         const response = await api(`/api/contabilidad/comprobantes/${comprobante.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1089,13 +1093,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
           toast.success("Comprobante actualizado correctamente")
           // Recargar detalles después de guardar
           if (result.data?.detalles) {
-            console.log("✅ Detalles actualizados después de guardar:", result.data.detalles)
             setDetalles(result.data.detalles)
           } else if (comprobante.id) {
-            // Si no vienen en la respuesta, recargarlos
             await fetchDetalles(comprobante.id)
           }
-          onSave()
+          onSave(result.data ?? null)
         } else {
           const error = await response.json()
           toast.error(error.error || "Error al actualizar el comprobante")
@@ -1157,8 +1159,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
           if (newComp.data?.detalles) {
             setDetalles(newComp.data.detalles)
           }
-          resetForm()
-          onSave()
+          // Pasar el comprobante creado al padre para que lo seleccione; así Aprobar no crea otro
+          onSave(newComp.data ?? null)
         } else {
           const error = await response.json()
           toast.error(error.error || "Error al crear el comprobante")
@@ -1169,8 +1171,19 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
       toast.error("Error de conexión")
     } finally {
       setSaving(false)
+      onSavingChange?.(false)
     }
   }
+
+  // Disparar guardado cuando la página incrementa triggerSave (botón Guardar del header).
+  // Solo ejecutamos una vez por valor de triggerSave para evitar duplicados (p. ej. React Strict Mode ejecuta efectos dos veces).
+  useEffect(() => {
+    if (triggerSave > 0 && triggerSave !== lastTriggerSaveRef.current) {
+      lastTriggerSaveRef.current = triggerSave
+      handleSave()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerSave])
 
   const handleAprobar = async () => {
     if (!isBalanced) {
@@ -1188,7 +1201,41 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
 
     try {
       setSaving(true)
+      onSavingChange?.(true)
       let comprobanteId = comprobante?.id
+
+      // Si ya existe el comprobante, primero guardar cambios (PUT) y luego aprobar
+      if (comprobanteId) {
+        if (detalles.length === 0) {
+          toast.error("Debe agregar al menos un detalle al comprobante")
+          setSaving(false)
+          return
+        }
+        const detallesInvalidos = detalles.some((d) => !d.cuenta)
+        if (detallesInvalidos) {
+          toast.error("Todos los detalles deben tener una cuenta asignada")
+          setSaving(false)
+          return
+        }
+        const payloadAprobar = {
+          ...formData,
+          estado: "BORRADOR",
+          detalles: detallesAjustados.map((d, index) => ({ ...d, orden: index + 1 })),
+        }
+        const putRes = await api(`/api/contabilidad/comprobantes/${comprobanteId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadAprobar),
+        })
+        if (!putRes.ok) {
+          const err = await putRes.json().catch(() => ({}))
+          toast.error(err.error || "Error al guardar el comprobante antes de aprobar")
+          setSaving(false)
+          return
+        }
+        const putData = await putRes.json().catch(() => ({}))
+        if (putData.data?.detalles) setDetalles(putData.data.detalles)
+      }
 
       // Si es comprobante nuevo, primero guardar (crear) y luego aprobar
       if (!comprobanteId) {
@@ -1280,6 +1327,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
       toast.error("Error de conexión")
     } finally {
       setSaving(false)
+      onSavingChange?.(false)
     }
   }
 

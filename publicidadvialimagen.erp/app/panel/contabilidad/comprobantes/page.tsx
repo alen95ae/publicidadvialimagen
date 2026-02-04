@@ -23,9 +23,11 @@ export default function ComprobantesPage() {
     setSelectedComprobante(null)
   }
 
-  const handleSave = () => {
+  const handleSave = (comprobanteGuardado?: Comprobante | null) => {
+    if (comprobanteGuardado != null) {
+      setSelectedComprobante(comprobanteGuardado)
+    }
     setRefreshKey(prev => prev + 1)
-    // Si se guardó correctamente, el formulario manejará la actualización
   }
 
   const handleExportPDF = async () => {

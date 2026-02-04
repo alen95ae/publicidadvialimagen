@@ -36,18 +36,19 @@ export default function NuevaFacturaManualPage() {
         const itemsLineas = lineas.filter(
           (l: any) => (l.tipo === "producto" || l.codigo_producto) && (l.cantidad ?? 0) > 0
         )
+        // Regla: la cotización es la fuente de verdad. Copiamos total_línea y cantidad; precio_unitario es derivado.
         const items = itemsLineas.map((l: any) => {
           const cantidad = Number(l.cantidad) || 0
-          const precioUnit = l.precio_unitario != null ? Number(l.precio_unitario) : (l.subtotal_linea != null && cantidad > 0 ? Number(l.subtotal_linea) / cantidad : 0)
-          const subtotal = l.subtotal_linea != null ? Number(l.subtotal_linea) : cantidad * precioUnit
+          const totalLinea = l.subtotal_linea != null ? Math.round(Number(l.subtotal_linea) * 100) / 100 : 0
+          const precioUnitario = cantidad > 0 ? Math.round((totalLinea / cantidad) * 100) / 100 : 0
           return {
             codigo_producto: l.codigo_producto ?? "",
             descripcion: [l.nombre_producto, l.descripcion].filter(Boolean).join(" - ") || "",
             cantidad,
             unidad_medida: l.unidad_medida ?? "m²",
-            precio_unitario: precioUnit,
+            precio_unitario: precioUnitario,
             descuento: 0,
-            importe: Math.round(subtotal * 100) / 100,
+            importe: totalLinea,
           }
         })
 

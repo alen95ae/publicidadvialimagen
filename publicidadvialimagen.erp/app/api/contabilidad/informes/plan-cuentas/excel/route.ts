@@ -1,19 +1,17 @@
-export const runtime = "nodejs";
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
+import * as XLSX from "xlsx"
 
-// GET - Informe Plan de Cuentas
 export async function GET(request: NextRequest) {
   try {
-    // Verificar permisos
     const permiso = await requirePermiso("contabilidad", "ver")
-    if (permiso instanceof Response) {
-      return permiso
-    }
+    if (permiso instanceof Response) return permiso
 
     const supabase = getSupabaseAdmin()
-
     const { searchParams } = new URL(request.url)
     const clasificador = searchParams.get("clasificador")
     const desde_cuenta = searchParams.get("desde_cuenta")
@@ -42,18 +40,22 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      console.error("Error fetching plan de cuentas:", error)
-      // Si la tabla no existe, devolver array vacío
       if (
         error.code === "PGRST116" ||
         error.code === "42P01" ||
         error.message?.includes("does not exist") ||
         error.message?.includes("relation")
       ) {
-        return NextResponse.json({
-          success: true,
-          data: [],
-          message: "Tabla plan_cuentas no encontrada",
+        const wb = XLSX.utils.book_new()
+        const ws = XLSX.utils.aoa_to_sheet([["Plan de Cuentas"], [], ["No hay datos."]])
+        XLSX.utils.book_append_sheet(wb, ws, "Plan de Cuentas")
+        const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
+        return new NextResponse(buffer, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Content-Disposition": `attachment; filename="plan_cuentas.xlsx"`,
+          },
         })
       }
       return NextResponse.json(
@@ -62,33 +64,40 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const cuentasInforme = (data || []).map((cuenta: any) => ({
-      cuenta: cuenta.cuenta,
-      descripcion: cuenta.descripcion,
-      nivel: cuenta.nivel,
-      tipo: cuenta.tipo_cuenta || "-",
-      cuenta_padre: cuenta.cuenta_padre || null,
-      aitb: !!cuenta.aitb,
-      transaccional: !!cuenta.transaccional,
+    const rows = (data || []).map((c: any) => ({
+      Cuenta: c.cuenta,
+      Descripción: c.descripcion,
+      Nivel: c.nivel,
+      Tipo: c.tipo_cuenta || "-",
+      "Cuenta padre": c.cuenta_padre ?? "",
+      AITB: c.aitb ? "Sí" : "No",
+      Transaccional: c.transaccional ? "Sí" : "No",
     }))
 
-    return NextResponse.json({
-      success: true,
-      data: cuentasInforme,
-      total: cuentasInforme.length,
+    const emptyRow = { Cuenta: "", Descripción: "Sin datos", Nivel: "", Tipo: "", "Cuenta padre": "", AITB: "", Transaccional: "" }
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [emptyRow])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Plan de Cuentas")
+
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
+    const hoy = new Date()
+    const d = String(hoy.getDate()).padStart(2, "0")
+    const m = String(hoy.getMonth() + 1).padStart(2, "0")
+    const y = hoy.getFullYear()
+    const nombreArchivo = `plan_cuentas_${d}-${m}-${y}.xlsx`
+
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${nombreArchivo}"`,
+      },
     })
   } catch (error: any) {
-    console.error("Error in GET /api/contabilidad/informes/plan-cuentas:", error)
+    console.error("Error in GET /api/contabilidad/informes/plan-cuentas/excel:", error)
     return NextResponse.json(
-      { error: "Error interno del servidor", details: error?.message },
+      { error: "Error al generar el Excel", details: error?.message },
       { status: 500 }
     )
   }
 }
-
-
-
-
-
-
-

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,9 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Play, Loader2, FileDown, FileSpreadsheet } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Play, Loader2, FileDown, FileSpreadsheet, ChevronsUpDown, Check } from "lucide-react"
 import { api } from "@/lib/fetcher"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import type { Cuenta } from "@/lib/types/contabilidad"
 
 interface BalanceSumasSaldosFilters {
   gestion: number
@@ -56,6 +60,12 @@ export default function BalanceSumasSaldosReporte() {
   const currentYear = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1
 
+  const [cuentas, setCuentas] = useState<Cuenta[]>([])
+  const [loadingCuentas, setLoadingCuentas] = useState(false)
+  const [openDesdeCuenta, setOpenDesdeCuenta] = useState(false)
+  const [openHastaCuenta, setOpenHastaCuenta] = useState(false)
+  const [filteredCuentasDesde, setFilteredCuentasDesde] = useState<Cuenta[]>([])
+  const [filteredCuentasHasta, setFilteredCuentasHasta] = useState<Cuenta[]>([])
   const [loading, setLoading] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
@@ -71,8 +81,66 @@ export default function BalanceSumasSaldosReporte() {
     tipo_cuenta: "",
   })
 
+  useEffect(() => {
+    const loadCuentas = async () => {
+      try {
+        setLoadingCuentas(true)
+        const res = await api("/api/contabilidad/cuentas?limit=10000")
+        if (res.ok) {
+          const d = await res.json()
+          const list = d.data || []
+          setCuentas(list)
+          setFilteredCuentasDesde(list.slice(0, 20))
+          setFilteredCuentasHasta(list.slice(0, 20))
+        }
+      } catch (e) {
+        console.error("Error loading cuentas:", e)
+      } finally {
+        setLoadingCuentas(false)
+      }
+    }
+    loadCuentas()
+  }, [])
+
   const handleFilterChange = (field: keyof BalanceSumasSaldosFilters, value: string | number | boolean) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const filtrarCuentasDesde = (searchValue: string) => {
+    if (!searchValue?.trim()) {
+      setFilteredCuentasDesde(cuentas.slice(0, 20))
+      return
+    }
+    const search = searchValue.toLowerCase().trim()
+    const filtered = cuentas
+      .filter((c) => {
+        const codigo = (c.cuenta || "").toLowerCase()
+        const desc = (c.descripcion || "").toLowerCase()
+        return codigo.startsWith(search) || desc.includes(search)
+      })
+      .slice(0, 20)
+    setFilteredCuentasDesde(filtered)
+  }
+  const filtrarCuentasHasta = (searchValue: string) => {
+    if (!searchValue?.trim()) {
+      setFilteredCuentasHasta(cuentas.slice(0, 20))
+      return
+    }
+    const search = searchValue.toLowerCase().trim()
+    const filtered = cuentas
+      .filter((c) => {
+        const codigo = (c.cuenta || "").toLowerCase()
+        const desc = (c.descripcion || "").toLowerCase()
+        return codigo.startsWith(search) || desc.includes(search)
+      })
+      .slice(0, 20)
+    setFilteredCuentasHasta(filtered)
+  }
+  const getCuentaDisplayText = (cuentaCodigo: string) => {
+    if (!cuentaCodigo) return "Seleccionar cuenta..."
+    const c = cuentas.find((x) => String(x.cuenta || "").trim() === String(cuentaCodigo).trim())
+    if (c) return `${c.cuenta} - ${c.descripcion || ""}`
+    return cuentaCodigo
   }
 
   const handleGenerarReporte = async () => {
@@ -382,28 +450,110 @@ export default function BalanceSumasSaldosReporte() {
           <h3 className="text-sm font-semibold text-gray-700">Filtros de Cuentas</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="desde_cuenta" className="text-xs text-gray-600">
-                Desde la Cuenta
-              </Label>
-              <Input
-                id="desde_cuenta"
-                value={filters.desde_cuenta}
-                onChange={(e) => handleFilterChange("desde_cuenta", e.target.value)}
-                placeholder="Ej: 111001"
-                className="mt-1 font-mono"
-              />
+              <Label className="text-xs text-gray-600">Desde la Cuenta</Label>
+              <Popover
+                open={openDesdeCuenta}
+                onOpenChange={(open) => {
+                  setOpenDesdeCuenta(open)
+                  if (open) setFilteredCuentasDesde(cuentas.slice(0, 20))
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full mt-1 h-9 justify-between text-sm overflow-hidden",
+                      !filters.desde_cuenta && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate text-left flex-1">{getCuentaDisplayText(filters.desde_cuenta)}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por código o descripción..."
+                      className="h-9 border-0 focus:ring-0"
+                      onValueChange={filtrarCuentasDesde}
+                    />
+                    <CommandList>
+                      <CommandEmpty>{loadingCuentas ? "Cargando..." : "No se encontraron cuentas."}</CommandEmpty>
+                      <CommandGroup>
+                        {filteredCuentasDesde.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={`${c.cuenta} ${c.descripcion || ""}`}
+                            onSelect={() => {
+                              handleFilterChange("desde_cuenta", c.cuenta)
+                              setOpenDesdeCuenta(false)
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", filters.desde_cuenta === c.cuenta ? "opacity-100" : "opacity-0")} />
+                            <span className="font-mono font-medium">{c.cuenta}</span>
+                            <span className="text-gray-600 truncate ml-2">{c.descripcion}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
-              <Label htmlFor="hasta_cuenta" className="text-xs text-gray-600">
-                Hasta la Cuenta
-              </Label>
-              <Input
-                id="hasta_cuenta"
-                value={filters.hasta_cuenta}
-                onChange={(e) => handleFilterChange("hasta_cuenta", e.target.value)}
-                placeholder="Ej: 111999"
-                className="mt-1 font-mono"
-              />
+              <Label className="text-xs text-gray-600">Hasta la Cuenta</Label>
+              <Popover
+                open={openHastaCuenta}
+                onOpenChange={(open) => {
+                  setOpenHastaCuenta(open)
+                  if (open) setFilteredCuentasHasta(cuentas.slice(0, 20))
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full mt-1 h-9 justify-between text-sm overflow-hidden",
+                      !filters.hasta_cuenta && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate text-left flex-1">{getCuentaDisplayText(filters.hasta_cuenta)}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por código o descripción..."
+                      className="h-9 border-0 focus:ring-0"
+                      onValueChange={filtrarCuentasHasta}
+                    />
+                    <CommandList>
+                      <CommandEmpty>{loadingCuentas ? "Cargando..." : "No se encontraron cuentas."}</CommandEmpty>
+                      <CommandGroup>
+                        {filteredCuentasHasta.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={`${c.cuenta} ${c.descripcion || ""}`}
+                            onSelect={() => {
+                              handleFilterChange("hasta_cuenta", c.cuenta)
+                              setOpenHastaCuenta(false)
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", filters.hasta_cuenta === c.cuenta ? "opacity-100" : "opacity-0")} />
+                            <span className="font-mono font-medium">{c.cuenta}</span>
+                            <span className="text-gray-600 truncate ml-2">{c.descripcion}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

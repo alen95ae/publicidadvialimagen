@@ -286,9 +286,7 @@ export default function FacturasManualesListPage() {
       })
       .catch(() => toast.error("Error al descargar PDF"))
       .finally(() => setDescargandoPDF(null))
-  }
-
-  const eliminarFiltro = (tipo: "busqueda" | "vendedor" | "estado") => {
+  }  const eliminarFiltro = (tipo: "busqueda" | "vendedor" | "estado") => {
     if (tipo === "busqueda") setSearchTerm("")
     if (tipo === "vendedor") setFiltroVendedor("all")
     if (tipo === "estado") setFiltroEstado("all")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -1004,8 +1004,39 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     return auxiliarVal
   }
 
-  // Calcular totales
-  const totales = detalles.reduce(
+  /**
+   * Ajuste de redondeo USD (política contable): moneda funcional Bs; USD informativo.
+   * La diferencia de redondeo en USD se absorbe en UNA línea (Proveedor HABER o última)
+   * para que Diferencia USD = 0,00 sin tocar Bs.
+   */
+  const ajustarRedondeoUsd = useCallback(
+    (lista: ComprobanteDetalle[], tc: number): ComprobanteDetalle[] => {
+      if (lista.length === 0) return lista
+      const totalDebeUsd = lista.reduce((s, d) => s + (d.debe_usd || 0), 0)
+      const totalHaberUsd = lista.reduce((s, d) => s + (d.haber_usd || 0), 0)
+      const diferenciaUsd = Math.round((totalDebeUsd - totalHaberUsd) * 100) / 100
+      if (Math.abs(diferenciaUsd) < 0.005) return lista
+
+      const idxAjuste =
+        lista.findIndex((d) => (d.haber_bs || 0) > 0) >= 0
+          ? lista.findIndex((d) => (d.haber_bs || 0) > 0)
+          : lista.length - 1
+      return lista.map((d, i) => {
+        if (i !== idxAjuste) return { ...d }
+        const nuevoHaberUsd = Math.round(((d.haber_usd || 0) + diferenciaUsd) * 100) / 100
+        return { ...d, haber_usd: nuevoHaberUsd }
+      })
+    },
+    []
+  )
+
+  const detallesAjustados = useMemo(
+    () => ajustarRedondeoUsd(detalles, formData.tipo_cambio ?? 6.96),
+    [detalles, formData.tipo_cambio, ajustarRedondeoUsd]
+  )
+
+  // Calcular totales (desde detalles ajustados para que Diferencia USD = 0,00)
+  const totales = detallesAjustados.reduce(
     (acc, det) => ({
       debe_bs: acc.debe_bs + (det.debe_bs || 0),
       haber_bs: acc.haber_bs + (det.haber_bs || 0),
@@ -1039,7 +1070,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
 
       const payload = {
         ...formData,
-        detalles: detalles.map((d, index) => ({
+        detalles: detallesAjustados.map((d, index) => ({
           ...d,
           orden: index + 1,
         })),
@@ -1174,7 +1205,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         }
         const payload = {
           ...formData,
-          detalles: detalles.map((d, index) => ({ ...d, orden: index + 1 })),
+          detalles: detallesAjustados.map((d, index) => ({ ...d, orden: index + 1 })),
         }
         const createRes = await api("/api/contabilidad/comprobantes", {
           method: "POST",
@@ -1619,7 +1650,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  detalles.map((detalle, index) => (
+                  detallesAjustados.map((detalle, index) => (
                     <TableRow key={index}>
                       <TableCell className="w-[250px]">
                         {/* Cuenta: bloqueada si cuenta_es_fija === true */}
@@ -2114,23 +2145,33 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
           setLcModalOpen(false)
           setLcLineIndex(lineN)
 
-          // Integración LC → Comprobante: solo la línea N recibe glosa y monto de este LC
+          // Integración LC → Comprobante (criterio operativo contable): Monto = importe bruto; IVA = 13% sobre monto; base_gasto = monto - iva.
+          // DEBE: Gasto (base_gasto) + Crédito fiscal (iva); HABER: Proveedor (monto). Total Debe = Total Haber = monto.
           setDetalles((prev) => {
             if (prev.length === 0) return prev
             const tipoCambio = formData.tipo_cambio ?? 6.96
+            const totalFactura = data.monto ?? 0
+            const creditoFiscal = data.credito_fiscal ?? 0
+            const baseImponible = Math.round((totalFactura - creditoFiscal) * 100) / 100
             let next = prev.map((det, idx) => {
               if (idx === lineN) {
                 const glosa = (det.glosa ?? "").trim() ? det.glosa : (data.detalle_glosa || null)
-                const debe_bs = data.monto ?? det.debe_bs ?? 0
+                const debe_bs = baseImponible
                 const debe_usd = Math.round((debe_bs / tipoCambio) * 100) / 100
                 return { ...det, glosa, debe_bs, debe_usd }
               }
-              // Solo para la primera línea (línea 0) actualizar también línea 1 y añadir 116001001 si aplica
-              if (lineN === 0 && idx === 1 && data.credito_fiscal != null && data.credito_fiscal > 0) {
+              if (lineN === 0 && idx === 1 && creditoFiscal > 0) {
                 const glosa = (det.glosa ?? "").trim() ? det.glosa : "Crédito fiscal"
-                const debe_bs = data.credito_fiscal ?? det.debe_bs ?? 0
+                const debe_bs = creditoFiscal
                 const debe_usd = Math.round((debe_bs / tipoCambio) * 100) / 100
                 return { ...det, glosa, debe_bs, debe_usd }
+              }
+              // Línea HABER (Proveedor): la que no es GASTO ni IVA crédito (116001001)
+              const esLineaProveedor = lineN === 0 && idx > 0 && det.cuenta !== "116001001" && totalFactura > 0
+              if (esLineaProveedor) {
+                const haber_bs = totalFactura
+                const haber_usd = Math.round((haber_bs / tipoCambio) * 100) / 100
+                return { ...det, haber_bs, haber_usd }
               }
               return det
             })

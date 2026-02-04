@@ -141,12 +141,16 @@ export function LcModal({
     setFilteredContactos(filtered.slice(0, 50))
   }
 
-  // Crédito fiscal = 13/87 del monto (base); así monto 87 → CF 13 (87+13=100)
-  const FACTOR_CREDITO_FISCAL = 13 / 87
+  // Criterio operativo contable: Monto = importe bruto sujeto a IVA. IVA = 13% directo sobre monto.
+  const PORCENTAJE_IVA = 0.13
+  const calcularCreditoFiscal = (monto: number) => {
+    if (!monto || monto <= 0) return 0
+    return Math.round(monto * PORCENTAJE_IVA * 100) / 100
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const creditoFiscal = Math.round((form.monto || 0) * FACTOR_CREDITO_FISCAL * 100) / 100
+    const creditoFiscal = calcularCreditoFiscal(form.monto || 0)
     onSave({ ...form, credito_fiscal: creditoFiscal })
     onOpenChange(false)
   }
@@ -368,7 +372,7 @@ export function LcModal({
                   value={form.monto || ""}
                   onChange={(e) => {
                     const monto = parseFloat(e.target.value) || 0
-                    const creditoFiscal = Math.round(monto * FACTOR_CREDITO_FISCAL * 100) / 100
+                    const creditoFiscal = calcularCreditoFiscal(monto)
                     setForm((f) => ({ ...f, monto, credito_fiscal: creditoFiscal }))
                   }}
                 />
@@ -380,8 +384,9 @@ export function LcModal({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={form.monto ? (Math.round(form.monto * FACTOR_CREDITO_FISCAL * 100) / 100) : ""}
+                  value={form.monto ? calcularCreditoFiscal(form.monto) : ""}
                   disabled
+                  readOnly
                   className="bg-gray-50 font-mono"
                 />
               </div>

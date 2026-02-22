@@ -1,7 +1,6 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { findUserByEmail, signSession, updateUserLastAccess } from "@/lib/auth";
 import { getSupabaseServer } from "@/lib/supabaseServer";
@@ -74,8 +73,15 @@ export async function POST(req: Request) {
     const isProd = process.env.NODE_ENV === "production";
     const domain = process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN !== "" ? process.env.COOKIE_DOMAIN : undefined;
 
-    const cookieStore = await cookies();
-    cookieStore.set("session", token, {
+    const response = NextResponse.json({
+      success: true,
+      user: { id: user.id, email: user.fields.Email, name: user.fields.Nombre, role: role },
+      redirect
+    });
+
+    response.cookies.set({
+      name: "session",
+      value: token,
       httpOnly: true,
       secure: isProd,
       sameSite: "lax",
@@ -84,11 +90,6 @@ export async function POST(req: Request) {
       ...(domain ? { domain } : {}),
     });
 
-    const response = NextResponse.json({
-      success: true,
-      user: { id: user.id, email: user.fields.Email, name: user.fields.Nombre, role: role },
-      redirect
-    });
     return response;
   } catch (e: any) {
     console.error("login error:", e);

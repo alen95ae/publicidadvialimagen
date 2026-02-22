@@ -17,75 +17,63 @@ export default function SessionProtection() {
   useEffect(() => {
     let consecutiveErrors = 0
     const MAX_CONSECUTIVE_ERRORS = 3
+    const RETRY_DELAY_MS = 400
+    const MAX_RETRIES = 2
 
-    // Validar sesión al cargar
+    const doRedirectToLogin = async () => {
+      try {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" })
+      } catch {
+        // ignorar
+      }
+      if (typeof window !== "undefined") {
+        localStorage.clear()
+        sessionStorage.clear()
+        router.push("/login")
+      }
+    }
+
+    const fetchAuthMe = (signal?: AbortSignal) =>
+      fetch("/api/auth/me", { cache: "no-store", credentials: "include", ...(signal && { signal }) })
+
+    // Validar sesión al cargar: reintentar en 401 para evitar redirección prematura en nueva pestaña
     const validateSession = async () => {
       try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 segundos timeout
+        let attempt = 0
 
-        const response = await fetch("/api/auth/me", {
-          cache: 'no-store',
-          credentials: 'include',
-          signal: controller.signal
-        })
+        while (attempt <= MAX_RETRIES) {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 5000)
+          const response = await fetchAuthMe(controller.signal)
+          clearTimeout(timeoutId)
 
-        clearTimeout(timeoutId)
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Solo redirigir si es 401 (no autorizado), no por otros errores
-            consecutiveErrors = MAX_CONSECUTIVE_ERRORS
-          } else {
-            // Error de servidor (500, 503, etc.) - no redirigir, solo contar
-            consecutiveErrors++
-            console.warn(`[SessionProtection] Error ${response.status} validando sesión, intento ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`)
+          if (response.ok) {
+            consecutiveErrors = 0
+            hasCheckedRef.current = true
             return
           }
-        } else {
-          // Éxito - resetear contador
-          consecutiveErrors = 0
-          hasCheckedRef.current = true
+          if (response.status === 401) {
+            attempt++
+            if (attempt <= MAX_RETRIES) {
+              await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
+              continue
+            }
+            await doRedirectToLogin()
+            return
+          }
+          consecutiveErrors++
+          console.warn(`[SessionProtection] Error ${response.status} validando sesión`)
           return
         }
-
-        // Solo redirigir si hay múltiples errores consecutivos o es 401
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          try {
-            await fetch("/api/auth/logout", {
-              method: "POST",
-              credentials: "include",
-              cache: 'no-store'
-            })
-          } catch {
-            // Ignorar errores de logout
-          }
-          
-          // Limpiar storage
-          if (typeof window !== 'undefined') {
-            localStorage.clear()
-            sessionStorage.clear()
-          }
-          
-          // Redirigir a login
-          router.push("/login")
-        }
       } catch (error: any) {
-        // Error de red o timeout - no redirigir inmediatamente
-        if (error.name === 'AbortError') {
+        if (error.name === "AbortError") {
           console.warn("[SessionProtection] Timeout validando sesión")
         } else {
           console.warn("[SessionProtection] Error validando sesión:", error)
         }
         consecutiveErrors++
-        
-        // Solo redirigir si hay múltiples errores consecutivos
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          if (typeof window !== 'undefined') {
-            localStorage.clear()
-            sessionStorage.clear()
-            router.push("/login")
-          }
+          await doRedirectToLogin()
         }
       }
     }

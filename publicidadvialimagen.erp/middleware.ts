@@ -64,7 +64,6 @@ export async function middleware(req: NextRequest) {
     // Solo protegemos /panel/*
     if (pathname.startsWith(PROTECTED_PREFIX)) {
       const token = req.cookies.get("session")?.value;
-      console.log("🕵️ [Middleware]", pathname, "→ Cookie session:", token ? "SÍ (" + token.substring(0, 20) + "...)" : "NO");
 
       // Si NO hay cookie, entonces sí → login
       if (!token) {

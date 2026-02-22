@@ -8,18 +8,14 @@ import { getSupabaseUser, getSupabaseAdmin } from '@/lib/supabaseServer'
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('session')?.value
-    console.log("🕵️ [API/me] Cookie recibida:", token ? "SÍ (" + token.substring(0, 20) + "...)" : "NO")
     
     if (!token) {
-      console.log("🔴 [API/me] No hay cookie session → 401")
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
     const payload = await verifySession(token)
-    console.log("🕵️ [API/me] Payload verificado:", payload ? "SÍ (sub=" + payload.sub + ")" : "NO (null)")
     
     if (!payload || !payload.sub) {
-      console.log("🔴 [API/me] Payload inválido → 401")
       return NextResponse.json({ error: 'Sesión inválida' }, { status: 401 })
     }
 

@@ -1,5 +1,13 @@
-import { redirect } from "next/navigation"
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
-export default function HomePage() {
-  redirect("/login")
+export default async function HomePage() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+
+  if (token) {
+    redirect("/panel");
+  }
+
+  redirect("/login");
 }

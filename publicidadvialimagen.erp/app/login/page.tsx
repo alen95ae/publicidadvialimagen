@@ -1,9 +1,16 @@
-"use client";
-
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import LoginPageInner from "./LoginPageInner";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+
+  if (token) {
+    redirect("/panel");
+  }
+
   return (
     <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md shadow-lg bg-white rounded-lg p-8 text-center">

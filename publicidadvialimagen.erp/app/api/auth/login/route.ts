@@ -1,9 +1,9 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { findUserByEmail, signSession, updateUserLastAccess } from "@/lib/auth";
-import { createAuthCookie } from "@/lib/auth/cookies";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export async function POST(req: Request) {
@@ -71,15 +71,24 @@ export async function POST(req: Request) {
 
     // Duración de la cookie basada en "mantener sesión iniciada"
     const maxAge = rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 días si rememberMe, 1 día si no
-    const cookie = createAuthCookie("session", token, maxAge);
-    
+    const isProd = process.env.NODE_ENV === "production";
+    const domain = process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN !== "" ? process.env.COOKIE_DOMAIN : undefined;
+
+    const cookieStore = await cookies();
+    cookieStore.set("session", token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      path: "/",
+      maxAge,
+      ...(domain ? { domain } : {}),
+    });
+
     const response = NextResponse.json({
       success: true,
       user: { id: user.id, email: user.fields.Email, name: user.fields.Nombre, role: role },
       redirect
     });
-    
-    response.headers.append('Set-Cookie', cookie);
     return response;
   } catch (e: any) {
     console.error("login error:", e);

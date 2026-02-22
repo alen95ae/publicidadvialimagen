@@ -66,6 +66,7 @@ function isPublicRoute(pathname: string): boolean {
     "/campaigns",
     "/captacion",
     "/print-shop",
+    "/impresion-digital",
     "/solicitar-cotizacion",
     "/privacy-policy",
     "/terms-of-service",

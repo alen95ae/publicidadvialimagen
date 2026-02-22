@@ -104,7 +104,7 @@ export default function PrintProductDetailPage({ params }: PrintProductDetailPag
           </Link>
           <span className="mx-2">/</span>
           <Link href="/print-shop" className="hover:text-primary">
-            Impresión
+            PrintShop
           </Link>
           <span className="mx-2">/</span>
           <span>{product.name}</span>

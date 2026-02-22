@@ -12,8 +12,18 @@ export default function LoginPageInner() {
   const next = searchParams.get('next');
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      {/* Fondo: imagen B/N + cortina 50% */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url('/la-paz-city2.png')",
+          filter: "grayscale(100%)",
+        }}
+        aria-hidden
+      />
+      <div className="absolute inset-0 bg-black/50" aria-hidden />
+      <Card className="w-full max-w-md shadow-lg relative z-10">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
             <Image src="/logo-publicidad-vial-imagen.svg" alt="Publicidad Vial Imagen" width={200} height={60} className="h-16 w-auto" priority />

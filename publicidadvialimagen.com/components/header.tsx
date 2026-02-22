@@ -184,9 +184,35 @@ export default function Header() {
             <Link href="/vallas-publicitarias" className="text-sm font-medium transition-colors hover:text-primary">
               {t('nav.billboards')}
             </Link>
-            <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
-              {t('nav.printShop')}
-            </Link>
+            <div className="flex items-center gap-1 group">
+              <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
+                Print Shop
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="text-sm font-medium transition-colors hover:text-primary flex items-center">
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem asChild>
+                    <Link href="/impresion-digital" className="cursor-pointer">
+                      Impresión Digital
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/impresion-digital?categoria=Displays" className="cursor-pointer">
+                      Displays
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/impresion-digital?categoria=Corte y Grabado" className="cursor-pointer">
+                      Corte y Grabado
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <Link href="/about" className="text-sm font-medium transition-colors hover:text-primary">
               {t('nav.about')}
             </Link>
@@ -297,9 +323,20 @@ export default function Header() {
             <Link href="/vallas-publicitarias" className="text-sm font-medium transition-colors hover:text-primary">
               {t('nav.billboards')}
             </Link>
-            <Link href="/print-shop" className="text-sm font-medium transition-colors hover:text-primary">
-              {t('nav.printShop')}
-            </Link>
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-muted-foreground">Print Shop</div>
+              <div className="pl-4 space-y-2">
+                <Link href="/impresion-digital" className="text-sm transition-colors hover:text-primary block">
+                  Impresión Digital
+                </Link>
+                <Link href="/impresion-digital?categoria=Displays" className="text-sm transition-colors hover:text-primary block">
+                  Displays
+                </Link>
+                <Link href="/impresion-digital?categoria=Corte y Grabado" className="text-sm transition-colors hover:text-primary block">
+                  Corte y Grabado
+                </Link>
+              </div>
+            </div>
             <Link href="/about" className="text-sm font-medium transition-colors hover:text-primary">
               {t('nav.about')}
             </Link>

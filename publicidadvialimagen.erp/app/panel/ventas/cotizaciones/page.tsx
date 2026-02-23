@@ -986,7 +986,7 @@ export default function CotizacionesPage() {
           </CardHeader>
           <CardContent>
             {/* Banner de selección total (cyan) */}
-            {cotizaciones.length > 0 &&
+            {tieneFuncionTecnica("ver boton exportar") && cotizaciones.length > 0 &&
              cotizaciones.every(c => selectedCotizaciones.includes(c.id)) &&
              selectAllMode !== 'all' &&
              allCotizacionIds.length > cotizaciones.length && (
@@ -1011,7 +1011,7 @@ export default function CotizacionesPage() {
               </div>
             )}
 
-            {selectAllMode === 'all' && (
+            {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-cyan-900">

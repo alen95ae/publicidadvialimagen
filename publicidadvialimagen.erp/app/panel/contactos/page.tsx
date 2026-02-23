@@ -784,7 +784,7 @@ export default function ContactosPage() {
           )}
 
           {/* Banner de selección total */}
-          {contacts.length > 0 && 
+          {tieneFuncionTecnica("ver boton exportar") && contacts.length > 0 && 
            contacts.every(c => selectedContacts.has(c.id)) && 
            selectAllMode !== 'all' &&
            allContactIds.length > contacts.length && (
@@ -809,7 +809,7 @@ export default function ContactosPage() {
             </div>
           )}
 
-          {selectAllMode === 'all' && (
+          {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
             <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-cyan-900">

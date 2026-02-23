@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 interface HistorialEntry {
   id: string
@@ -65,6 +66,7 @@ interface Usuario {
 }
 
 export default function HistorialPage() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const router = useRouter()
   const fechaHoy = new Date().toISOString().split('T')[0]
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
@@ -512,26 +514,28 @@ export default function HistorialPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Filtros</CardTitle>
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleExportarExcel} 
-                variant="outline" 
-                size="sm"
-                disabled={exportingPDF || exportingExcel || loading || historial.length === 0}
-              >
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                {exportingExcel ? "Exportando..." : "Exportar Excel"}
-              </Button>
-              <Button 
-                onClick={handleExportarPDF} 
-                variant="outline" 
-                size="sm"
-                disabled={exportingPDF || exportingExcel || loading || historial.length === 0}
-              >
-                <FileDown className="w-4 h-4 mr-2" />
-                {exportingPDF ? "Exportando..." : "Exportar PDF"}
-              </Button>
-            </div>
+            {tieneFuncionTecnica("ver boton exportar") && (
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleExportarExcel} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={exportingPDF || exportingExcel || loading || historial.length === 0}
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  {exportingExcel ? "Exportando..." : "Exportar Excel"}
+                </Button>
+                <Button 
+                  onClick={handleExportarPDF} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={exportingPDF || exportingExcel || loading || historial.length === 0}
+                >
+                  <FileDown className="w-4 h-4 mr-2" />
+                  {exportingPDF ? "Exportando..." : "Exportar PDF"}
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -733,7 +737,7 @@ export default function HistorialPage() {
         </CardHeader>
         <CardContent>
           {/* Banner de selección total (cyan) */}
-          {!loading && historial.length > 0 &&
+          {tieneFuncionTecnica("ver boton exportar") && !loading && historial.length > 0 &&
            historial.every((e) => selectedIds.includes(e.id)) &&
            selectAllMode !== "all" &&
            allHistorialIds.length > historial.length && (
@@ -758,7 +762,7 @@ export default function HistorialPage() {
             </div>
           )}
 
-          {selectAllMode === "all" && (
+          {tieneFuncionTecnica("ver boton exportar") && selectAllMode === "all" && (
             <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-cyan-900">
@@ -779,7 +783,7 @@ export default function HistorialPage() {
             </div>
           )}
 
-          {selectedIds.length > 0 && (
+          {tieneFuncionTecnica("ver boton exportar") && selectedIds.length > 0 && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-sm font-medium text-blue-800">

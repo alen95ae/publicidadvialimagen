@@ -1317,7 +1317,7 @@ export default function CostesPage() {
         </div>
 
         {/* Banner de selección total (cyan) */}
-        {!permisosLoading && soportesCostesPaginated.length > 0 &&
+        {tieneFuncionTecnica("ver boton exportar") && !permisosLoading && soportesCostesPaginated.length > 0 &&
          soportesCostesPaginated.every(s => selectedSoportes.includes(s.id)) &&
          selectAllMode !== 'all' &&
          allSoporteIds.length > soportesCostesPaginated.length && (
@@ -1342,7 +1342,7 @@ export default function CostesPage() {
           </div>
         )}
 
-        {selectAllMode === 'all' && (
+        {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
           <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-cyan-900">

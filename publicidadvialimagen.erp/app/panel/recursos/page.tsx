@@ -941,7 +941,7 @@ export default function RecursosPage() {
           </CardHeader>
           <CardContent>
             {/* Banner de selección total (cyan) */}
-            {ids.length > 0 && allSelected && selectAllMode !== 'all' && allRecursoIds.length > ids.length && (
+            {tieneFuncionTecnica("ver boton exportar") && ids.length > 0 && allSelected && selectAllMode !== 'all' && allRecursoIds.length > ids.length && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-cyan-900">
@@ -965,7 +965,7 @@ export default function RecursosPage() {
               </div>
             )}
 
-            {selectAllMode === 'all' && (
+            {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-cyan-900">

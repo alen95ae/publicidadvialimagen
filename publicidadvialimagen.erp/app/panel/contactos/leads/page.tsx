@@ -815,7 +815,7 @@ export default function LeadsPage() {
           )}
 
           {/* Banner de selección total */}
-          {leads.length > 0 && 
+          {tieneFuncionTecnica("ver boton exportar") && leads.length > 0 && 
            leads.every(l => selectedLeads.has(l.id)) && 
            selectAllMode !== 'all' &&
            allLeadIds.length > leads.length && (
@@ -840,7 +840,7 @@ export default function LeadsPage() {
             </div>
           )}
 
-          {selectAllMode === 'all' && (
+          {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
             <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-cyan-900">

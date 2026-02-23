@@ -538,7 +538,7 @@ export default function AlquileresPage() {
             )}
 
             {/* Banner de selección total (cyan) */}
-            {alquileres.length > 0 &&
+            {tieneFuncionTecnica("ver boton exportar") && alquileres.length > 0 &&
              alquileres.every(a => selectedAlquileres.includes(a.id)) &&
              selectAllMode !== 'all' &&
              allAlquilerIds.length > alquileres.length && (
@@ -563,7 +563,7 @@ export default function AlquileresPage() {
               </div>
             )}
 
-            {selectAllMode === 'all' && (
+            {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
               <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-cyan-900">

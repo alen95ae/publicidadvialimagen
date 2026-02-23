@@ -51,6 +51,7 @@ import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
 import { normalizeText } from "@/lib/utils"
 import { CategoriasConsumiblesModal } from "@/components/inventario/categorias-consumibles-modal"
 import { useCategorias } from "@/hooks/use-categorias"
+import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Tipo para los items de consumibles
 interface ConsumibleItem {
@@ -79,6 +80,7 @@ function getStockBadge(cantidad: number) {
 }
 
 export default function ConsumiblesPage() {
+  const { tieneFuncionTecnica } = usePermisosContext()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
@@ -655,10 +657,12 @@ export default function ConsumiblesPage() {
                 </div>
                 
                 <div className="flex gap-2 items-center ml-auto">
-                  <Button variant="outline" size="sm" onClick={handleExportAll}>
-                    <FileSpreadsheet className="h-4 w-4 mr-2" />
-                    Exportar
-                  </Button>
+                  {tieneFuncionTecnica("ver boton exportar") && (
+                    <Button variant="outline" size="sm" onClick={handleExportAll}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      Exportar
+                    </Button>
+                  )}
                   <Button 
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={handleNewConsumible}
@@ -681,7 +685,7 @@ export default function ConsumiblesPage() {
           </CardHeader>
           <CardContent>
             {/* Banner de selección total (cyan) */}
-            {ids.length > 0 && allSelected && selectAllMode !== 'all' && allConsumibleIds.length > ids.length && (
+            {tieneFuncionTecnica("ver boton exportar") && ids.length > 0 && allSelected && selectAllMode !== 'all' && allConsumibleIds.length > ids.length && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-cyan-900">
@@ -705,7 +709,7 @@ export default function ConsumiblesPage() {
               </div>
             )}
 
-            {selectAllMode === 'all' && (
+            {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-cyan-900">
@@ -726,10 +730,12 @@ export default function ConsumiblesPage() {
                     <span className="text-sm font-medium text-blue-800">
                       {selectAllMode === 'all' ? `${allConsumibleIds.length} item${allConsumibleIds.length > 1 ? 's' : ''} seleccionado${allConsumibleIds.length > 1 ? 's' : ''} (todos)` : `${selectedIds.length} item${selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
                     </span>
-                    <Button variant="outline" size="sm" onClick={handleExportSelected} disabled={exportingSelected}>
-                      <FileSpreadsheet className="w-4 h-4 mr-2" />
-                      {exportingSelected ? 'Exportando...' : 'Exportar selección'}
-                    </Button>
+                    {tieneFuncionTecnica("ver boton exportar") && (
+                      <Button variant="outline" size="sm" onClick={handleExportSelected} disabled={exportingSelected}>
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                      </Button>
+                    )}
                     
                     {!singleSelected && selectedCount > 1 && (
                       <>

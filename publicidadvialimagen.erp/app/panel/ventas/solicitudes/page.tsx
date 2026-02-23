@@ -68,7 +68,7 @@ const ESTADOS_META = {
 
 export default function SolicitudesPage() {
   const router = useRouter()
-  const { puedeEliminar, puedeEditar, esAdmin } = usePermisosContext()
+  const { puedeEliminar, puedeEditar, esAdmin, tieneFuncionTecnica } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSolicitudes, setSelectedSolicitudes] = useState<string[]>([])
   const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
@@ -516,10 +516,12 @@ export default function SolicitudesPage() {
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleExport}>
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Exportar
-                </Button>
+                {tieneFuncionTecnica("ver boton exportar") && (
+                  <Button variant="outline" size="sm" onClick={handleExport}>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Exportar
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -578,7 +580,7 @@ export default function SolicitudesPage() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  {selectedSolicitudes.length > 0 && (
+                  {tieneFuncionTecnica("ver boton exportar") && selectedSolicitudes.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -634,7 +636,7 @@ export default function SolicitudesPage() {
           </CardHeader>
           <CardContent>
             {/* Banner de selección total (cyan) */}
-            {!loading && filteredSolicitudes.length > 0 &&
+            {tieneFuncionTecnica("ver boton exportar") && !loading && filteredSolicitudes.length > 0 &&
              filteredSolicitudes.every(s => selectedSolicitudes.includes(s.codigo)) &&
              selectAllMode !== 'all' &&
              allSolicitudIds.length > filteredSolicitudes.length && (
@@ -659,7 +661,7 @@ export default function SolicitudesPage() {
               </div>
             )}
 
-            {selectAllMode === 'all' && (
+            {tieneFuncionTecnica("ver boton exportar") && selectAllMode === 'all' && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-cyan-900">

@@ -1105,7 +1105,7 @@ export default function SoportesPage() {
           <CardContent>
 
             {/* Banner de selección total (cyan) */}
-            {viewMode === "list" && ids.length > 0 && allSelected && selectAllMode !== 'all' && allSoporteIds.length > ids.length && (
+            {tieneFuncionTecnica("ver boton exportar") && viewMode === "list" && ids.length > 0 && allSelected && selectAllMode !== 'all' && allSoporteIds.length > ids.length && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-cyan-900">
@@ -1129,7 +1129,7 @@ export default function SoportesPage() {
               </div>
             )}
 
-            {viewMode === "list" && selectAllMode === 'all' && (
+            {tieneFuncionTecnica("ver boton exportar") && viewMode === "list" && selectAllMode === 'all' && (
               <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-cyan-900">

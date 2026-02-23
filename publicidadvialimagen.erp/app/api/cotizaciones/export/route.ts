@@ -2,167 +2,244 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server"
-import { getCotizaciones } from "@/lib/supabaseCotizaciones"
+import { getCotizaciones, getCotizacionById } from "@/lib/supabaseCotizaciones"
+import { getLineasByCotizacionId } from "@/lib/supabaseCotizacionLineas"
 import { getUserByIdSupabase } from "@/lib/supabaseUsers"
 import { findContactoById } from "@/lib/supabaseContactos"
+import * as XLSX from "xlsx"
 
-// Función para escapar CSV correctamente (maneja tildes, ñ y caracteres especiales)
-function escapeCSV(value: string | number | boolean | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  const str = String(value)
-  // Escapar comillas dobles duplicándolas
-  const escaped = str.replace(/"/g, '""')
-  // Envolver en comillas para manejar comas, saltos de línea, etc.
-  return `"${escaped}"`
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Solo tabla cotizaciones (exportación general, ligera)
+const HEADERS_SOLO_COTIZACIONES = [
+  "Código",
+  "Fecha Creación",
+  "Fecha Actualización",
+  "Cliente",
+  "Vendedor",
+  "Sucursal",
+  "Estado",
+  "Subtotal",
+  "Total IVA",
+  "Total IT",
+  "Total Final",
+  "Vigencia (días)",
+  "Cantidad Items"
+] as const
+
+// Combinado cotización + líneas (solo para exportar selección)
+const HEADERS_COMBINADO = [
+  "Código",
+  "Fecha Creación",
+  "Fecha Actualización",
+  "Cliente",
+  "Vendedor",
+  "Sucursal",
+  "Estado",
+  "Subtotal",
+  "Total IVA",
+  "Total IT",
+  "Total Final",
+  "Vigencia (días)",
+  "Cantidad Items",
+  "Tipo Línea",
+  "Código Producto",
+  "Nombre Producto",
+  "Descripción",
+  "Cantidad",
+  "Ancho",
+  "Alto",
+  "Total m²",
+  "Unidad Medida",
+  "Precio Unit.",
+  "Comisión",
+  "Con IVA",
+  "Con IT",
+  "Es Soporte",
+  "Orden",
+  "Subtotal Línea"
+] as const
+
+function rowSoloCotizacion(cot: any, clienteNombre: string, vendedorNombre: string): (string | number)[] {
+  return [
+    cot.codigo ?? '',
+    cot.fecha_creacion ? new Date(cot.fecha_creacion).toLocaleDateString('es-ES') : '',
+    cot.fecha_actualizacion ? new Date(cot.fecha_actualizacion).toLocaleDateString('es-ES') : '',
+    clienteNombre,
+    vendedorNombre,
+    cot.sucursal ?? '',
+    cot.estado ?? '',
+    cot.subtotal ?? '',
+    cot.total_iva ?? '',
+    cot.total_it ?? '',
+    cot.total_final ?? '',
+    cot.vigencia ?? '',
+    cot.cantidad_items ?? ''
+  ]
+}
+
+function rowCombinado(
+  cot: any,
+  linea: any,
+  clienteNombre: string,
+  vendedorNombre: string
+): (string | number | boolean)[] {
+  const cotFechaCreacion = cot.fecha_creacion ? new Date(cot.fecha_creacion).toLocaleDateString('es-ES') : ''
+  const cotFechaActualizacion = cot.fecha_actualizacion ? new Date(cot.fecha_actualizacion).toLocaleDateString('es-ES') : ''
+  return [
+    cot.codigo ?? '',
+    cotFechaCreacion,
+    cotFechaActualizacion,
+    clienteNombre,
+    vendedorNombre,
+    cot.sucursal ?? '',
+    cot.estado ?? '',
+    cot.subtotal ?? '',
+    cot.total_iva ?? '',
+    cot.total_it ?? '',
+    cot.total_final ?? '',
+    cot.vigencia ?? '',
+    cot.cantidad_items ?? '',
+    linea ? (linea.tipo ?? '') : '',
+    linea?.codigo_producto ?? '',
+    linea?.nombre_producto ?? '',
+    linea?.descripcion ?? '',
+    linea?.cantidad ?? '',
+    linea?.ancho ?? '',
+    linea?.alto ?? '',
+    linea?.total_m2 ?? '',
+    linea?.unidad_medida ?? '',
+    linea?.precio_unitario ?? '',
+    linea?.comision ?? '',
+    linea?.con_iva ?? '',
+    linea?.con_it ?? '',
+    linea?.es_soporte ?? '',
+    linea?.orden ?? '',
+    linea?.subtotal_linea ?? ''
+  ]
 }
 
 export async function GET(request: Request) {
   try {
-    // Obtener todas las cotizaciones en lotes
-    let allCotizaciones: any[] = []
-    let page = 1
-    const limit = 1000
-    let hasMore = true
+    const { searchParams } = new URL(request.url)
+    const idsParam = searchParams.get('ids')
 
-    while (hasMore) {
-      const result = await getCotizaciones({ 
-        page,
-        limit
-      })
-      
-      if (result.data && result.data.length > 0) {
-        allCotizaciones = [...allCotizaciones, ...result.data]
-        hasMore = result.data.length === limit
-        page++
-      } else {
-        hasMore = false
+    let cotizaciones: any[] = []
+
+    if (idsParam) {
+      const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean)
+      if (ids.length === 0) {
+        return NextResponse.json({ error: "No se especificaron IDs" }, { status: 400 })
       }
+      const results = await Promise.all(ids.map(id => getCotizacionById(id)))
+      cotizaciones = results.filter(c => c != null)
+      console.log(`📤 Exportando ${cotizaciones.length} cotizaciones seleccionadas (combinado con líneas)`)
+    } else {
+      let page = 1
+      const limit = 1000
+      let hasMore = true
+      while (hasMore) {
+        const result = await getCotizaciones({ page, limit })
+        if (result.data && result.data.length > 0) {
+          cotizaciones = [...cotizaciones, ...result.data]
+          hasMore = result.data.length === limit
+          page++
+        } else {
+          hasMore = false
+        }
+      }
+      console.log(`📊 Total cotizaciones a exportar (solo tabla): ${cotizaciones.length}`)
     }
 
-    const cotizaciones = allCotizaciones
-
-    // Los datos de cliente y vendedor pueden venir como nombres (texto) o como IDs (UUID)
-    // Intentamos mapear solo si parecen ser UUIDs (tienen formato UUID)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    
     const vendedorIds = new Set<string>()
     const clienteIds = new Set<string>()
-    
     cotizaciones.forEach(c => {
-      if (c.vendedor && uuidRegex.test(c.vendedor)) {
-        vendedorIds.add(c.vendedor)
-      }
-      if (c.cliente && uuidRegex.test(c.cliente)) {
-        clienteIds.add(c.cliente)
-      }
+      if (c.vendedor && uuidRegex.test(c.vendedor)) vendedorIds.add(c.vendedor)
+      if (c.cliente && uuidRegex.test(c.cliente)) clienteIds.add(c.cliente)
     })
 
-    // Mapear vendedores (solo si son IDs)
     const vendedoresMap: Record<string, string> = {}
     if (vendedorIds.size > 0) {
-      const promises = Array.from(vendedorIds).map(async (id) => {
+      await Promise.all(Array.from(vendedorIds).map(async (id) => {
         try {
           const user = await getUserByIdSupabase(id)
-          if (user) {
-            vendedoresMap[id] = user.nombre || user.email || ''
-          }
-        } catch (error) {
-          // Si falla, usar el ID como fallback
+          if (user) vendedoresMap[id] = user.nombre || user.email || ''
+        } catch {
           vendedoresMap[id] = id
         }
-      })
-      await Promise.all(promises)
+      }))
     }
 
-    // Mapear clientes (solo si son IDs)
     const clientesMap: Record<string, string> = {}
     if (clienteIds.size > 0) {
-      const promises = Array.from(clienteIds).map(async (id) => {
+      await Promise.all(Array.from(clienteIds).map(async (id) => {
         try {
           const contacto = await findContactoById(id)
-          if (contacto) {
-            clientesMap[id] = contacto.displayName || ''
-          }
-        } catch (error) {
-          // Si no se encuentra, usar el ID como fallback
+          if (contacto) clientesMap[id] = contacto.displayName || ''
+        } catch {
           clientesMap[id] = id
         }
-      })
-      await Promise.all(promises)
+      }))
     }
 
-    // Construir CSV con todos los campos del listado
-    const headers = [
-      "ID",
-      "Código",
-      "Fecha Creación",
-      "Fecha Actualización",
-      "Cliente",
-      "Vendedor",
-      "Sucursal",
-      "Estado",
-      "Subtotal",
-      "Total IVA",
-      "Total IT",
-      "Total Final",
-      "Vigencia (días)",
-      "Cantidad Items",
-      "Líneas Cotización"
-    ]
+    const fecha = new Date().toISOString().split('T')[0]
+    let buffer: Buffer
+    let nombreArchivo: string
 
-    const csvRows: string[] = []
-    
-    // Agregar headers
-    csvRows.push(headers.map(h => escapeCSV(h)).join(','))
-
-    // Agregar filas de datos
-    for (const cotizacion of cotizaciones) {
-      // Si es un UUID, intentar mapear, si no, usar el valor directamente (ya es un nombre)
-      const clienteNombre = cotizacion.cliente 
-        ? (uuidRegex.test(cotizacion.cliente) 
-            ? (clientesMap[cotizacion.cliente] || cotizacion.cliente)
-            : cotizacion.cliente)
-        : ''
-      const vendedorNombre = cotizacion.vendedor 
-        ? (uuidRegex.test(cotizacion.vendedor)
-            ? (vendedoresMap[cotizacion.vendedor] || cotizacion.vendedor)
-            : cotizacion.vendedor)
-        : ''
-
-      const row = [
-        escapeCSV(cotizacion.id),
-        escapeCSV(cotizacion.codigo || ''),
-        escapeCSV(cotizacion.fecha_creacion ? new Date(cotizacion.fecha_creacion).toLocaleDateString('es-ES') : ''),
-        escapeCSV(cotizacion.fecha_actualizacion ? new Date(cotizacion.fecha_actualizacion).toLocaleDateString('es-ES') : ''),
-        escapeCSV(clienteNombre),
-        escapeCSV(vendedorNombre),
-        escapeCSV(cotizacion.sucursal || ''),
-        escapeCSV(cotizacion.estado || ''),
-        escapeCSV(cotizacion.subtotal || 0),
-        escapeCSV(cotizacion.total_iva || 0),
-        escapeCSV(cotizacion.total_it || 0),
-        escapeCSV(cotizacion.total_final || 0),
-        escapeCSV(cotizacion.vigencia || 0),
-        escapeCSV(cotizacion.cantidad_items || 0),
-        escapeCSV(cotizacion.lineas_cotizacion || 0)
+    if (!idsParam) {
+      // Exportación general: solo tabla cotizaciones (una fila por cotización)
+      const rows: (string | number)[][] = [
+        [...HEADERS_SOLO_COTIZACIONES],
+        ...cotizaciones.map(cot => {
+          const clienteNombre = cot.cliente
+            ? (uuidRegex.test(cot.cliente) ? (clientesMap[cot.cliente] || cot.cliente) : cot.cliente)
+            : ''
+          const vendedorNombre = cot.vendedor
+            ? (uuidRegex.test(cot.vendedor) ? (vendedoresMap[cot.vendedor] || cot.vendedor) : cot.vendedor)
+            : ''
+          return rowSoloCotizacion(cot, clienteNombre, vendedorNombre)
+        })
       ]
-      csvRows.push(row.join(','))
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.aoa_to_sheet(rows)
+      XLSX.utils.book_append_sheet(wb, ws, 'Cotizaciones')
+      buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      nombreArchivo = `cotizaciones_${fecha}.xlsx`
+    } else {
+      // Exportar selección: combinado cotización + líneas
+      const rows: (string | number | boolean)[][] = [HEADERS_COMBINADO as unknown as (string | number | boolean)[]]
+      for (const cot of cotizaciones) {
+        const clienteNombre = cot.cliente
+          ? (uuidRegex.test(cot.cliente) ? (clientesMap[cot.cliente] || cot.cliente) : cot.cliente)
+          : ''
+        const vendedorNombre = cot.vendedor
+          ? (uuidRegex.test(cot.vendedor) ? (vendedoresMap[cot.vendedor] || cot.vendedor) : cot.vendedor)
+          : ''
+        let lineas: any[] = []
+        try {
+          lineas = await getLineasByCotizacionId(cot.id)
+        } catch (e) {
+          console.warn(`⚠️ No se pudieron cargar líneas para cotización ${cot.codigo}:`, e)
+        }
+        if (lineas.length === 0) {
+          rows.push(rowCombinado(cot, null, clienteNombre, vendedorNombre))
+        } else {
+          for (const linea of lineas) {
+            rows.push(rowCombinado(cot, linea, clienteNombre, vendedorNombre))
+          }
+        }
+      }
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.aoa_to_sheet(rows)
+      XLSX.utils.book_append_sheet(wb, ws, 'Cotizaciones y líneas')
+      buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      nombreArchivo = `cotizaciones_seleccionadas_${fecha}.xlsx`
     }
 
-    const csv = csvRows.join('\n')
-    // BOM UTF-8 para Excel y otros programas
-    const csvWithBOM = '\uFEFF' + csv
-
-    console.log(`✅ Exportadas ${cotizaciones.length} cotizaciones a CSV`)
-
-    // Convertir a Buffer con encoding UTF-8 explícito
-    const csvBuffer = Buffer.from(csvWithBOM, 'utf-8')
-
-    return new NextResponse(csvBuffer, {
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="cotizaciones_${new Date().toISOString().split('T')[0]}.csv"`,
-        'Content-Encoding': 'utf-8',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
       },
     })
   } catch (e: any) {
@@ -170,4 +247,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No se pudieron exportar las cotizaciones" }, { status: 500 })
   }
 }
-

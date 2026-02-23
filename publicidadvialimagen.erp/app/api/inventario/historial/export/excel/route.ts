@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const fechaHasta = searchParams.get('fecha_hasta')
     const itemId = searchParams.get('item_id')
     const referenciaCodigo = searchParams.get('referencia_codigo')
+    const idsParam = searchParams.get('ids') || ''
 
     let query = supabase
       .from('historial_stock')
@@ -51,6 +52,11 @@ export async function GET(request: NextRequest) {
 
     if (referenciaCodigo) {
       query = query.ilike('referencia_codigo', `%${referenciaCodigo}%`)
+    }
+
+    if (idsParam.trim()) {
+      const idList = idsParam.split(',').map((id) => id.trim()).filter(Boolean)
+      if (idList.length > 0) query = query.in('id', idList)
     }
 
     // Obtener todos los registros (sin paginación)

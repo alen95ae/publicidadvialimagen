@@ -2,96 +2,100 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server"
-import { getAlquileres } from "@/lib/supabaseAlquileres"
+import { getAlquileres, getAlquilerById } from "@/lib/supabaseAlquileres"
+import { getSupabaseServer } from "@/lib/supabaseServer"
+import * as XLSX from "xlsx"
 
-// Función para escapar CSV correctamente (maneja tildes, ñ y caracteres especiales)
-function escapeCSV(value: string | number | boolean | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  const str = String(value)
-  // Escapar comillas dobles duplicándolas
-  const escaped = str.replace(/"/g, '""')
-  // Envolver en comillas para manejar comas, saltos de línea, etc.
-  return `"${escaped}"`
+// Columnas a exportar (sin ID ni Cotización ID)
+const HEADERS = [
+  'Código',
+  'Fecha Inicio',
+  'Fecha Fin',
+  'Meses',
+  'Soporte Código',
+  'Cliente',
+  'Vendedor',
+  'Total',
+  'Estado',
+  'Fecha Creación'
+] as const
+
+function rowFromAlquiler(a: any): (string | number)[] {
+  return [
+    a.codigo || '',
+    a.inicio ? new Date(a.inicio).toLocaleDateString('es-ES') : '',
+    a.fin ? new Date(a.fin).toLocaleDateString('es-ES') : '',
+    a.meses ?? '',
+    a.soporte_codigo || '',
+    a.cliente || '',
+    a.vendedor || '',
+    a.total ?? '',
+    a.estado || '',
+    a.fecha_creacion ? new Date(a.fecha_creacion).toLocaleDateString('es-ES') : ''
+  ]
 }
 
 export async function GET(request: Request) {
   try {
-    // Obtener todos los alquileres en lotes
+    const { searchParams } = new URL(request.url)
+    const idsParam = searchParams.get('ids')
+
     let allAlquileres: any[] = []
-    let page = 1
-    const limit = 1000
-    let hasMore = true
 
-    while (hasMore) {
-      const result = await getAlquileres({ 
-        page,
-        limit
-      })
-      
-      if (result.data && result.data.length > 0) {
-        allAlquileres = [...allAlquileres, ...result.data]
-        hasMore = result.data.length === limit
-        page++
-      } else {
-        hasMore = false
+    if (idsParam) {
+      const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean)
+      if (ids.length === 0) {
+        return NextResponse.json({ error: "No se especificaron IDs" }, { status: 400 })
       }
+      const results = await Promise.all(ids.map(id => getAlquilerById(id)))
+      const found = results.filter(Boolean) as any[]
+      const soporteIds = [...new Set(found.map(a => a.soporte_id).filter(Boolean))]
+      const codigosSoportes: Record<string | number, string> = {}
+      if (soporteIds.length > 0) {
+        const supabase = getSupabaseServer()
+        const { data: soportesData } = await supabase
+          .from("soportes")
+          .select("id, codigo")
+          .in("id", soporteIds)
+        if (soportesData) {
+          soportesData.forEach((s: any) => { codigosSoportes[s.id] = s.codigo || '' })
+        }
+      }
+      allAlquileres = found.map(a => ({
+        ...a,
+        soporte_codigo: a.soporte_id ? codigosSoportes[a.soporte_id] ?? '' : ''
+      }))
+      console.log(`📤 Exportando ${allAlquileres.length} alquileres seleccionados`)
+    } else {
+      let page = 1
+      const limit = 1000
+      let hasMore = true
+      while (hasMore) {
+        const result = await getAlquileres({ page, limit })
+        if (result.data && result.data.length > 0) {
+          allAlquileres = [...allAlquileres, ...result.data]
+          hasMore = result.data.length === limit
+          page++
+        } else {
+          hasMore = false
+        }
+      }
+      console.log(`📊 Total de alquileres a exportar: ${allAlquileres.length}`)
     }
 
-    console.log(`📊 Total de alquileres a exportar: ${allAlquileres.length}`)
+    const wsData = [HEADERS as unknown as (string | number)[], ...allAlquileres.map(rowFromAlquiler)]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    XLSX.utils.book_append_sheet(wb, ws, 'Alquileres')
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    const d = new Date()
+    const fecha = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const nombreArchivo = idsParam ? `alquileres_seleccionados_${fecha}.xlsx` : `alquileres_${fecha}.xlsx`
 
-    // Headers del CSV
-    const headers = [
-      'ID',
-      'Código',
-      'Cotización ID',
-      'Fecha Inicio',
-      'Fecha Fin',
-      'Meses',
-      'Soporte Código',
-      'Cliente',
-      'Vendedor',
-      'Total',
-      'Estado',
-      'Fecha Creación'
-    ]
-
-    const csvRows: string[] = []
-    
-    // Agregar headers
-    csvRows.push(headers.map(h => escapeCSV(h)).join(','))
-
-    // Agregar filas de datos
-    for (const alquiler of allAlquileres) {
-      const row = [
-        escapeCSV(alquiler.id),
-        escapeCSV(alquiler.codigo || ''),
-        escapeCSV(alquiler.cotizacion_id || ''),
-        escapeCSV(alquiler.inicio ? new Date(alquiler.inicio).toLocaleDateString('es-ES') : ''),
-        escapeCSV(alquiler.fin ? new Date(alquiler.fin).toLocaleDateString('es-ES') : ''),
-        escapeCSV(alquiler.meses || 0),
-        escapeCSV(alquiler.soporte_codigo || ''),
-        escapeCSV(alquiler.cliente || ''),
-        escapeCSV(alquiler.vendedor || ''),
-        escapeCSV(alquiler.total || 0),
-        escapeCSV(alquiler.estado || ''),
-        escapeCSV(alquiler.fecha_creacion ? new Date(alquiler.fecha_creacion).toLocaleDateString('es-ES') : '')
-      ]
-      csvRows.push(row.join(','))
-    }
-
-    const csv = csvRows.join('\n')
-    // BOM UTF-8 para Excel y otros programas
-    const csvWithBOM = '\uFEFF' + csv
-
-
-    // Convertir a Buffer con encoding UTF-8 explícito
-    const csvBuffer = Buffer.from(csvWithBOM, 'utf-8')
-
-    return new NextResponse(csvBuffer, {
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="alquileres_${new Date().toISOString().split('T')[0]}.csv"`,
-        'Content-Encoding': 'utf-8',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
       },
     })
   } catch (e: any) {
@@ -99,4 +103,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No se pudieron exportar los alquileres" }, { status: 500 })
   }
 }
-

@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { requirePermiso } from "@/lib/permisos";
+import * as XLSX from "xlsx";
 
 const EMPRESA_ID = 1;
 const COTIZACION_FIJA = 6.96;
@@ -26,7 +27,7 @@ async function obtenerSiguienteNumero(supabase: ReturnType<typeof getSupabaseAdm
   return `FAC-${siguiente.toString().padStart(4, "0")}`;
 }
 
-/** GET - Listar facturas manuales (o exportar CSV si format=csv) */
+/** GET - Listar facturas manuales (o exportar XLSX si format=csv|xlsx) */
 export async function GET(request: NextRequest) {
   try {
     const permiso = await requirePermiso("contabilidad", "ver");
@@ -34,17 +35,18 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
-    const format = searchParams.get("format") || "";
+    const format = (searchParams.get("format") || "").toLowerCase();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
     const offset = (page - 1) * limit;
     const search = (searchParams.get("search") || "").trim();
     const estado = searchParams.get("estado") || "";
     const vendedor = searchParams.get("vendedor") || "";
+    const idsParam = searchParams.get("ids") || "";
 
     let query = supabase
       .from("facturas_manuales")
-      .select("id, numero, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion_id, tipo_cambio, subtotal, total, estado, created_at, updated_at", format === "csv" ? {} : { count: "exact" })
+      .select("id, numero, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion_id, tipo_cambio, subtotal, total, estado, created_at, updated_at", (format === "csv" || format === "xlsx") ? {} : { count: "exact" })
       .eq("empresa_id", EMPRESA_ID)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false });
@@ -58,20 +60,35 @@ export async function GET(request: NextRequest) {
     if (search) {
       query = query.or(`numero.ilike.%${search}%,cliente_nombre.ilike.%${search}%,cliente_nit.ilike.%${search}%`);
     }
+    if ((format === "csv" || format === "xlsx") && idsParam.trim()) {
+      const idList = idsParam.split(",").map((id) => id.trim()).filter(Boolean);
+      if (idList.length > 0) query = query.in("id", idList);
+    }
 
-    if (format === "csv") {
+    if (format === "csv" || format === "xlsx") {
       const { data: rows, error } = await query.limit(10000);
       if (error) {
-        console.error("Error fetching facturas_manuales for CSV:", error);
+        console.error("Error fetching facturas_manuales for export:", error);
         return NextResponse.json({ error: "Error al exportar" }, { status: 500 });
       }
-      const headers = ["id", "numero", "fecha", "cliente_nombre", "cliente_nit", "moneda", "total", "estado"];
-      const csvLines = [headers.join(";"), ...(rows || []).map((r: any) => headers.map((h) => (r[h] != null ? String(r[h]) : "")).join(";"))];
-      const csv = "\uFEFF" + csvLines.join("\r\n");
-      return new NextResponse(csv, {
+      const excelData = (rows || []).map((r: any) => ({
+        numero: r.numero ?? "",
+        fecha: r.fecha ?? "",
+        cliente_nombre: r.cliente_nombre ?? "",
+        cliente_nit: r.cliente_nit ?? "",
+        moneda: r.moneda ?? "",
+        total: r.total ?? "",
+        estado: r.estado ?? "",
+      }));
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+      XLSX.utils.book_append_sheet(wb, ws, "Facturas");
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const fecha = new Date().toISOString().split("T")[0];
+      return new NextResponse(buffer, {
         headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="facturas_manuales_${new Date().toISOString().split("T")[0]}.csv"`,
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="facturas_manuales_${fecha}.xlsx"`,
         },
       });
     }

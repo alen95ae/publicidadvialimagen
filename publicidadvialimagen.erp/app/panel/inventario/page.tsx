@@ -18,7 +18,8 @@ import {
   LayoutGrid,
   List,
   X,
-  Settings
+  Settings,
+  FileSpreadsheet
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -209,6 +210,9 @@ export default function InventarioPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allProductoIds, setAllProductoIds] = useState<string[]>([])
+  const [exportingSelected, setExportingSelected] = useState(false)
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
@@ -375,7 +379,26 @@ export default function InventarioPage() {
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) || allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])
-  const singleSelected = selectedIds.length === 1
+  const selectedCount = selectAllMode === 'all' ? allProductoIds.length : selectedIds.length
+  const singleSelected = selectedCount === 1
+
+  const fetchAllProductoIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (selectedCategory) params.set('categoria', selectedCategory)
+      if (searchTerm?.trim()) params.set('q', searchTerm.trim())
+      const res = await fetch(`/api/inventario/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllProductoIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all producto IDs:', e)
+      return []
+    }
+  }
   
   // Efecto para mostrar/ocultar barra de acciones masivas
   useEffect(() => {
@@ -475,10 +498,17 @@ export default function InventarioPage() {
 
   // Ya no guardamos automáticamente al deseleccionar - el usuario debe usar los botones
 
-  function toggleAll(checked: boolean) {
-    const next: Record<string, boolean> = {}
-    ids.forEach(id => { next[id] = checked })
-    setSelected(next)
+  async function toggleAll(checked: boolean) {
+    if (checked) {
+      const next: Record<string, boolean> = {}
+      ids.forEach(id => { next[id] = true })
+      setSelected(next)
+      setSelectAllMode('page')
+      await fetchAllProductoIds()
+    } else {
+      setSelected({})
+      setSelectAllMode('none')
+    }
   }
   
   const handleBulkFieldChange = (field: keyof InventoryItem, value: any) => {
@@ -715,7 +745,7 @@ export default function InventarioPage() {
         const a = document.createElement('a')
         a.href = url
         const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
-        a.download = `productos_${fecha}.csv`
+        a.download = `productos_${fecha}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -874,6 +904,37 @@ export default function InventarioPage() {
   // Funciones de paginación
   const handlePageChange = (page: number) => {
     fetchItems(page)
+    setSelectAllMode('none')
+    setSelected({})
+  }
+
+  const handleExportSelected = async () => {
+    const idsToExport = selectAllMode === 'all' ? allProductoIds : selectedIds
+    if (idsToExport.length === 0) {
+      toast.error('Selecciona al menos un producto')
+      return
+    }
+    try {
+      setExportingSelected(true)
+      const params = new URLSearchParams({ ids: idsToExport.join(',') })
+      const res = await fetch(`/api/inventario/export?${params}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('Error al exportar')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `productos_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${idsToExport.length} productos exportados`)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al exportar selección')
+    } finally {
+      setExportingSelected(false)
+    }
   }
 
   const handlePrevPage = () => {
@@ -899,10 +960,9 @@ export default function InventarioPage() {
 
   // Funciones para acciones masivas
   const selectedItems = Object.keys(selected).filter(id => selected[id])
-  const selectedCount = selectedItems.length
 
   const handleBulkAction = async () => {
-    if (!bulkAction || selectedCount === 0) return
+    if (!bulkAction || selectedItems.length === 0) return
 
     try {
       const updates = selectedItems.map(id => ({
@@ -919,7 +979,7 @@ export default function InventarioPage() {
       })
 
       if (response.ok) {
-        toast.success(`${selectedCount} items actualizados correctamente`)
+        toast.success(`${selectedItems.length} items actualizados correctamente`)
         setSelected({})
         setShowBulkActions(false)
         setBulkAction("")
@@ -935,8 +995,8 @@ export default function InventarioPage() {
   }
 
   const handleBulkDelete = async () => {
-    if (selectedCount === 0) return
-    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedCount} items?`)) return
+    if (selectedItems.length === 0) return
+    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedItems.length} items?`)) return
 
     try {
       const response = await fetch('/api/inventario/bulk', {
@@ -949,7 +1009,7 @@ export default function InventarioPage() {
 
       if (response.ok) {
         const result = await response.json()
-        toast.success(result.message || `${selectedCount} items eliminados correctamente`)
+        toast.success(result.message || `${selectedItems.length} items eliminados correctamente`)
         setSelected({})
         setShowBulkActions(false)
         await fetchItems()
@@ -1128,7 +1188,7 @@ export default function InventarioPage() {
                 <div className="flex gap-2 items-center ml-auto">
                   {tieneFuncionTecnica("ver boton exportar") && (
                     <Button variant="outline" size="sm" onClick={handleExport}>
-                      <Download className="h-4 w-4 mr-2" />
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
                       Exportar
                     </Button>
                   )}
@@ -1175,14 +1235,68 @@ export default function InventarioPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Catálogo PDF - Siempre visible cuando hay productos seleccionados (para todos los usuarios) */}
-            {viewMode === "list" && Object.keys(selected).filter(id => selected[id]).length > 0 && (
+            {/* Banner de selección total (cyan) */}
+            {viewMode === "list" && ids.length > 0 && allSelected && selectAllMode !== 'all' && allProductoIds.length > ids.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {ids.length} productos de esta página están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      const next: Record<string, boolean> = {}
+                      allProductoIds.forEach(id => { next[id] = true })
+                      setSelected(next)
+                      setSelectAllMode('all')
+                      toast.success(`${allProductoIds.length} productos seleccionados`)
+                    }}
+                  >
+                    Seleccionar los {allProductoIds.length} productos
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {viewMode === "list" && selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allProductoIds.length} productos están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => { setSelected({}); setSelectAllMode('none') }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Catálogo PDF y Exportar selección */}
+            {viewMode === "list" && selectedCount > 0 && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {Object.keys(selected).filter(id => selected[id]).length} seleccionado{Object.keys(selected).filter(id => selected[id]).length > 1 ? 's' : ''}
+                      {selectAllMode === 'all' ? `${allProductoIds.length} seleccionados (todos)` : `${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
                     </span>
+                    {tieneFuncionTecnica("ver boton exportar") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportSelected}
+                        disabled={exportingSelected}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -1197,16 +1311,16 @@ export default function InventarioPage() {
             )}
 
             {/* Barra azul unificada de acciones masivas - Solo en modo lista */}
-            {viewMode === "list" && puedeEditar("inventario") && !esSoloLecturaDesdeVentas && someSelected && (
+            {viewMode === "list" && puedeEditar("inventario") && !esSoloLecturaDesdeVentas && (someSelected || (selectAllMode === 'all' && allProductoIds.length > 0)) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {selectedIds.length} item{selectedIds.length > 1 ? 's' : ''} seleccionado{selectedIds.length > 1 ? 's' : ''}
+                      {selectAllMode === 'all' ? `${allProductoIds.length} item${allProductoIds.length > 1 ? 's' : ''} seleccionado${allProductoIds.length > 1 ? 's' : ''} (todos)` : `${selectedIds.length} item${selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
                     </span>
                     
                     {/* Solo mostrar desplegables cuando hay más de 1 seleccionado */}
-                    {!singleSelected && selectedIds.length > 1 && (
+                    {!singleSelected && selectedCount > 1 && (
                       <>
                         {/* Cambiar categoría */}
                         <Select onValueChange={(value) => handleBulkFieldChange('categoria', value)}>
@@ -1388,9 +1502,11 @@ export default function InventarioPage() {
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[item.id]}
-                          onCheckedChange={(v) =>
-                            setSelected(prev => ({ ...prev, [item.id]: Boolean(v) }))
-                          }
+                          onCheckedChange={(v) => {
+                            const checked = Boolean(v)
+                            setSelected(prev => ({ ...prev, [item.id]: checked }))
+                            if (!checked && selectAllMode === 'all') setSelectAllMode('page')
+                          }}
                           aria-label={`Seleccionar ${item.codigo}`}
                         />
                       </TableCell>

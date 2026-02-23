@@ -71,6 +71,9 @@ export default function FacturasManualesListPage() {
   const { tieneFuncionTecnica, puedeEliminar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allFacturaIds, setAllFacturaIds] = useState<string[]>([])
+  const [exportingSelected, setExportingSelected] = useState(false)
   const [facturas, setFacturas] = useState<FacturaManual[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -119,6 +122,11 @@ export default function FacturasManualesListPage() {
     if (!filtersLoaded) return
     fetchFacturas(currentPage)
   }, [currentPage, filtroVendedor, filtroEstado, searchTerm, filtersLoaded])
+
+  const handlePageChangeReset = () => {
+    setSelectAllMode("none")
+    setSelectedIds([])
+  }
 
   useEffect(() => {
     fetchVendedores()
@@ -241,7 +249,7 @@ export default function FacturasManualesListPage() {
     try {
       setExporting(true)
       const params = new URLSearchParams()
-      params.set("format", "csv")
+      params.set("format", "xlsx")
       if (filtroEstado !== "all") params.set("estado", filtroEstado)
       if (filtroVendedor !== "all") params.set("vendedor", filtroVendedor)
       if (searchTerm.trim()) params.set("search", searchTerm.trim())
@@ -251,14 +259,14 @@ export default function FacturasManualesListPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `facturas_manuales_${new Date().toISOString().split("T")[0]}.csv`
+      a.download = `facturas_manuales_${new Date().toISOString().split("T")[0]}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      toast.success("CSV exportado correctamente")
+      toast.success("Excel exportado correctamente")
     } catch (_) {
-      toast.error("Error al exportar CSV")
+      toast.error("Error al exportar Excel")
     } finally {
       setExporting(false)
     }
@@ -301,12 +309,68 @@ export default function FacturasManualesListPage() {
     sessionStorage.removeItem("facturas_manuales_filtros")
   }
 
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedIds(checked ? filteredFacturas.map((f) => f.id) : [])
+  const fetchAllFacturaIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (filtroEstado !== "all") params.set("estado", filtroEstado)
+      if (filtroVendedor !== "all") params.set("vendedor", filtroVendedor)
+      if (searchTerm.trim()) params.set("search", searchTerm.trim())
+      const res = await fetch(`/api/contabilidad/facturas-manuales/all-ids?${params}`, { credentials: "include" })
+      if (res.ok) {
+        const data = await res.json()
+        setAllFacturaIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error("Error fetching all factura IDs:", e)
+      return []
+    }
+  }
+
+  const handleSelectAll = async (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(facturas.map((f) => f.id))
+      setSelectAllMode("page")
+      await fetchAllFacturaIds()
+    } else {
+      setSelectedIds([])
+      setSelectAllMode("none")
+    }
   }
 
   const handleSelectOne = (id: string, checked: boolean) => {
     setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id))
+    if (!checked && selectAllMode === "all") setSelectAllMode("page")
+  }
+
+  const handleExportSelected = async () => {
+    const idsToExport = selectAllMode === "all" ? allFacturaIds : selectedIds
+    if (idsToExport.length === 0) {
+      toast.error("Selecciona al menos una factura")
+      return
+    }
+    try {
+      setExportingSelected(true)
+      const params = new URLSearchParams({ format: "xlsx", ids: idsToExport.join(",") })
+      const res = await fetch(`/api/contabilidad/facturas-manuales?${params}`, { credentials: "include" })
+      if (!res.ok) throw new Error("Error al exportar")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `facturas_seleccionadas_${new Date().toISOString().split("T")[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${idsToExport.length} facturas exportadas`)
+    } catch (e) {
+      console.error(e)
+      toast.error("Error al exportar selección")
+    } finally {
+      setExportingSelected(false)
+    }
   }
 
   const puedeEliminarFactura = puedeEliminar("contabilidad") || esAdmin("contabilidad")
@@ -372,7 +436,7 @@ export default function FacturasManualesListPage() {
                     disabled={exporting || filteredFacturas.length === 0}
                   >
                     <FileSpreadsheet className="w-4 h-4 mr-2" />
-                    {exporting ? "Exportando..." : "Exportar CSV"}
+                    {exporting ? "Exportando..." : "Exportar"}
                   </Button>
                 )}
                 <Link href="/panel/contabilidad/facturas/manuales/nueva">
@@ -429,13 +493,71 @@ export default function FacturasManualesListPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Banner de selección total (cyan) */}
+            {facturas.length > 0 &&
+             facturas.every((f) => selectedIds.includes(f.id)) &&
+             selectAllMode !== "all" &&
+             allFacturaIds.length > facturas.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Las {facturas.length} facturas de esta página están seleccionadas.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      setSelectedIds([...allFacturaIds])
+                      setSelectAllMode("all")
+                      toast.success(`${allFacturaIds.length} facturas seleccionadas`)
+                    }}
+                  >
+                    Seleccionar las {allFacturaIds.length} facturas
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === "all" && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Las {allFacturaIds.length} facturas están seleccionadas.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => {
+                      setSelectedIds([])
+                      setSelectAllMode("none")
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {selectedIds.length > 0 && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-sm font-medium text-blue-800">
-                    {selectedIds.length} factura{selectedIds.length > 1 ? "s" : ""} seleccionada{selectedIds.length > 1 ? "s" : ""}
+                    {selectAllMode === "all" ? `${allFacturaIds.length} factura${allFacturaIds.length > 1 ? "s" : ""} seleccionada${allFacturaIds.length > 1 ? "s" : ""} (todos)` : `${selectedIds.length} factura${selectedIds.length > 1 ? "s" : ""} seleccionada${selectedIds.length > 1 ? "s" : ""}`}
                   </span>
-                  {selectedIds.length === 1 && (
+                  {tieneFuncionTecnica("ver boton exportar") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportSelected}
+                      disabled={exportingSelected}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      {exportingSelected ? "Exportando..." : "Exportar selección"}
+                    </Button>
+                  )}
+                  {selectedIds.length === 1 && selectAllMode !== "all" && (
                     <Button variant="outline" size="sm" onClick={() => handleDuplicate(selectedIds[0])}>
                       <Copy className="w-4 h-4 mr-2" />
                       Duplicar factura
@@ -466,7 +588,7 @@ export default function FacturasManualesListPage() {
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-4 w-12">
                         <Checkbox
-                          checked={selectedIds.length === filteredFacturas.length && filteredFacturas.length > 0}
+                          checked={facturas.length > 0 && facturas.every((f) => selectedIds.includes(f.id))}
                           onCheckedChange={handleSelectAll}
                         />
                       </th>
@@ -553,7 +675,10 @@ export default function FacturasManualesListPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => fetchFacturas(currentPage - 1)}
+                  onClick={() => {
+                    handlePageChangeReset()
+                    fetchFacturas(currentPage - 1)
+                  }}
                   disabled={!pagination.hasPrev || currentPage <= 1}
                 >
                   Anterior
@@ -564,7 +689,10 @@ export default function FacturasManualesListPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => fetchFacturas(currentPage + 1)}
+                  onClick={() => {
+                    handlePageChangeReset()
+                    fetchFacturas(currentPage + 1)
+                  }}
                   disabled={!pagination.hasNext}
                 >
                   Siguiente

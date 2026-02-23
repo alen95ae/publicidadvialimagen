@@ -12,13 +12,14 @@ import {
   DollarSign, 
   Search, 
   Filter, 
-  Download, 
   TrendingUp,
   TrendingDown,
   ArrowUpDown,
   X,
-  Info
+  Info,
+  FileSpreadsheet
 } from "lucide-react"
+import * as XLSX from "xlsx"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -115,6 +116,8 @@ export default function CostesPage() {
   const { puedeEditar, loading: permisosLoading, tieneFuncionTecnica } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSoportes, setSelectedSoportes] = useState<string[]>([])
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allSoporteIds, setAllSoporteIds] = useState<string[]>([])
   const [supports, setSupports] = useState<Support[]>([])
   const [allSupports, setAllSupports] = useState<Support[]>([]) // Todos los soportes para el dashboard
   const [filteredSupports, setFilteredSupports] = useState<Support[]>([]) // Soportes filtrados para la tabla
@@ -620,6 +623,7 @@ export default function CostesPage() {
       setSelectedSoportes([...selectedSoportes, id])
     } else {
       setSelectedSoportes(selectedSoportes.filter(s => s !== id))
+      if (selectAllMode === 'all') setSelectAllMode('page')
       // Limpiar ediciones si se deselecciona
       if (editedSupports[id]) {
         const newEdited = { ...editedSupports }
@@ -703,109 +707,108 @@ export default function CostesPage() {
     toast.info(`Campo ${field} actualizado para ${selectedSoportes.length} soporte(s)`)
   }
 
-  // Función para exportar a CSV
-  const exportToCSV = (data: SupportCosts[]) => {
+  // Exportar a xlsx (NUNCA incluir columna dueno_casa / Dueño de casa)
+  const HEADERS_COSTES = [
+    "Código",
+    "Título",
+    "Propietario",
+    "Temporalidad de pago",
+    "Método de pago",
+    "Notas",
+    "Estructura",
+    "Coste Alquiler",
+    "Patentes",
+    "Uso de suelos",
+    "Luz",
+    "Gastos administrativos",
+    "Comisión ejec.",
+    "Mantenimiento",
+    "Impuestos 18%",
+    "Coste Total",
+    "Coste Actual",
+    "Precio Venta",
+    "% Utilidad",
+    "Utilidad mensual",
+    "Utilidad anual",
+    "Último precio",
+    "% Utilidad real",
+    "Estado"
+  ]
+
+  const rowFromCoste = (s: SupportCosts): (string | number)[] => [
+    s.codigo ?? "",
+    s.titulo ?? "",
+    s.propietario ?? "",
+    s.temporalidadPago ?? "",
+    s.metodoPago ?? "",
+    s.notas ?? "",
+    s.estructura ?? "",
+    s.costeAlquiler != null ? Number(s.costeAlquiler.toFixed(2)) : "",
+    s.patentes != null ? Number(s.patentes.toFixed(2)) : "",
+    s.usoSuelos != null ? Number(s.usoSuelos.toFixed(2)) : "",
+    s.luz && parseFloat(s.luz) > 0 ? parseFloat(s.luz).toFixed(2) : "",
+    s.gastosAdministrativos != null ? Number(s.gastosAdministrativos.toFixed(2)) : "",
+    s.comisionEjec != null ? Number(s.comisionEjec.toFixed(2)) : "",
+    s.mantenimiento != null ? Number(s.mantenimiento.toFixed(2)) : "",
+    s.impuestos18 != null ? Number(s.impuestos18.toFixed(2)) : "",
+    s.costoTotal != null ? Number(s.costoTotal.toFixed(2)) : "",
+    s.costeActual != null ? Number(s.costeActual.toFixed(2)) : "",
+    s.precioVenta != null ? Number(s.precioVenta.toFixed(2)) : "",
+    s.porcentajeBeneficio != null ? s.porcentajeBeneficio.toFixed(1) + "%" : "",
+    s.utilidadMensual != null ? Number(s.utilidadMensual.toFixed(2)) : "",
+    s.utilidadAnual != null ? Number(s.utilidadAnual.toFixed(2)) : "",
+    s.ultimoPrecio != null ? Number(s.ultimoPrecio.toFixed(2)) : "",
+    s.porcentajeUtilidadReal != null ? s.porcentajeUtilidadReal.toFixed(1) + "%" : "",
+    s.estadoAlquiler === "activo" ? "Activo" : s.estadoAlquiler === "reservado" ? "Reservado" : s.estadoAlquiler === "proximo" ? "Próximo" : s.estadoAlquiler === "finalizado" ? "Finalizado" : ""
+  ]
+
+  const exportToXlsx = (data: SupportCosts[], filename: string) => {
     if (data.length === 0) {
       toast.error("No hay datos para exportar")
       return
     }
-
-    // Definir las columnas en el orden correcto (sin "Dueño de casa")
-    const headers = [
-      "Código",
-      "Título",
-      "Propietario",
-      "Temporalidad de pago",
-      "Método de pago",
-      "Notas",
-      "Estructura",
-      "Coste Alquiler",
-      "Patentes",
-      "Uso de suelos",
-      "Luz",
-      "Gastos administrativos",
-      "Comisión ejec.",
-      "Mantenimiento",
-      "Impuestos 18%",
-      "Coste Total",
-      "Coste Actual",
-      "Precio Venta",
-      "% Utilidad",
-      "Utilidad mensual",
-      "Utilidad anual",
-      "Último precio",
-      "% Utilidad real",
-      "Estado"
-    ]
-
-    // Función para escapar valores CSV
-    const escapeCSV = (value: any): string => {
-      if (value === null || value === undefined) return ""
-      const str = String(value)
-      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-        return `"${str.replace(/"/g, '""')}"`
-      }
-      return str
-    }
-
-    // Crear las filas de datos (sin "Dueño de casa")
-    const rows = data.map(soporte => [
-      escapeCSV(soporte.codigo),
-      escapeCSV(soporte.titulo),
-      escapeCSV(soporte.propietario),
-      escapeCSV(soporte.temporalidadPago),
-      escapeCSV(soporte.metodoPago),
-      escapeCSV(soporte.notas),
-      escapeCSV(soporte.estructura),
-      escapeCSV(soporte.costeAlquiler.toFixed(2)),
-      escapeCSV(soporte.patentes.toFixed(2)),
-      escapeCSV(soporte.usoSuelos.toFixed(2)),
-      escapeCSV(soporte.luz && parseFloat(soporte.luz) > 0 ? parseFloat(soporte.luz).toFixed(2) : ""),
-      escapeCSV(soporte.gastosAdministrativos.toFixed(2)),
-      escapeCSV(soporte.comisionEjec.toFixed(2)),
-      escapeCSV(soporte.mantenimiento.toFixed(2)),
-      escapeCSV(soporte.impuestos18.toFixed(2)),
-      escapeCSV(soporte.costoTotal.toFixed(2)),
-      escapeCSV(soporte.costeActual.toFixed(2)),
-      escapeCSV(soporte.precioVenta.toFixed(2)),
-      escapeCSV(soporte.porcentajeBeneficio.toFixed(1) + "%"),
-      escapeCSV(soporte.utilidadMensual.toFixed(2)),
-      escapeCSV(soporte.utilidadAnual.toFixed(2)),
-      escapeCSV(soporte.ultimoPrecio !== null ? soporte.ultimoPrecio.toFixed(2) : ""),
-      escapeCSV(soporte.porcentajeUtilidadReal !== null ? soporte.porcentajeUtilidadReal.toFixed(1) + "%" : ""),
-      escapeCSV(
-        soporte.estadoAlquiler === 'activo' ? 'Activo' :
-        soporte.estadoAlquiler === 'reservado' ? 'Reservado' :
-        soporte.estadoAlquiler === 'proximo' ? 'Próximo' :
-        soporte.estadoAlquiler === 'finalizado' ? 'Finalizado' : ""
-      )
-    ])
-
-    // Crear el contenido CSV
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.join(","))
-    ].join("\n")
-
-    // Crear el BOM para UTF-8 (ayuda con Excel)
-    const BOM = "\uFEFF"
-    const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
+    const wsData = [HEADERS_COSTES, ...data.map(rowFromCoste)]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    XLSX.utils.book_append_sheet(wb, ws, "Costes")
+    const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" })
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
-    
-    link.setAttribute("href", url)
-    link.setAttribute("download", `costes_soportes_${new Date().toISOString().split('T')[0]}.csv`)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = filename
     link.style.visibility = "hidden"
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    
+    URL.revokeObjectURL(url)
     toast.success(`${data.length} registro(s) exportado(s)`)
+  }
+
+  const fetchAllSoporteIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (searchTerm?.trim()) params.set('q', searchTerm.trim())
+      if (filtroEstado !== 'all') params.set('status', filtroEstado)
+      if (filtroCiudad !== 'all') params.set('city', filtroCiudad)
+      const res = await fetch(`/api/soportes/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllSoporteIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all soporte IDs (costes):', e)
+      return []
+    }
   }
 
   // Funciones de paginación (se definirán después de calcular totalPages)
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
+    setSelectAllMode('none')
+    setSelectedSoportes([])
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -940,11 +943,14 @@ export default function CostesPage() {
   }).filter(Boolean) as Support[]
   
   // Actualizar handleSelectAll para usar los soportes paginados correctos
-  const handleSelectAllUpdated = (checked: boolean) => {
+  const handleSelectAllUpdated = async (checked: boolean) => {
     if (checked) {
       setSelectedSoportes(soportesCostesPaginated.map(s => s.id))
+      setSelectAllMode('page')
+      await fetchAllSoporteIds()
     } else {
       setSelectedSoportes([])
+      setSelectAllMode('none')
     }
   }
   
@@ -1301,14 +1307,61 @@ export default function CostesPage() {
             </div>
             <div className="flex gap-2">
               {tieneFuncionTecnica("ver boton exportar") && (
-                <Button variant="outline" size="sm" onClick={() => exportToCSV(allSoportesCostes)}>
-                  <Download className="w-4 h-4 mr-2" />
+                <Button variant="outline" size="sm" onClick={() => exportToXlsx(allSoportesCostes, `costes_soportes_${new Date().toISOString().split("T")[0]}.xlsx`)}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
                   Exportar
                 </Button>
               )}
             </div>
           </div>
         </div>
+
+        {/* Banner de selección total (cyan) */}
+        {!permisosLoading && soportesCostesPaginated.length > 0 &&
+         soportesCostesPaginated.every(s => selectedSoportes.includes(s.id)) &&
+         selectAllMode !== 'all' &&
+         allSoporteIds.length > soportesCostesPaginated.length && (
+          <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-cyan-900">
+                Los {soportesCostesPaginated.length} soportes de esta página están seleccionados.
+              </span>
+              <Button
+                variant="link"
+                size="sm"
+                className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                onClick={() => {
+                  setSelectedSoportes([...allSoporteIds])
+                  setSelectAllMode('all')
+                  toast.success(`${allSoporteIds.length} soportes seleccionados`)
+                }}
+              >
+                Seleccionar los {allSoporteIds.length} soportes
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {selectAllMode === 'all' && (
+          <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-cyan-900">
+                Los {allSoporteIds.length} soportes están seleccionados.
+              </span>
+              <Button
+                variant="link"
+                size="sm"
+                className="text-cyan-700 hover:text-cyan-900 underline"
+                onClick={() => {
+                  setSelectedSoportes([])
+                  setSelectAllMode('none')
+                }}
+              >
+                Limpiar selección
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Barra azul de acciones masivas */}
         {!permisosLoading && puedeEditar("soportes") && (selectedSoportes.length > 0 || Object.keys(editedSupports).length > 0) && (
@@ -1317,15 +1370,17 @@ export default function CostesPage() {
               {/* Primera fila: Botones siempre arriba a la izquierda */}
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-blue-800 mr-2">
-                  {selectedSoportes.length} seleccionados
+                  {selectAllMode === 'all' ? `${allSoporteIds.length} seleccionados (todos)` : `${selectedSoportes.length} seleccionados`}
                 </span>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const selectedCostes = soportesCostes.filter(s => selectedSoportes.includes(s.id))
-                  exportToCSV(selectedCostes)
-                }}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar selección
-                </Button>
+                {tieneFuncionTecnica("ver boton exportar") && (
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const selectedCostes = soportesCostes.filter(s => selectedSoportes.includes(s.id))
+                    exportToXlsx(selectedCostes, `costes_soportes_seleccionados_${new Date().toISOString().split("T")[0]}.xlsx`)
+                  }}>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Exportar selección
+                  </Button>
+                )}
                 
                 {Object.keys(editedSupports).length > 0 && (
                   <>
@@ -1350,7 +1405,7 @@ export default function CostesPage() {
               </div>
               
               {/* Segunda fila: Opciones de edición masiva (saltan de línea si no caben) */}
-              {selectedSoportes.length > 1 && (
+              {(selectAllMode === 'all' ? allSoporteIds.length : selectedSoportes.length) > 1 && (
                 <div className="flex items-center gap-3 flex-wrap">
                   {/* Cambiar Propietario */}
                   <Input

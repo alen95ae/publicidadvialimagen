@@ -13,7 +13,6 @@ import {
   Plus, 
   Search, 
   Filter, 
-  Download, 
   MoreHorizontal,
   Calendar,
   User,
@@ -24,7 +23,8 @@ import {
   XCircle,
   AlertCircle,
   Eye,
-  Trash2
+  Trash2,
+  FileSpreadsheet
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast, Toaster } from "sonner"
@@ -71,6 +71,8 @@ export default function SolicitudesPage() {
   const { puedeEliminar, puedeEditar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSolicitudes, setSelectedSolicitudes] = useState<string[]>([])
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allSolicitudIds, setAllSolicitudIds] = useState<string[]>([])
   const [solicitudesList, setSolicitudesList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [estadoFilter, setEstadoFilter] = useState<string[]>([])
@@ -162,11 +164,31 @@ export default function SolicitudesPage() {
   }, [])
 
 
-  const handleSelectAll = (checked: boolean) => {
+  const fetchAllSolicitudIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (estadoFilter.length > 0) params.set('estado', estadoFilter.join(','))
+      const res = await fetch(`/api/solicitudes/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllSolicitudIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all solicitud IDs:', e)
+      return []
+    }
+  }
+
+  const handleSelectAll = async (checked: boolean) => {
     if (checked) {
-      setSelectedSolicitudes(solicitudesList.map(s => s.codigo))
+      setSelectedSolicitudes(filteredSolicitudes.map(s => s.codigo))
+      setSelectAllMode('page')
+      await fetchAllSolicitudIds()
     } else {
       setSelectedSolicitudes([])
+      setSelectAllMode('none')
     }
   }
 
@@ -175,6 +197,7 @@ export default function SolicitudesPage() {
       setSelectedSolicitudes([...selectedSolicitudes, id])
     } else {
       setSelectedSolicitudes(selectedSolicitudes.filter(s => s !== id))
+      if (selectAllMode === 'all') setSelectAllMode('page')
     }
   }
 
@@ -375,21 +398,18 @@ export default function SolicitudesPage() {
     }
   }
 
-  // Exportar solicitudes
+  // Exportar todas las solicitudes a Excel (xlsx)
   const handleExport = async () => {
     try {
       const params = new URLSearchParams()
       if (estadoFilter && estadoFilter.length > 0) params.set('estado', estadoFilter.join(','))
-      
       const response = await fetch(`/api/solicitudes/export?${params.toString()}`)
-      
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        const fecha = new Date().toISOString().split('T')[0]
-        a.download = `solicitudes_${fecha}.csv`
+        a.download = `solicitudes_${new Date().toISOString().split('T')[0]}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -401,6 +421,29 @@ export default function SolicitudesPage() {
     } catch (error) {
       console.error('Error al exportar:', error)
       toast.error('Error al exportar')
+    }
+  }
+
+  // Exportar solo las solicitudes seleccionadas a Excel (xlsx)
+  const handleExportSelected = async () => {
+    if (selectedSolicitudes.length === 0) return
+    try {
+      const ids = selectedSolicitudes.join(',')
+      const response = await fetch(`/api/solicitudes/export?ids=${encodeURIComponent(ids)}`)
+      if (!response.ok) throw new Error('Error al exportar selección')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `solicitudes_seleccionadas_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${selectedSolicitudes.length} solicitud(es) exportada(s)`)
+    } catch (error) {
+      console.error('Error al exportar selección:', error)
+      toast.error('Error al exportar selección')
     }
   }
 
@@ -474,7 +517,7 @@ export default function SolicitudesPage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleExport}>
-                  <Download className="w-4 h-4 mr-2" />
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
                   Exportar
                 </Button>
               </div>
@@ -486,7 +529,7 @@ export default function SolicitudesPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  {selectedSolicitudes.length === 1 ? (
+                  {selectedSolicitudes.length === 1 && selectAllMode !== 'all' ? (
                     <>
                       <p className="text-sm text-blue-900 font-medium">
                         1 solicitud seleccionada
@@ -507,10 +550,10 @@ export default function SolicitudesPage() {
                         </Select>
                       </div>
                     </>
-                  ) : selectedSolicitudes.length > 1 ? (
+                  ) : (selectAllMode === 'all' || selectedSolicitudes.length > 1) ? (
                     <>
                       <p className="text-sm text-blue-900 font-medium">
-                        {selectedSolicitudes.length} solicitudes seleccionadas
+                        {selectAllMode === 'all' ? `${allSolicitudIds.length} solicitudes seleccionadas (todos)` : `${selectedSolicitudes.length} solicitudes seleccionadas`}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-blue-900">Cambiar estado a:</span>
@@ -535,6 +578,16 @@ export default function SolicitudesPage() {
                   )}
                 </div>
                 <div className="flex gap-2">
+                  {selectedSolicitudes.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportSelected}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Exportar selección
+                    </Button>
+                  )}
                   {Object.keys(editedSolicitudes).length > 0 && (
                     <>
                       <Button
@@ -580,6 +633,53 @@ export default function SolicitudesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Banner de selección total (cyan) */}
+            {!loading && filteredSolicitudes.length > 0 &&
+             filteredSolicitudes.every(s => selectedSolicitudes.includes(s.codigo)) &&
+             selectAllMode !== 'all' &&
+             allSolicitudIds.length > filteredSolicitudes.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Las {filteredSolicitudes.length} solicitudes de esta página están seleccionadas.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      setSelectedSolicitudes([...allSolicitudIds])
+                      setSelectAllMode('all')
+                      toast.success(`${allSolicitudIds.length} solicitudes seleccionadas`)
+                    }}
+                  >
+                    Seleccionar las {allSolicitudIds.length} solicitudes
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Las {allSolicitudIds.length} solicitudes están seleccionadas.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => {
+                      setSelectedSolicitudes([])
+                      setSelectAllMode('none')
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D54644]"></div>
@@ -592,7 +692,7 @@ export default function SolicitudesPage() {
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-3 px-4">
                       <Checkbox
-                        checked={selectedSolicitudes.length === solicitudesList.length}
+                        checked={filteredSolicitudes.length > 0 && filteredSolicitudes.every(s => selectedSolicitudes.includes(s.codigo))}
                         onCheckedChange={handleSelectAll}
                       />
                     </th>

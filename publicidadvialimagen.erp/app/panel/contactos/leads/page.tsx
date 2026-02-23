@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Download, Edit, Trash2, X, Trash, RotateCcw, UserPlus } from "lucide-react"
+import { Plus, Search, Edit, Trash2, X, Trash, RotateCcw, UserPlus, FileSpreadsheet } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
@@ -253,7 +253,7 @@ export default function LeadsPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `leads_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `leads_${new Date().toISOString().split('T')[0]}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -269,7 +269,6 @@ export default function LeadsPage() {
 
   const handleExportSelected = async () => {
     if (selectedLeads.size === 0) return
-    
     try {
       const ids = Array.from(selectedLeads).join(',')
       const response = await fetch(`/api/leads/export?ids=${encodeURIComponent(ids)}`, {
@@ -280,7 +279,7 @@ export default function LeadsPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `leads_seleccionados_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `leads_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -704,8 +703,8 @@ export default function LeadsPage() {
               </Button>
               {tieneFuncionTecnica("ver boton exportar") && (
                 <Button variant="outline" onClick={handleExport}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar CSV
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Exportar
                 </Button>
               )}
               <Button className="bg-[#D54644] hover:bg-[#B03A38]" onClick={handleCreate}>
@@ -763,7 +762,7 @@ export default function LeadsPage() {
                       size="sm"
                       onClick={handleExportSelected}
                     >
-                      <Download className="w-4 h-4 mr-2" />
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
                       Exportar selección
                     </Button>
                   )}

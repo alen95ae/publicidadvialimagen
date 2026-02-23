@@ -118,7 +118,10 @@ export default function CotizacionesPage() {
   const [filtroSucursal, setFiltroSucursal] = useState<string>("all")
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [exporting, setExporting] = useState(false)
+  const [exportingSelected, setExportingSelected] = useState(false)
   const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allCotizacionIds, setAllCotizacionIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -458,6 +461,27 @@ export default function CotizacionesPage() {
   // Funciones de paginación
   const handlePageChange = (page: number) => {
     fetchCotizaciones(page)
+    setSelectAllMode('none')
+    setSelectedCotizaciones([])
+  }
+
+  const fetchAllCotizacionIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (searchTerm?.trim()) params.set('search', searchTerm.trim())
+      if (filtroVendedor !== 'all') params.set('vendedor', filtroVendedor)
+      if (filtroEstado !== 'all') params.set('estado', filtroEstado)
+      const res = await fetch(`/api/cotizaciones/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllCotizacionIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all cotizacion IDs:', e)
+      return []
+    }
   }
 
   const handlePrevPage = () => {
@@ -472,11 +496,14 @@ export default function CotizacionesPage() {
     }
   }
 
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = async (checked: boolean) => {
     if (checked) {
       setSelectedCotizaciones(cotizaciones.map(c => c.id))
+      setSelectAllMode('page')
+      await fetchAllCotizacionIds()
     } else {
       setSelectedCotizaciones([])
+      setSelectAllMode('none')
     }
   }
 
@@ -485,6 +512,7 @@ export default function CotizacionesPage() {
       setSelectedCotizaciones([...selectedCotizaciones, id])
     } else {
       setSelectedCotizaciones(selectedCotizaciones.filter(c => c !== id))
+      if (selectAllMode === 'all') setSelectAllMode('page')
     }
   }
 
@@ -521,32 +549,53 @@ export default function CotizacionesPage() {
     return matchesSearch && matchesVendedor && matchesSucursal && matchesEstado
   })
 
-  // Función para exportar a CSV
+  // Exportar todas las cotizaciones a Excel (xlsx combinado: cotización + líneas)
   const handleExport = async () => {
     try {
       setExporting(true)
       const response = await fetch('/api/cotizaciones/export')
-      
-      if (!response.ok) {
-        throw new Error('Error al exportar cotizaciones')
-      }
-      
+      if (!response.ok) throw new Error('Error al exportar cotizaciones')
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `cotizaciones_${new Date().toISOString().split('T')[0]}.csv`
+      a.download = `cotizaciones_${new Date().toISOString().split('T')[0]}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
       toast.success('Cotizaciones exportadas correctamente')
     } catch (error) {
       console.error('Error exporting:', error)
       toast.error('Error al exportar cotizaciones')
     } finally {
       setExporting(false)
+    }
+  }
+
+  // Exportar solo las cotizaciones seleccionadas a Excel (xlsx combinado)
+  const handleExportSelected = async () => {
+    if (selectedCotizaciones.length === 0) return
+    try {
+      setExportingSelected(true)
+      const ids = selectedCotizaciones.join(',')
+      const response = await fetch(`/api/cotizaciones/export?ids=${encodeURIComponent(ids)}`)
+      if (!response.ok) throw new Error('Error al exportar selección')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `cotizaciones_seleccionadas_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${selectedCotizaciones.length} cotización(es) exportada(s)`)
+    } catch (error) {
+      console.error('Error exporting selection:', error)
+      toast.error('Error al exportar selección')
+    } finally {
+      setExportingSelected(false)
     }
   }
 
@@ -936,17 +985,75 @@ export default function CotizacionesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Banner de selección total (cyan) */}
+            {cotizaciones.length > 0 &&
+             cotizaciones.every(c => selectedCotizaciones.includes(c.id)) &&
+             selectAllMode !== 'all' &&
+             allCotizacionIds.length > cotizaciones.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {cotizaciones.length} cotizaciones de esta página están seleccionadas.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      setSelectedCotizaciones([...allCotizacionIds])
+                      setSelectAllMode('all')
+                      toast.success(`${allCotizacionIds.length} cotizaciones seleccionadas`)
+                    }}
+                  >
+                    Seleccionar las {allCotizacionIds.length} cotizaciones
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allCotizacionIds.length} cotizaciones están seleccionadas.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => {
+                      setSelectedCotizaciones([])
+                      setSelectAllMode('none')
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Barra azul de acciones masivas - Solo cuando hay seleccionadas */}
             {selectedCotizaciones.length > 0 && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {selectedCotizaciones.length} cotización{selectedCotizaciones.length > 1 ? 'es' : ''} seleccionada{selectedCotizaciones.length > 1 ? 's' : ''}
+                      {selectAllMode === 'all' ? `${allCotizacionIds.length} cotización${allCotizacionIds.length > 1 ? 'es' : ''} seleccionada${allCotizacionIds.length > 1 ? 's' : ''} (todos)` : `${selectedCotizaciones.length} cotización${selectedCotizaciones.length > 1 ? 'es' : ''} seleccionada${selectedCotizaciones.length > 1 ? 's' : ''}`}
                     </span>
                   </div>
                   
                   <div className="flex gap-2">
+                    {tieneFuncionTecnica("ver boton exportar") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportSelected}
+                        disabled={exportingSelected}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                      </Button>
+                    )}
                     {selectedCotizaciones.length === 1 && (
                       <>
                         <Button

@@ -14,7 +14,8 @@ import {
   Copy,
   X,
   List,
-  Settings
+  Settings,
+  FileSpreadsheet
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -82,6 +83,9 @@ export default function ConsumiblesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allConsumibleIds, setAllConsumibleIds] = useState<string[]>([])
+  const [exportingSelected, setExportingSelected] = useState(false)
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
@@ -262,12 +266,38 @@ export default function ConsumiblesPage() {
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) || allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])
-  const singleSelected = selectedIds.length === 1
+  const selectedCount = selectAllMode === 'all' ? allConsumibleIds.length : selectedIds.length
+  const singleSelected = selectedCount === 1
 
-  function toggleAll(checked: boolean) {
-    const next: Record<string, boolean> = {}
-    ids.forEach(id => { next[id] = checked })
-    setSelected(next)
+  const fetchAllConsumibleIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (selectedCategory) params.set('categoria', selectedCategory)
+      if (searchTerm?.trim()) params.set('q', searchTerm.trim())
+      const res = await fetch(`/api/consumibles/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllConsumibleIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all consumible IDs:', e)
+      return []
+    }
+  }
+
+  async function toggleAll(checked: boolean) {
+    if (checked) {
+      const next: Record<string, boolean> = {}
+      ids.forEach(id => { next[id] = true })
+      setSelected(next)
+      setSelectAllMode('page')
+      await fetchAllConsumibleIds()
+    } else {
+      setSelected({})
+      setSelectAllMode('none')
+    }
   }
 
   // Aplicar cambio masivo a seleccionados
@@ -360,6 +390,60 @@ export default function ConsumiblesPage() {
   // Funciones de paginación
   const handlePageChange = (page: number) => {
     fetchItems(page)
+    setSelectAllMode('none')
+    setSelected({})
+  }
+
+  const handleExportAll = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (selectedCategory) params.set('categoria', selectedCategory)
+      if (searchTerm?.trim()) params.set('q', searchTerm.trim())
+      const res = await fetch(`/api/consumibles/export?${params}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('Error al exportar')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `consumibles_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success('Consumibles exportados')
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al exportar')
+    }
+  }
+
+  const handleExportSelected = async () => {
+    const idsToExport = selectAllMode === 'all' ? allConsumibleIds : selectedIds
+    if (idsToExport.length === 0) {
+      toast.error('Selecciona al menos un consumible')
+      return
+    }
+    try {
+      setExportingSelected(true)
+      const params = new URLSearchParams({ ids: idsToExport.join(',') })
+      const res = await fetch(`/api/consumibles/export?${params}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('Error al exportar')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `consumibles_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${idsToExport.length} consumibles exportados`)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al exportar selección')
+    } finally {
+      setExportingSelected(false)
+    }
   }
 
   const handlePrevPage = () => {
@@ -571,6 +655,10 @@ export default function ConsumiblesPage() {
                 </div>
                 
                 <div className="flex gap-2 items-center ml-auto">
+                  <Button variant="outline" size="sm" onClick={handleExportAll}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Exportar
+                  </Button>
                   <Button 
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={handleNewConsumible}
@@ -592,16 +680,58 @@ export default function ConsumiblesPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* Banner de selección total (cyan) */}
+            {ids.length > 0 && allSelected && selectAllMode !== 'all' && allConsumibleIds.length > ids.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {ids.length} consumibles de esta página están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      const next: Record<string, boolean> = {}
+                      allConsumibleIds.forEach(id => { next[id] = true })
+                      setSelected(next)
+                      setSelectAllMode('all')
+                      toast.success(`${allConsumibleIds.length} consumibles seleccionados`)
+                    }}
+                  >
+                    Seleccionar los {allConsumibleIds.length} consumibles
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allConsumibleIds.length} consumibles están seleccionados.
+                  </span>
+                  <Button variant="link" size="sm" className="text-cyan-700 hover:text-cyan-900 underline" onClick={() => { setSelected({}); setSelectAllMode('none') }}>
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Barra de acciones masivas */}
-            {someSelected && (
+            {(someSelected || (selectAllMode === 'all' && allConsumibleIds.length > 0)) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {selectedIds.length} item{selectedIds.length > 1 ? 's' : ''} seleccionado{selectedIds.length > 1 ? 's' : ''}
+                      {selectAllMode === 'all' ? `${allConsumibleIds.length} item${allConsumibleIds.length > 1 ? 's' : ''} seleccionado${allConsumibleIds.length > 1 ? 's' : ''} (todos)` : `${selectedIds.length} item${selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
                     </span>
+                    <Button variant="outline" size="sm" onClick={handleExportSelected} disabled={exportingSelected}>
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                    </Button>
                     
-                    {!singleSelected && selectedIds.length > 1 && (
+                    {!singleSelected && selectedCount > 1 && (
                       <>
                         <Select onValueChange={(value) => handleBulkFieldChange('categoria', value)}>
                           <SelectTrigger className="w-48">
@@ -616,12 +746,12 @@ export default function ConsumiblesPage() {
                           </SelectContent>
                         </Select>
 
-                        <Select onValueChange={(value) => handleBulkFieldChange('responsable', value)}>
+                        <Select onValueChange={(value) => handleBulkFieldChange('responsable', value === "__sin_responsable__" ? "" : value)}>
                           <SelectTrigger className="w-48">
                             <SelectValue placeholder="Cambiar responsable" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Sin responsable</SelectItem>
+                            <SelectItem value="__sin_responsable__">Sin responsable</SelectItem>
                           </SelectContent>
                         </Select>
 
@@ -734,9 +864,11 @@ export default function ConsumiblesPage() {
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[item.id]}
-                          onCheckedChange={(v) =>
-                            setSelected(prev => ({ ...prev, [item.id]: Boolean(v) }))
-                          }
+                          onCheckedChange={(v) => {
+                            const checked = Boolean(v)
+                            setSelected(prev => ({ ...prev, [item.id]: checked }))
+                            if (!checked && selectAllMode === 'all') setSelectAllMode('page')
+                          }}
                           aria-label={`Seleccionar ${item.codigo}`}
                         />
                       </TableCell>

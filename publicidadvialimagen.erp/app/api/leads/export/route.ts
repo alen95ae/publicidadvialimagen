@@ -5,20 +5,38 @@ import { NextResponse } from "next/server"
 import { getAllLeads, findLeadById } from "@/lib/supabaseLeads"
 import { getSupabaseUser } from "@/lib/supabaseServer"
 import { NextRequest } from "next/server"
+import * as XLSX from "xlsx"
 
-// Función para escapar CSV correctamente (maneja tildes, ñ y caracteres especiales)
-function escapeCSV(value: string | number | boolean | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  const str = String(value)
-  // Escapar comillas dobles duplicándolas
-  const escaped = str.replace(/"/g, '""')
-  // Envolver en comillas para manejar comas, saltos de línea, etc.
-  return `"${escaped}"`
+// Columnas a exportar (sin ID)
+const HEADERS = [
+  "Nombre",
+  "Empresa",
+  "Email",
+  "Teléfono",
+  "Sector",
+  "Interés",
+  "Origen",
+  "Creado"
+] as const
+
+function rowFromLead(lead: any): (string | number)[] {
+  const createdDate = lead.created_at
+    ? new Date(lead.created_at).toLocaleDateString('es-ES')
+    : ''
+  return [
+    lead.nombre ?? '',
+    lead.empresa ?? '',
+    lead.email ?? '',
+    lead.telefono ?? '',
+    lead.sector ?? '',
+    lead.interes ?? '',
+    lead.origen ?? '',
+    createdDate
+  ]
 }
 
 export async function GET(request: Request) {
   try {
-    // Verificar autenticación
     const supabase = await getSupabaseUser(request as NextRequest)
     if (!supabase) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
@@ -34,17 +52,12 @@ export async function GET(request: Request) {
     let leads
 
     if (idsParam) {
-      // Exportar solo los leads con IDs específicos
       const ids = idsParam.split(',').map(id => id.trim()).filter(id => id)
-      
       console.log(`📤 Exportando ${ids.length} leads específicos`)
-      
-      // Obtener leads por ID
       const promises = ids.map(id => findLeadById(id))
       const results = await Promise.all(promises)
       leads = results.filter(l => l !== null)
     } else {
-      // Exportar leads con filtros aplicados
       console.log('📤 Exportando leads con filtros aplicados')
       const result = await getAllLeads({
         query,
@@ -55,58 +68,23 @@ export async function GET(request: Request) {
       leads = result.data
     }
 
-    // Construir CSV con todos los campos
-    const headers = [
-      "ID",
-      "Nombre",
-      "Empresa",
-      "Email",
-      "Teléfono",
-      "Sector",
-      "Interés",
-      "Origen",
-      "Creado"
+    const wsData = [
+      [...HEADERS],
+      ...leads.map((l: any) => rowFromLead(l))
     ]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    XLSX.utils.book_append_sheet(wb, ws, 'Leads')
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    const fecha = new Date().toISOString().split('T')[0]
+    const nombreArchivo = idsParam ? `leads_seleccionados_${fecha}.xlsx` : `leads_${fecha}.xlsx`
 
-    const csvRows: string[] = []
-    
-    // Agregar headers
-    csvRows.push(headers.map(h => escapeCSV(h)).join(','))
+    console.log(`✅ Exportados ${leads.length} leads a Excel`)
 
-    // Agregar filas de datos
-    for (const lead of leads) {
-      const createdDate = lead.created_at 
-        ? new Date(lead.created_at).toLocaleDateString('es-ES')
-        : ''
-
-      const row = [
-        escapeCSV(lead.id),
-        escapeCSV(lead.nombre),
-        escapeCSV(lead.empresa),
-        escapeCSV(lead.email),
-        escapeCSV(lead.telefono),
-        escapeCSV(lead.sector),
-        escapeCSV(lead.interes),
-        escapeCSV(lead.origen),
-        escapeCSV(createdDate)
-      ]
-      csvRows.push(row.join(','))
-    }
-
-    const csv = csvRows.join('\n')
-    // BOM UTF-8 para Excel y otros programas
-    const csvWithBOM = '\uFEFF' + csv
-
-    console.log(`✅ Exportados ${leads.length} leads a CSV`)
-
-    // Convertir a Buffer con encoding UTF-8 explícito
-    const csvBuffer = Buffer.from(csvWithBOM, 'utf-8')
-
-    return new NextResponse(csvBuffer, {
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="leads_${new Date().toISOString().split('T')[0]}.csv"`,
-        'Content-Encoding': 'utf-8',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
       },
     })
   } catch (e: any) {
@@ -114,4 +92,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No se pudieron exportar los leads" }, { status: 500 })
   }
 }
-

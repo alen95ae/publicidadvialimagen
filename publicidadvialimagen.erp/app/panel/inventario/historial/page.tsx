@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -83,6 +84,10 @@ export default function HistorialPage() {
   const limit = 50
   const [exportingPDF, setExportingPDF] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allHistorialIds, setAllHistorialIds] = useState<string[]>([])
+  const [exportingSelected, setExportingSelected] = useState(false)
 
   // Función para obtener iniciales del usuario
   const getInitials = (nombre: string | null) => {
@@ -404,6 +409,74 @@ export default function HistorialPage() {
     }
   }
 
+  const fetchAllHistorialIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (filtroItemTipo !== "all") params.set("item_tipo", filtroItemTipo)
+      if (filtroOrigen !== "all") params.set("origen", filtroOrigen)
+      if (filtroSucursal !== "all") params.set("sucursal", filtroSucursal)
+      if (filtroFechaDesde) params.set("fecha_desde", filtroFechaDesde)
+      if (filtroFechaHasta) params.set("fecha_hasta", filtroFechaHasta)
+      if (busqueda?.trim()) params.set("search", busqueda.trim())
+      const res = await fetch(`/api/inventario/historial/all-ids?${params}`, { credentials: "include" })
+      if (res.ok) {
+        const data = await res.json()
+        setAllHistorialIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error("Error fetching historial all-ids:", e)
+      return []
+    }
+  }
+
+  const handleSelectAll = async (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(historial.map((e) => e.id))
+      setSelectAllMode("page")
+      await fetchAllHistorialIds()
+    } else {
+      setSelectedIds([])
+      setSelectAllMode("none")
+    }
+  }
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    setSelectedIds(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id))
+    if (!checked && selectAllMode === "all") setSelectAllMode("page")
+  }
+
+  const handleExportSelected = async () => {
+    const idsToExport = selectAllMode === "all" ? allHistorialIds : selectedIds
+    if (idsToExport.length === 0) {
+      toast.error("Selecciona al menos un registro")
+      return
+    }
+    try {
+      setExportingSelected(true)
+      const params = construirParamsExportacion()
+      params.set("ids", idsToExport.join(","))
+      const res = await fetch(`/api/inventario/historial/export/excel?${params}`, { credentials: "include" })
+      if (!res.ok) throw new Error("Error al exportar")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `historial_stock_seleccionados_${new Date().toISOString().split("T")[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${idsToExport.length} registros exportados`)
+    } catch (e) {
+      console.error(e)
+      toast.error("Error al exportar selección")
+    } finally {
+      setExportingSelected(false)
+    }
+  }
+
   const formatearFecha = (fecha: string) => {
     try {
       const date = new Date(fecha)
@@ -659,6 +732,72 @@ export default function HistorialPage() {
           <CardTitle>Registros ({total})</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Banner de selección total (cyan) */}
+          {!loading && historial.length > 0 &&
+           historial.every((e) => selectedIds.includes(e.id)) &&
+           selectAllMode !== "all" &&
+           allHistorialIds.length > historial.length && (
+            <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-cyan-900">
+                  Los {historial.length} registros de esta página están seleccionados.
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                  onClick={() => {
+                    setSelectedIds([...allHistorialIds])
+                    setSelectAllMode("all")
+                    toast.success(`${allHistorialIds.length} registros seleccionados`)
+                  }}
+                >
+                  Seleccionar los {allHistorialIds.length} registros
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {selectAllMode === "all" && (
+            <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-cyan-900">
+                  Los {allHistorialIds.length} registros están seleccionados.
+                </span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-cyan-700 hover:text-cyan-900 underline"
+                  onClick={() => {
+                    setSelectedIds([])
+                    setSelectAllMode("none")
+                  }}
+                >
+                  Limpiar selección
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {selectedIds.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectAllMode === "all" ? `${allHistorialIds.length} seleccionados (todos)` : `${selectedIds.length} seleccionados`}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportSelected}
+                  disabled={exportingSelected}
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  {exportingSelected ? "Exportando..." : "Exportar selección"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-8 text-gray-500">Cargando historial...</div>
           ) : historial.length === 0 ? (
@@ -668,6 +807,13 @@ export default function HistorialPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={historial.length > 0 && historial.every((e) => selectedIds.includes(e.id))}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Seleccionar todo"
+                      />
+                    </TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Origen</TableHead>
                     <TableHead>Tipo</TableHead>
@@ -685,6 +831,13 @@ export default function HistorialPage() {
                 <TableBody>
                   {historial.map((entry) => (
                     <TableRow key={entry.id}>
+                      <TableCell className="w-10">
+                        <Checkbox
+                          checked={selectedIds.includes(entry.id)}
+                          onCheckedChange={(v) => handleSelectOne(entry.id, v as boolean)}
+                          aria-label={`Seleccionar ${entry.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {entry.observaciones && entry.observaciones.trim() !== '' ? (
@@ -789,7 +942,11 @@ export default function HistorialPage() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => setPage(Math.max(1, page - 1))}
+                  onClick={() => {
+                    setSelectAllMode("none")
+                    setSelectedIds([])
+                    setPage(Math.max(1, page - 1))
+                  }}
                   disabled={page === 1 || loading}
                 >
                   Anterior
@@ -813,7 +970,11 @@ export default function HistorialPage() {
                       key={pageNum}
                       variant="outline"
                       size="sm"
-                      onClick={() => setPage(pageNum)}
+                      onClick={() => {
+                        setSelectAllMode("none")
+                        setSelectedIds([])
+                        setPage(pageNum)
+                      }}
                       disabled={loading}
                       className={page === pageNum ? "bg-[#D54644] text-white hover:bg-[#B73E3A]" : ""}
                     >
@@ -825,7 +986,11 @@ export default function HistorialPage() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  onClick={() => {
+                    setSelectAllMode("none")
+                    setSelectedIds([])
+                    setPage(Math.min(totalPages, page + 1))
+                  }}
                   disabled={page >= totalPages || loading}
                 >
                   Siguiente

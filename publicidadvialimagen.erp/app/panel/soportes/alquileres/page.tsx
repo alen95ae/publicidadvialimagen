@@ -11,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { 
   Search, 
   Filter, 
-  Download, 
   Plus,
   Edit,
   Trash2,
@@ -19,7 +18,8 @@ import {
   Calendar,
   User,
   DollarSign,
-  X
+  X,
+  FileSpreadsheet
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
@@ -62,6 +62,9 @@ export default function AlquileresPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [vendedoresUnicos, setVendedoresUnicos] = useState<string[]>([])
   const [exporting, setExporting] = useState(false)
+  const [exportingSelected, setExportingSelected] = useState(false)
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allAlquilerIds, setAllAlquilerIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -277,6 +280,27 @@ export default function AlquileresPage() {
   // Funciones de paginación
   const handlePageChange = (page: number) => {
     loadAlquileres(page)
+    setSelectAllMode('none')
+    setSelectedAlquileres([])
+  }
+
+  const fetchAllAlquilerIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (searchTerm) params.set('search', searchTerm)
+      if (filtroVendedor !== 'all') params.set('vendedor', filtroVendedor)
+      if (filtroEstado !== 'all') params.set('estado', filtroEstado)
+      const res = await fetch(`/api/alquileres/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllAlquilerIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all alquiler IDs:', e)
+      return []
+    }
   }
 
   const handlePrevPage = () => {
@@ -291,11 +315,14 @@ export default function AlquileresPage() {
     }
   }
 
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = async (checked: boolean) => {
     if (checked) {
       setSelectedAlquileres(alquileres.map(a => a.id))
+      setSelectAllMode('page')
+      await fetchAllAlquilerIds()
     } else {
       setSelectedAlquileres([])
+      setSelectAllMode('none')
     }
   }
 
@@ -304,6 +331,7 @@ export default function AlquileresPage() {
       setSelectedAlquileres([...selectedAlquileres, id])
     } else {
       setSelectedAlquileres(selectedAlquileres.filter(a => a !== id))
+      if (selectAllMode === 'all') setSelectAllMode('page')
     }
   }
 
@@ -345,32 +373,53 @@ export default function AlquileresPage() {
     }).format(price)
   }
 
-  // Función para exportar a CSV
+  // Función para exportar todo a Excel (xlsx)
   const handleExport = async () => {
     try {
       setExporting(true)
       const response = await fetch('/api/alquileres/export')
-      
-      if (!response.ok) {
-        throw new Error('Error al exportar alquileres')
-      }
-      
+      if (!response.ok) throw new Error('Error al exportar alquileres')
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `alquileres_${new Date().toISOString().split('T')[0]}.csv`
+      a.download = `alquileres_${new Date().toISOString().split('T')[0]}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
       toast.success('Alquileres exportados correctamente')
     } catch (error) {
       console.error('Error exporting:', error)
       toast.error('Error al exportar alquileres')
     } finally {
       setExporting(false)
+    }
+  }
+
+  // Exportar solo los alquileres seleccionados a Excel (xlsx)
+  const handleExportSelected = async () => {
+    if (selectedAlquileres.length === 0) return
+    try {
+      setExportingSelected(true)
+      const ids = selectedAlquileres.join(',')
+      const response = await fetch(`/api/alquileres/export?ids=${encodeURIComponent(ids)}`)
+      if (!response.ok) throw new Error('Error al exportar selección')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `alquileres_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${selectedAlquileres.length} alquiler(es) exportado(s)`)
+    } catch (error) {
+      console.error('Error exporting selection:', error)
+      toast.error('Error al exportar selección')
+    } finally {
+      setExportingSelected(false)
     }
   }
 
@@ -450,7 +499,7 @@ export default function AlquileresPage() {
                     onClick={handleExport}
                     disabled={exporting || alquileres.length === 0}
                   >
-                    <Download className="w-4 h-4 mr-2" />
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
                     {exporting ? 'Exportando...' : 'Exportar'}
                   </Button>
                 )}
@@ -466,6 +515,75 @@ export default function AlquileresPage() {
               </div>
             </div>
             
+            {/* Acciones masivas (ventanita azul) - exportar selección */}
+            {selectedAlquileres.length > 0 && tieneFuncionTecnica("ver boton exportar") && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm font-medium text-blue-800">
+                    {selectAllMode === 'all' ? `${allAlquilerIds.length} alquiler(es) seleccionado(s) (todos)` : `${selectedAlquileres.length} alquiler(es) seleccionado(s)`}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportSelected}
+                      disabled={exportingSelected}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Banner de selección total (cyan) */}
+            {alquileres.length > 0 &&
+             alquileres.every(a => selectedAlquileres.includes(a.id)) &&
+             selectAllMode !== 'all' &&
+             allAlquilerIds.length > alquileres.length && (
+              <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {alquileres.length} alquileres de esta página están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      setSelectedAlquileres([...allAlquilerIds])
+                      setSelectAllMode('all')
+                      toast.success(`${allAlquilerIds.length} alquileres seleccionados`)
+                    }}
+                  >
+                    Seleccionar los {allAlquilerIds.length} alquileres
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === 'all' && (
+              <div className="mt-2 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allAlquilerIds.length} alquileres están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => {
+                      setSelectedAlquileres([])
+                      setSelectAllMode('none')
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Etiquetas de filtros activos */}
             {(searchTerm || filtroVendedor !== "all" || filtroEstado !== "all") && (
               <div className="flex flex-wrap gap-2 items-center pb-4 border-b">

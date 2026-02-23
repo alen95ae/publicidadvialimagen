@@ -14,7 +14,8 @@ import {
   XCircle,
   Copy,
   X,
-  Download
+  Download,
+  FileSpreadsheet
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -162,6 +163,9 @@ export default function RecursosPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allRecursoIds, setAllRecursoIds] = useState<string[]>([])
+  const [exportingSelected, setExportingSelected] = useState(false)
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
@@ -364,12 +368,38 @@ export default function RecursosPage() {
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) || allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])
-  const singleSelected = selectedIds.length === 1
+  const selectedCount = selectAllMode === 'all' ? allRecursoIds.length : selectedIds.length
+  const singleSelected = selectedCount === 1
 
-  function toggleAll(checked: boolean) {
-    const next: Record<string, boolean> = {}
-    ids.forEach(id => { next[id] = checked })
-    setSelected(next)
+  const fetchAllRecursoIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (selectedCategory) params.set('categoria', selectedCategory)
+      if (searchTerm?.trim()) params.set('q', searchTerm.trim())
+      const res = await fetch(`/api/recursos/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllRecursoIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all recurso IDs:', e)
+      return []
+    }
+  }
+
+  async function toggleAll(checked: boolean) {
+    if (checked) {
+      const next: Record<string, boolean> = {}
+      ids.forEach(id => { next[id] = true })
+      setSelected(next)
+      setSelectAllMode('page')
+      await fetchAllRecursoIds()
+    } else {
+      setSelected({})
+      setSelectAllMode('none')
+    }
   }
 
   async function bulkUpdate(patch: any) {
@@ -503,7 +533,7 @@ export default function RecursosPage() {
         const a = document.createElement('a')
         a.href = url
         const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
-        a.download = `recursos_${fecha}.csv`
+        a.download = `recursos_${fecha}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -521,6 +551,37 @@ export default function RecursosPage() {
   // Funciones de paginación
   const handlePageChange = (page: number) => {
     fetchItems(page)
+    setSelectAllMode('none')
+    setSelected({})
+  }
+
+  const handleExportSelected = async () => {
+    const idsToExport = selectAllMode === 'all' ? allRecursoIds : selectedIds
+    if (idsToExport.length === 0) {
+      toast.error('Selecciona al menos un recurso')
+      return
+    }
+    try {
+      setExportingSelected(true)
+      const params = new URLSearchParams({ ids: idsToExport.join(',') })
+      const res = await fetch(`/api/recursos/export?${params}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('Error al exportar')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `recursos_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${idsToExport.length} recursos exportados`)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al exportar selección')
+    } finally {
+      setExportingSelected(false)
+    }
   }
 
   const handlePrevPage = () => {
@@ -616,10 +677,9 @@ export default function RecursosPage() {
 
   // Funciones para acciones masivas
   const selectedItems = Object.keys(selected).filter(id => selected[id])
-  const selectedCount = selectedItems.length
 
   const handleBulkAction = async () => {
-    if (!bulkAction || selectedCount === 0) return
+    if (!bulkAction || selectedItems.length === 0) return
 
     try {
       const updates = selectedItems.map(id => ({
@@ -636,7 +696,7 @@ export default function RecursosPage() {
       })
 
       if (response.ok) {
-        toast.success(`${selectedCount} items actualizados correctamente`)
+        toast.success(`${selectedItems.length} items actualizados correctamente`)
         setSelected({})
         setShowBulkActions(false)
         setBulkAction("")
@@ -652,8 +712,8 @@ export default function RecursosPage() {
   }
 
   const handleBulkDelete = async () => {
-    if (selectedCount === 0) return
-    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedCount} items?`)) return
+    if (selectedItems.length === 0) return
+    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedItems.length} items?`)) return
 
     try {
       const response = await fetch('/api/recursos/bulk', {
@@ -665,7 +725,7 @@ export default function RecursosPage() {
       })
 
       if (response.ok) {
-        toast.success(`${selectedCount} items eliminados correctamente`)
+        toast.success(`${selectedItems.length} items eliminados correctamente`)
         setSelected({})
         setShowBulkActions(false)
         fetchItems()
@@ -855,7 +915,7 @@ export default function RecursosPage() {
                 <div className="flex gap-2 items-center ml-auto">
                   {tieneFuncionTecnica("ver boton exportar") && (
                     <Button variant="outline" size="sm" onClick={handleExport}>
-                      <Download className="h-4 w-4 mr-2" />
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
                       Exportar
                     </Button>
                   )}
@@ -880,17 +940,61 @@ export default function RecursosPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Barra azul unificada de acciones masivas */}
-            {someSelected && (
+            {/* Banner de selección total (cyan) */}
+            {ids.length > 0 && allSelected && selectAllMode !== 'all' && allRecursoIds.length > ids.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {ids.length} recursos de esta página están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      const next: Record<string, boolean> = {}
+                      allRecursoIds.forEach(id => { next[id] = true })
+                      setSelected(next)
+                      setSelectAllMode('all')
+                      toast.success(`${allRecursoIds.length} recursos seleccionados`)
+                    }}
+                  >
+                    Seleccionar los {allRecursoIds.length} recursos
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allRecursoIds.length} recursos están seleccionados.
+                  </span>
+                  <Button variant="link" size="sm" className="text-cyan-700 hover:text-cyan-900 underline" onClick={() => { setSelected({}); setSelectAllMode('none') }}>
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Barra azul: Exportar selección + acciones masivas */}
+            {(someSelected || (selectAllMode === 'all' && allRecursoIds.length > 0)) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {selectedIds.length} item{selectedIds.length > 1 ? 's' : ''} seleccionado{selectedIds.length > 1 ? 's' : ''}
+                      {selectAllMode === 'all' ? `${allRecursoIds.length} item${allRecursoIds.length > 1 ? 's' : ''} seleccionado${allRecursoIds.length > 1 ? 's' : ''} (todos)` : `${selectedIds.length} item${selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
                     </span>
+                    {tieneFuncionTecnica("ver boton exportar") && (
+                      <Button variant="outline" size="sm" onClick={handleExportSelected} disabled={exportingSelected}>
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                      </Button>
+                    )}
                     
                     {/* Solo mostrar desplegables cuando hay más de 1 seleccionado */}
-                    {!singleSelected && selectedIds.length > 1 && (
+                    {!singleSelected && selectedCount > 1 && (
                       <>
                         {/* Cambiar categoría */}
                         <Select onValueChange={(value) => handleBulkFieldChange('categoria', value)}>
@@ -1038,9 +1142,11 @@ export default function RecursosPage() {
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[item.id]}
-                          onCheckedChange={(v) =>
-                            setSelected(prev => ({ ...prev, [item.id]: Boolean(v) }))
-                          }
+                          onCheckedChange={(v) => {
+                            const checked = Boolean(v)
+                            setSelected(prev => ({ ...prev, [item.id]: checked }))
+                            if (!checked && selectAllMode === 'all') setSelectAllMode('page')
+                          }}
                           aria-label={`Seleccionar ${item.codigo}`}
                         />
                       </TableCell>

@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Search, Filter, Download, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle, X } from "lucide-react"
+import { Plus, Search, Filter, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle, X, FileSpreadsheet } from "lucide-react"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { PermisoEliminar } from "@/components/permiso"
@@ -250,14 +250,13 @@ export default function ContactosPage() {
 
   const handleExport = async () => {
     try {
-      // Exportar TODOS los contactos sin filtros
       const response = await fetch(`/api/contactos/export`)
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `contactos_todos_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `contactos_todos_${new Date().toISOString().split('T')[0]}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -273,7 +272,6 @@ export default function ContactosPage() {
 
   const handleExportSelected = async () => {
     if (selectedContacts.size === 0) return
-    
     try {
       const ids = Array.from(selectedContacts).join(',')
       const response = await fetch(`/api/contactos/export?ids=${encodeURIComponent(ids)}`)
@@ -282,7 +280,7 @@ export default function ContactosPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `contactos_seleccionados_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `contactos_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -679,7 +677,7 @@ export default function ContactosPage() {
               )}
               {tieneFuncionTecnica("ver boton exportar") && (
                 <Button variant="outline" onClick={handleExport}>
-                  <Download className="w-4 h-4 mr-2" />
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
                   Exportar
                 </Button>
               )}
@@ -751,7 +749,7 @@ export default function ContactosPage() {
                       size="sm"
                       onClick={handleExportSelected}
                     >
-                      <Download className="w-4 h-4 mr-2" />
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
                       Exportar selección
                     </Button>
                   )}

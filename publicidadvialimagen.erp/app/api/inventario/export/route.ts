@@ -1,94 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllProductos } from '@/lib/supabaseProductos'
+import * as XLSX from 'xlsx'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || ''
     const categoria = searchParams.get('categoria') || ''
+    const idsParam = searchParams.get('ids') || ''
 
-    console.log('📤 Export productos params:', { query, categoria })
+    console.log('📤 Export productos params:', { query, categoria, ids: idsParam ? 'selection' : 'all' })
 
-    // Obtener todos los productos de Supabase
     let productos = await getAllProductos()
 
-    // Aplicar filtros
-    if (query) {
-      productos = productos.filter(item => 
-        item.codigo.toLowerCase().includes(query.toLowerCase()) ||
-        item.nombre.toLowerCase().includes(query.toLowerCase()) ||
-        item.categoria?.toLowerCase().includes(query.toLowerCase())
-      )
+    if (idsParam.trim()) {
+      const idSet = new Set(idsParam.split(',').map((id) => id.trim()).filter(Boolean))
+      productos = productos.filter((item) => idSet.has(item.id))
+    } else {
+      if (query) {
+        productos = productos.filter(item =>
+          item.codigo.toLowerCase().includes(query.toLowerCase()) ||
+          item.nombre.toLowerCase().includes(query.toLowerCase()) ||
+          item.categoria?.toLowerCase().includes(query.toLowerCase())
+        )
+      }
+      if (categoria) {
+        productos = productos.filter(item =>
+          item.categoria?.toLowerCase().trim() === categoria.toLowerCase().trim()
+        )
+      }
     }
 
-    if (categoria) {
-      productos = productos.filter(item => 
-        item.categoria?.toLowerCase().trim() === categoria.toLowerCase().trim()
-      )
-    }
-
-    // Función para escapar CSV correctamente
-    const escapeCSV = (value: string | number | boolean | null | undefined): string => {
-      if (value === null || value === undefined) return '""'
-      const str = String(value)
-      // Reemplazar comillas dobles por dos comillas dobles (estándar CSV)
-      const escaped = str.replace(/"/g, '""')
-      // Envolver en comillas para manejar comas, saltos de línea, etc.
-      return `"${escaped}"`
-    }
-
-    // Crear CSV con todas las columnas de la lista
-    const headers = [
-      'Código',
-      'Nombre',
-      'Categoría',
-      'Unidad',
-      'Coste',
-      'Precio Venta',
-      '% Utilidad',
-      'Stock',
-      'Mostrar en Web',
-      'Responsable',
-      'Descripción',
-      'Disponibilidad'
-    ]
-
-    const csvRows = [headers.join(',')]
-
-    productos.forEach(item => {
+    const excelData = productos.map(item => {
       const utilidad = item.coste === 0 ? 0 : ((item.precio_venta - item.coste) / item.coste) * 100
-      
-      const row = [
-        escapeCSV(item.codigo),
-        escapeCSV(item.nombre),
-        escapeCSV(item.categoria),
-        escapeCSV(item.unidad_medida),
-        item.coste.toFixed(2),
-        item.precio_venta.toFixed(2),
-        utilidad.toFixed(1),
-        item.cantidad,
-        item.mostrar_en_web ? 'Sí' : 'No',
-        escapeCSV(item.responsable),
-        escapeCSV(item.descripcion),
-        escapeCSV(item.disponibilidad)
-      ]
-      csvRows.push(row.join(','))
+      return {
+        'Código': item.codigo ?? '',
+        'Nombre': item.nombre ?? '',
+        'Categoría': item.categoria ?? '',
+        'Unidad': item.unidad_medida ?? '',
+        'Coste': item.coste,
+        'Precio Venta': item.precio_venta,
+        '% Utilidad': utilidad,
+        'Stock': item.cantidad,
+        'Mostrar en Web': item.mostrar_en_web ? 'Sí' : 'No',
+        'Responsable': item.responsable ?? '',
+        'Descripción': item.descripcion ?? '',
+        'Disponibilidad': item.disponibilidad ?? ''
+      }
     })
 
-    const csv = csvRows.join('\n')
-    // Agregar BOM (Byte Order Mark) para que Excel reconozca UTF-8 correctamente
-    // Esto es crucial para que las tildes y ñ se muestren correctamente
-    const csvWithBOM = '\uFEFF' + csv
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(excelData)
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos')
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 
-    console.log('📊 CSV productos generado:', { rows: productos.length })
+    console.log('📊 XLSX productos generado:', { rows: productos.length })
 
-    const fecha = new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
-    
-    return new NextResponse(csvWithBOM, {
+    const fecha = new Date().toISOString().split('T')[0]
+
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="productos_${fecha}.csv"`
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="productos_${fecha}.xlsx"`
       }
     })
 

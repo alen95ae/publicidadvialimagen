@@ -12,7 +12,6 @@ import {
   Plus, 
   Search, 
   Filter, 
-  Download, 
   MoreHorizontal,
   Calendar,
   User,
@@ -25,7 +24,8 @@ import {
   AlertCircle,
   Eye,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
@@ -81,6 +81,8 @@ export default function FormulariosPage() {
   const { tieneFuncionTecnica, puedeEliminar, esAdmin } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMensajes, setSelectedMensajes] = useState<string[]>([])
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allMensajeIds, setAllMensajeIds] = useState<string[]>([])
   const [mensajesList, setMensajesList] = useState<Message[]>([])
   const [estadoFilter, setEstadoFilter] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -116,22 +118,6 @@ export default function FormulariosPage() {
   useEffect(() => {
     loadMensajes()
   }, [])
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedMensajes(mensajesList.map(m => m.id))
-    } else {
-      setSelectedMensajes([])
-    }
-  }
-
-  const handleSelectMensaje = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedMensajes([...selectedMensajes, id])
-    } else {
-      setSelectedMensajes(selectedMensajes.filter(m => m !== id))
-    }
-  }
 
   const handleEliminarMensaje = async (id: string) => {
     if (confirm('¿Estás seguro de que quieres eliminar este formulario?')) {
@@ -248,30 +234,47 @@ export default function FormulariosPage() {
   const handleExport = async () => {
     try {
       const estadoParam = estadoFilter.length > 0 ? estadoFilter.join(',') : 'all'
-      const url = `/api/messages/export?estado=${estadoParam}`
-      
-      const response = await fetch(url, {
+      const response = await fetch(`/api/messages/export?estado=${encodeURIComponent(estadoParam)}`, {
         credentials: 'include'
       })
-      
-      if (!response.ok) {
-        throw new Error('Error al exportar mensajes')
-      }
-      
+      if (!response.ok) throw new Error('Error al exportar mensajes')
       const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = `formularios_${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-      
-      toast.success(`Formularios exportados correctamente`)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `formularios_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success('Formularios exportados correctamente')
     } catch (error) {
       console.error('Error exportando mensajes:', error)
       toast.error('Error al exportar formularios')
+    }
+  }
+
+  const handleExportSelected = async () => {
+    if (selectedMensajes.length === 0) return
+    try {
+      const ids = selectedMensajes.join(',')
+      const response = await fetch(`/api/messages/export?ids=${encodeURIComponent(ids)}`, {
+        credentials: 'include'
+      })
+      if (!response.ok) throw new Error('Error al exportar selección')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `formularios_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${selectedMensajes.length} formulario(s) exportado(s)`)
+    } catch (error) {
+      console.error('Error al exportar selección:', error)
+      toast.error('Error al exportar selección')
     }
   }
 
@@ -324,6 +327,43 @@ export default function FormulariosPage() {
   const sortedMensajes = filteredMensajes.sort((a, b) => 
     new Date(b.fecha_recepcion).getTime() - new Date(a.fecha_recepcion).getTime()
   )
+
+  const fetchAllMensajeIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (estadoFilter.length > 0) params.set('estado', estadoFilter.join(','))
+      const res = await fetch(`/api/messages/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllMensajeIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all mensaje IDs:', e)
+      return []
+    }
+  }
+
+  const handleSelectAll = async (checked: boolean) => {
+    if (checked) {
+      setSelectedMensajes(filteredMensajes.map(m => m.id))
+      setSelectAllMode('page')
+      await fetchAllMensajeIds()
+    } else {
+      setSelectedMensajes([])
+      setSelectAllMode('none')
+    }
+  }
+
+  const handleSelectMensaje = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedMensajes([...selectedMensajes, id])
+    } else {
+      setSelectedMensajes(selectedMensajes.filter(m => m !== id))
+      if (selectAllMode === 'all') setSelectAllMode('page')
+    }
+  }
 
   return (
     <div className="p-6">
@@ -381,7 +421,7 @@ export default function FormulariosPage() {
             <div className="flex gap-2">
               {tieneFuncionTecnica("ver boton exportar") && (
                 <Button variant="outline" size="sm" onClick={handleExport}>
-                  <Download className="w-4 h-4 mr-2" />
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
                   Exportar
                 </Button>
               )}
@@ -397,16 +437,63 @@ export default function FormulariosPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Banner de selección total (cyan) */}
+            {!loading && filteredMensajes.length > 0 &&
+             filteredMensajes.every(m => selectedMensajes.includes(m.id)) &&
+             selectAllMode !== 'all' &&
+             allMensajeIds.length > filteredMensajes.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {filteredMensajes.length} formularios de esta página están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      setSelectedMensajes([...allMensajeIds])
+                      setSelectAllMode('all')
+                      toast.success(`${allMensajeIds.length} formularios seleccionados`)
+                    }}
+                  >
+                    Seleccionar los {allMensajeIds.length} formularios
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allMensajeIds.length} formularios están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => {
+                      setSelectedMensajes([])
+                      setSelectAllMode('none')
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {(selectedMensajes.length > 0 || Object.keys(editedMessages).length > 0) && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     {selectedMensajes.length > 0 && (
                       <span className="text-sm font-medium text-blue-800">
-                        {selectedMensajes.length} seleccionado{selectedMensajes.length > 1 ? 's' : ''}
+                        {selectAllMode === 'all' ? `${allMensajeIds.length} seleccionados (todos)` : `${selectedMensajes.length} seleccionado${selectedMensajes.length > 1 ? 's' : ''}`}
                       </span>
                     )}
-                    {selectedMensajes.length > 1 && (
+                    {(selectAllMode === 'all' ? allMensajeIds.length > 1 : selectedMensajes.length > 1) && (
                       <Select
                         value=""
                         onValueChange={(value: "NUEVO" | "LEÍDO" | "CONTESTADO") => {
@@ -430,6 +517,16 @@ export default function FormulariosPage() {
                     )}
                   </div>
                   <div className="flex gap-2">
+                    {tieneFuncionTecnica("ver boton exportar") && selectedMensajes.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportSelected}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        Exportar selección
+                      </Button>
+                    )}
                     {Object.keys(editedMessages).length > 0 && (
                       <>
                         <Button 
@@ -456,7 +553,7 @@ export default function FormulariosPage() {
                         className="bg-red-600 hover:bg-red-700 text-white"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Eliminar{selectedMensajes.length > 1 ? ` (${selectedMensajes.length})` : ''}
+                        Eliminar{(selectAllMode === 'all' ? allMensajeIds.length : selectedMensajes.length) > 1 ? ` (${selectAllMode === 'all' ? allMensajeIds.length : selectedMensajes.length})` : ''}
                       </Button>
                     )}
                   </div>
@@ -478,7 +575,7 @@ export default function FormulariosPage() {
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-3 px-4">
                       <Checkbox
-                        checked={selectedMensajes.length === mensajesList.length}
+                        checked={filteredMensajes.length > 0 && filteredMensajes.every(m => selectedMensajes.includes(m.id))}
                         onCheckedChange={handleSelectAll}
                       />
                     </th>

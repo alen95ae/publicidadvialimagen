@@ -1,34 +1,60 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseUser } from "@/lib/supabaseServer"
+import { getSupabaseAdmin } from "@/lib/supabaseServer"
+import { verifySession } from "@/lib/auth/verifySession"
+import * as XLSX from "xlsx"
+
+const HEADERS = [
+  'Nombre',
+  'Email',
+  'Teléfono',
+  'Empresa',
+  'Mensaje',
+  'Fecha',
+  'Estado'
+] as const
+
+function rowFromMensaje(m: any): (string | number)[] {
+  return [
+    m.nombre ?? '',
+    m.email ?? '',
+    m.telefono ?? '',
+    m.empresa ?? '',
+    m.mensaje ?? '',
+    m.fecha_recepcion ? new Date(m.fecha_recepcion).toLocaleDateString('es-ES') : '',
+    m.estado ?? ''
+  ]
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // Usar cliente de usuario (RLS controla acceso por permisos)
-    const supabase = await getSupabaseUser(request);
-    
-    if (!supabase) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    const token = request.cookies.get('session')?.value
+    if (!token) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+    const payload = await verifySession(token)
+    if (!payload?.sub) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
+    const supabase = getSupabaseAdmin()
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get('estado') || ''
-    
-    console.log('📤 Export mensajes params:', { estado })
+    const idsParam = searchParams.get('ids')
 
-    // Obtener todos los mensajes
     const { data, error } = await supabase
-      .from('mensajes')
+      .from('formularios')
       .select('*')
-      .order('fecha', { ascending: false });
+      .order('fecha', { ascending: false })
 
     if (error) {
-      console.error('Error fetching messages:', error);
-      return NextResponse.json({ error: "Error al obtener mensajes" }, { status: 500 });
+      console.error('Error fetching messages:', error)
+      return NextResponse.json({ error: "Error al obtener mensajes" }, { status: 500 })
     }
 
-    // Mapear los campos de Supabase al formato esperado por el frontend
-    const mensajes = (data || []).map((msg: any) => ({
+    let mensajes = (data || []).map((msg: any) => ({
       id: msg.id,
       nombre: msg.nombre || '',
       email: msg.email || '',
@@ -36,77 +62,41 @@ export async function GET(request: NextRequest) {
       empresa: msg.empresa || '',
       mensaje: msg.mensaje || '',
       fecha_recepcion: msg.fecha || msg.created_at || new Date().toISOString(),
-      // Mapear "LEIDO" (sin tilde) de la BD a "LEÍDO" (con tilde) para el frontend
       estado: msg.estado === 'LEIDO' ? 'LEÍDO' : (msg.estado || 'NUEVO'),
-      origen: 'contacto' as const,
-      created_at: msg.created_at,
-      updated_at: msg.updated_at
-    }));
+    }))
 
-    // Filtrar por estado si se especifica
-    let filteredMensajes = mensajes
-    if (estado && estado !== 'all') {
-      filteredMensajes = mensajes.filter(m => m.estado === estado)
-    }
-
-    // Crear CSV con headers
-    const headers = [
-      'Nombre',
-      'Email',
-      'Teléfono',
-      'Empresa',
-      'Mensaje',
-      'Fecha',
-      'Estado'
-    ]
-
-    const csvRows = [headers.join(',')]
-
-    // Agregar filas de datos
-    for (const mensaje of filteredMensajes) {
-      // Escapar comillas dobles y envolver en comillas para evitar problemas con comas y saltos de línea
-      const escapeCSV = (value: string | null | undefined): string => {
-        if (value === null || value === undefined) return '""'
-        const str = String(value)
-        // Reemplazar comillas dobles por dos comillas dobles (estándar CSV)
-        const escaped = str.replace(/"/g, '""')
-        // Envolver en comillas para manejar comas, saltos de línea, etc.
-        return `"${escaped}"`
+    if (idsParam) {
+      const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean)
+      if (ids.length === 0) {
+        return NextResponse.json({ error: "No se especificaron IDs" }, { status: 400 })
       }
-
-      const row = [
-        escapeCSV(mensaje.nombre),
-        escapeCSV(mensaje.email),
-        escapeCSV(mensaje.telefono),
-        escapeCSV(mensaje.empresa),
-        escapeCSV(mensaje.mensaje),
-        escapeCSV(new Date(mensaje.fecha_recepcion).toLocaleDateString('es-ES')),
-        escapeCSV(mensaje.estado)
-      ]
-      csvRows.push(row.join(','))
+      const idSet = new Set(ids)
+      mensajes = mensajes.filter((m: any) => idSet.has(m.id))
+      console.log(`📤 Exportando ${mensajes.length} formularios seleccionados`)
+    } else if (estado && estado !== 'all') {
+      const estados = estado.split(',')
+      mensajes = mensajes.filter((m: any) => estados.includes(m.estado))
+      console.log(`✅ Exportando ${mensajes.length} formularios a Excel (filtro estado)`)
+    } else {
+      console.log(`✅ Exportando ${mensajes.length} formularios a Excel`)
     }
 
-    const csv = csvRows.join('\n')
-    // Agregar BOM (Byte Order Mark) para que Excel reconozca UTF-8 correctamente
-    // Esto es crucial para que las tildes y ñ se muestren correctamente
-    const csvWithBOM = '\uFEFF' + csv
+    const wsData = [HEADERS as unknown as (string | number)[], ...mensajes.map(rowFromMensaje)]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    XLSX.utils.book_append_sheet(wb, ws, 'Formularios')
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    const fecha = new Date().toISOString().split('T')[0]
+    const nombreArchivo = idsParam ? `formularios_seleccionados_${fecha}.xlsx` : `formularios_${fecha}.xlsx`
 
-    console.log(`✅ Exportados ${filteredMensajes.length} mensajes a CSV`)
-
-    return new NextResponse(csvWithBOM, {
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="mensajes_${new Date().toISOString().split('T')[0]}.csv"`,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
       },
     })
   } catch (e: any) {
     console.error("❌ Error exportando mensajes:", e)
-    return NextResponse.json(
-      { error: "No se pudieron exportar los mensajes" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "No se pudieron exportar los mensajes" }, { status: 500 })
   }
 }
-
-
-

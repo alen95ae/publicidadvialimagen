@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Download, Filter, Monitor, DollarSign, Calendar, Upload, LayoutGrid, List, ArrowUpDown, X, FolderClock } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Filter, Monitor, DollarSign, Calendar, LayoutGrid, List, ArrowUpDown, X, FolderClock, FileSpreadsheet, FileDown, FileUp } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -68,6 +68,8 @@ export default function SoportesPage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [cityFilter, setCityFilter] = useState<string>("")
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
+  const [allSoporteIds, setAllSoporteIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -90,6 +92,8 @@ export default function SoportesPage() {
   // Estado para ordenamiento
   const [sortColumn, setSortColumn] = useState<"code" | "title" | null>(null)
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  const [exporting, setExporting] = useState(false)
+  const [exportingSelected, setExportingSelected] = useState(false)
   
   // Estado para controlar cuándo los filtros están cargados
   const [filtersLoaded, setFiltersLoaded] = useState(false)
@@ -362,15 +366,35 @@ export default function SoportesPage() {
   const allSelected = ids.length > 0 && ids.every(id => selected[id])
   const someSelected = ids.some(id => selected[id]) && !allSelected
   const selectedIds = Object.keys(selected).filter(id => selected[id])
-  const singleSelected = selectedIds.length === 1
+  const selectedCount = selectAllMode === 'all' ? allSoporteIds.length : selectedIds.length
+  const singleSelected = selectedCount === 1
+
+  const fetchAllSoporteIds = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      if (statusFilter.length > 0) params.set('status', statusFilter.join(','))
+      if (cityFilter) params.set('city', cityFilter)
+      const res = await fetch(`/api/soportes/all-ids?${params}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllSoporteIds(data.ids || [])
+        return data.ids || []
+      }
+      return []
+    } catch (e) {
+      console.error('Error fetching all soporte IDs:', e)
+      return []
+    }
+  }
 
   // Funciones de paginación
   const handlePageChange = (page: number) => {
+    setSelected({})
+    setSelectAllMode('none')
     if (sortColumn) {
-      // Si hay ordenamiento activo, solo cambiar la página localmente
       setCurrentPage(page)
     } else {
-      // Si no hay ordenamiento, recargar desde el servidor
       fetchSupports(q, page)
     }
   }
@@ -396,10 +420,17 @@ export default function SoportesPage() {
   }
 
 
-  function toggleAll(checked: boolean) {
-    const next: Record<string, boolean> = {}
-    ids.forEach(id => { next[id] = checked })
-    setSelected(next)
+  async function toggleAll(checked: boolean) {
+    if (checked) {
+      const next: Record<string, boolean> = {}
+      ids.forEach(id => { next[id] = true })
+      setSelected(next)
+      setSelectAllMode('page')
+      await fetchAllSoporteIds()
+    } else {
+      setSelected({})
+      setSelectAllMode('none')
+    }
   }
 
   async function bulkUpdate(patch: any) {
@@ -784,98 +815,53 @@ export default function SoportesPage() {
     }
   }
 
-  // Función para exportar a CSV
-  const handleCsvExport = async () => {
-    const toastId = 'csv-export'
+  // Exportar todos los soportes a Excel (xlsx)
+  const handleExport = async () => {
     try {
-      toast.loading('Obteniendo todos los soportes...', { id: toastId })
-      
-      // Obtener TODOS los soportes de la base de datos sin paginación ni filtros
-      const params = new URLSearchParams()
-      // No aplicar filtros para exportar TODOS los soportes
-      params.set('page', '1')
-      params.set('limit', '100000') // Límite muy alto para obtener todos
-      
-      const response = await api(`/api/soportes?${params}`)
-      
-      if (!response.ok) {
-        throw new Error('Error al obtener los soportes')
-      }
-      
-      const result = await response.json()
-      const allSupportsData = result.data || []
-      
-      // Construir CSV con todas las columnas del listado
-      const headers = [
-        'Código',
-        'Título',
-        'Tipo de soporte',
-        'Ciudad',
-        'País',
-        'Ancho (m)',
-        'Alto (m)',
-        'Área (m²)',
-        'Precio/Mes',
-        'Precio por m²',
-        'Coste de producción',
-        'Estado',
-        'Empresa'
-      ]
-      
-      const rows = allSupportsData.map((s: Support) => [
-        s.code || '',
-        s.title || '',
-        s.type || '',
-        s.city || '',
-        s.country || 'BO',
-        s.widthM || '',
-        s.heightM || '',
-        s.areaM2 || '',
-        s.priceMonth || '',
-        s.pricePerM2 || '',
-        s.productionCost || '',
-        s.status || '',
-        s.company?.name || ''
-      ])
-      
-      // Función para escapar valores CSV correctamente
-      const escapeCsvValue = (value: any): string => {
-        const str = String(value ?? '')
-        // Si contiene comillas, comas o saltos de línea, envolver en comillas y escapar comillas dobles
-        if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
-          return `"${str.replace(/"/g, '""')}"`
-        }
-        return str
-      }
-      
-      // Construir contenido CSV con UTF-8 BOM para que las tildes y ñ se vean correctamente
-      const csvRows = [
-        headers.map(escapeCsvValue).join(','),
-        ...rows.map(row => row.map(escapeCsvValue).join(','))
-      ]
-      
-      // Agregar BOM UTF-8 al inicio del CSV
-      const BOM = '\uFEFF'
-      const csvContent = BOM + csvRows.join('\n')
-      
-      // Crear blob con UTF-8
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `soportes_${new Date().toISOString().split('T')[0]}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      
-      toast.dismiss(toastId)
-      toast.success(`CSV exportado correctamente (${allSupportsData.length} soportes)`)
+      setExporting(true)
+      const response = await api('/api/soportes/export')
+      if (!response.ok) throw new Error('Error al exportar')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `soportes_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success('Soportes exportados correctamente')
     } catch (error) {
-      console.error('Error al exportar CSV:', error)
-      toast.dismiss(toastId)
+      console.error('Error al exportar:', error)
       toast.error('Error al exportar el archivo')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Exportar solo los soportes seleccionados a Excel (xlsx)
+  const handleExportSelected = async () => {
+    const ids = Object.keys(selected).filter(id => selected[id])
+    if (ids.length === 0) return
+    try {
+      setExportingSelected(true)
+      const response = await api(`/api/soportes/export?ids=${encodeURIComponent(ids.join(','))}`)
+      if (!response.ok) throw new Error('Error al exportar selección')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `soportes_seleccionados_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success(`${ids.length} soporte(s) exportado(s)`)
+    } catch (error) {
+      console.error('Error al exportar selección:', error)
+      toast.error('Error al exportar selección')
+    } finally {
+      setExportingSelected(false)
     }
   }
 
@@ -1036,10 +1022,11 @@ export default function SoportesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleCsvExport}
+                  onClick={handleExport}
+                  disabled={exporting}
                 >
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar CSV
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  {exporting ? 'Exportando...' : 'Exportar'}
                 </Button>
               )}
               
@@ -1047,7 +1034,7 @@ export default function SoportesPage() {
                 <Dialog open={openImport} onOpenChange={setOpenImport}>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm">
-                      <Upload className="h-4 w-4 mr-2" />
+                      <FileUp className="h-4 w-4 mr-2" />
                       Importar
                     </Button>
                   </DialogTrigger>
@@ -1117,20 +1104,77 @@ export default function SoportesPage() {
           </CardHeader>
           <CardContent>
 
-            {/* Catálogo PDF - Siempre visible cuando hay soportes seleccionados (para todos los usuarios) */}
-            {viewMode === "list" && Object.keys(selected).filter(id => selected[id]).length > 0 && (
+            {/* Banner de selección total (cyan) */}
+            {viewMode === "list" && ids.length > 0 && allSelected && selectAllMode !== 'all' && allSoporteIds.length > ids.length && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cyan-900">
+                    Los {ids.length} soportes de esta página están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline font-semibold"
+                    onClick={() => {
+                      const next: Record<string, boolean> = {}
+                      allSoporteIds.forEach(id => { next[id] = true })
+                      setSelected(next)
+                      setSelectAllMode('all')
+                      toast.success(`${allSoporteIds.length} soportes seleccionados`)
+                    }}
+                  >
+                    Seleccionar los {allSoporteIds.length} soportes
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {viewMode === "list" && selectAllMode === 'all' && (
+              <div className="mb-4 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-cyan-900">
+                    Los {allSoporteIds.length} soportes están seleccionados.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-cyan-700 hover:text-cyan-900 underline"
+                    onClick={() => {
+                      setSelected({})
+                      setSelectAllMode('none')
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Catálogo PDF y Exportar selección - visible cuando hay soportes seleccionados */}
+            {viewMode === "list" && selectedCount > 0 && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {Object.keys(selected).filter(id => selected[id]).length} seleccionados
+                      {selectAllMode === 'all' ? `${allSoporteIds.length} seleccionados (todos)` : `${selectedIds.length} seleccionados`}
                     </span>
+                    {tieneFuncionTecnica("ver boton exportar") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportSelected}
+                        disabled={exportingSelected}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        {exportingSelected ? 'Exportando...' : 'Exportar selección'}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={exportPDF}
                     >
-                      <Download className="w-4 h-4 mr-2" />
+                      <FileDown className="w-4 h-4 mr-2" />
                       Catálogo PDF
                     </Button>
                   </div>
@@ -1144,11 +1188,11 @@ export default function SoportesPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
-                      {Object.keys(selected).filter(id => selected[id]).length} seleccionados
+                      {selectAllMode === 'all' ? `${allSoporteIds.length} seleccionados (todos)` : `${selectedIds.length} seleccionados`}
                     </span>
                     
                     {/* Solo mostrar desplegables cuando hay más de 1 seleccionado */}
-                    {!singleSelected && Object.keys(selected).filter(id => selected[id]).length > 1 && (
+                    {!singleSelected && selectedCount > 1 && (
                       <>
                         {/* Cambiar tipo de soporte */}
                         <Select onValueChange={(value) => handleBulkFieldChange('type', value)}>
@@ -1383,9 +1427,11 @@ export default function SoportesPage() {
                       <TableCell className="w-10">
                         <Checkbox
                           checked={!!selected[support.id]}
-                          onCheckedChange={(v) =>
-                            setSelected(prev => ({ ...prev, [support.id]: Boolean(v) }))
-                          }
+                          onCheckedChange={(v) => {
+                            const checked = Boolean(v)
+                            setSelected(prev => ({ ...prev, [support.id]: checked }))
+                            if (!checked && selectAllMode === 'all') setSelectAllMode('page')
+                          }}
                           aria-label={`Seleccionar ${support.code}`}
                         />
                       </TableCell>

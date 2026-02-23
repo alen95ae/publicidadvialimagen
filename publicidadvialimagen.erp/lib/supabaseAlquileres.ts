@@ -215,18 +215,14 @@ export async function getAlquileres(options?: {
     }
   }
 
-  // Recalcular estados de los alquileres y mapear código y título del soporte
-  // IMPORTANTE: Solo calculamos el estado, NO lo persistimos en la DB durante una operación de lectura
-  // Esto evita bucles infinitos y escrituras innecesarias durante GET requests
+  // Mapear datos del soporte y recalcular estado en tiempo real para coherencia inmediata.
+  // El cron mantiene la BD sincronizada; aquí recalculamos para que la respuesta
+  // siempre sea correcta incluso si el cron aún no ha corrido hoy.
   let alquileresConEstadoActualizado = dataConSoportes.map((alquiler: any) => {
     const estadoCalculado = recalcularEstadoAlquiler(alquiler as Alquiler);
-    
-    // Obtener código y título del soporte desde los mapas
     const soporteCodigo = alquiler.soporte_id ? codigosSoportes[alquiler.soporte_id] || null : null;
     const soporteTitulo = alquiler.soporte_id ? titulosSoportes[alquiler.soporte_id] || null : null;
     const soporteCiudad = alquiler.soporte_id ? ciudadesSoportes[alquiler.soporte_id] || null : null;
-    
-    // Retornar el alquiler con el estado calculado (sin persistir en DB)
     return { ...alquiler, estado: estadoCalculado, soporte_codigo: soporteCodigo, soporte_titulo: soporteTitulo, soporte_ciudad: soporteCiudad } as any;
   });
 
@@ -509,20 +505,24 @@ export async function generarSiguienteCodigoAlquiler(): Promise<string> {
   }
 }
 
-// Obtener alquileres activos o reservados para un soporte
+// Obtener alquileres no finalizados para un soporte — BASADO EN FECHAS, no en estado persistido
 export async function getAlquileresVigentesPorSoporte(soporteId: string | number) {
   const supabase = getSupabaseServer();
 
-  // Convertir a número si es posible (si soporte_id es numérico)
   const soporteIdValue = typeof soporteId === 'string' && !isNaN(Number(soporteId)) 
     ? Number(soporteId) 
     : soporteId;
 
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const hoyStr = hoy.toISOString().split('T')[0];
+
+  // Vigente = fin >= hoy (no ha terminado aún)
   const { data, error } = await supabase
     .from("alquileres")
     .select("*")
     .eq("soporte_id", soporteIdValue)
-    .in("estado", ["activo", "reservado", "proximo"]);
+    .gte("fin", hoyStr);
 
   if (error) {
     console.error('❌ [getAlquileresVigentesPorSoporte] Error:', error);
@@ -530,6 +530,53 @@ export async function getAlquileresVigentesPorSoporte(soporteId: string | number
   }
 
   return (data || []) as Alquiler[];
+}
+
+/**
+ * Sincronizar estados de TODOS los alquileres no finalizados.
+ * Recalcula el estado de cada alquiler según sus fechas y lo persiste si difiere.
+ * Debe ejecutarse ANTES de actualizar estados de soportes.
+ */
+export async function sincronizarEstadosAlquileresDiario() {
+  const supabase = getSupabaseServer();
+  console.log('🔄 [sincronizarEstadosAlquileresDiario] Iniciando...');
+
+  // Traer alquileres que NO están finalizados (los finalizados ya no cambian)
+  const { data: alquileres, error } = await supabase
+    .from("alquileres")
+    .select("*")
+    .neq("estado", "finalizado");
+
+  if (error) {
+    console.error('❌ [sincronizarEstadosAlquileresDiario] Error obteniendo alquileres:', error);
+    throw error;
+  }
+
+  if (!alquileres || alquileres.length === 0) {
+    console.log('ℹ️ [sincronizarEstadosAlquileresDiario] No hay alquileres pendientes de sincronizar');
+    return { actualizados: 0, revisados: 0 };
+  }
+
+  let actualizados = 0;
+
+  for (const alquiler of alquileres) {
+    const estadoCalculado = recalcularEstadoAlquiler(alquiler as Alquiler);
+    if (alquiler.estado !== estadoCalculado) {
+      const { error: updateError } = await supabase
+        .from("alquileres")
+        .update({ estado: estadoCalculado, fecha_actualizacion: new Date().toISOString() })
+        .eq("id", alquiler.id);
+
+      if (updateError) {
+        console.warn(`⚠️ [sincronizarEstadosAlquileresDiario] Error actualizando ${alquiler.codigo}:`, updateError);
+      } else {
+        actualizados++;
+      }
+    }
+  }
+
+  console.log(`✅ [sincronizarEstadosAlquileresDiario] ${actualizados} de ${alquileres.length} alquileres actualizados`);
+  return { actualizados, revisados: alquileres.length };
 }
 
 // Obtener todos los alquileres para actualizar estados de soportes

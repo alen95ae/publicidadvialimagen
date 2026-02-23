@@ -188,24 +188,20 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
       
       alquileresCreados.push(alquiler)
       
-      // Notificación de alquiler creado ELIMINADA según requerimientos
-      
-      // Obtener estado actual del soporte antes de actualizarlo
       const soporteIdNum = typeof info.soporte.id === 'number' ? info.soporte.id : parseInt(String(info.soporte.id))
       const soporteActual = await getSoporteById(String(info.soporte.id))
       const estadoAnterior = soporteActual?.estado || 'Disponible'
       
-      // Si el soporte estaba en "A Consultar", guardarlo en el historial para poder restaurarlo después
+      // Guardar en historial si estaba en "A Consultar" para poder restaurarlo después
       if (estadoAnterior === 'A Consultar') {
         try {
           await addHistorialEvento({
             soporte_id: soporteIdNum,
             tipo_evento: 'CAMBIO_ESTADO',
-            descripcion: `Soporte pasó de "A Consultar" a "Ocupado" por alquiler ${siguienteCodigo}. Se restaurará a "A Consultar" cuando finalice el alquiler.`,
-            realizado_por: null, // Sistema automático
+            descripcion: `Soporte salió de "A Consultar" por alquiler ${siguienteCodigo}. Se restaurará cuando finalice.`,
+            realizado_por: null,
             datos: {
               estado_anterior: 'A Consultar',
-              estado_nuevo: 'Ocupado',
               motivo: 'alquiler_creado',
               alquiler_codigo: siguienteCodigo,
               restaurar_a_consultar: true
@@ -216,10 +212,9 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
         }
       }
       
-      // Actualizar estado del soporte a "Ocupado"
-      await updateSoporte(String(info.soporte.id), { estado: 'Ocupado' })
+      // Recalcular estado del soporte según fechas (NO forzar "Ocupado")
+      await actualizarEstadoSoporte(info.soporte.id)
       
-      // Registrar evento en historial del soporte
       try {
         await registrarAlquilerCreado(
           soporteIdNum,
@@ -229,7 +224,6 @@ export async function crearAlquileresDesdeCotizacion(cotizacionId: string) {
           info.importe
         )
       } catch (historialError) {
-        // No fallar si el historial falla, solo loguear
         console.warn('⚠️ Error registrando historial de alquiler creado:', historialError)
       }
       
@@ -313,73 +307,74 @@ async function debeVolverAConsultar(soporteId: number): Promise<boolean> {
 }
 
 /**
- * Actualizar estado de soportes cuando un alquiler finaliza
- * Reglas:
- * - "Reservado": No cambiar (tiene su propia lógica de 48h)
- * - "No disponible": No cambiar (solo manualmente)
- * - "A Consultar": No cambiar si no tiene alquileres vigentes (solo manualmente). Si tiene alquileres vigentes, cambiar a "Ocupado". Si estaba en "A Consultar" antes de pasar a "Ocupado", volver a "A Consultar" cuando finalice.
- * - Otros: Cambiar a "Disponible" si no hay alquileres vigentes, o "Ocupado" si hay
+ * Actualizar estado de un soporte BASÁNDOSE SOLO EN FECHAS de sus alquileres.
+ *
+ * Reglas (en orden de prioridad):
+ * 1. "No disponible" → no se toca (solo manual).
+ * 2. "Reservado" manual (48h) → no se toca (tiene su propia lógica de expiración).
+ * 3. Si existe alquiler donde inicio <= hoy <= fin → "Ocupado".
+ * 4. Si existe alquiler futuro (inicio > hoy) a ≤ 30 días → "Reservado".
+ * 5. Si no hay alquileres vigentes ni próximos (≤30d): "A Consultar" si estaba antes, sino "Disponible".
  */
 export async function actualizarEstadoSoporte(soporteId: string | number) {
   try {
-    console.log(`🔄 Actualizando estado del soporte ${soporteId}...`);
-    
-    // Obtener el soporte actual para ver su estado
     const soporteIdStr = typeof soporteId === 'number' ? String(soporteId) : soporteId;
     const soporte = await getSoporteById(soporteIdStr);
-    
+
     if (!soporte) {
       console.error(`❌ Soporte ${soporteIdStr} no encontrado`);
       return;
     }
-    
+
     const estadoActual = soporte.estado || 'Disponible';
-    
-    // REGLA 1: No cambiar "Reservado" (tiene su propia lógica de 48h)
-    if (estadoActual === 'Reservado') {
-      console.log(`⏭️ Soporte ${soporteIdStr} está en "Reservado", no se modifica (tiene lógica propia)`);
-      return;
-    }
-    
-    // REGLA 2: No cambiar "No disponible" (solo manualmente)
-    if (estadoActual === 'No disponible') {
-      console.log(`⏭️ Soporte ${soporteIdStr} está en "No disponible", no se modifica (solo manualmente)`);
-      return;
-    }
-    
-    // Obtener alquileres vigentes del soporte
+
+    if (estadoActual === 'No disponible') return;
+
+    // Obtener TODOS los alquileres del soporte cuya fin >= hoy (vigentes por fecha)
     const alquileresVigentes = await getAlquileresVigentesPorSoporte(soporteId);
-    
-    // REGLA 2.5: No cambiar "A Consultar" si no tiene alquileres vigentes (solo manualmente)
-    if (estadoActual === 'A Consultar' && alquileresVigentes.length === 0) {
-      console.log(`⏭️ Soporte ${soporteIdStr} está en "A Consultar" sin alquileres vigentes, no se modifica (solo manualmente)`);
-      return;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    let tieneAlquilerActivo = false;
+    let tieneAlquilerProximo30d = false;
+
+    for (const alq of alquileresVigentes) {
+      const inicio = new Date(alq.inicio);
+      inicio.setHours(0, 0, 0, 0);
+      const fin = new Date(alq.fin);
+      fin.setHours(0, 0, 0, 0);
+
+      if (inicio <= hoy && hoy <= fin) {
+        tieneAlquilerActivo = true;
+        break;
+      }
+
+      if (inicio > hoy) {
+        const diffMs = inicio.getTime() - hoy.getTime();
+        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDias <= 30) {
+          tieneAlquilerProximo30d = true;
+        }
+      }
     }
-    
-    if (alquileresVigentes.length > 0) {
-      // Tiene alquileres vigentes, debe estar "Ocupado"
-      // Solo actualizar si no está ya en "Ocupado"
-      if (estadoActual !== 'Ocupado') {
-        await updateSoporte(soporteIdStr, { estado: 'Ocupado' });
-        console.log(`✅ Soporte ${soporteIdStr} actualizado a Ocupado (${alquileresVigentes.length} alquiler(es) vigente(s))`);
-      } else {
-        console.log(`⏭️ Soporte ${soporteIdStr} ya está en "Ocupado"`);
-      }
+
+    let nuevoEstado: string;
+
+    if (tieneAlquilerActivo) {
+      nuevoEstado = 'Ocupado';
+    } else if (tieneAlquilerProximo30d) {
+      nuevoEstado = 'Reservado';
     } else {
-      // No tiene alquileres vigentes
+      // Sin alquileres vigentes ni próximos a 30d
       const soporteIdNum = typeof soporteId === 'number' ? soporteId : parseInt(soporteIdStr);
-      
-      // REGLA 3: Si estaba en "A Consultar" antes, volver a "A Consultar"
       const debeVolver = await debeVolverAConsultar(soporteIdNum);
-      
-      if (debeVolver) {
-        await updateSoporte(soporteIdStr, { estado: 'A Consultar' });
-        console.log(`✅ Soporte ${soporteIdStr} actualizado a "A Consultar" (estaba en "A Consultar" antes del alquiler)`);
-      } else {
-        // REGLA 4: Otros casos, cambiar a "Disponible"
-        await updateSoporte(soporteIdStr, { estado: 'Disponible' });
-        console.log(`✅ Soporte ${soporteIdStr} actualizado a Disponible (sin alquileres vigentes)`);
-      }
+      nuevoEstado = debeVolver ? 'A Consultar' : 'Disponible';
+    }
+
+    if (estadoActual !== nuevoEstado) {
+      await updateSoporte(soporteIdStr, { estado: nuevoEstado });
+      console.log(`✅ Soporte ${soporteIdStr}: ${estadoActual} → ${nuevoEstado}`);
     }
   } catch (error) {
     console.error(`❌ Error actualizando estado del soporte ${soporteId}:`, error);
@@ -465,41 +460,34 @@ export async function verificarYNotificarAlquileresProximosFinalizar() {
   }
 }
 
-// Esta función se puede llamar desde un CRON para actualizar estados diariamente
+/**
+ * CRON diario: primero sincroniza alquileres (fechas → estado en BD),
+ * después recalcula estado de cada soporte (basado en fechas de alquileres).
+ */
 export async function actualizarEstadoSoportesAlquileres() {
-  console.log('🔄 Iniciando actualización diaria de estados de soportes...');
-  
-  // Obtener todos los soportes para procesarlos
+  const { sincronizarEstadosAlquileresDiario } = await import('@/lib/supabaseAlquileres');
+
+  // FASE 1: Sincronizar estados de alquileres según fechas
+  console.log('🔄 FASE 1: Sincronizando estados de alquileres...');
+  const resAlquileres = await sincronizarEstadosAlquileresDiario();
+
+  // FASE 2: Actualizar estados de soportes según fechas de alquileres
+  console.log('🔄 FASE 2: Actualizando estados de soportes...');
   const { data: todosSoportes } = await getSoportes({ limit: 10000 });
-  
+
   if (!todosSoportes || todosSoportes.length === 0) {
     console.log('⚠️ No se encontraron soportes para actualizar');
-    return {
-      actualizados: 0,
-      omitidos: 0,
-      errores: 0,
-      total: 0
-    };
+    return { alquileres: resAlquileres, soportes: { actualizados: 0, omitidos: 0, errores: 0, total: 0 } };
   }
-  
+
   let actualizados = 0;
   let omitidos = 0;
   let errores = 0;
-  
-  // Actualizar cada soporte usando la función mejorada
-  // La función actualizarEstadoSoporte ya maneja internamente las reglas:
-  // - No cambiar "Reservado" ni "No disponible"
-  // - Volver a "A Consultar" si estaba antes
-  // - Cambiar a "Disponible" u "Ocupado" según alquileres vigentes
+
   for (const soporte of todosSoportes) {
     try {
       const estadoAnterior = soporte.estado || 'Disponible';
-      
-      // La función actualizarEstadoSoporte retorna void, pero podemos verificar cambios
-      // obteniendo el estado después de la actualización
       await actualizarEstadoSoporte(soporte.id);
-      
-      // Verificar si hubo cambio (obtener el soporte actualizado)
       const soporteActualizado = await getSoporteById(String(soporte.id));
       if (soporteActualizado && soporteActualizado.estado !== estadoAnterior) {
         actualizados++;
@@ -511,18 +499,12 @@ export async function actualizarEstadoSoportesAlquileres() {
       errores++;
     }
   }
-  
-  console.log(`✅ Actualización de estados de soportes completada:`);
-  console.log(`   - Actualizados: ${actualizados}`);
-  console.log(`   - Omitidos (sin cambios necesarios): ${omitidos}`);
-  console.log(`   - Errores: ${errores}`);
-  console.log(`   - Total procesados: ${todosSoportes.length}`);
-  
+
+  console.log(`✅ Soportes: ${actualizados} actualizados, ${omitidos} sin cambios, ${errores} errores (${todosSoportes.length} total)`);
+
   return {
-    actualizados,
-    omitidos,
-    errores,
-    total: todosSoportes.length
+    alquileres: resAlquileres,
+    soportes: { actualizados, omitidos, errores, total: todosSoportes.length }
   };
 }
 

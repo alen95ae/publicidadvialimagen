@@ -25,7 +25,15 @@ import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+
+interface Vendedor {
+  id: string
+  nombre: string
+  email?: string
+  imagen_usuario?: unknown
+}
 
 // Interface para los datos de alquileres
 interface Alquiler {
@@ -61,6 +69,7 @@ export default function AlquileresPage() {
   const [filtroVendedor, setFiltroVendedor] = useState<string>("all")
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [vendedoresUnicos, setVendedoresUnicos] = useState<string[]>([])
+  const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportingSelected, setExportingSelected] = useState(false)
   const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
@@ -150,6 +159,29 @@ export default function AlquileresPage() {
     }
   }
 
+  // Iniciales del vendedor para Avatar fallback
+  const getInitials = (nombre: string) => {
+    if (!nombre) return "?"
+    return nombre
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
+  // Imagen del vendedor (mismo criterio que en cotizaciones)
+  const getVendedorImage = (vendedorNombre: string) => {
+    const vendedor = vendedores.find(v => v.nombre === vendedorNombre || v.id === vendedorNombre)
+    if (vendedor?.imagen_usuario) {
+      const imagenData = typeof vendedor.imagen_usuario === 'string'
+        ? JSON.parse(vendedor.imagen_usuario as string)
+        : vendedor.imagen_usuario as { url?: string }
+      return imagenData?.url ?? null
+    }
+    return null
+  }
+
   // Cargar TODOS los vendedores del sistema y de la tabla alquileres
   const fetchVendedoresSistema = async () => {
     try {
@@ -160,7 +192,7 @@ export default function AlquileresPage() {
       // Normalizar nombres (trim) para evitar duplicados por espacios
       // SOLO incluir usuarios con vendedor=true (ya filtrado por el endpoint)
       const vendedoresComerciales = comerciales
-        .map((u: any) => (u.nombre || '').trim())
+        .map((u: { nombre?: string }) => (u.nombre || '').trim())
         .filter((nombre: string) => nombre.length > 0) as string[]
       
       // 2. Obtener vendedores únicos de la tabla alquileres, pero SOLO los que tienen vendedor=true
@@ -188,6 +220,17 @@ export default function AlquileresPage() {
       ).sort()
       
       setVendedoresUnicos(todosLosVendedores)
+
+      // 5. Lista de vendedores con imagen para la columna (como en cotizaciones)
+      const comercialesIds = new Set(comerciales.map((c: Vendedor) => c.id))
+      const comercialesNombres = new Set(comerciales.map((c: Vendedor) => c.nombre?.trim()))
+      const vendedoresList: Vendedor[] = [...comerciales]
+      todosLosVendedores.forEach((nombre: string) => {
+        if (!comercialesIds.has(nombre) && !comercialesNombres.has(nombre)) {
+          vendedoresList.push({ id: nombre, nombre, imagen_usuario: null })
+        }
+      })
+      setVendedores(vendedoresList)
     } catch (error) {
       console.error('Error fetching vendedores del sistema:', error)
     }
@@ -686,7 +729,7 @@ export default function AlquileresPage() {
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Meses</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Soporte</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Cliente</th>
-                      <th className="text-center py-2 px-3 font-medium text-gray-900">Vendedor</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-900">Vendedor</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Total</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Estado</th>
                       <th className="text-center py-2 px-3 font-medium text-gray-900">Acciones</th>
@@ -753,8 +796,16 @@ export default function AlquileresPage() {
                               <span className="text-sm">{alquiler.cliente || '-'}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap text-center">
-                            <span className="text-sm">{alquiler.vendedor || '-'}</span>
+                          <td className="py-2 px-3 align-middle">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-6 w-6 shrink-0">
+                                <AvatarImage src={getVendedorImage(alquiler.vendedor || '') || ''} alt={alquiler.vendedor || ''} />
+                                <AvatarFallback className="bg-[#D54644] text-white text-[10px] font-medium">
+                                  {getInitials(alquiler.vendedor || '')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm text-gray-900">{alquiler.vendedor || '-'}</span>
+                            </div>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap text-center">
                             <span className="font-medium text-green-600">

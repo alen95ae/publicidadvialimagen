@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Filter, Monitor, DollarSign, Calendar, LayoutGrid, List, ArrowUpDown, X, FolderClock, FileSpreadsheet, FileDown, FileUp } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, MapPin, Euro, Filter, ChevronDown, Monitor, DollarSign, Calendar, LayoutGrid, List, ArrowUpDown, X, FolderClock, FileSpreadsheet, FileDown, FileUp } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -67,6 +67,7 @@ export default function SoportesPage() {
   const [searchQuery, setSearchQuery] = useState("") // Para debounce
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [cityFilter, setCityFilter] = useState<string>("")
+  const [openCiudad, setOpenCiudad] = useState(false)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
   const [allSoporteIds, setAllSoporteIds] = useState<string[]>([])
@@ -996,24 +997,40 @@ export default function SoportesPage() {
                 </SelectContent>
               </Select>
 
-              {/* Filtro de ciudad */}
-              <Select
-                value={cityFilter || "all"}
-                onValueChange={(value) => setCityFilter(value === 'all' ? '' : value)}
-              >
-                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                  <SelectValue placeholder="Ciudad" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Ciudad</SelectItem>
-                  {ciudadesBolivia.map((city) => (
-                    <SelectItem key={city} value={city}>
-                      {city}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Filtro de ciudad (mismo scroll que ciudad en editar soporte) */}
+              <Popover open={openCiudad} onOpenChange={setOpenCiudad}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCiudad}
+                    className="relative w-52 justify-between !pl-9"
+                  >
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                    <span className="truncate">{cityFilter || "Ciudad"}</span>
+                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-52 p-0" align="start">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <div
+                      className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${!cityFilter ? "bg-accent font-medium" : ""}`}
+                      onClick={() => { setCityFilter(""); setOpenCiudad(false); }}
+                    >
+                      Ciudad
+                    </div>
+                    {ciudadesBolivia.map((city) => (
+                      <div
+                        key={city}
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${cityFilter === city ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setCityFilter(city); setOpenCiudad(false); }}
+                      >
+                        {city}
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <div className="flex-1" />
               

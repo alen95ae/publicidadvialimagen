@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { 
   Search, 
   Filter,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -197,6 +199,8 @@ export default function PlanificacionPage() {
   const [filtroVendedor, setFiltroVendedor] = useState("all")
   const [filtroEstado, setFiltroEstado] = useState("all")
   const [agrupador, setAgrupador] = useState<"ninguno" | "vendedor" | "cliente" | "estado" | "ciudad">("ninguno")
+  const [openVendedorPlanif, setOpenVendedorPlanif] = useState(false)
+  const [openEstadoPlanif, setOpenEstadoPlanif] = useState(false)
   const [soportesPlanificacion, setSoportesPlanificacion] = useState<SoportePlanificacion[]>([])
   const [vendedoresUnicos, setVendedoresUnicos] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -639,40 +643,76 @@ export default function PlanificacionPage() {
                 />
               </div>
 
-              {/* Filtro por Vendedor */}
-              <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
-                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                  <SelectValue placeholder="Vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los vendedores</SelectItem>
-                  {vendedoresUnicos.map((vendedor) => (
-                    <SelectItem key={vendedor} value={vendedor}>
-                      {vendedor}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Filtro por Vendedor (mismo scroll que ciudad en editar soporte) */}
+              <Popover open={openVendedorPlanif} onOpenChange={setOpenVendedorPlanif}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openVendedorPlanif}
+                    className="relative w-52 justify-between !pl-9"
+                  >
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                    <span className="truncate">{filtroVendedor === "all" ? "Vendedor" : filtroVendedor}</span>
+                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-52 p-0" align="start">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <div
+                      className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroVendedor === "all" ? "bg-accent font-medium" : ""}`}
+                      onClick={() => { setFiltroVendedor("all"); setOpenVendedorPlanif(false); }}
+                    >
+                      Vendedor
+                    </div>
+                    {vendedoresUnicos.map((vendedor) => (
+                      <div
+                        key={vendedor}
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroVendedor === vendedor ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setFiltroVendedor(vendedor); setOpenVendedorPlanif(false); }}
+                      >
+                        {vendedor}
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
-              {/* Filtro por Estado */}
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+              {/* Filtro por Estado (mismo scroll que ciudad en editar soporte) */}
+              <Popover open={openEstadoPlanif} onOpenChange={setOpenEstadoPlanif}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openEstadoPlanif}
+                    className="relative w-52 justify-between !pl-9"
+                  >
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                    <span className="truncate">{filtroEstado === "all" ? "Estado" : (ESTADOS_ALQUILER[filtroEstado as keyof typeof ESTADOS_ALQUILER]?.label || filtroEstado)}</span>
+                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-52 p-0" align="start">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <div
+                      className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroEstado === "all" ? "bg-accent font-medium" : ""}`}
+                      onClick={() => { setFiltroEstado("all"); setOpenEstadoPlanif(false); }}
+                    >
+                      Estado
+                    </div>
+                    {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
+                      <div
+                        key={key}
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm flex items-center gap-2 ${filtroEstado === key ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setFiltroEstado(key); setOpenEstadoPlanif(false); }}
+                      >
+                        <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`} />
                         {meta.label}
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               {/* Agrupador */}
               <Select value={agrupador} onValueChange={(value) => setAgrupador(value as typeof agrupador)}>

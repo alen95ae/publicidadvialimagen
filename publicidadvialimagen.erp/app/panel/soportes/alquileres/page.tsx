@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { 
   Search, 
   Filter, 
+  ChevronDown,
   Plus,
   Edit,
   Trash2,
@@ -24,7 +25,7 @@ import {
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 
@@ -87,6 +88,8 @@ export default function AlquileresPage() {
   const hadDataRef = useRef(false)
   const reloadAttemptedRef = useRef(false)
   const [currentUserVendedor, setCurrentUserVendedor] = useState<boolean>(false)
+  const [openVendedor, setOpenVendedor] = useState(false)
+  const [openEstado, setOpenEstado] = useState(false)
 
   // Cargar alquileres desde la API
   const loadAlquileres = async (page: number = currentPage) => {
@@ -119,8 +122,9 @@ export default function AlquileresPage() {
         if (data.success) {
           const alquileresData = data.data || []
           
-          // Failsafe: si antes había datos y ahora no, y no hemos intentado reload, hacer reload
-          if (hadDataRef.current && alquileresData.length === 0 && !reloadAttemptedRef.current) {
+          // Failsafe: solo recargar si antes había datos y ahora no, SIN filtros aplicados (vacío con filtros es válido)
+          const tieneFiltros = filtroVendedor !== 'all' || filtroEstado !== 'all' || (searchTerm && searchTerm.trim() !== '')
+          if (hadDataRef.current && alquileresData.length === 0 && !reloadAttemptedRef.current && !tieneFiltros) {
             reloadAttemptedRef.current = true
             console.warn("[Alquileres] Datos vacíos inesperados, recargando página...")
             setTimeout(() => {
@@ -491,47 +495,83 @@ export default function AlquileresPage() {
                   />
                 </div>
 
-                {/* Filtro por Vendedor */}
-                <Select value={filtroVendedor} onValueChange={(value) => {
-                  // Normalizar el valor seleccionado (trim) para evitar problemas con espacios
-                  setFiltroVendedor(value === 'all' ? 'all' : value.trim())
-                }}>
-                  <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                    <SelectValue placeholder="Vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los vendedores</SelectItem>
-                    {vendedoresUnicos.map((vendedor) => {
-                      // Asegurar que el vendedor esté normalizado (sin espacios)
-                      const vendedorNormalizado = vendedor.trim();
-                      return (
-                        <SelectItem key={vendedorNormalizado} value={vendedorNormalizado}>
-                          {vendedorNormalizado}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                {/* Filtro por Vendedor (mismo scroll que ciudad en editar soporte) */}
+                <Popover open={openVendedor} onOpenChange={setOpenVendedor}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openVendedor}
+                      className="relative w-52 justify-between !pl-9"
+                    >
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                      <span className="truncate">
+                        {filtroVendedor === "all" ? "Vendedor" : filtroVendedor}
+                      </span>
+                      <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-52 p-0" align="start">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <div
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroVendedor === "all" ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setFiltroVendedor("all"); setOpenVendedor(false); }}
+                      >
+                        Vendedor
+                      </div>
+                      {vendedoresUnicos.map((v) => {
+                        const vendedorNormalizado = v.trim();
+                        return (
+                          <div
+                            key={vendedorNormalizado}
+                            className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroVendedor === vendedorNormalizado ? "bg-accent font-medium" : ""}`}
+                            onClick={() => { setFiltroVendedor(vendedorNormalizado); setOpenVendedor(false); }}
+                          >
+                            {vendedorNormalizado}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-                {/* Filtro por Estado */}
-                <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                  <SelectTrigger className="w-52 [&>span]:text-black !pl-9 !pr-3 relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los estados</SelectItem>
-                    {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`}></span>
+                {/* Filtro por Estado (mismo scroll que ciudad en editar soporte) */}
+                <Popover open={openEstado} onOpenChange={setOpenEstado}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openEstado}
+                      className="relative w-52 justify-between !pl-9"
+                    >
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                      <span className="truncate">
+                        {filtroEstado === "all" ? "Estado" : (ESTADOS_ALQUILER[filtroEstado as keyof typeof ESTADOS_ALQUILER]?.label || filtroEstado)}
+                      </span>
+                      <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-52 p-0" align="start">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <div
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroEstado === "all" ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setFiltroEstado("all"); setOpenEstado(false); }}
+                      >
+                        Estado
+                      </div>
+                      {Object.entries(ESTADOS_ALQUILER).map(([key, meta]) => (
+                        <div
+                          key={key}
+                          className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm flex items-center gap-2 ${filtroEstado === key ? "bg-accent font-medium" : ""}`}
+                          onClick={() => { setFiltroEstado(key); setOpenEstado(false); }}
+                        >
+                          <span className={`inline-block w-3 h-3 rounded-full ${meta.className}`} />
                           {meta.label}
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               
               <div className="flex gap-2">

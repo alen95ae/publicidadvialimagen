@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { 
   DollarSign, 
   Search, 
   Filter, 
+  ChevronDown,
   TrendingUp,
   TrendingDown,
   ArrowUpDown,
@@ -132,6 +134,7 @@ export default function CostesPage() {
   
   // Estados para filtros
   const [filtroCiudad, setFiltroCiudad] = useState<string>("all")
+  const [openCiudadCostes, setOpenCiudadCostes] = useState(false)
   const [filtroMetodoPago, setFiltroMetodoPago] = useState<string>("all")
   const [filtroPropietario, setFiltroPropietario] = useState<string>("all")
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
@@ -505,10 +508,13 @@ export default function CostesPage() {
           const supportsData = result.data || result
           const allData = Array.isArray(supportsData) ? supportsData : []
           
-          // Normalizar ciudades: capitalizar primera letra, resto minúsculas
+          // Normalizar ciudades: capitalizar primera letra, resto minúsculas; excepciones "El Alto", "La Paz"
           const normalizeCity = (city: string): string => {
             if (!city) return ''
-            return city.charAt(0).toUpperCase() + city.slice(1).toLowerCase()
+            const normalized = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase()
+            if (normalized === 'El alto') return 'El Alto'
+            if (normalized === 'La paz') return 'La Paz'
+            return normalized
           }
           
           // Obtener ciudades únicas normalizadas
@@ -972,10 +978,12 @@ export default function CostesPage() {
   // TOTAL COSTES: usar coste actual en lugar de costo total
   const totalCostos = allSoportesCostes.reduce((sum, soporte) => sum + soporte.costeActual, 0)
   
-  // Potencial de ventas: suma de todos los "último precio" de todos los soportes
-  const potencialVentas = allSoportesCostes
-    .filter(soporte => soporte.ultimoPrecio !== null)
-    .reduce((sum, soporte) => sum + (soporte.ultimoPrecio || 0), 0)
+  // Potencial de ventas: suma de todos los precios de venta de todos los soportes excepto "No disponible"
+  const potencialVentas = round2(
+    allSupports
+      .filter(s => (s.status || '').toLowerCase() !== 'no disponible')
+      .reduce((sum, s) => sum + (s.priceMonth || 0), 0)
+  )
   
   // Ingreso Total: suma de todos los "último precio" de soportes con estado de alquiler activo
   const ingresoTotal = allSoportesCostes
@@ -1009,16 +1017,16 @@ export default function CostesPage() {
                           <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="max-w-xs">Suma del total de últimos precios de todos los soportes</p>
+                          <p className="max-w-xs">Cifra que facturaría mensualmente la empresa si todos los soportes estuvieran alquilados con su precio de venta</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <p className="text-2xl font-bold text-blue-600 mt-2">
+                  <p className="text-2xl font-bold text-gray-800 mt-2">
                     Bs {potencialVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <DollarSign className="w-8 h-8 text-blue-500" />
+                <DollarSign className="w-8 h-8 text-gray-600" />
               </div>
             </CardContent>
           </Card>
@@ -1035,16 +1043,16 @@ export default function CostesPage() {
                           <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="max-w-xs">Suma de todos los costes de los soportes con alquiler activo</p>
+                          <p className="max-w-xs">Suma del coste actual que están generando todos los soportes, tanto si está alquilado como si no</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <p className="text-2xl font-bold text-red-600 mt-2">
+                  <p className="text-2xl font-bold text-gray-800 mt-2">
                     Bs {totalCostos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <TrendingDown className="w-8 h-8 text-red-500" />
+                <TrendingDown className="w-8 h-8 text-gray-600" />
               </div>
             </CardContent>
           </Card>
@@ -1066,11 +1074,11 @@ export default function CostesPage() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <p className="text-2xl font-bold text-green-600 mt-2">
+                  <p className="text-2xl font-bold text-gray-800 mt-2">
                     Bs {ingresoTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-green-600" />
+                <TrendingUp className="w-8 h-8 text-gray-600" />
               </div>
             </CardContent>
           </Card>
@@ -1249,19 +1257,40 @@ export default function CostesPage() {
                   className="pl-10 max-w-64"
                 />
               </div>
-              {/* Filtro por Ciudad */}
-              <Select value={filtroCiudad} onValueChange={setFiltroCiudad}>
-                <SelectTrigger className="w-44 [&>span]:text-black !pl-9 !pr-3 relative">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                  <SelectValue placeholder="Ciudad" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Ciudad</SelectItem>
-                  {ciudadesUnicas.map((ciudad) => (
-                    <SelectItem key={ciudad} value={ciudad}>{ciudad}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Filtro por Ciudad (mismo scroll que ciudad en editar soporte) */}
+              <Popover open={openCiudadCostes} onOpenChange={setOpenCiudadCostes}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCiudadCostes}
+                    className="relative w-44 justify-between !pl-9"
+                  >
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                    <span className="truncate">{filtroCiudad === "all" ? "Ciudad" : filtroCiudad}</span>
+                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-44 p-0" align="start">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <div
+                      className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroCiudad === "all" ? "bg-accent font-medium" : ""}`}
+                      onClick={() => { setFiltroCiudad("all"); setOpenCiudadCostes(false); }}
+                    >
+                      Ciudad
+                    </div>
+                    {ciudadesUnicas.map((ciudad) => (
+                      <div
+                        key={ciudad}
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroCiudad === ciudad ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setFiltroCiudad(ciudad); setOpenCiudadCostes(false); }}
+                      >
+                        {ciudad}
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
               
               {/* Filtro por Método de pago */}
               <Select value={filtroMetodoPago} onValueChange={setFiltroMetodoPago}>

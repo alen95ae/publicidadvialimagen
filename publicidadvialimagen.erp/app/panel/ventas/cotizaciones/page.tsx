@@ -10,11 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { 
   Handshake, 
   Plus, 
   Search, 
   Filter, 
+  ChevronDown,
   Edit,
   Trash2,
   Clock,
@@ -115,6 +117,7 @@ export default function CotizacionesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [filtroVendedor, setFiltroVendedor] = useState<string>("all")
+  const [openVendedorCotiz, setOpenVendedorCotiz] = useState(false)
   const [filtroSucursal, setFiltroSucursal] = useState<string>("all")
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [exporting, setExporting] = useState(false)
@@ -826,21 +829,42 @@ export default function CotizacionesPage() {
                   />
                 </div>
 
-                {/* Filtro por Vendedor */}
-                <Select value={filtroVendedor} onValueChange={setFiltroVendedor}>
-                  <SelectTrigger className="w-44 [&>span]:text-black [&>svg]:ml-auto [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 relative pl-9 pr-3">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
-                    <SelectValue placeholder="Vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Vendedor</SelectItem>
-                    {vendedores.map((v) => (
-                      <SelectItem key={v.id} value={v.nombre}>
-                        {v.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Filtro por Vendedor (igual que en gestión de alquileres) */}
+                <Popover open={openVendedorCotiz} onOpenChange={setOpenVendedorCotiz}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openVendedorCotiz}
+                      className="relative w-44 justify-between !pl-9"
+                    >
+                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                      <span className="truncate">
+                        {filtroVendedor === "all" ? "Vendedor" : filtroVendedor}
+                      </span>
+                      <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-44 p-0" align="start">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <div
+                        className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroVendedor === "all" ? "bg-accent font-medium" : ""}`}
+                        onClick={() => { setFiltroVendedor("all"); setOpenVendedorCotiz(false); }}
+                      >
+                        Vendedor
+                      </div>
+                      {vendedores.map((v) => (
+                        <div
+                          key={v.id}
+                          className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filtroVendedor === v.nombre ? "bg-accent font-medium" : ""}`}
+                          onClick={() => { setFiltroVendedor(v.nombre); setOpenVendedorCotiz(false); }}
+                        >
+                          {v.nombre}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
                 {/* Filtro por Sucursal */}
                 <Select value={filtroSucursal} onValueChange={setFiltroSucursal}>

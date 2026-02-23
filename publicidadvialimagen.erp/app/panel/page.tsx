@@ -3,12 +3,13 @@ import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Handshake, ChevronRight, Monitor, Users, FileText, Send, Clock, Download, Wrench, Package, Receipt } from "lucide-react";
+import { Handshake, ChevronRight, Monitor, Users, FileText, Send, Clock, Download, Wrench, Package, Receipt, Calendar, TriangleAlert, TimerReset } from "lucide-react";
 import Link from "next/link";
-import ERPModulesGrid from "@/components/erp-modules-grid";
 import PanelMetrics from "@/components/panel-metrics";
 import PanelNotifications from "@/components/panel-notifications";
 import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getAlquileres } from "@/lib/supabaseAlquileres";
+import { getUrgeAlquilarList } from "@/lib/urgeAlquilar";
 
 export default async function PanelPage() {
   const cookieStore = await cookies();
@@ -47,6 +48,38 @@ export default async function PanelPage() {
       console.error('Error obteniendo nombre del rol:', error);
     }
   }
+
+  // Alquileres en estado "próximo" (próximos a finalizar) para el panel
+  let alquileresProximos: { id: string; codigo: string; fin: string; cliente: string | null; estado: string }[] = [];
+  try {
+    const { data } = await getAlquileres({ estado: 'proximo', limit: 50 });
+    alquileresProximos = (data || []).map((a: { id: string; codigo: string; fin: string; cliente: string | null; estado: string }) => ({
+      id: a.id,
+      codigo: a.codigo,
+      fin: a.fin,
+      cliente: a.cliente,
+      estado: a.estado,
+    }));
+  } catch (error) {
+    console.error('Error obteniendo alquileres próximos:', error);
+  }
+
+  let urgeAlquilar: { id: number; codigo: string; ciudad: string; precio: number; estado: string }[] = [];
+  try {
+    urgeAlquilar = await getUrgeAlquilarList(10);
+  } catch (error) {
+    console.error('Error obteniendo urge alquilar:', error);
+  }
+
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('es-ES');
+  const STATUS_META: Record<string, { label: string; className: string }> = {
+    'Disponible': { label: 'Disponible', className: 'bg-green-100 text-green-800' },
+    'Reservado': { label: 'Reservado', className: 'bg-yellow-100 text-yellow-800' },
+    'Ocupado': { label: 'Ocupado', className: 'bg-red-100 text-red-800' },
+    'No disponible': { label: 'No disponible', className: 'bg-gray-100 text-gray-800' },
+    'A Consultar': { label: 'A Consultar', className: 'bg-blue-100 text-blue-800' },
+  };
+  const formatPrecio = (n: number) => `${n.toFixed(2)} Bs`;
 
   return (
       <div className="p-6 space-y-8">
@@ -259,18 +292,126 @@ export default async function PanelPage() {
           </Card>
         </div>
 
-        {/* Módulos ERP */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Módulos ERP</CardTitle>
-            <CardDescription>
-              Accede rápidamente a cualquier módulo del sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ERPModulesGrid />
-          </CardContent>
-        </Card>
+        {/* Alquileres próximos a finalizar y segundo apartado */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Alquileres próximos a finalizar (mismo ancho que Notificaciones) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TimerReset className="w-5 h-5" />
+                Alquileres próximos a finalizar
+              </CardTitle>
+              <CardDescription>
+                Alquileres en estado Próximo (últimos 5 días antes del fin)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Código</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Fin</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Cliente</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alquileresProximos.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-6 text-gray-500 text-sm">
+                          No hay alquileres próximos a finalizar
+                        </td>
+                      </tr>
+                    ) : (
+                      alquileresProximos.map((alquiler) => (
+                        <tr key={alquiler.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                              {alquiler.codigo}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-1 text-sm">
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(alquiler.fin)}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className="text-sm">{alquiler.cliente || '-'}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center rounded px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800">
+                              Próximo
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Urge alquilar: 10 soportes más caros (FIJO, finalizado) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TriangleAlert className="w-5 h-5" />
+                Urge alquilar
+              </CardTitle>
+              <CardDescription>
+                Soportes con pago fijo, sin alquiler activo, ordenados por coste de mayor a menor
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Código</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Ciudad</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Precio</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-900">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {urgeAlquilar.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-6 text-gray-500 text-sm">
+                          No hay soportes que cumplan los criterios
+                        </td>
+                      </tr>
+                    ) : (
+                      urgeAlquilar.map((item) => (
+                        <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200">
+                              {item.codigo}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className="text-sm">{item.ciudad}</span>
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap text-center text-sm">
+                            {formatPrecio(item.precio)}
+                          </td>
+                          <td className="py-2 px-3 whitespace-nowrap text-center">
+                            <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${STATUS_META[item.estado]?.className ?? 'bg-gray-100 text-gray-800'}`}>
+                              {STATUS_META[item.estado]?.label ?? item.estado}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
       </div>
   );
 }

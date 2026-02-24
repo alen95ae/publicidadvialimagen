@@ -43,6 +43,8 @@ interface DatosCotizacion {
   codigo: string
   cliente: string
   clienteNombreCompleto?: string
+  /** NIT del contacto (solo se muestra si está registrado) */
+  clienteNit?: string | null
   sucursal: string // Se usa para determinar qué dirección mostrar
   vendedor: string
   vendedorEmail?: string // Email del comercial
@@ -332,6 +334,13 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   pdf.text(textoCliente, xPosition, yPosition)
   yPosition += 6
 
+  // NIT del contacto (solo si está registrado)
+  const nitCliente = datos.clienteNit != null ? String(datos.clienteNit).trim() : ''
+  if (nitCliente) {
+    pdf.text(`NIT: ${nitCliente}`, xPosition, yPosition)
+    yPosition += 5
+  }
+
   // Tipo de cambio solo en PDF en dólares (en Bs no se muestra)
   if (datos.enDolares) {
     const tcValor = datos.tipoCambio ?? 6.96
@@ -574,10 +583,12 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
   pdf.text(`Validez: ${vigenciaValor} días`, tableX, yPosition)
   yPosition += 7
   
-  // Plazo de entrega - mostrar siempre (con texto por defecto si no existe)
-  const plazoTexto = datos.plazo && datos.plazo.trim() !== '' ? datos.plazo : 'A convenir'
-  pdf.text(`Plazo de Entrega: ${plazoTexto}`, tableX, yPosition)
-  yPosition += 7
+  // Plazo de entrega - solo mostrar si viene rellenado; si no, no aparece nada
+  const plazoTexto = datos.plazo != null ? String(datos.plazo).trim() : ''
+  if (plazoTexto !== '') {
+    pdf.text(`Plazo de Entrega: ${plazoTexto}`, tableX, yPosition)
+    yPosition += 7
+  }
 
   // Agregar footers con paginación a todas las páginas
   const totalPages = pdf.getNumberOfPages()

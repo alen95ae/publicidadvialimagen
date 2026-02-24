@@ -46,7 +46,7 @@ interface AjusteInventarioItem {
   nombre: string
   sucursal: string
   varianteCombinacion: string // Descripción de la combinación de variantes
-  formato: string | null // Formato del ítem (primer formato si hay varios)
+  formatos: string[] // Todos los formatos del ítem (misma fórmula que en recursos: "rollo 160 m²", etc.)
   unidad_medida: string
   diferenciaPrecio: number
   precioVariante: number
@@ -125,13 +125,13 @@ function generateVarianteKey(combinacion: any): string {
   return parts.join("|")
 }
 
-// Función para obtener el primer formato de un ítem (recurso o consumible)
-function getPrimerFormato(item: any): string | null {
-  if (!item.formato) return null
-  
+// Función para obtener todos los formatos en texto de display (misma fórmula que en recursos: "rollo 160 m²", "Unidad suelta", etc.)
+function getAllFormatosDisplay(item: any): string[] {
+  if (!item.formato) return []
+
   try {
     let formatosArray: Array<{ formato: string; cantidad: number; unidad_medida: string }> = []
-    
+
     if (Array.isArray(item.formato)) {
       formatosArray = item.formato
     } else if (typeof item.formato === 'string') {
@@ -149,16 +149,18 @@ function getPrimerFormato(item: any): string | null {
     } else if (typeof item.formato === 'object') {
       formatosArray = [item.formato]
     }
-    
-    // Retornar el formato del primer elemento (solo el nombre, sin cantidad ni unidad)
-    if (formatosArray.length > 0 && formatosArray[0].formato) {
-      return formatosArray[0].formato
-    }
+
+    return formatosArray
+      .filter((f: any) => f && f.formato)
+      .map((f: { formato: string; cantidad: number; unidad_medida: string }) => {
+        if (f.formato === "Unidad suelta") return "Unidad suelta"
+        return `${f.formato} ${f.cantidad} ${f.unidad_medida}`.trim()
+      })
   } catch (e) {
     console.error('Error parseando formato:', e)
   }
-  
-  return null
+
+  return []
 }
 
 function AjustesInventarioPageContent() {
@@ -328,8 +330,8 @@ function AjustesInventarioPageContent() {
           // Crear combinación con sucursal incluida
           const combinacionConSucursal = { ...combinacion, Sucursal: sucursal }
           
-          // Obtener el primer formato del recurso
-          const formato = getPrimerFormato(recurso)
+          // Obtener todos los formatos del recurso (misma fórmula que en recursos)
+          const formatos = getAllFormatosDisplay(recurso)
           
           ajustes.push({
             id,
@@ -338,7 +340,7 @@ function AjustesInventarioPageContent() {
             nombre: recurso.nombre,
             sucursal,
             varianteCombinacion: varianteDesc,
-            formato,
+            formatos,
             unidad_medida: recurso.unidad_medida || '',
             diferenciaPrecio,
             precioVariante,
@@ -370,8 +372,8 @@ function AjustesInventarioPageContent() {
         // Crear combinación con sucursal incluida
         const combinacionConSucursal = { Sucursal: sucursal }
         
-        // Obtener el primer formato del consumible
-        const formato = getPrimerFormato(consumible)
+        // Obtener todos los formatos del consumible (misma fórmula que en recursos)
+        const formatos = getAllFormatosDisplay(consumible)
         
         ajustes.push({
           id,
@@ -380,7 +382,7 @@ function AjustesInventarioPageContent() {
           nombre: consumible.nombre,
           sucursal,
           varianteCombinacion: "Sin variantes",
-          formato,
+          formatos,
           unidad_medida: consumible.unidad_medida || '',
           diferenciaPrecio,
           precioVariante,
@@ -1162,7 +1164,7 @@ function AjustesInventarioPageContent() {
                       <TableHead>Nombre</TableHead>
                       <TableHead className="w-24">Sucursal</TableHead>
                       <TableHead className="min-w-[200px]">Variantes</TableHead>
-                      <TableHead className="w-20">Formato</TableHead>
+                      <TableHead className="min-w-[140px]">Formato</TableHead>
                       <TableHead className="w-20">Unidad</TableHead>
                       <TableHead className="text-center w-32">Diferencia Precio</TableHead>
                       <TableHead className="text-right w-28">Precio Variante</TableHead>
@@ -1222,11 +1224,27 @@ function AjustesInventarioPageContent() {
                             {item.varianteCombinacion || "Sin variantes"}
                           </div>
                         </TableCell>
-                        <TableCell className="w-20">
-                          <Badge variant="secondary">{item.formato || 'Sin formato'}</Badge>
+                        <TableCell className="min-w-[140px] max-w-[220px]">
+                          <div className="flex flex-wrap gap-1">
+                            {(item.formatos?.length ?? 0) > 0 ? (
+                              item.formatos.map((texto, idx) => (
+                                <Badge
+                                  key={idx}
+                                  variant="secondary"
+                                  className="bg-blue-200 text-blue-800 hover:bg-blue-200"
+                                >
+                                  {texto}
+                                </Badge>
+                              ))
+                            ) : (
+                              <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
+                                Sin formato
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="w-20">
-                          <Badge variant="secondary" className="bg-gray-200 text-gray-800 hover:bg-gray-200">
+                          <Badge variant="secondary" className="bg-purple-200 text-purple-800 hover:bg-purple-200">
                             {item.unidad_medida || 'Sin unidad'}
                           </Badge>
                         </TableCell>

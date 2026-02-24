@@ -79,6 +79,7 @@ export interface CotizacionPayload {
   estado: 'Pendiente' | 'Aprobada' | 'Rechazada' | 'Vencida'
   vigencia_dias: number
   plazo: string
+  comprobante: 'factura' | 'nota de remision'
   lineas: LineaPayload[]
   total_final?: number
   regenerar_alquileres?: boolean
@@ -298,6 +299,7 @@ export function prepararPayload(
     sucursal: string
     vigencia: string
     plazo: string
+    comprobante: 'factura' | 'nota de remision'
     totalManual?: number | null
     totalGeneralReal?: number
     totalGeneral?: number
@@ -318,6 +320,7 @@ export function prepararPayload(
     estado: 'Pendiente',
     vigencia_dias: parseInt(datosCotizacion.vigencia) || 30,
     plazo: datosCotizacion.plazo,
+    comprobante: datosCotizacion.comprobante,
     lineas: lineas
   }
 

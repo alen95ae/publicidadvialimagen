@@ -37,6 +37,7 @@ export interface CotizacionPayload {
   estado?: string
   vigencia_dias?: number
   plazo?: string | null
+  comprobante?: string
   lineas: LineaPayload[]
   total_final?: number | null
   regenerar_alquileres?: boolean

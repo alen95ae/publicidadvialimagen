@@ -6,9 +6,12 @@ import {
 } from '@/lib/supabaseCotizaciones'
 import { getSupabaseServer } from '@/lib/supabaseServer'
 import type { UsuarioResponsable } from '@/lib/services/inventoryService'
+import { findContactoById, findContactoByNombre } from '@/lib/supabaseContactos'
 
 export const runtime = 'nodejs' // Asegurar runtime Node.js para notificaciones
 import { getLineasByCotizacionId, deleteLineasByCotizacionId, createMultipleLineas } from '@/lib/supabaseCotizacionLineas'
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import { cancelarAlquileresCotizacion } from '@/lib/helpersAlquileres'
 import { getAlquileresPorCotizacion } from '@/lib/supabaseAlquileres'
 import {
@@ -53,11 +56,26 @@ export async function GET(
     // Obtener las líneas asociadas
     const lineas = await getLineasByCotizacionId(id)
 
+    // NIT del contacto (para PDF): por UUID o por nombre (las cotizaciones guardan el nombre del cliente)
+    let cliente_nit: string | null = null
+    if (cotizacion?.cliente && String(cotizacion.cliente).trim()) {
+      let contacto: Awaited<ReturnType<typeof findContactoById>> = null
+      if (uuidRegex.test(cotizacion.cliente)) {
+        contacto = await findContactoById(cotizacion.cliente)
+      } else {
+        contacto = await findContactoByNombre(cotizacion.cliente)
+      }
+      if (contacto?.taxId && String(contacto.taxId).trim()) {
+        cliente_nit = String(contacto.taxId).trim()
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         cotizacion,
-        lineas
+        lineas,
+        cliente_nit
       }
     })
 
@@ -134,6 +152,16 @@ export async function PATCH(
 
     // Limpiar campos que no existen en Supabase
     const { vigencia_dias, notas_generales, terminos_condiciones, total_final, ...camposLimpios } = body
+
+    // Validar comprobante si viene en el body (debe ser factura o nota de remision)
+    if (camposLimpios.comprobante !== undefined) {
+      if (camposLimpios.comprobante !== 'factura' && camposLimpios.comprobante !== 'nota de remision') {
+        return NextResponse.json(
+          { success: false, error: 'Comprobante debe ser "factura" o "nota de remision".' },
+          { status: 400 }
+        )
+      }
+    }
 
     // ============================================================================
     // C6: VALIDACIÓN Y NORMALIZACIÓN DE LÍNEAS

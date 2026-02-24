@@ -14,6 +14,7 @@ export type Cotizacion = {
   total_final: number | null;
   vigencia: number | null;
   plazo: string | null;
+  comprobante: string | null;
   cantidad_items: number | null;
   lineas_cotizacion: number | null;
   requiere_nueva_aprobacion: boolean | null;
@@ -35,6 +36,7 @@ export interface CotizacionInput {
   total_final?: number;
   vigencia?: number;
   plazo?: string | null;
+  comprobante?: string;
   cantidad_items?: number;
   lineas_cotizacion?: number;
   requiere_nueva_aprobacion?: boolean;
@@ -216,6 +218,7 @@ export async function createCotizacion(cotizacion: CotizacionInput) {
     total_final: cotizacion.total_final || 0,
     vigencia: cotizacion.vigencia || 30,
     plazo: cotizacion.plazo || null,
+    comprobante: cotizacion.comprobante || 'factura',
     cantidad_items: cotizacion.cantidad_items || 0,
     lineas_cotizacion: cotizacion.lineas_cotizacion || 0,
   }
@@ -267,6 +270,7 @@ export async function updateCotizacion(
   if (cotizacion.total_final !== undefined) updateData.total_final = cotizacion.total_final;
   if (cotizacion.vigencia !== undefined) updateData.vigencia = cotizacion.vigencia;
   if (cotizacion.plazo !== undefined) updateData.plazo = cotizacion.plazo;
+  if (cotizacion.comprobante !== undefined) updateData.comprobante = cotizacion.comprobante;
   if (cotizacion.cantidad_items !== undefined) updateData.cantidad_items = cotizacion.cantidad_items;
   if (cotizacion.lineas_cotizacion !== undefined) updateData.lineas_cotizacion = cotizacion.lineas_cotizacion;
   if (cotizacion.requiere_nueva_aprobacion !== undefined) updateData.requiere_nueva_aprobacion = cotizacion.requiere_nueva_aprobacion;

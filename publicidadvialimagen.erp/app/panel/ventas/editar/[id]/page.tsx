@@ -154,6 +154,7 @@ export default function EditarCotizacionPage() {
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
   const [plazo, setPlazo] = useState("")
+  const [comprobante, setComprobante] = useState<'factura' | 'nota de remision'>('factura')
   const [tipoCambio, setTipoCambio] = useState("6.96")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
@@ -720,6 +721,9 @@ export default function EditarCotizacionPage() {
       setSucursal(cotizacion.sucursal || 'La Paz')
       setVigencia(cotizacion.vigencia ? String(cotizacion.vigencia) : '30')
       setPlazo(cotizacion.plazo || "")
+      setComprobante(
+        cotizacion.comprobante === 'nota de remision' ? 'nota de remision' : 'factura'
+      )
       setFechaCreacion(cotizacion.fecha_creacion || '')
 
       // Calcular estado: verificar si está vencida
@@ -1761,6 +1765,7 @@ export default function EditarCotizacionPage() {
           sucursal,
           vigencia,
           plazo,
+          comprobante,
           totalManual,
           totalGeneralReal,
           totalGeneral
@@ -2370,30 +2375,35 @@ export default function EditarCotizacionPage() {
           {/* Información General */}
           <Card className="mb-6">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Información General</CardTitle>
-                {/* Botones de estado y descarga */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => actualizarEstado("Rechazada")}
-                    disabled={guardando || estadoCotizacion === "Rechazada"}
-                    className="text-red-600 hover:text-red-700 border-red-600 hover:bg-red-50"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Rechazada
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 hover:text-green-700 border-green-600 hover:bg-green-50"
-                    onClick={() => actualizarEstado("Aprobada")}
-                    disabled={guardando || (estadoCotizacion === "Aprobada" && !requiereNuevaAprobacion)}
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    {requiereNuevaAprobacion ? 'Aprobar de nuevo' : 'Aprobada'}
-                  </Button>
+              <div className="flex flex-col gap-4">
+                {/* Información General a la izquierda, Rechazada/Aprobada a la derecha, misma altura */}
+                <div className="flex items-center justify-between">
+                  <CardTitle>Información General</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => actualizarEstado("Rechazada")}
+                      disabled={guardando || estadoCotizacion === "Rechazada"}
+                      className="text-red-600 hover:text-red-700 border-red-600 hover:bg-red-50"
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Rechazada
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-green-600 hover:text-green-700 border-green-600 hover:bg-green-50"
+                      onClick={() => actualizarEstado("Aprobada")}
+                      disabled={guardando || (estadoCotizacion === "Aprobada" && !requiereNuevaAprobacion)}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      {requiereNuevaAprobacion ? 'Aprobar de nuevo' : 'Aprobada'}
+                    </Button>
+                  </div>
+                </div>
+                {/* Botones de descarga a la derecha */}
+                <div className="flex flex-wrap items-center gap-2 justify-end">
                   {tieneFuncionTecnica("descargar ot") && (
                     <Button
                       variant="outline"
@@ -2411,7 +2421,7 @@ export default function EditarCotizacionPage() {
                     title="Cotización en dólares (tipo de cambio del campo Tipo de cambio)"
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    Descargar Cotización $
+                    Cotización $USD
                   </Button>
                   <Button
                     variant="outline"
@@ -2419,7 +2429,7 @@ export default function EditarCotizacionPage() {
                     onClick={descargarCotizacionPDF}
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    Descargar Cotización
+                    Cotización Bs
                   </Button>
                 </div>
               </div>
@@ -2437,7 +2447,7 @@ export default function EditarCotizacionPage() {
               <div className="flex gap-4">
                 {/* Cliente */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="cliente">Cliente</Label>
+                  <Label htmlFor="cliente">Cliente *</Label>
                   <Popover open={openClienteCombobox} onOpenChange={(open) => {
                     setOpenClienteCombobox(open)
                     if (open) {
@@ -2508,7 +2518,7 @@ export default function EditarCotizacionPage() {
 
                 {/* Comercial */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="vendedor">Comercial</Label>
+                  <Label htmlFor="vendedor">Comercial *</Label>
                   <Popover open={openComercialCombobox} onOpenChange={(open) => {
                     setOpenComercialCombobox(open)
                     if (open) {
@@ -2584,7 +2594,7 @@ export default function EditarCotizacionPage() {
 
                 {/* Sucursal */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="sucursal">Sucursal</Label>
+                  <Label htmlFor="sucursal">Sucursal *</Label>
                   <Select value={sucursal} onValueChange={setSucursal}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar sucursal" />
@@ -2601,9 +2611,9 @@ export default function EditarCotizacionPage() {
 
                 {/* Validez */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="vigencia">Validez</Label>
+                  <Label htmlFor="vigencia">Validez *</Label>
                   <Select value={vigencia} onValueChange={setVigencia}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder="Seleccionar validez" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2626,8 +2636,25 @@ export default function EditarCotizacionPage() {
                   />
                 </div>
 
-                {/* Tipo de cambio */}
+                {/* Comprobante */}
                 <div className="flex-1 space-y-2">
+                  <Label htmlFor="comprobante">Comprobante *</Label>
+                  <Select
+                    value={comprobante}
+                    onValueChange={(v) => setComprobante(v as 'factura' | 'nota de remision')}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Seleccionar comprobante" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="factura">Factura</SelectItem>
+                      <SelectItem value="nota de remision">Nota de remisión</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Tipo de cambio (menos ancho, no obligatorio) */}
+                <div className="flex-[0.7] min-w-0 space-y-2">
                   <Label htmlFor="tipoCambio">Tipo de cambio</Label>
                   <Input
                     id="tipoCambio"

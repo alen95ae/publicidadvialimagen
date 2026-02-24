@@ -188,6 +188,15 @@ export async function POST(request: NextRequest) {
       console.log('💰 [POST /api/cotizaciones] Subtotal:', subtotal, 'IVA:', totalIVA, 'IT:', totalIT)
     }
 
+    // Validar comprobante obligatorio (factura | nota de remision)
+    const comprobanteValido = body.comprobante === 'factura' || body.comprobante === 'nota de remision'
+    if (!comprobanteValido) {
+      return NextResponse.json(
+        { success: false, error: 'El campo Comprobante es obligatorio. Debe ser "factura" o "nota de remision".' },
+        { status: 400 }
+      )
+    }
+
     // Limpiar campos que no existen en Supabase antes de crear
     const { vigencia_dias, ...camposLimpios } = body
 
@@ -211,6 +220,7 @@ export async function POST(request: NextRequest) {
         total_final: totalFinal,
         vigencia: vigencia_dias || 30,
         plazo: camposLimpios.plazo || null,
+        comprobante: body.comprobante,
         cantidad_items: lineasNormalizadas.length,
         lineas_cotizacion: lineasNormalizadas.length
       })

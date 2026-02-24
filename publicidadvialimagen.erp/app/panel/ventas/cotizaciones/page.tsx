@@ -777,10 +777,12 @@ export default function CotizacionesPage() {
         vendedorNumero
       })
       
-      // Generar el PDF
+      // Generar el PDF (NIT del contacto si está registrado, viene en data.data.cliente_nit)
+      const clienteNit = data.data.cliente_nit ?? null
       await generarPDFCotizacion({
         codigo: cotizacion.codigo || codigo,
         cliente: cotizacion.cliente || '',
+        clienteNit: clienteNit || undefined,
         sucursal: cotizacion.sucursal || '',
         vendedor: nombreVendedor,
         vendedorEmail: vendedorEmail,

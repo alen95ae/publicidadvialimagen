@@ -6,7 +6,6 @@ import {
 } from "./variantEngine";
 
 import { generarCombinacionesVariantes } from "./generarCombinaciones";
-import { calcularFinanzasVariante, type ProductoInput } from "@/lib/calcularVarianteFinanciera";
 
 // Sucursales disponibles en el sistema (las mismas que en control de stock)
 const SUCURSALES_DISPONIBLES = ["La Paz", "Santa Cruz"];
@@ -174,46 +173,36 @@ export async function syncProductVariants(productId: string) {
   // Usar el coste base REAL calculado desde la receta, no producto.coste de la BD
   const costeBaseRecetaReal = calcularCosteBaseRecetaReal(receta, recursosMap);
 
-  const productoInput: ProductoInput = {
-    coste: Number(producto.coste) || 0,
-    precio_venta: Number(producto.precio_venta) || 0,
-  };
-
   for (const combo of combinacionesFinal) {
     const key = combo.combinacion;
     const valores = combo.valores;
 
     processedKeys.add(key);
 
+    // Extraer la sucursal de los valores de la combinación
     const sucursal = valores["Sucursal"] || valores["sucursal"];
 
+    // Calcular coste: BASE REAL + suma de diferencias de precios de recursos
     const coste = computeVariantCost(receta, recursos, valores, sucursal, costeBaseRecetaReal);
-    const precio = coste;
+
+    const precio = coste; // Temporal hasta que activemos calculadora final
 
     const existente = existentesMap.get(key);
 
-    const varianteParaCalculo = {
-      coste_override: existente?.coste_override ?? null,
-      coste_calculado: coste,
-      precio_override: existente?.precio_override ?? null,
-      precio_calculado: precio,
-    };
-    const finanzas = calcularFinanzasVariante(varianteParaCalculo, productoInput);
-
     if (existente) {
+      // UPDATE
       ops.push(
         supabaseServer
           .from("producto_variantes")
           .update({
             coste_calculado: coste,
             precio_calculado: precio,
-            ...finanzas,
-            updated_at_calculo: new Date().toISOString(),
             fecha_actualizacion: new Date().toISOString()
           })
           .eq("id", existente.id)
       );
     } else {
+      // INSERT
       ops.push(
         supabaseServer.from("producto_variantes").insert({
           producto_id: productId,
@@ -221,9 +210,7 @@ export async function syncProductVariants(productId: string) {
           coste_calculado: coste,
           precio_calculado: precio,
           coste_override: null,
-          precio_override: null,
-          ...finanzas,
-          updated_at_calculo: new Date().toISOString(),
+          precio_override: null
         })
       );
     }

@@ -141,6 +141,7 @@ export default function NuevaCotizacionPage() {
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
   const [plazo, setPlazo] = useState("")
+  const [comprobante, setComprobante] = useState<'factura' | 'nota de remision'>('factura')
   const [tipoCambio, setTipoCambio] = useState("6.96")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
@@ -1347,6 +1348,7 @@ export default function NuevaCotizacionPage() {
           sucursal,
           vigencia,
           plazo,
+          comprobante,
           totalManual,
           totalGeneralReal,
           totalGeneral
@@ -1890,30 +1892,35 @@ export default function NuevaCotizacionPage() {
           {/* Información General */}
           <Card className="mb-6">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Información General</CardTitle>
-                {/* Botones de estado y descarga */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => actualizarEstado("Rechazada")}
-                    disabled={guardando || !cotizacionId || estadoCotizacion === "Rechazada"}
-                    className="text-red-600 hover:text-red-700 border-red-600 hover:bg-red-50"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Rechazada
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 hover:text-green-700 border-green-600 hover:bg-green-50"
-                    onClick={() => actualizarEstado("Aprobada")}
-                    disabled={guardando || !cotizacionId || estadoCotizacion === "Aprobada"}
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Aprobada
-                  </Button>
+              <div className="flex flex-col gap-4">
+                {/* Información General a la izquierda, Rechazada/Aprobada a la derecha, misma altura */}
+                <div className="flex items-center justify-between">
+                  <CardTitle>Información General</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => actualizarEstado("Rechazada")}
+                      disabled={guardando || !cotizacionId || estadoCotizacion === "Rechazada"}
+                      className="text-red-600 hover:text-red-700 border-red-600 hover:bg-red-50"
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Rechazada
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-green-600 hover:text-green-700 border-green-600 hover:bg-green-50"
+                      onClick={() => actualizarEstado("Aprobada")}
+                      disabled={guardando || !cotizacionId || estadoCotizacion === "Aprobada"}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Aprobada
+                    </Button>
+                  </div>
+                </div>
+                {/* Botones de descarga a la derecha */}
+                <div className="flex flex-wrap items-center gap-2 justify-end">
                   {tieneFuncionTecnica("descargar ot") && (
                     <Button
                       variant="outline"
@@ -1934,7 +1941,7 @@ export default function NuevaCotizacionPage() {
                     title={!cotizacionId ? "Guarda la cotización antes de descargar en USD" : "Cotización en dólares (tipo de cambio 6.96)"}
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    Descargar Cotización $
+                    Cotización $USD
                   </Button>
                   <Button
                     variant="outline"
@@ -1944,7 +1951,7 @@ export default function NuevaCotizacionPage() {
                     title={!cotizacionId ? "Guarda la cotización antes de descargarla" : ""}
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    Descargar Cotización
+                    Cotización Bs
                   </Button>
                 </div>
               </div>
@@ -1954,7 +1961,7 @@ export default function NuevaCotizacionPage() {
               <div className="flex gap-4">
                 {/* Cliente */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="cliente">Cliente</Label>
+                  <Label htmlFor="cliente">Cliente *</Label>
                   <Popover open={openClienteCombobox} onOpenChange={(open) => {
                     setOpenClienteCombobox(open)
                     if (open) {
@@ -2042,7 +2049,7 @@ export default function NuevaCotizacionPage() {
 
                 {/* Comercial */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="vendedor">Comercial</Label>
+                  <Label htmlFor="vendedor">Comercial *</Label>
                   <Popover open={openComercialCombobox} onOpenChange={(open) => {
                     setOpenComercialCombobox(open)
                     if (open) {
@@ -2103,7 +2110,7 @@ export default function NuevaCotizacionPage() {
 
                 {/* Sucursal */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="sucursal">Sucursal</Label>
+                  <Label htmlFor="sucursal">Sucursal *</Label>
                   <Select value={sucursal} onValueChange={setSucursal}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar sucursal" />
@@ -2120,9 +2127,9 @@ export default function NuevaCotizacionPage() {
 
                 {/* Validez */}
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="vigencia">Validez</Label>
+                  <Label htmlFor="vigencia">Validez *</Label>
                   <Select value={vigencia} onValueChange={setVigencia}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder="Seleccionar validez" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2145,8 +2152,25 @@ export default function NuevaCotizacionPage() {
                   />
                 </div>
 
-                {/* Tipo de cambio */}
+                {/* Comprobante */}
                 <div className="flex-1 space-y-2">
+                  <Label htmlFor="comprobante">Comprobante *</Label>
+                  <Select
+                    value={comprobante}
+                    onValueChange={(v) => setComprobante(v as 'factura' | 'nota de remision')}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Seleccionar comprobante" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="factura">Factura</SelectItem>
+                      <SelectItem value="nota de remision">Nota de remisión</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Tipo de cambio (menos ancho, no obligatorio) */}
+                <div className="flex-[0.7] min-w-0 space-y-2">
                   <Label htmlFor="tipoCambio">Tipo de cambio</Label>
                   <Input
                     id="tipoCambio"

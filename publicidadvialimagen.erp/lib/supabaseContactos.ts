@@ -352,6 +352,29 @@ export async function findContactoById(id: string): Promise<Contacto | null> {
 }
 
 /**
+ * Buscar contacto por nombre (para cotizaciones que guardan nombre en lugar de UUID).
+ * Coincidencia exacta por nombre (trim, case insensitive). Devuelve el primero si hay varios.
+ */
+export async function findContactoByNombre(nombre: string): Promise<Contacto | null> {
+  const trimmed = nombre?.trim()
+  if (!trimmed) return null
+  const { data, error } = await supabase
+    .from('contactos')
+    .select('*')
+    .ilike('nombre', trimmed)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('❌ [Supabase] Error finding contacto by nombre:', error)
+    return null
+  }
+
+  if (!data) return null
+  return supabaseToContacto(data as ContactoSupabase)
+}
+
+/**
  * Crear nuevo contacto
  * Valida campos requeridos y asegura valores por defecto según la estructura de la tabla
  */

@@ -201,7 +201,7 @@ export default function Sidebar({ children }: SidebarProps) {
                 if (!tieneAcceso) {
                   return null
                 }
-                const isActive = pathname.startsWith('/panel/ajustes')
+                const isActive = pathname.startsWith('/panel/ajustes') && !pathname.startsWith('/panel/ajustes-inventario')
                 return (
                   <li key={module.key}>
                     <Link

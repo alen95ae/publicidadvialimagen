@@ -12,6 +12,7 @@ import {
   Eye,
   MoreHorizontal,
   Download,
+  FileDown,
   CheckCircle,
   XCircle,
   Copy,
@@ -19,7 +20,8 @@ import {
   List,
   X,
   Settings,
-  FileSpreadsheet
+  FileSpreadsheet,
+  TriangleAlert
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -214,6 +216,7 @@ export default function InventarioPage() {
   const [allProductoIds, setAllProductoIds] = useState<string[]>([])
   const [exportingSelected, setExportingSelected] = useState(false)
   const [items, setItems] = useState<any[]>([])
+  const [alertasVariantes, setAlertasVariantes] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
@@ -355,6 +358,24 @@ export default function InventarioPage() {
     setCurrentPage(1)
     fetchItems(1)
   }, [searchTerm, selectedCategory, filtersLoaded])
+
+  // Alertas de variantes (sin configurar o utilidad < 10%) para mostrar botón "Urge"
+  useEffect(() => {
+    if (items.length === 0) {
+      setAlertasVariantes({})
+      return
+    }
+    const ids = items.map((i: any) => i.id).filter(Boolean)
+    if (ids.length === 0) return
+    const params = new URLSearchParams({ ids: ids.join(',') })
+    fetch(`/api/inventario/alertas-variantes?${params}`)
+      .then((res) => res.ok ? res.json() : {})
+      .then((data: Record<string, boolean>) => setAlertasVariantes(data || {}))
+      .catch(() => setAlertasVariantes({}))
+  }, [items])
+
+  // Mostrar botón Revisar utilidad: solo cuando API marca alerta (producto con variantes y utilidad neta < 10%)
+  const mostrarBotonRevisarUtilidad = (item: any) => alertasVariantes[item.id] === true
   
   // Estados para acciones masivas
   const [showBulkActions, setShowBulkActions] = useState(false)
@@ -1302,8 +1323,8 @@ export default function InventarioPage() {
                       size="sm"
                       onClick={exportPDF}
                     >
-                      <Download className="w-4 h-4 mr-2" />
-                      Descargar Catálogo
+                      <FileDown className="w-4 h-4 mr-2" />
+                      Catálogo PDF
                     </Button>
                   </div>
                 </div>
@@ -1446,6 +1467,17 @@ export default function InventarioPage() {
                         </div>
                         {!esSoloLecturaDesdeVentas && (
                           <div className="flex items-center gap-0.5 pt-1 border-t">
+                            {mostrarBotonRevisarUtilidad(item) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Revisar utilidad"
+                                onClick={() => handleEdit(item.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 text-[10px] h-6 px-1"
+                              >
+                                <TriangleAlert className="w-2.5 h-2.5" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1492,7 +1524,13 @@ export default function InventarioPage() {
                     <TableHead>Precio Venta</TableHead>
                     {!esSoloLecturaDesdeVentas && <TableHead>% Utilidad</TableHead>}
                     {!ocultarElementosDesdeVentas && <TableHead>Mostrar en Web</TableHead>}
-                    {!esSoloLecturaDesdeVentas && <TableHead className="text-center">Acciones</TableHead>}
+                    {!esSoloLecturaDesdeVentas && (
+                    <TableHead className="w-[100px]">
+                      <div className="flex justify-end">
+                        <div className="w-[90px] text-center">Acciones</div>
+                      </div>
+                    </TableHead>
+                  )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1619,7 +1657,7 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       {!esSoloLecturaDesdeVentas && (
-                        <TableCell>
+                        <TableCell className={(item.coste ?? 0) === 0 ? 'text-red-600 font-medium' : ''}>
                           Bs {item.coste.toFixed(2)}/{item.unidad_medida || ''}
                         </TableCell>
                       )}
@@ -1663,8 +1701,19 @@ export default function InventarioPage() {
                         </TableCell>
                       )}
                       {!esSoloLecturaDesdeVentas && (
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1 w-[100px] ml-auto">
+                            {mostrarBotonRevisarUtilidad(item) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Revisar utilidad"
+                                onClick={() => handleEdit(item.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <TriangleAlert className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button 
                               variant="ghost" 
                               size="sm" 

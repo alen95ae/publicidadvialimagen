@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseServer';
+import { verificarCronAuth } from '@/lib/cronAuth';
 import { crearNotificacion } from '@/lib/notificaciones';
 import {
   obtenerRolesHabilitadosPorTipo,
@@ -16,7 +17,7 @@ import { getAlquileres } from '@/lib/supabaseAlquileres';
  * 
  * Uso desde cron job (ejemplo con curl):
  * curl -X POST http://localhost:3000/api/cron/notificaciones \
- *   -H "Authorization: Bearer YOUR_SECRET_TOKEN"
+ *   -H "Authorization: Bearer <CRON_SECRET>"
  * 
  * O configurar en Vercel Cron Jobs:
  * {
@@ -28,13 +29,8 @@ import { getAlquileres } from '@/lib/supabaseAlquileres';
  */
 export async function POST(req: NextRequest) {
   try {
-    // Autenticación por CRON_SECRET
-    const authHeader = req.headers.get('authorization');
-    const expectedToken = process.env.CRON_SECRET_TOKEN;
-
-    if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const authError = verificarCronAuth(req);
+    if (authError) return authError;
 
     console.log('🔔 [CRON NOTIFICACIONES] Iniciando procesamiento de notificaciones...');
     const inicio = Date.now();

@@ -4,6 +4,8 @@ import {
   updateCotizacion, 
   deleteCotizacion
 } from '@/lib/supabaseCotizaciones'
+import { getSupabaseServer } from '@/lib/supabaseServer'
+import type { UsuarioResponsable } from '@/lib/services/inventoryService'
 
 export const runtime = 'nodejs' // Asegurar runtime Node.js para notificaciones
 import { getLineasByCotizacionId, deleteLineasByCotizacionId, createMultipleLineas } from '@/lib/supabaseCotizacionLineas'
@@ -19,6 +21,24 @@ import {
   type CotizacionPayload
 } from '@/lib/cotizacionesBackend'
 import { descontarStockProducto, registrarMovimiento, descontarInsumosDesdeCotizacion, revertirStockCotizacion } from '@/lib/services/inventoryService'
+
+/** Resuelve vendedor de la cotización (id o nombre) a UsuarioResponsable. Si no existe, usa fallback (ej. usuario que ejecuta la acción). */
+async function resolverUsuarioResponsableDesdeCotizacion(
+  vendedor: string | null,
+  fallback: UsuarioResponsable
+): Promise<UsuarioResponsable> {
+  if (!vendedor || !String(vendedor).trim()) return fallback
+  const supabase = getSupabaseServer()
+  const v = String(vendedor).trim()
+  const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v)
+  if (isUuid) {
+    const { data } = await supabase.from('usuarios').select('id, nombre').eq('id', v).single()
+    if (data) return { id: data.id, nombre: data.nombre ?? undefined }
+  }
+  const { data } = await supabase.from('usuarios').select('id, nombre').ilike('nombre', v).maybeSingle()
+  if (data) return { id: data.id, nombre: data.nombre ?? undefined }
+  return fallback
+}
 
 export async function GET(
   request: Request,
@@ -215,12 +235,17 @@ export async function PATCH(
         const lineasParaReversion = await getLineasByCotizacionId(id)
         if (lineasParaReversion && lineasParaReversion.length > 0) {
           const sucursal = cotizacionActual.sucursal || 'La Paz'
+          const usuarioResponsable = await resolverUsuarioResponsableDesdeCotizacion(
+            cotizacionActual.vendedor,
+            { id: usuario.id, nombre: usuario.name ?? undefined }
+          )
           await revertirStockCotizacion({
             cotizacionId: id,
             cotizacionCodigo: cotizacionActual.codigo,
             lineas: lineasParaReversion,
             sucursal: sucursal,
-            origen: nuevoEstado === 'Rechazada' ? 'cotizacion_rechazada' : 'cotizacion_editada'
+            origen: nuevoEstado === 'Rechazada' ? 'cotizacion_rechazada' : 'cotizacion_editada',
+            usuarioResponsable
           })
           
           // Marcar flag como false solo si la reversión fue completamente exitosa
@@ -325,14 +350,18 @@ export async function PATCH(
             if (lineasParaDescuento.length > 0) {
               // Obtener sucursal de la cotización
               const sucursal = cotizacionActualizada.sucursal || 'La Paz'
-              
+              const usuarioResponsable = await resolverUsuarioResponsableDesdeCotizacion(
+                cotizacionActualizada.vendedor,
+                { id: usuario.id, nombre: usuario.name ?? undefined }
+              )
               // Usar la nueva función mejorada que considera m², unidades, variantes y excluye soportes
               await descontarInsumosDesdeCotizacion({
                 cotizacionId: id,
                 cotizacionCodigo: cotizacionActualizada.codigo,
                 lineas: lineasParaDescuento,
                 sucursal: sucursal,
-                origen: estadoAnterior === 'Aprobada' ? 'cotizacion_editada' : 'cotizacion_aprobada'
+                origen: estadoAnterior === 'Aprobada' ? 'cotizacion_editada' : 'cotizacion_aprobada',
+                usuarioResponsable
               })
               
               // Marcar flag solo si el descuento fue completamente exitoso
@@ -490,12 +519,17 @@ export async function DELETE(
         const lineasParaReversion = await getLineasByCotizacionId(id)
         if (lineasParaReversion && lineasParaReversion.length > 0) {
           const sucursal = cotizacionAEliminar.sucursal || 'La Paz'
+          const usuarioResponsable = await resolverUsuarioResponsableDesdeCotizacion(
+            cotizacionAEliminar.vendedor,
+            { id: usuario.id, nombre: usuario.name ?? undefined }
+          )
           await revertirStockCotizacion({
             cotizacionId: id,
             cotizacionCodigo: cotizacionAEliminar.codigo,
             lineas: lineasParaReversion,
             sucursal: sucursal,
-            origen: 'cotizacion_eliminada'
+            origen: 'cotizacion_eliminada',
+            usuarioResponsable
           })
           console.log('✅ [DELETE /api/cotizaciones/[id]] Stock revertido antes de eliminar')
         } else {

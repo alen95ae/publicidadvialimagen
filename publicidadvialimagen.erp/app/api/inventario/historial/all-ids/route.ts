@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
+import { filterUltimaVersionPorCotizacion } from "@/lib/historialStockUtils";
 
 const supabase = getSupabaseServer();
 
@@ -15,10 +16,12 @@ export async function GET(request: NextRequest) {
     const fechaDesde = searchParams.get("fecha_desde");
     const fechaHasta = searchParams.get("fecha_hasta");
     const search = searchParams.get("search");
+    const ultimaVersionCotizacion = searchParams.get("ultima_version_cotizacion") === "1";
+    const aplicarUltimaVersion = ultimaVersionCotizacion && origen !== "registro_manual";
 
     let query = supabase
       .from("historial_stock")
-      .select("id")
+      .select("id, fecha, referencia_id, origen, created_at")
       .order("fecha", { ascending: false });
 
     if (itemTipo && itemTipo !== "all") {
@@ -46,7 +49,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No se pudieron obtener los IDs" }, { status: 500 });
     }
 
-    const ids = (data || []).map((r: any) => r.id);
+    let rows = data || [];
+    if (aplicarUltimaVersion && rows.length > 0) {
+      rows = filterUltimaVersionPorCotizacion(rows);
+    }
+    const ids = rows.map((r: any) => r.id);
     return NextResponse.json({ ids, total: ids.length });
   } catch (e: any) {
     console.error("❌ Error historial all-ids:", e);

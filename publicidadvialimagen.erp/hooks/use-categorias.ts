@@ -20,9 +20,15 @@ export function useCategorias(modulo: string, seccion: string) {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(
-        `/api/categorias?modulo=${encodeURIComponent(modulo)}&seccion=${encodeURIComponent(seccion)}`
-      )
+      const url = `/api/categorias?modulo=${encodeURIComponent(modulo)}&seccion=${encodeURIComponent(seccion)}`
+      const response = await fetch(url)
+
+      if (response.status === 404) {
+        console.warn(`[useCategorias] 404 para ${modulo}/${seccion} - usando categorías vacías`)
+        setConfig(null)
+        setLoading(false)
+        return
+      }
 
       if (!response.ok) {
         throw new Error(`Error ${response.status}: ${response.statusText}`)

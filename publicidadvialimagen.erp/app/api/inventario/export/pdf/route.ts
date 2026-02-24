@@ -129,7 +129,6 @@ async function loadImage(imageUrl: string): Promise<{ base64: string | null; for
       if (isPNG) {
         const imageData = imgCtx.getImageData(0, 0, img.width, img.height)
         const data = imageData.data
-        // Verificar si algún pixel tiene alpha < 255
         for (let i = 3; i < data.length; i += 4) {
           if (data[i] < 255) {
             hasAlpha = true
@@ -138,44 +137,33 @@ async function loadImage(imageUrl: string): Promise<{ base64: string | null; for
         }
       }
       
-      // Optimización de tamaño: reducir calidad y redimensionar si es muy grande
-      const maxDimension = 1200 // Máxima dimensión en píxeles para optimizar tamaño
-      let finalWidth = img.width
-      let finalHeight = img.height
-      
+      // Reducir tamaño: limitar dimensión máxima (en el PDF se muestran pequeñas)
+      const maxDimension = 800
       if (img.width > maxDimension || img.height > maxDimension) {
         const ratio = Math.min(maxDimension / img.width, maxDimension / img.height)
-        finalWidth = Math.round(img.width * ratio)
-        finalHeight = Math.round(img.height * ratio)
+        const w = Math.round(img.width * ratio)
+        const h = Math.round(img.height * ratio)
+        const resized = createCanvas(w, h)
+        resized.getContext('2d').drawImage(img, 0, 0, w, h)
+        imgCanvas = resized
       }
       
-      // Redimensionar si es necesario
-      if (finalWidth !== img.width || finalHeight !== img.height) {
-        const resizedCanvas = createCanvas(finalWidth, finalHeight)
-        const resizedCtx = resizedCanvas.getContext('2d')
-        resizedCtx.drawImage(img, 0, 0, finalWidth, finalHeight)
-        imgCanvas = resizedCanvas
-      }
-      
-      // Estrategia de compresión optimizada para reducir tamaño
-      // Calidad reducida de 0.89 a 0.75 para reducir significativamente el tamaño
+      // Compresión agresiva para reducir peso del PDF (catálogo para email)
       if (isPNG && !hasAlpha) {
-        // PNG sin transparencia → JPEG progresivo 75%
         const compressedBuffer = imgCanvas.toBuffer('image/jpeg', { 
-          quality: 0.75, 
+          quality: 0.72, 
           progressive: true,
-          chromaSubsampling: true // Habilitar subsampling para reducir más el tamaño
+          chromaSubsampling: true 
         })
         return {
           base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,
           format: 'JPEG'
         }
       } else if (format === 'JPEG' || isWEBP) {
-        // JPEG/WEBP → recomprimir a JPEG progresivo 75%
         const compressedBuffer = imgCanvas.toBuffer('image/jpeg', { 
-          quality: 0.75, 
+          quality: 0.72, 
           progressive: true,
-          chromaSubsampling: true // Habilitar subsampling para reducir más el tamaño
+          chromaSubsampling: true 
         })
         return {
           base64: `data:image/jpeg;base64,${compressedBuffer.toString('base64')}`,

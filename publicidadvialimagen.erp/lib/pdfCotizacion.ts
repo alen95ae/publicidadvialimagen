@@ -73,6 +73,82 @@ async function cargarLogo(): Promise<string | null> {
   }
 }
 
+/**
+ * Carga una imagen desde URL y la comprime (misma estrategia que PDF soportes):
+ * PNG sin transparencia / JPEG / WEBP → JPEG 89%.
+ * PNG con transparencia → se mantiene PNG sin comprimir.
+ * Reduce mucho el tamaño del PDF para poder enviarlo por email.
+ */
+async function loadAndCompressImage(imageUrl: string): Promise<{ base64: string | null; format: string }> {
+  if (!imageUrl || imageUrl.startsWith('blob:')) {
+    return { base64: null, format: 'JPEG' }
+  }
+  try {
+    const imgResponse = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' })
+    if (!imgResponse.ok) throw new Error(`HTTP ${imgResponse.status}`)
+    const imgBlob = await imgResponse.blob()
+    if (!imgBlob.type.startsWith('image/')) throw new Error(`Tipo inválido: ${imgBlob.type}`)
+
+    const isPNG = imgBlob.type.includes('png')
+    const isWEBP = imgBlob.type.includes('webp')
+
+    return await new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(imgBlob)
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth
+          canvas.height = img.naturalHeight
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve({ base64: null, format: 'JPEG' })
+            return
+          }
+          ctx.drawImage(img, 0, 0)
+
+          let hasAlpha = false
+          if (isPNG) {
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+            for (let i = 3; i < data.length; i += 4) {
+              if (data[i] < 255) {
+                hasAlpha = true
+                break
+              }
+            }
+          }
+
+          if (isPNG && !hasAlpha) {
+            const jpeg = canvas.toDataURL('image/jpeg', 0.89)
+            resolve({ base64: jpeg, format: 'JPEG' })
+          } else if (imgBlob.type.includes('jpeg') || imgBlob.type.includes('jpg') || isWEBP) {
+            const jpeg = canvas.toDataURL('image/jpeg', 0.89)
+            resolve({ base64: jpeg, format: 'JPEG' })
+          } else if (isPNG && hasAlpha) {
+            const png = canvas.toDataURL('image/png')
+            resolve({ base64: png, format: 'PNG' })
+          } else {
+            const jpeg = canvas.toDataURL('image/jpeg', 0.89)
+            resolve({ base64: jpeg, format: 'JPEG' })
+          }
+        } catch (e) {
+          reject(e)
+        }
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        reject(new Error('Error cargando imagen'))
+      }
+      img.src = url
+    })
+  } catch (error) {
+    console.error('❌ Error cargando/comprimiendo imagen para PDF:', error)
+    return { base64: null, format: 'JPEG' }
+  }
+}
+
 // Función para formatear números con separador de miles y decimales (Bs)
 function formatearNumero(numero: number): string {
   const numeroFormateado = numero.toFixed(2)
@@ -325,49 +401,12 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
       let imgType = 'JPEG'
       const hasImage = !!producto.imagen
       
-      if (hasImage) {
-        // Validar que la imagen no sea blob antes de intentar cargarla
-        if (!producto.imagen || producto.imagen.startsWith('blob:')) {
-          console.error('❌ Imagen inválida o blob, omitiendo en PDF:', producto.imagen?.substring(0, 50) || 'null')
-          // Continuar sin imagen
-        } else {
-          try {
-            // Validar que la respuesta sea exitosa
-            const imgResponse = await fetch(producto.imagen, {
-              mode: 'cors',
-              credentials: 'omit'
-            })
-            
-            if (!imgResponse.ok) {
-              throw new Error(`HTTP error! status: ${imgResponse.status}`)
-            }
-            
-            const imgBlob = await imgResponse.blob()
-            
-            // Validar que sea una imagen
-            if (!imgBlob.type.startsWith('image/')) {
-              throw new Error(`Tipo de archivo inválido: ${imgBlob.type}`)
-            }
-            
-            imgBase64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onerror = reject
-              reader.onloadend = () => {
-                if (reader.result) {
-                  resolve(reader.result as string)
-                } else {
-                  reject(new Error('Error leyendo imagen'))
-                }
-              }
-              reader.readAsDataURL(imgBlob)
-            })
-            imgType = imgBlob.type.includes('png') ? 'PNG' : 'JPEG'
-          } catch (error) {
-            console.error('❌ Error cargando imagen del producto para PDF:', error)
-            console.error('   URL:', producto.imagen?.substring(0, 100))
-            // Continuar sin imagen en lugar de fallar completamente
-          }
-        }
+      if (hasImage && producto.imagen && !producto.imagen.startsWith('blob:')) {
+        const loaded = await loadAndCompressImage(producto.imagen)
+        imgBase64 = loaded.base64
+        imgType = loaded.format as 'JPEG' | 'PNG'
+      } else if (hasImage && (!producto.imagen || producto.imagen.startsWith('blob:'))) {
+        console.error('❌ Imagen inválida o blob, omitiendo en PDF:', producto.imagen?.substring(0, 50) || 'null')
       }
       
       // Calcular altura necesaria para el título
@@ -794,49 +833,12 @@ export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
       let imgType = 'JPEG'
       const hasImage = !!producto.imagen
       
-      if (hasImage) {
-        // Validar que la imagen no sea blob antes de intentar cargarla
-        if (!producto.imagen || producto.imagen.startsWith('blob:')) {
-          console.error('❌ Imagen inválida o blob, omitiendo en PDF:', producto.imagen?.substring(0, 50) || 'null')
-          // Continuar sin imagen
-        } else {
-          try {
-            // Validar que la respuesta sea exitosa
-            const imgResponse = await fetch(producto.imagen, {
-              mode: 'cors',
-              credentials: 'omit'
-            })
-            
-            if (!imgResponse.ok) {
-              throw new Error(`HTTP error! status: ${imgResponse.status}`)
-            }
-            
-            const imgBlob = await imgResponse.blob()
-            
-            // Validar que sea una imagen
-            if (!imgBlob.type.startsWith('image/')) {
-              throw new Error(`Tipo de archivo inválido: ${imgBlob.type}`)
-            }
-            
-            imgBase64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onerror = reject
-              reader.onloadend = () => {
-                if (reader.result) {
-                  resolve(reader.result as string)
-                } else {
-                  reject(new Error('Error leyendo imagen'))
-                }
-              }
-              reader.readAsDataURL(imgBlob)
-            })
-            imgType = imgBlob.type.includes('png') ? 'PNG' : 'JPEG'
-          } catch (error) {
-            console.error('❌ Error cargando imagen del producto para PDF:', error)
-            console.error('   URL:', producto.imagen?.substring(0, 100))
-            // Continuar sin imagen en lugar de fallar completamente
-          }
-        }
+      if (hasImage && producto.imagen && !producto.imagen.startsWith('blob:')) {
+        const loaded = await loadAndCompressImage(producto.imagen)
+        imgBase64 = loaded.base64
+        imgType = loaded.format as 'JPEG' | 'PNG'
+      } else if (hasImage && (!producto.imagen || producto.imagen.startsWith('blob:'))) {
+        console.error('❌ Imagen inválida o blob, omitiendo en PDF:', producto.imagen?.substring(0, 50) || 'null')
       }
       
       // Calcular altura necesaria para el título

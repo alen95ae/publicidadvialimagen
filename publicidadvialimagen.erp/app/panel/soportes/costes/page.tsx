@@ -114,6 +114,13 @@ const getBeneficioIcon = (porcentaje: number) => {
   return <TrendingUp className="w-4 h-4" />
 }
 
+// Formato: punto cada 3 cifras, coma decimales (ej. 975.706,98)
+const formatearBs = (n: number): string => {
+  const [parteEntera, parteDecimal] = n.toFixed(2).split('.')
+  const conMiles = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${conMiles},${parteDecimal}`
+}
+
 export default function CostesPage() {
   const { puedeEditar, loading: permisosLoading, tieneFuncionTecnica } = usePermisosContext()
   const [searchTerm, setSearchTerm] = useState("")
@@ -141,7 +148,7 @@ export default function CostesPage() {
   const [ciudadesUnicas, setCiudadesUnicas] = useState<string[]>([])
   
   // Estados para ordenamiento
-  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadMensual" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>(null)
+  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>(null)
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   
   // Estado para controlar cuándo los filtros están cargados
@@ -733,9 +740,8 @@ export default function CostesPage() {
     "Coste Total",
     "Coste Actual",
     "Precio Venta",
-    "% Utilidad",
-    "Utilidad mensual",
-    "Utilidad anual",
+    "% Utilidad estimada",
+    "Utilidad anual estimada",
     "Último precio",
     "% Utilidad real",
     "Estado"
@@ -761,7 +767,6 @@ export default function CostesPage() {
     s.costeActual != null ? Number(s.costeActual.toFixed(2)) : "",
     s.precioVenta != null ? Number(s.precioVenta.toFixed(2)) : "",
     s.porcentajeBeneficio != null ? s.porcentajeBeneficio.toFixed(1) + "%" : "",
-    s.utilidadMensual != null ? Number(s.utilidadMensual.toFixed(2)) : "",
     s.utilidadAnual != null ? Number(s.utilidadAnual.toFixed(2)) : "",
     s.ultimoPrecio != null ? Number(s.ultimoPrecio.toFixed(2)) : "",
     s.porcentajeUtilidadReal != null ? s.porcentajeUtilidadReal.toFixed(1) + "%" : "",
@@ -819,7 +824,7 @@ export default function CostesPage() {
   }
 
   // Función para manejar el ordenamiento
-  const handleSort = (column: "codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadMensual" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal") => {
+  const handleSort = (column: "codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal") => {
     if (sortColumn === column) {
       // Si ya está ordenando por esta columna, cambiar dirección o desactivar
       if (sortDirection === "asc") {
@@ -905,11 +910,6 @@ export default function CostesPage() {
         bValue = b.porcentajeBeneficio
         return sortDirection === "asc" ? aValue - bValue : bValue - aValue
         
-      case "utilidadMensual":
-        aValue = a.utilidadMensual
-        bValue = b.utilidadMensual
-        return sortDirection === "asc" ? aValue - bValue : bValue - aValue
-        
       case "utilidadAnual":
         aValue = a.utilidadAnual
         bValue = b.utilidadAnual
@@ -993,6 +993,7 @@ export default function CostesPage() {
   // % Beneficio = ((totalIngresos - totalCostes) / totalCostes) * 100
   // Si totalCostes === 0, retornar 100 para evitar división por 0
   const porcentajeBeneficioTotal = totalCostos === 0 ? 100 : round2(((ingresoTotal - totalCostos) / totalCostos) * 100)
+  const beneficioTotal = round2(ingresoTotal - totalCostos)
 
   return (
     <div className="p-6">
@@ -1023,7 +1024,7 @@ export default function CostesPage() {
                     </TooltipProvider>
                   </div>
                   <p className="text-2xl font-bold text-gray-800 mt-2">
-                    Bs {potencialVentas.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                    Bs {formatearBs(potencialVentas)}
                   </p>
                 </div>
                 <DollarSign className="w-8 h-8 text-gray-600" />
@@ -1049,7 +1050,7 @@ export default function CostesPage() {
                     </TooltipProvider>
                   </div>
                   <p className="text-2xl font-bold text-gray-800 mt-2">
-                    Bs {totalCostos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                    Bs {formatearBs(totalCostos)}
                   </p>
                 </div>
                 <TrendingDown className="w-8 h-8 text-gray-600" />
@@ -1075,7 +1076,7 @@ export default function CostesPage() {
                     </TooltipProvider>
                   </div>
                   <p className="text-2xl font-bold text-gray-800 mt-2">
-                    Bs {ingresoTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                    Bs {formatearBs(ingresoTotal)}
                   </p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-gray-600" />
@@ -1102,6 +1103,9 @@ export default function CostesPage() {
                   </div>
                   <p className={`text-2xl font-bold ${getBeneficioColor(porcentajeBeneficioTotal)} mt-2`}>
                     {porcentajeBeneficioTotal.toFixed(1)}%
+                  </p>
+                  <p className={`text-xs mt-0.5 ${getBeneficioColor(porcentajeBeneficioTotal)}`}>
+                    Bs {formatearBs(beneficioTotal)}
                   </p>
                 </div>
                 {(() => {
@@ -1210,14 +1214,13 @@ export default function CostesPage() {
                                        sortColumn === 'impuestos' ? 'Impuestos' :
                                        sortColumn === 'costeTotal' ? 'Coste Total' :
                                        sortColumn === 'precioVenta' ? 'Precio Venta' :
-                                       sortColumn === 'porcentajeUtilidad' ? 'Utilidad' :
-                                       sortColumn === 'utilidadMensual' ? 'Utilidad Mensual' :
-                                       sortColumn === 'utilidadAnual' ? 'Utilidad Anual' :
+                                       sortColumn === 'porcentajeUtilidad' ? 'Utilidad estimada' :
+                                       sortColumn === 'utilidadAnual' ? 'Utilidad anual estimada' :
                                        sortColumn === 'costeActual' ? 'Coste Actual' :
                                        sortColumn === 'ultimoPrecio' ? 'Último Precio' :
                                        sortColumn === 'utilidadReal' ? 'Utilidad Real' : sortColumn || ''
                       
-                      const isNumericColumn = ['impuestos', 'costeTotal', 'precioVenta', 'porcentajeUtilidad', 'utilidadMensual', 'utilidadAnual', 'costeActual', 'ultimoPrecio', 'utilidadReal', 'costeAlquiler'].includes(sortColumn || '')
+                      const isNumericColumn = ['impuestos', 'costeTotal', 'precioVenta', 'porcentajeUtilidad', 'utilidadAnual', 'costeActual', 'ultimoPrecio', 'utilidadReal', 'costeAlquiler'].includes(sortColumn || '')
                       const directionText = isNumericColumn 
                         ? (sortDirection === 'asc' ? '(Menor a Mayor)' : '(Mayor a Menor)')
                         : (sortDirection === 'asc' ? '(A-Z)' : '(Z-A)')
@@ -1593,17 +1596,8 @@ export default function CostesPage() {
                           onClick={() => handleSort("porcentajeUtilidad")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
                         >
-                          % Utilidad
+                          % Utilidad estimada
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "porcentajeUtilidad" ? "text-[#D54644]" : "text-gray-400"}`} />
-                        </button>
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
-                        <button
-                          onClick={() => handleSort("utilidadMensual")}
-                          className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
-                        >
-                          Utilidad mensual
-                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadMensual" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-900">
@@ -1611,7 +1605,7 @@ export default function CostesPage() {
                           onClick={() => handleSort("utilidadAnual")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
                         >
-                          Utilidad anual
+                          Utilidad anual estimada
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadAnual" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
@@ -1648,7 +1642,7 @@ export default function CostesPage() {
                   <tbody>
                     {soportesCostesPaginated.length === 0 ? (
                       <tr>
-                        <td colSpan={25} className="text-center py-8 text-gray-500">
+                        <td colSpan={24} className="text-center py-8 text-gray-500">
                           {searchTerm ? 'No se encontraron soportes con ese criterio de búsqueda' : 'No hay soportes disponibles'}
                         </td>
                       </tr>
@@ -1781,7 +1775,7 @@ export default function CostesPage() {
                                 placeholder="0.00"
                               />
                             ) : soporte.costeAlquilerActual !== null ? (
-                              <span className="font-medium">Bs {soporte.costeAlquilerActual.toFixed(2)}</span>
+                              <span className="font-medium">Bs {formatearBs(soporte.costeAlquilerActual)}</span>
                             ) : (
                               <span className="text-gray-500">-</span>
                             )}
@@ -1797,7 +1791,7 @@ export default function CostesPage() {
                                 placeholder="0.00"
                               />
                             ) : (
-                              <span>Bs {soporte.patentes.toFixed(2)}</span>
+                              <span>Bs {formatearBs(soporte.patentes)}</span>
                             )}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
@@ -1811,7 +1805,7 @@ export default function CostesPage() {
                                 placeholder="0.00"
                               />
                             ) : (
-                              <span>Bs {soporte.usoSuelos.toFixed(2)}</span>
+                              <span>Bs {formatearBs(soporte.usoSuelos)}</span>
                             )}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
@@ -1876,7 +1870,7 @@ export default function CostesPage() {
                                 // Si es un número → mostrarlo como está (sin estilo especial)
                                 const luzNumero = parseFloat(luzValue);
                                 if (!isNaN(luzNumero) && luzNumero > 0) {
-                                  return <span>Bs {luzNumero.toFixed(2)}</span>;
+                                  return <span>Bs {formatearBs(luzNumero)}</span>;
                                 }
                               }
                               
@@ -1894,7 +1888,7 @@ export default function CostesPage() {
                                 // Si es un número
                                 const luzNumero = parseFloat(luzValue);
                                 if (!isNaN(luzNumero) && luzNumero > 0) {
-                                  return <span>Bs {luzNumero.toFixed(2)}</span>;
+                                  return <span>Bs {formatearBs(luzNumero)}</span>;
                                 }
                               }
                               
@@ -1917,7 +1911,7 @@ export default function CostesPage() {
                                 placeholder="0.00"
                               />
                             ) : (
-                              <span>Bs {soporte.gastosAdministrativos.toFixed(2)}</span>
+                              <span>Bs {formatearBs(soporte.gastosAdministrativos)}</span>
                             )}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
@@ -1931,7 +1925,7 @@ export default function CostesPage() {
                                 placeholder="0.00"
                               />
                             ) : (
-                              <span>Bs {soporte.comisionEjec.toFixed(2)}</span>
+                              <span>Bs {formatearBs(soporte.comisionEjec)}</span>
                             )}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
@@ -1945,41 +1939,39 @@ export default function CostesPage() {
                                 placeholder="0.00"
                               />
                             ) : (
-                              <span>Bs {soporte.mantenimiento.toFixed(2)}</span>
+                              <span>Bs {formatearBs(soporte.mantenimiento)}</span>
                             )}
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <span className="font-medium text-orange-600">Bs {soporte.impuestos18.toFixed(2)}</span>
+                            <span className="font-medium text-orange-600">Bs {formatearBs(soporte.impuestos18)}</span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <span className="font-medium text-red-600">Bs {soporte.costoTotal.toFixed(2)}</span>
+                            <span className="font-medium text-red-600">Bs {formatearBs(soporte.costoTotal)}</span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <span className="font-medium text-green-600">Bs {soporte.precioVenta.toFixed(2)}</span>
+                            <span className="font-medium text-green-600">Bs {formatearBs(soporte.precioVenta)}</span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <div className={`flex items-center gap-1 ${getBeneficioColor(soporte.porcentajeBeneficio)}`}>
-                              {getBeneficioIcon(soporte.porcentajeBeneficio)}
-                              <span className="font-medium">{soporte.porcentajeBeneficio.toFixed(1)}%</span>
+                            <div className={`flex flex-col ${getBeneficioColor(soporte.porcentajeBeneficio)}`}>
+                              <div className="flex items-center gap-1">
+                                {getBeneficioIcon(soporte.porcentajeBeneficio)}
+                                <span className="font-medium">{soporte.porcentajeBeneficio.toFixed(1)}%</span>
+                              </div>
+                              <span className="text-xs mt-0.5">Bs {formatearBs(soporte.utilidadMensual)}</span>
                             </div>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <span className={`font-medium ${soporte.utilidadMensual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              Bs {soporte.utilidadMensual.toFixed(2)}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
                             <span className={`font-medium ${soporte.utilidadAnual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              Bs {soporte.utilidadAnual.toFixed(2)}
+                              Bs {formatearBs(soporte.utilidadAnual)}
                             </span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
-                            <span className="font-medium text-purple-600">Bs {soporte.costeActual.toFixed(2)}</span>
+                            <span className="font-medium text-purple-600">Bs {formatearBs(soporte.costeActual)}</span>
                           </td>
                           <td className="py-2 px-3 whitespace-nowrap">
                             {soporte.ultimoPrecio !== null ? (
                               <span className="font-medium text-blue-600">
-                                Bs {soporte.ultimoPrecio.toFixed(2)}
+                                Bs {formatearBs(soporte.ultimoPrecio)}
                               </span>
                             ) : (
                               <span className="text-gray-500">-</span>

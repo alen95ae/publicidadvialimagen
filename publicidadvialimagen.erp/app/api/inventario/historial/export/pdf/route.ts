@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabaseServer'
+import { filterUltimaVersionPorCotizacion } from '@/lib/historialStockUtils'
 import jsPDF from 'jspdf'
 import path from "path"
 import fs from "fs/promises"
@@ -63,6 +64,8 @@ export async function GET(request: NextRequest) {
     const fechaHasta = searchParams.get('fecha_hasta')
     const itemId = searchParams.get('item_id')
     const referenciaCodigo = searchParams.get('referencia_codigo')
+    const ultimaVersionCotizacion = searchParams.get('ultima_version_cotizacion') === '1'
+    const aplicarUltimaVersion = ultimaVersionCotizacion && origen !== 'registro_manual'
 
     let query = supabase
       .from('historial_stock')
@@ -117,8 +120,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    let dataParaExportar = data
+    if (aplicarUltimaVersion && dataParaExportar.length > 0) {
+      dataParaExportar = filterUltimaVersionPorCotizacion(dataParaExportar)
+    }
+    if (!dataParaExportar || dataParaExportar.length === 0) {
+      return NextResponse.json(
+        { error: 'No hay datos para generar el historial con los filtros seleccionados' },
+        { status: 400 }
+      )
+    }
+
     // Para registros de cotizaciones, obtener el usuario que aprobó desde la cotización
-    const dataConUsuario = await Promise.all((data || []).map(async (entry: any) => {
+    const dataConUsuario = await Promise.all((dataParaExportar || []).map(async (entry: any) => {
       if (
         (entry.origen === 'cotizacion_aprobada' || 
          entry.origen === 'cotizacion_rechazada' || 
@@ -148,14 +162,10 @@ export async function GET(request: NextRequest) {
               .select('id, vendedor')
               .eq('codigo', entry.referencia_codigo)
             
-            if (cotizacionesPorCodigo && cotizacionesPorCodigo.length > 0) {
-              cotizacion = cotizacionesPorCodigo[0]
-            }
+          if (cotizacionesPorCodigo && cotizacionesPorCodigo.length > 0) {
+            cotizacion = cotizacionesPorCodigo[0]
           }
-          
-          if (cotizacionError) {
-            console.warn(`⚠️ Error obteniendo cotización ${entry.referencia_id}:`, cotizacionError)
-          }
+        }
           
           if (cotizacion?.vendedor) {
             let usuarioNombreCotizacion = cotizacion.vendedor

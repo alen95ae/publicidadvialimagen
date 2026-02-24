@@ -803,36 +803,6 @@ export default function ProductoDetailPage() {
   // Función auxiliar para redondear a 2 decimales
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-  // Función para calcular utilidad neta usando los mismos parámetros de la calculadora principal
-  // Devuelve { valor, porcentaje }
-  const calcularUtilidadNeta = (costeVariante: number, precioVariante: number): { valor: number, porcentaje: number } => {
-    // Obtener porcentajes de la calculadora principal
-    const facturaRow = priceRows.find(r => r.campo === "Factura")
-    const iueRow = priceRows.find(r => r.campo === "IUE")
-    const comisionRow = priceRows.find(r => r.campo === "Comision")
-
-    const facturaPctConfig = parseNum(facturaRow?.porcentajeConfig ?? facturaRow?.porcentaje ?? 16)
-    const iuePctConfig = parseNum(iueRow?.porcentajeConfig ?? iueRow?.porcentaje ?? 2)
-    const comPctConfig = parseNum(comisionRow?.porcentajeConfig ?? comisionRow?.porcentaje ?? 12)
-
-    const facturaPct = facturaPctConfig / 100
-    const iuePct = iuePctConfig / 100
-
-    const facturaVal = round2(precioVariante * facturaPct)
-    const iueVal = round2(precioVariante * iuePct)
-
-    const costosTotales = round2(costeVariante + facturaVal + iueVal)
-    const utilidadBruta = round2(precioVariante - costosTotales)
-    const comPct = comPctConfig / 100
-    const comisionVal = round2(utilidadBruta * comPct)
-    const utilidadNeta = round2(utilidadBruta - comisionVal)
-
-    // Calcular porcentaje sobre el precio
-    const utilidadNetaPct = precioVariante > 0 ? round2((utilidadNeta / precioVariante) * 100) : 0
-
-    return { valor: utilidadNeta, porcentaje: utilidadNetaPct }
-  }
-
   // Función para manejar cambios en una SOLA variante (edición individual en la tabla)
   const handleSingleVarianteFieldChange = (varianteId: string, field: 'precio_override' | 'dif_precio', value: number) => {
     const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
@@ -3867,69 +3837,42 @@ export default function ProductoDetailPage() {
                               </TableHead>
                               <TableHead className="min-w-[250px]">Variante</TableHead>
                               <TableHead className="w-[120px] text-right">Coste Variante</TableHead>
-                              <TableHead className="w-[120px] text-right">Precio Variante</TableHead>
                               <TableHead className="w-[120px] text-right">Dif. Coste</TableHead>
+                              <TableHead className="w-[120px] text-right">Precio Variante</TableHead>
                               <TableHead className="w-[120px] text-right">Dif. Precio</TableHead>
                               <TableHead className="w-[120px] text-right">Utilidad Neta</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {variantesProducto.filter(v => v && v.id).map((variante, index) => {
-                              // ID como string para consistencia
                               const varianteIdStr = String(variante.id)
 
-                              // IMPORTANTE: Usar siempre como referencia el coste base real del producto (totalCost)
+                              // Leer campos financieros persistidos
+                              const costeFinal = variante.coste_final_usado ?? (totalCost || 0)
                               const costeBaseProducto = totalCost || 0
+                              const difCoste = Math.max(0, costeFinal - costeBaseProducto)
 
-                              // Priorizar override si existe; luego coste_calculado; fallback al coste base
-                              const costeVarianteRaw =
-                                (variante.coste_override !== null && variante.coste_override !== undefined
-                                  ? variante.coste_override
-                                  : (variante.coste_calculado !== null && variante.coste_calculado !== undefined
-                                      ? variante.coste_calculado
-                                      : costeBaseProducto))
-
-                              // Calcular diferencia respecto al coste base y NUNCA permitir valores negativos
-                              const difCosteRaw = costeVarianteRaw - costeBaseProducto
-                              const difCoste = difCosteRaw < 0 ? 0 : difCosteRaw
-
-                              // El coste de la variante que se muestra/usa nunca puede ser inferior al coste base
-                              const costeVariante = costeBaseProducto + difCoste
-                              const costeFinal = costeVariante
-
-                              // Obtener precio base del producto
                               const precioBaseProducto = parseFloat(formData.precio_venta) || (producto?.precio_venta || 0)
 
-                              // La primera variante siempre usa el precio base del producto
+                              // Para precio y dif_precio: respetar pendingChanges del formulario de edición
                               let precioFinal: number
                               let difPrecio: number
 
-                              // Verificar si hay cambios pendientes para ESTA variante específica
                               const pendingChanges = pendingChangesVariantes[varianteIdStr]
 
-                              // Determinar precio final: pendingChanges > precio_override guardado > precio base
                               if (pendingChanges?.precio_override !== undefined) {
-                                // Si hay cambios pendientes, usar esos
                                 precioFinal = pendingChanges.precio_override
                                 difPrecio = pendingChanges.dif_precio ?? (precioFinal - precioBaseProducto)
-                              } else if (variante.precio_override !== null && variante.precio_override !== undefined) {
-                                // Si hay precio_override guardado, usarlo
-                                precioFinal = variante.precio_override
-                                difPrecio = calcularDiferenciaPrecio(precioFinal, precioBaseProducto)
-                              } else if (index === 0) {
-                                // Primera variante sin override: usar precio base
-                                precioFinal = precioBaseProducto
-                                difPrecio = 0
                               } else {
-                                // Otras variantes sin override: usar precio calculado
-                                precioFinal = variante.precio_base || variante.precio_calculado || precioBaseProducto
+                                precioFinal = variante.precio_final_usado ?? precioBaseProducto
                                 difPrecio = calcularDiferenciaPrecio(precioFinal, precioBaseProducto)
                               }
 
-                              // Calcular utilidad neta (valor y porcentaje)
-                              const { valor: utilidadNetaValor, porcentaje: utilidadNetaPct } = calcularUtilidadNeta(costeFinal, precioFinal)
+                              // Utilidad neta directamente del valor persistido
+                              const utilidadNetaPct = pendingChanges?.precio_override !== undefined
+                                ? (precioFinal > 0 ? Math.round(((precioFinal - costeFinal) / precioFinal) * 10000) / 100 : 0)
+                                : (variante.utilidad_neta_calculada ?? 0)
 
-                              // Estado de selección y edición
                               const isSelected = selectedVariantes[varianteIdStr] || false
                               const isEditing = editingVariante[varianteIdStr] !== undefined
                               const editData = editingVariante[varianteIdStr] || {}
@@ -3951,7 +3894,12 @@ export default function ProductoDetailPage() {
                                   </TableCell>
                                   <TableCell className="text-right">
                                     <span>
-                                      Bs {costeVariante.toFixed(2)}
+                                      Bs {costeFinal.toFixed(2)}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <span className={difCoste !== 0 ? (difCoste > 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium') : 'text-gray-500'}>
+                                      {difCoste > 0 ? '+' : difCoste < 0 ? '-' : ''}{Math.abs(difCoste).toFixed(2)}
                                     </span>
                                   </TableCell>
                                   <TableCell className="text-right">
@@ -3972,11 +3920,6 @@ export default function ProductoDetailPage() {
                                         Bs {precioFinal.toFixed(2)}
                                       </span>
                                     )}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <span className={difCoste !== 0 ? (difCoste > 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium') : 'text-gray-500'}>
-                                      {difCoste > 0 ? '+' : difCoste < 0 ? '-' : ''}{Math.abs(difCoste).toFixed(2)}
-                                    </span>
                                   </TableCell>
                                   <TableCell className="text-right">
                                     {isSelected ? (

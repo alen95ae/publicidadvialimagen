@@ -1,125 +1,111 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabaseServer';
+import { verificarCronAuth } from '@/lib/cronAuth';
+
+const ESTADOS_QUE_PUEDEN_VENCER = ['Pendiente', 'En Proceso'] as const;
+const VIGENCIA_DEFAULT_DIAS = 30;
 
 /**
- * Endpoint para actualizar estados de cotizaciones vencidas
- * 
- * Este endpoint debe ser llamado diariamente (por ejemplo, desde un cron job)
- * para actualizar automáticamente los estados de las cotizaciones:
- * 
- * - Cotizaciones con vigencia expirada → "Vencida"
- * - Solo actualiza si el estado actual es "Pendiente" o "En Proceso"
- * - No modifica cotizaciones "Aprobada" o "Rechazada"
- * 
- * Uso desde cron job (ejemplo con curl):
- * curl -X POST http://localhost:3000/api/cotizaciones/actualizar-vencidas \
- *   -H "Authorization: Bearer YOUR_SECRET_TOKEN"
- * 
- * O configurar en Vercel Cron Jobs:
- * {
- *   "crons": [{
- *     "path": "/api/cotizaciones/actualizar-vencidas",
- *     "schedule": "0 0 * * *"
- *   }]
- * }
+ * Calcula la fecha de vencimiento: fecha_creacion + vigencia_dias.
+ * Usa el mismo criterio que el resto del sistema (fecha en local según Date).
  */
-export async function POST(req: NextRequest) {
-  try {
-    // Opcional: Verificar token de autorización para seguridad
-    const authHeader = req.headers.get('authorization');
-    const expectedToken = process.env.CRON_SECRET_TOKEN;
-    
-    if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
-    
-    console.log('🔄 [API] Iniciando actualización de cotizaciones vencidas...');
-    const inicio = Date.now();
-    
-    const supabase = getSupabaseServer();
-    const ahora = new Date();
-    
-    // Obtener todas las cotizaciones que no están Aprobadas, Rechazadas o Vencidas
-    // Solo queremos actualizar las que están en "Pendiente" o "En Proceso"
-    const { data: cotizaciones, error } = await supabase
+function calcularFechaVencimiento(fechaCreacion: string, vigenciaDias: number): Date {
+  const fecha = new Date(fechaCreacion);
+  const vencimiento = new Date(fecha);
+  vencimiento.setDate(vencimiento.getDate() + vigenciaDias);
+  return vencimiento;
+}
+
+/**
+ * Cron: actualiza a "Vencida" las cotizaciones Pendiente/En Proceso cuya
+ * fecha de validez ya pasó (fecha_creacion + vigencia_dias).
+ * No modifica Aprobada, Rechazada, Facturada ni Vencida.
+ *
+ * Vercel envía Authorization: Bearer <CRON_SECRET> cuando CRON_SECRET está definido.
+ * En local (GET/POST sin header) se permite en desarrollo.
+ */
+async function ejecutarActualizacion(): Promise<{ revisadas: number; actualizadas: number; errores: number }> {
+  const supabase = getSupabaseServer();
+  const ahora = new Date();
+
+  const { data: cotizaciones, error } = await supabase
+    .from('cotizaciones')
+    .select('id, codigo, estado, fecha_creacion, vigencia')
+    .in('estado', [...ESTADOS_QUE_PUEDEN_VENCER]);
+
+  if (error) {
+    console.error('❌ [CRON cotizaciones] Error obteniendo cotizaciones:', error);
+    throw error;
+  }
+
+  const revisadas = cotizaciones?.length ?? 0;
+
+  if (revisadas === 0) {
+    console.log('ℹ️ [CRON cotizaciones] No hay cotizaciones Pendiente/En Proceso para revisar.');
+    return { revisadas: 0, actualizadas: 0, errores: 0 };
+  }
+
+  console.log(`🔄 [CRON cotizaciones] Revisando ${revisadas} cotización(es) candidata(s).`);
+
+  let actualizadas = 0;
+  let errores = 0;
+
+  for (const cotizacion of cotizaciones ?? []) {
+    if (!cotizacion.fecha_creacion) continue;
+
+    const vigenciaDias =
+      typeof cotizacion.vigencia === 'number' && !Number.isNaN(cotizacion.vigencia)
+        ? cotizacion.vigencia
+        : VIGENCIA_DEFAULT_DIAS;
+
+    const fechaVencimiento = calcularFechaVencimiento(cotizacion.fecha_creacion, vigenciaDias);
+
+    if (ahora < fechaVencimiento) continue;
+
+    const { error: updateError } = await supabase
       .from('cotizaciones')
-      .select('id, codigo, estado, fecha_creacion, vigencia')
-      .in('estado', ['Pendiente', 'En Proceso']); // Solo las que pueden vencer
-    
-    if (error) {
-      console.error('❌ [API] Error obteniendo cotizaciones:', error);
-      throw error;
+      .update({ estado: 'Vencida' })
+      .eq('id', cotizacion.id);
+
+    if (updateError) {
+      console.error(`❌ [CRON cotizaciones] Error actualizando ${cotizacion.codigo}:`, updateError);
+      errores++;
+    } else {
+      actualizadas++;
     }
-    
-    if (!cotizaciones || cotizaciones.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No hay cotizaciones para verificar',
-        actualizadas: 0,
-        duracion_ms: Date.now() - inicio,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    let actualizadas = 0;
-    let errores = 0;
-    
-    // Verificar cada cotización
-    for (const cotizacion of cotizaciones) {
-      if (!cotizacion.fecha_creacion) continue;
-      
-      const fechaCreacion = new Date(cotizacion.fecha_creacion);
-      const vigenciaDias = cotizacion.vigencia || 30;
-      const fechaVencimiento = new Date(fechaCreacion);
-      fechaVencimiento.setDate(fechaVencimiento.getDate() + vigenciaDias);
-      
-      // Si la fecha actual es mayor que la fecha de vencimiento, actualizar
-      if (ahora > fechaVencimiento) {
-        try {
-          const { error: updateError } = await supabase
-            .from('cotizaciones')
-            .update({ estado: 'Vencida' })
-            .eq('id', cotizacion.id);
-          
-          if (updateError) {
-            console.error(`❌ [API] Error actualizando cotización ${cotizacion.codigo}:`, updateError);
-            errores++;
-          } else {
-            console.log(`✅ [API] Cotización ${cotizacion.codigo} actualizada a Vencida`);
-            actualizadas++;
-          }
-        } catch (error) {
-          console.error(`❌ [API] Error actualizando cotización ${cotizacion.id}:`, error);
-          errores++;
-        }
-      }
-    }
-    
-    const duracion = Date.now() - inicio;
-    
+  }
+
+  console.log(`✅ [CRON cotizaciones] Revisadas: ${revisadas}, actualizadas: ${actualizadas}, errores: ${errores}.`);
+  return { revisadas, actualizadas, errores };
+}
+
+export async function POST(req: NextRequest) {
+  const inicio = Date.now();
+
+  const authError = verificarCronAuth(req);
+  if (authError) return authError;
+
+  console.log('🔄 [CRON cotizaciones] Iniciando actualización de cotizaciones vencidas.');
+
+  try {
+    const { revisadas, actualizadas, errores } = await ejecutarActualizacion();
+    const duracion_ms = Date.now() - inicio;
+
     return NextResponse.json({
       success: true,
-      message: 'Cotizaciones vencidas actualizadas correctamente',
-      resultado: {
-        verificadas: cotizaciones.length,
-        actualizadas,
-        errores
-      },
-      duracion_ms: duracion,
-      timestamp: new Date().toISOString()
+      revisadas,
+      actualizadas,
+      errores,
+      duracion_ms,
+      timestamp: new Date().toISOString(),
     });
-    
   } catch (error) {
-    console.error('❌ [API] Error actualizando cotizaciones vencidas:', error);
-    
+    console.error('❌ [CRON cotizaciones] Error:', error);
     return NextResponse.json(
       {
         success: false,
         error: error instanceof Error ? error.message : 'Error desconocido',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       { status: 500 }
     );
@@ -127,7 +113,8 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * También permitir GET para facilitar pruebas y configuración de cron jobs
+ * GET soportado para pruebas manuales (p. ej. navegador en local)
+ * y para configuración de cron (algunos sistemas llaman GET).
  */
 export async function GET(req: NextRequest) {
   return POST(req);

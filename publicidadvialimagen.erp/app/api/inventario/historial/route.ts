@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabaseServer'
+import { filterUltimaVersionPorCotizacion } from '@/lib/historialStockUtils'
 
 const supabase = getSupabaseServer()
 
@@ -20,10 +21,13 @@ export async function GET(request: NextRequest) {
     const itemId = searchParams.get('item_id')
     const referenciaCodigo = searchParams.get('referencia_codigo')
     const search = searchParams.get('search')
+    const ultimaVersionCotizacion = searchParams.get('ultima_version_cotizacion') === '1'
+
+    const aplicarUltimaVersion = ultimaVersionCotizacion && origen !== 'registro_manual'
 
     let query = supabase
       .from('historial_stock')
-      .select('*', { count: 'exact' })
+      .select('*', { count: aplicarUltimaVersion ? undefined : 'exact' })
       .order('fecha', { ascending: false })
 
     // Aplicar filtros
@@ -55,12 +59,13 @@ export async function GET(request: NextRequest) {
       query = query.ilike('referencia_codigo', `%${referenciaCodigo}%`)
     }
 
-    // Búsqueda general: código del ítem, nombre del ítem o código de referencia
-    // Si hay búsqueda, no aplicar paginación todavía (se hará después de filtrar por usuario)
+    // Búsqueda en BD (cuando no aplicamos filtro última versión, la paginación se hace después)
     if (search) {
       query = query.or(`item_codigo.ilike.%${search}%,item_nombre.ilike.%${search}%,referencia_codigo.ilike.%${search}%`)
-    } else {
-      // Solo aplicar paginación si no hay búsqueda
+    }
+
+    // Si aplicamos "última versión por cotización", no paginar en BD; traer todo, filtrar y paginar en memoria
+    if (!aplicarUltimaVersion && !search) {
       const from = (page - 1) * limit
       const to = from + limit - 1
       query = query.range(from, to)
@@ -73,151 +78,119 @@ export async function GET(request: NextRequest) {
       throw error
     }
 
-    // Para registros de cotizaciones, obtener el usuario que aprobó desde la cotización
-    let dataConUsuario = await Promise.all((data || []).map(async (entry: any) => {
-      // Si el origen es una cotizacion y hay referencia_id, buscar el usuario que aprobó
-      if (
-        (entry.origen === 'cotizacion_aprobada' || 
-         entry.origen === 'cotizacion_rechazada' || 
-         entry.origen === 'cotizacion_editada' || 
-         entry.origen === 'cotizacion_eliminada') &&
-        entry.referencia_id
-      ) {
-        try {
-          // Buscar la cotización para obtener el vendedor (que es quien aprobó)
-          // Intentar primero por ID, luego por código si falla
-          let cotizacion = null
-          
-          if (entry.referencia_id) {
-            const { data: cotizaciones } = await supabase
-              .from('cotizaciones')
-              .select('id, vendedor')
-              .eq('id', entry.referencia_id)
-            
-            if (cotizaciones && cotizaciones.length > 0) {
-              cotizacion = cotizaciones[0]
-            }
-          }
-          
-          // Si no se encontró por ID, intentar por código
-          if (!cotizacion && entry.referencia_codigo) {
-            const { data: cotizacionesPorCodigo } = await supabase
-              .from('cotizaciones')
-              .select('id, vendedor')
-              .eq('codigo', entry.referencia_codigo)
-            
-            if (cotizacionesPorCodigo && cotizacionesPorCodigo.length > 0) {
-              cotizacion = cotizacionesPorCodigo[0]
-            }
-          }
-          
-          if (cotizacionError) {
-            console.warn(`⚠️ Error obteniendo cotización ${entry.referencia_id}:`, cotizacionError)
-          }
-          
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'historial/route.ts:91',message:'ANTES condición vendedor',data:{cotizacion_exists:!!cotizacion,vendedor:cotizacion?.vendedor,vendedor_type:typeof cotizacion?.vendedor,vendedor_empty:!cotizacion?.vendedor},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-          // #endregion
-          
-          if (cotizacion?.vendedor) {
-            let usuarioNombreCotizacion = cotizacion.vendedor
-            let usuarioIdCotizacion = null
-            let usuarioImagen = null
+    let dataParaEnriquecer = (data || []) as any[]
 
-            // Si el vendedor es un UUID, buscar el nombre del usuario
-            if (cotizacion.vendedor.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
-              const { data: userData, error: userError } = await supabase
-                .from('usuarios')
-                .select('id, nombre, imagen_usuario')
-                .eq('id', cotizacion.vendedor)
-                .single()
-              
-              if (userData && !userError) {
-                usuarioNombreCotizacion = userData.nombre
-                usuarioIdCotizacion = userData.id
-                usuarioImagen = userData.imagen_usuario
-              } else if (userError) {
-                console.warn(`⚠️ Error obteniendo usuario por ID ${cotizacion.vendedor}:`, userError)
-                // Intentar buscar por nombre como fallback
-                const { data: userDataByName } = await supabase
-                  .from('usuarios')
-                  .select('id, nombre, imagen_usuario')
-                  .eq('nombre', cotizacion.vendedor)
-                  .single()
-                
-                if (userDataByName) {
-                  usuarioNombreCotizacion = userDataByName.nombre
-                  usuarioIdCotizacion = userDataByName.id
-                  usuarioImagen = userDataByName.imagen_usuario
-                }
-              }
-            } else {
-              // Si el vendedor es un nombre, intentar obtener el ID del usuario
-              const { data: userDataByName } = await supabase
-                .from('usuarios')
-                .select('id, nombre, imagen_usuario')
-                .eq('nombre', cotizacion.vendedor)
-                .single()
-              
-              if (userDataByName) {
-                usuarioIdCotizacion = userDataByName.id
-                usuarioImagen = userDataByName.imagen_usuario
-              }
-            }
+    if (aplicarUltimaVersion && dataParaEnriquecer.length > 0) {
+      dataParaEnriquecer = filterUltimaVersionPorCotizacion(dataParaEnriquecer)
+    }
 
-            return {
-              ...entry,
-              usuario_id: usuarioIdCotizacion || entry.usuario_id,
-              usuario_nombre: usuarioNombreCotizacion || entry.usuario_nombre,
-              usuario_imagen: usuarioImagen || entry.usuario_imagen
-            }
-          }
-        } catch (err) {
-          // Si falla, mantener los datos originales
-          console.warn('⚠️ No se pudo obtener usuario de cotización:', err)
-        }
-      }
-      return entry
-    }))
-
-    // Si hay búsqueda, filtrar también por usuario_nombre (después de obtener los datos con usuario)
-    if (search) {
+    if (search && dataParaEnriquecer.length > 0) {
       const searchLower = search.toLowerCase()
-      dataConUsuario = dataConUsuario.filter((entry: any) => {
-        // Ya se filtró por item_codigo, item_nombre y referencia_codigo en la query
-        // Ahora filtrar también por usuario_nombre
+      dataParaEnriquecer = dataParaEnriquecer.filter((entry: any) => {
         const itemCodigo = (entry.item_codigo || '').toLowerCase()
         const itemNombre = (entry.item_nombre || '').toLowerCase()
         const referenciaCodigo = (entry.referencia_codigo || '').toLowerCase()
         const usuarioNombre = (entry.usuario_nombre || '').toLowerCase()
-        
-        // Buscar en cualquiera de estos campos
         return itemCodigo.includes(searchLower) ||
                itemNombre.includes(searchLower) ||
                referenciaCodigo.includes(searchLower) ||
                usuarioNombre.includes(searchLower)
       })
-      
-      // Recalcular total después del filtro
-      const totalFiltrado = dataConUsuario.length
-      const totalPagesFiltrado = Math.ceil(totalFiltrado / limit)
-      
-      // Aplicar paginación manualmente después del filtro
+    }
+
+    let totalFinal = count ?? 0
+    let dataPaginada = dataParaEnriquecer
+    if (aplicarUltimaVersion || search) {
+      totalFinal = dataParaEnriquecer.length
       const from = (page - 1) * limit
       const to = from + limit
-      const dataPaginada = dataConUsuario.slice(from, to)
-      
-      return NextResponse.json({
-        success: true,
-        data: dataPaginada || [],
-        pagination: {
-          page,
-          limit,
-          total: totalFiltrado,
-          totalPages: totalPagesFiltrado
-        }
-      })
+      dataPaginada = dataParaEnriquecer.slice(from, to)
     }
+
+    // Enriquecer usuario solo para registros antiguos sin usuario_id (compatibilidad). Los nuevos ya traen usuario_id.
+    let dataConUsuario = await Promise.all((dataPaginada || []).map(async (entry: any) => {
+      if (entry.usuario_id) {
+        return entry
+      }
+      // Solo para orígenes de cotización y sin usuario_id: intentar obtener vendedor desde cotización (registros antiguos)
+      if (
+        (entry.origen === 'cotizacion_aprobada' ||
+         entry.origen === 'cotizacion_rechazada' ||
+         entry.origen === 'cotizacion_editada' ||
+         entry.origen === 'cotizacion_eliminada') &&
+        entry.referencia_id
+      ) {
+        try {
+          let cotizacion: { id: string; vendedor: string | null } | null = null
+          const { data: cotizaciones } = await supabase
+            .from('cotizaciones')
+            .select('id, vendedor')
+            .eq('id', entry.referencia_id)
+          if (cotizaciones && cotizaciones.length > 0) cotizacion = cotizaciones[0]
+          if (!cotizacion && entry.referencia_codigo) {
+            const { data: porCodigo } = await supabase
+              .from('cotizaciones')
+              .select('id, vendedor')
+              .eq('codigo', entry.referencia_codigo)
+            if (porCodigo && porCodigo.length > 0) cotizacion = porCodigo[0]
+          }
+          if (!cotizacion?.vendedor) return entry
+
+          let usuarioIdCotizacion: string | null = null
+          let usuarioNombreCotizacion: string | null = null
+          let usuarioImagen: string | null = null
+          const v = cotizacion.vendedor
+          const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v)
+          if (isUuid) {
+            const { data: userData } = await supabase
+              .from('usuarios')
+              .select('id, nombre, imagen_usuario')
+              .eq('id', v)
+              .single()
+            if (userData) {
+              usuarioIdCotizacion = userData.id
+              usuarioNombreCotizacion = userData.nombre
+              usuarioImagen = userData.imagen_usuario ?? null
+            } else {
+              const { data: byName } = await supabase
+                .from('usuarios')
+                .select('id, nombre, imagen_usuario')
+                .eq('nombre', v)
+                .maybeSingle()
+              if (byName) {
+                usuarioIdCotizacion = byName.id
+                usuarioNombreCotizacion = byName.nombre
+                usuarioImagen = byName.imagen_usuario ?? null
+              }
+            }
+          } else {
+            const { data: byName } = await supabase
+              .from('usuarios')
+              .select('id, nombre, imagen_usuario')
+              .ilike('nombre', v)
+              .maybeSingle()
+            if (byName) {
+              usuarioIdCotizacion = byName.id
+              usuarioNombreCotizacion = byName.nombre
+              usuarioImagen = byName.imagen_usuario ?? null
+            }
+          }
+          if (usuarioIdCotizacion || usuarioNombreCotizacion) {
+            return {
+              ...entry,
+              usuario_id: usuarioIdCotizacion ?? entry.usuario_id,
+              usuario_nombre: usuarioNombreCotizacion ?? entry.usuario_nombre,
+              usuario_imagen: usuarioImagen ?? entry.usuario_imagen
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ No se pudo enriquecer usuario de cotización (registro antiguo):', err)
+        }
+      }
+      return entry
+    }))
+
+    const totalPagesFinal = Math.ceil(totalFinal / limit)
 
     return NextResponse.json({
       success: true,
@@ -225,8 +198,8 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit)
+        total: totalFinal,
+        totalPages: totalPagesFinal
       }
     })
 

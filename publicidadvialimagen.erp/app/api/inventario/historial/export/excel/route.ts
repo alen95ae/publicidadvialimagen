@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabaseServer'
+import { filterUltimaVersionPorCotizacion } from '@/lib/historialStockUtils'
 import * as XLSX from 'xlsx'
 
 const supabase = getSupabaseServer()
@@ -19,6 +20,8 @@ export async function GET(request: NextRequest) {
     const itemId = searchParams.get('item_id')
     const referenciaCodigo = searchParams.get('referencia_codigo')
     const idsParam = searchParams.get('ids') || ''
+    const ultimaVersionCotizacion = searchParams.get('ultima_version_cotizacion') === '1'
+    const aplicarUltimaVersion = ultimaVersionCotizacion && origen !== 'registro_manual' && !idsParam.trim()
 
     let query = supabase
       .from('historial_stock')
@@ -70,8 +73,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    let dataParaExportar = data || []
+    if (aplicarUltimaVersion && dataParaExportar.length > 0) {
+      dataParaExportar = filterUltimaVersionPorCotizacion(dataParaExportar)
+    }
+
     // Para registros de cotizaciones, obtener el usuario que aprobó desde la cotización
-    const dataConUsuario = await Promise.all((data || []).map(async (entry: any) => {
+    const dataConUsuario = await Promise.all((dataParaExportar || []).map(async (entry: any) => {
       if (
         (entry.origen === 'cotizacion_aprobada' || 
          entry.origen === 'cotizacion_rechazada' || 

@@ -5,15 +5,19 @@
 
 import { getSupabaseServer } from '@/lib/supabaseServer'
 import { generarClaveVariante } from '@/lib/variantes/generarCombinaciones'
-import { insertarHistorialStock, obtenerUsuarioActual } from '@/lib/supabaseHistorialStock'
+import { insertarHistorialStock } from '@/lib/supabaseHistorialStock'
 
 const supabase = getSupabaseServer()
+
+/** Usuario responsable del movimiento (quien creó la cotización o quien registra). Obligatorio para historial. */
+export type UsuarioResponsable = { id: string; nombre?: string }
 
 export interface DescontarStockParams {
   productoId: string
   cantidad: number
   sucursal: string
   variantes?: Record<string, string>
+  usuarioResponsable: UsuarioResponsable
 }
 
 export interface RegistrarMovimientoParams {
@@ -30,7 +34,7 @@ export interface RegistrarMovimientoParams {
  * Descuenta stock de un producto (si tiene receta, descuenta recursos)
  */
 export async function descontarStockProducto(params: DescontarStockParams): Promise<void> {
-  const { productoId, cantidad, sucursal, variantes = {} } = params
+  const { productoId, cantidad, sucursal, variantes = {}, usuarioResponsable } = params
 
   try {
     // Obtener producto con receta
@@ -51,7 +55,8 @@ export async function descontarStockProducto(params: DescontarStockParams): Prom
         productoId,
         cantidad,
         sucursal,
-        variantes
+        variantes,
+        usuarioResponsable
       })
     } else {
       // Si no tiene receta, solo registrar movimiento (no hay stock directo de productos)
@@ -74,7 +79,7 @@ export async function descontarStockProducto(params: DescontarStockParams): Prom
  * Descuenta stock de recursos según la receta del producto
  */
 export async function descontarStockPorReceta(params: DescontarStockParams): Promise<void> {
-  const { productoId, cantidad, sucursal, variantes = {} } = params
+  const { productoId, cantidad, sucursal, variantes = {}, usuarioResponsable } = params
 
   try {
     // Obtener producto con receta
@@ -127,6 +132,7 @@ export async function descontarStockPorReceta(params: DescontarStockParams): Pro
         cantidad: cantidadDescontar,
         sucursal,
         variantes,
+        usuarioResponsable,
         origen: 'cotizacion_aprobada', // Origen por defecto para recetas
         tipo_movimiento: 'Venta'
       })
@@ -155,6 +161,7 @@ async function descontarStockRecurso(params: {
   cantidad: number
   sucursal: string
   variantes?: Record<string, string>
+  usuarioResponsable: UsuarioResponsable
   // Parámetros para historial
   origen?: 'registro_manual' | 'cotizacion_aprobada' | 'cotizacion_rechazada' | 'cotizacion_editada' | 'cotizacion_eliminada'
   referencia_id?: string | null
@@ -163,7 +170,7 @@ async function descontarStockRecurso(params: {
   observaciones?: string | null
   formato?: any | null
 }): Promise<void> {
-  const { recursoId, cantidad, sucursal, variantes = {}, origen, referencia_id, referencia_codigo, tipo_movimiento, observaciones, formato } = params
+  const { recursoId, cantidad, sucursal, variantes = {}, usuarioResponsable, origen, referencia_id, referencia_codigo, tipo_movimiento, observaciones, formato } = params
 
   try {
     // Obtener recurso actual con más campos para historial
@@ -216,9 +223,8 @@ async function descontarStockRecurso(params: {
       throw new Error(`Error actualizando stock: ${updateError.message}`)
     }
 
-    // Registrar en historial SIEMPRE
+    // Registrar en historial SIEMPRE (usuario pasado explícitamente, sin depender de sesión HTTP)
     const origenFinal = origen || 'registro_manual'
-    const usuario = await obtenerUsuarioActual()
     await insertarHistorialStock({
       origen: origenFinal,
       referencia_id: referencia_id || null,
@@ -236,8 +242,8 @@ async function descontarStockRecurso(params: {
       stock_nuevo: nuevoStock,
       tipo_movimiento: tipo_movimiento || 'Descuento stock',
       observaciones: observaciones || null,
-      usuario_id: usuario.id,
-      usuario_nombre: usuario.nombre
+      usuario_id: usuarioResponsable.id,
+      usuario_nombre: usuarioResponsable.nombre ?? null
     })
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:241',message:'descontarStockRecurso DESPUÉS de insertarHistorialStock',data:{recursoId,success:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
@@ -266,6 +272,7 @@ async function aumentarStockRecurso(params: {
   cantidad: number
   sucursal: string
   variantes?: Record<string, string>
+  usuarioResponsable: UsuarioResponsable
   // Parámetros para historial
   origen?: 'registro_manual' | 'cotizacion_aprobada' | 'cotizacion_rechazada' | 'cotizacion_editada' | 'cotizacion_eliminada'
   referencia_id?: string | null
@@ -274,7 +281,7 @@ async function aumentarStockRecurso(params: {
   observaciones?: string | null
   formato?: any | null
 }): Promise<void> {
-  const { recursoId, cantidad, sucursal, variantes = {}, origen, referencia_id, referencia_codigo, tipo_movimiento, observaciones, formato } = params
+  const { recursoId, cantidad, sucursal, variantes = {}, usuarioResponsable, origen, referencia_id, referencia_codigo, tipo_movimiento, observaciones, formato } = params
 
   try {
     // Obtener recurso actual con más campos para historial
@@ -327,9 +334,8 @@ async function aumentarStockRecurso(params: {
       throw new Error(`Error actualizando stock: ${updateError.message}`)
     }
 
-    // Registrar en historial SIEMPRE
+    // Registrar en historial SIEMPRE (usuario pasado explícitamente)
     const origenFinal = origen || 'registro_manual'
-    const usuario = await obtenerUsuarioActual()
     await insertarHistorialStock({
       origen: origenFinal,
       referencia_id: referencia_id || null,
@@ -347,8 +353,8 @@ async function aumentarStockRecurso(params: {
       stock_nuevo: nuevoStock,
       tipo_movimiento: tipo_movimiento || 'Aumento stock',
       observaciones: observaciones || null,
-      usuario_id: usuario.id,
-      usuario_nombre: usuario.nombre
+      usuario_id: usuarioResponsable.id,
+      usuario_nombre: usuarioResponsable.nombre ?? null
     })
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/0c38a0dd-0488-46f2-9e99-19064c1193dd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inventoryService.ts:346',message:'aumentarStockRecurso DESPUÉS de insertarHistorialStock',data:{recursoId,success:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
@@ -418,6 +424,7 @@ export interface DescontarInsumosParams {
   }>
   sucursal: string
   origen?: 'cotizacion_aprobada' | 'cotizacion_editada'
+  usuarioResponsable: UsuarioResponsable
 }
 
 /**
@@ -551,7 +558,7 @@ function aplicarVariantesAInsumo(
 export async function descontarInsumosDesdeCotizacion(
   params: DescontarInsumosParams
 ): Promise<void> {
-  const { cotizacionId, cotizacionCodigo, lineas, sucursal, origen = 'cotizacion_aprobada' } = params
+  const { cotizacionId, cotizacionCodigo, lineas, sucursal, origen = 'cotizacion_aprobada', usuarioResponsable } = params
 
   console.log(`📦 [DESCONTAR] Procesando cotización ${cotizacionId}`)
   console.log(`📦 [DESCONTAR] Sucursal: ${sucursal}`)
@@ -782,6 +789,7 @@ export async function descontarInsumosDesdeCotizacion(
               cantidad: cantidadDescontar,
               sucursal: sucursal,
               variantes: variantesInsumo,
+              usuarioResponsable,
               origen,
               referencia_id: cotizacionId,
               referencia_codigo: cotizacionCodigo,
@@ -838,6 +846,7 @@ export interface RevertirInsumosParams {
   }>
   sucursal: string
   origen?: 'cotizacion_rechazada' | 'cotizacion_editada' | 'cotizacion_eliminada'
+  usuarioResponsable: UsuarioResponsable
 }
 
 /**
@@ -848,7 +857,7 @@ export interface RevertirInsumosParams {
 export async function revertirStockCotizacion(
   params: RevertirInsumosParams
 ): Promise<void> {
-  const { cotizacionId, cotizacionCodigo, lineas, sucursal, origen = 'cotizacion_rechazada' } = params
+  const { cotizacionId, cotizacionCodigo, lineas, sucursal, origen = 'cotizacion_rechazada', usuarioResponsable } = params
 
   console.log(`🔄 [REVERTIR] Procesando cotización ${cotizacionId}`)
   console.log(`🔄 [REVERTIR] Sucursal: ${sucursal}`)
@@ -1070,6 +1079,7 @@ export async function revertirStockCotizacion(
               cantidad: cantidadRevertir,
               sucursal: sucursal,
               variantes: variantesInsumo,
+              usuarioResponsable,
               origen,
               referencia_id: cotizacionId,
               referencia_codigo: cotizacionCodigo,

@@ -86,6 +86,7 @@ export default function HistorialPage() {
   const limit = 50
   const [exportingPDF, setExportingPDF] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
+  const [mostrarUltimaVersionCotizacion, setMostrarUltimaVersionCotizacion] = useState(true)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
   const [allHistorialIds, setAllHistorialIds] = useState<string[]>([])
@@ -147,6 +148,10 @@ export default function HistorialPage() {
         params.append('search', busqueda)
       }
 
+      if (mostrarUltimaVersionCotizacion && filtroOrigen !== 'registro_manual') {
+        params.append('ultima_version_cotizacion', '1')
+      }
+
       const response = await fetch(`/api/inventario/historial?${params.toString()}`)
       const data = await response.json()
 
@@ -178,6 +183,7 @@ export default function HistorialPage() {
         setFiltroFechaDesde(f.filtroFechaDesde ?? "")
         setFiltroFechaHasta(f.filtroFechaHasta ?? fechaManana)
         setBusqueda(f.busqueda ?? "")
+        setMostrarUltimaVersionCotizacion(f.mostrarUltimaVersionCotizacion !== false)
       } catch (error) {
         console.error('❌ Error parseando filtros guardados:', error)
       }
@@ -196,9 +202,10 @@ export default function HistorialPage() {
       filtroSucursal,
       filtroFechaDesde,
       filtroFechaHasta,
-      busqueda
+      busqueda,
+      mostrarUltimaVersionCotizacion
     }))
-  }, [filtroItemTipo, filtroOrigen, filtroSucursal, filtroFechaDesde, filtroFechaHasta, busqueda, filtersLoaded])
+  }, [filtroItemTipo, filtroOrigen, filtroSucursal, filtroFechaDesde, filtroFechaHasta, busqueda, mostrarUltimaVersionCotizacion, filtersLoaded])
 
   // Cargar usuarios para avatares
   useEffect(() => {
@@ -220,7 +227,7 @@ export default function HistorialPage() {
   useEffect(() => {
     if (!filtersLoaded) return
     cargarHistorial()
-  }, [page, filtroItemTipo, filtroOrigen, filtroSucursal, filtroFechaDesde, filtroFechaHasta, busqueda, filtersLoaded])
+  }, [page, filtroItemTipo, filtroOrigen, filtroSucursal, filtroFechaDesde, filtroFechaHasta, busqueda, mostrarUltimaVersionCotizacion, filtersLoaded])
 
   const handleBuscar = () => {
     setPage(1)
@@ -235,6 +242,7 @@ export default function HistorialPage() {
     setFiltroFechaDesde("")
     setFiltroFechaHasta(fechaManana)
     setBusqueda("")
+    setMostrarUltimaVersionCotizacion(true)
     setPage(1)
     sessionStorage.removeItem('historial_filtros')
   }
@@ -310,6 +318,10 @@ export default function HistorialPage() {
     
     if (busqueda) {
       params.append('search', busqueda)
+    }
+
+    if (mostrarUltimaVersionCotizacion && filtroOrigen !== 'registro_manual') {
+      params.append('ultima_version_cotizacion', '1')
     }
     
     return params
@@ -420,6 +432,7 @@ export default function HistorialPage() {
       if (filtroFechaDesde) params.set("fecha_desde", filtroFechaDesde)
       if (filtroFechaHasta) params.set("fecha_hasta", filtroFechaHasta)
       if (busqueda?.trim()) params.set("search", busqueda.trim())
+      if (mostrarUltimaVersionCotizacion && filtroOrigen !== "registro_manual") params.set("ultima_version_cotizacion", "1")
       const res = await fetch(`/api/inventario/historial/all-ids?${params}`, { credentials: "include" })
       if (res.ok) {
         const data = await res.json()
@@ -515,7 +528,21 @@ export default function HistorialPage() {
           <div className="flex items-center justify-between">
             <CardTitle>Filtros</CardTitle>
             {tieneFuncionTecnica("ver boton exportar") && (
-              <div className="flex gap-2">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="ultima-version-cotizacion"
+                    checked={mostrarUltimaVersionCotizacion}
+                    onCheckedChange={(checked) => setMostrarUltimaVersionCotizacion(checked === true)}
+                    disabled={filtroOrigen === 'registro_manual'}
+                  />
+                  <Label
+                    htmlFor="ultima-version-cotizacion"
+                    className="text-sm font-normal cursor-pointer whitespace-nowrap"
+                  >
+                    Mostrar última versión de cada cotización
+                  </Label>
+                </div>
                 <Button 
                   onClick={handleExportarExcel} 
                   variant="outline" 
@@ -827,7 +854,7 @@ export default function HistorialPage() {
                     <TableHead>Impacto</TableHead>
                     <TableHead>Stock Anterior</TableHead>
                     <TableHead>Stock Nuevo</TableHead>
-                    <TableHead>Tipo Movimiento</TableHead>
+                    <TableHead className="text-center">Tipo Movimiento</TableHead>
                     <TableHead>Referencia</TableHead>
                     <TableHead>Usuario</TableHead>
                   </TableRow>
@@ -907,7 +934,7 @@ export default function HistorialPage() {
                       <TableCell>{getImpactoBadge(entry.impacto)}</TableCell>
                       <TableCell>{entry.stock_anterior}</TableCell>
                       <TableCell className="font-medium">{entry.stock_nuevo}</TableCell>
-                      <TableCell>{entry.tipo_movimiento || '-'}</TableCell>
+                      <TableCell className="text-center">{entry.tipo_movimiento || '-'}</TableCell>
                       <TableCell>
                         {entry.referencia_codigo ? (
                           <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200 whitespace-nowrap">

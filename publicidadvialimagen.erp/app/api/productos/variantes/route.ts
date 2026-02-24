@@ -1,12 +1,14 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServer } from '@/lib/supabaseServer'
+import { getSupabaseServer, getSupabaseAdmin } from '@/lib/supabaseServer'
 import { calcularCosteVariante } from '@/lib/variantes/calcularCosteVariante'
 import { calcularPrecioVariante } from '@/lib/variantes/calcularPrecioVariante'
 import { syncProductVariants } from '@/lib/variantes/variantSync'
+import { recalcularYPersistirVariantes } from '@/lib/calcularVarianteFinanciera'
 
 const supabase = getSupabaseServer()
+const supabaseAdmin = getSupabaseAdmin()
 
 /**
  * GET - Obtener variantes de un producto
@@ -119,9 +121,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Recalcular campos financieros de TODAS las variantes del producto
+    const { data: prod } = await supabase
+      .from('productos')
+      .select('coste, precio_venta')
+      .eq('id', producto_id)
+      .single()
+
+    if (prod) {
+      await recalcularYPersistirVariantes(producto_id, prod, supabaseAdmin)
+    }
+
+    // Devolver variante actualizada con campos financieros
+    const { data: varianteActualizada } = await supabase
+      .from('producto_variantes')
+      .select('*')
+      .eq('id', variante_id)
+      .single()
+
     return NextResponse.json({
       success: true,
-      variante: data
+      variante: varianteActualizada || data
     })
   } catch (error) {
     console.error('Error en POST /api/productos/variantes:', error)
@@ -147,15 +167,32 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    // Cargar producto para campos financieros
+    const { data: prod } = await supabase
+      .from('productos')
+      .select('coste, precio_venta')
+      .eq('id', producto_id)
+      .single()
+
     if (action === 'recalcular') {
       // Recalcular costes y precios de todas las variantes existentes
-      return await recalcularVariantes(producto_id)
+      const response = await recalcularVariantes(producto_id)
+
+      // Persistir campos financieros
+      if (prod) {
+        await recalcularYPersistirVariantes(producto_id, prod, supabaseAdmin)
+      }
+
+      return response
     } else if (action === 'regenerar' || action === 'sync') {
-      // Sincronización inteligente (Smart Regeneration)
       try {
         await syncProductVariants(producto_id)
 
-        // Obtener las variantes actualizadas para devolverlas
+        // Persistir campos financieros tras la sincronización
+        if (prod) {
+          await recalcularYPersistirVariantes(producto_id, prod, supabaseAdmin)
+        }
+
         const { data: variantes } = await supabase
           .from('producto_variantes')
           .select('*')

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getProductoById, updateProducto, deleteProducto } from '@/lib/supabaseProductos'
+import { recalcularYPersistirVariantes } from '@/lib/calcularVarianteFinanciera'
+import { getSupabaseAdmin } from '@/lib/supabaseServer'
 
 export async function GET(
   request: NextRequest,
@@ -60,6 +62,24 @@ export async function PUT(
     } catch {}
 
     const productoActualizado = await updateProducto(id, body)
+
+    // Recalcular campos financieros de variantes si cambiaron coste o precio_venta
+    if (body.coste !== undefined || body.precio_venta !== undefined) {
+      try {
+        const supabase = getSupabaseAdmin()
+        const { data: prod } = await supabase
+          .from('productos')
+          .select('coste, precio_venta')
+          .eq('id', id)
+          .single()
+
+        if (prod) {
+          await recalcularYPersistirVariantes(id, prod, supabase)
+        }
+      } catch (recalcErr) {
+        console.warn('⚠️ Error recalculando variantes tras actualizar producto:', recalcErr)
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -7,7 +7,7 @@ import { requirePermiso } from "@/lib/permisos";
 import { normalizeText } from "@/lib/utils";
 
 const CAMPOS_PRECIOS =
-  "id, codigo, titulo, ciudad, estado, coste_alquiler, patentes, uso_suelos, gastos_administrativos, comision_ejecutiva, mantenimiento, precio_mensual, precio_3_meses, precio_6_meses, precio_12_meses";
+  "id, codigo, titulo, ciudad, estado, coste_alquiler, patentes, uso_suelos, luz, gastos_administrativos, comision_ejecutiva, mantenimiento, precio_mensual, precio_3_meses, precio_6_meses, precio_12_meses";
 
 export type SoportePreciosRow = {
   id: number;
@@ -18,6 +18,7 @@ export type SoportePreciosRow = {
   coste_alquiler: number | null;
   patentes: number | null;
   uso_suelos: number | null;
+  luz: number | string | null;
   gastos_administrativos: number | null;
   comision_ejecutiva: number | null;
   mantenimiento: number | null;

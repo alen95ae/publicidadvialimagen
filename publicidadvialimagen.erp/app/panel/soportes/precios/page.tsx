@@ -52,19 +52,36 @@ const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre
 const STORAGE_KEY = "soportes_precios_filtros";
 const LIMIT = 50;
 
-function n(val: number | null): number {
-  return val != null && Number.isFinite(val) ? val : 0;
+function n(val: number | string | null): number {
+  if (val == null) return 0;
+  const num = typeof val === "string" ? parseFloat(val) : val;
+  return Number.isFinite(num) ? num : 0;
 }
 
-function costeTotal(row: SoportePreciosRow): number {
-  return (
+// Coste base estructural (sin impuestos). Igual para todos los escenarios.
+function costeBase(row: SoportePreciosRow): number {
+  return round2(
     n(row.coste_alquiler) +
     n(row.patentes) +
     n(row.uso_suelos) +
+    n(row.luz) +
     n(row.gastos_administrativos) +
     n(row.comision_ejecutiva) +
     n(row.mantenimiento)
   );
+}
+
+// Coste total para un escenario: costeBase + impuestos 18% sobre el precio de ESE escenario.
+// Cada columna (1 mes, 3, 6, 12) usa su propio precio para impuestos.
+function costeTotalParaEscenario(row: SoportePreciosRow, precioEscenario: number): number {
+  const base = costeBase(row);
+  const impuestosEscenario = round2(precioEscenario * 0.18);
+  return round2(base + impuestosEscenario);
+}
+
+// Coste Total mostrado en columna = escenario 1 mes (precio_mensual).
+function costeTotal(row: SoportePreciosRow): number {
+  return costeTotalParaEscenario(row, n(row.precio_mensual));
 }
 
 function utilidadPct(precio: number | null, costeTotalVal: number): number {
@@ -219,14 +236,14 @@ export default function PreciosPage() {
     return [...filteredData].sort((a, b) => {
       const ctA = costeTotal(a);
       const ctB = costeTotal(b);
-      const u1A = utilidadPct(a.precio_mensual, ctA);
-      const u1B = utilidadPct(b.precio_mensual, ctB);
-      const u3A = utilidadPct(a.precio_3_meses, ctA);
-      const u3B = utilidadPct(b.precio_3_meses, ctB);
-      const u6A = utilidadPct(a.precio_6_meses, ctA);
-      const u6B = utilidadPct(b.precio_6_meses, ctB);
-      const u12A = utilidadPct(a.precio_12_meses, ctA);
-      const u12B = utilidadPct(b.precio_12_meses, ctB);
+      const u1A = utilidadPct(a.precio_mensual, costeTotalParaEscenario(a, n(a.precio_mensual)));
+      const u1B = utilidadPct(b.precio_mensual, costeTotalParaEscenario(b, n(b.precio_mensual)));
+      const u3A = utilidadPct(a.precio_3_meses, costeTotalParaEscenario(a, n(a.precio_3_meses)));
+      const u3B = utilidadPct(b.precio_3_meses, costeTotalParaEscenario(b, n(b.precio_3_meses)));
+      const u6A = utilidadPct(a.precio_6_meses, costeTotalParaEscenario(a, n(a.precio_6_meses)));
+      const u6B = utilidadPct(b.precio_6_meses, costeTotalParaEscenario(b, n(b.precio_6_meses)));
+      const u12A = utilidadPct(a.precio_12_meses, costeTotalParaEscenario(a, n(a.precio_12_meses)));
+      const u12B = utilidadPct(b.precio_12_meses, costeTotalParaEscenario(b, n(b.precio_12_meses)));
       const dir = sortDirection === "asc" ? 1 : -1;
       let cmp = 0;
       switch (sortColumn) {
@@ -826,11 +843,16 @@ export default function PreciosPage() {
                       const p3 = edited?.precio_3_meses !== undefined ? edited.precio_3_meses : row.precio_3_meses;
                       const p6 = edited?.precio_6_meses !== undefined ? edited.precio_6_meses : row.precio_6_meses;
                       const p12 = edited?.precio_12_meses !== undefined ? edited.precio_12_meses : row.precio_12_meses;
+                      const p1 = n(row.precio_mensual);
                       const ct = costeTotal(row);
-                      const u1 = utilidadPct(row.precio_mensual, ct);
-                      const u3 = utilidadPct(p3, ct);
-                      const u6 = utilidadPct(p6, ct);
-                      const u12 = utilidadPct(p12, ct);
+                      const ct1 = costeTotalParaEscenario(row, p1);
+                      const ct3 = costeTotalParaEscenario(row, n(p3));
+                      const ct6 = costeTotalParaEscenario(row, n(p6));
+                      const ct12 = costeTotalParaEscenario(row, n(p12));
+                      const u1 = utilidadPct(row.precio_mensual, ct1);
+                      const u3 = utilidadPct(p3, ct3);
+                      const u6 = utilidadPct(p6, ct6);
+                      const u12 = utilidadPct(p12, ct12);
                       const canEdit = isSelected && puedeEditar("soportes");
                       return (
                         <TableRow
@@ -890,7 +912,7 @@ export default function PreciosPage() {
                           <TableCell className={`p-2 align-middle text-right tabular-nums text-sm ${getUtilidadColor(u1)}`}>
                             <div className="flex flex-col justify-end">
                               <span>{u1.toFixed(1)}%</span>
-                              <span className="text-xs mt-0.5">Bs {formatearBs(row.precio_mensual == null || row.precio_mensual <= 0 ? 0 : round2(row.precio_mensual - ct))}</span>
+                              <span className="text-xs mt-0.5">Bs {formatearBs(row.precio_mensual == null || row.precio_mensual <= 0 ? 0 : round2(row.precio_mensual - ct1))}</span>
                             </div>
                           </TableCell>
                           <TableCell className="p-2 align-middle text-right tabular-nums text-sm">
@@ -909,7 +931,7 @@ export default function PreciosPage() {
                           <TableCell className={`p-2 align-middle text-right tabular-nums text-sm ${getUtilidadColor(u3)}`}>
                             <div className="flex flex-col justify-end">
                               <span>{u3.toFixed(1)}%</span>
-                              <span className="text-xs mt-0.5">Bs {formatearBs(p3 == null || p3 <= 0 ? 0 : round2(p3 - ct))}</span>
+                              <span className="text-xs mt-0.5">Bs {formatearBs(p3 == null || p3 <= 0 ? 0 : round2(p3 - ct3))}</span>
                             </div>
                           </TableCell>
                           <TableCell className="p-2 align-middle text-right tabular-nums text-sm">
@@ -928,7 +950,7 @@ export default function PreciosPage() {
                           <TableCell className={`p-2 align-middle text-right tabular-nums text-sm ${getUtilidadColor(u6)}`}>
                             <div className="flex flex-col justify-end">
                               <span>{u6.toFixed(1)}%</span>
-                              <span className="text-xs mt-0.5">Bs {formatearBs(p6 == null || p6 <= 0 ? 0 : round2(p6 - ct))}</span>
+                              <span className="text-xs mt-0.5">Bs {formatearBs(p6 == null || p6 <= 0 ? 0 : round2(p6 - ct6))}</span>
                             </div>
                           </TableCell>
                           <TableCell className="p-2 align-middle text-right tabular-nums text-sm">
@@ -947,7 +969,7 @@ export default function PreciosPage() {
                           <TableCell className={`p-2 align-middle text-right tabular-nums text-sm ${getUtilidadColor(u12)}`}>
                             <div className="flex flex-col justify-end">
                               <span>{u12.toFixed(1)}%</span>
-                              <span className="text-xs mt-0.5">Bs {formatearBs(p12 == null || p12 <= 0 ? 0 : round2(p12 - ct))}</span>
+                              <span className="text-xs mt-0.5">Bs {formatearBs(p12 == null || p12 <= 0 ? 0 : round2(p12 - ct12))}</span>
                             </div>
                           </TableCell>
                         </TableRow>

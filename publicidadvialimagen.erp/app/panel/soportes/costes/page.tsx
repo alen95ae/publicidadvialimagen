@@ -250,10 +250,12 @@ export default function CostesPage() {
     }
   }
 
-  // Función para calcular costes basados en datos reales (siguiendo lógica de calculadora de precios)
+  // Función para calcular costes. Dos bloques independientes (sin cruce de bases):
+  // — BLOQUE PROYECCIÓN: Coste Total, Precio Venta, % Utilidad estimada (solo priceMonth + costeTotal).
+  // — BLOQUE REAL: Coste Actual, Último Precio, % Utilidad real (solo costeActualTotal + ultimoPrecio).
   const calculateCosts = (support: Support): SupportCosts => {
     const precioVenta = support.priceMonth || 0
-    
+
     // Obtener valores de la base de datos
     const costeAlquiler = support.costeAlquiler || 0
     const patentes = support.patentes || 0
@@ -263,20 +265,18 @@ export default function CostesPage() {
     const gastosAdministrativos = support.gastosAdministrativos || 0
     const comisionEjec = support.comisionEjecutiva || 0
     const mantenimiento = support.mantenimiento || 0
-    
-    // Obtener método de pago y estado de alquiler
+
+    // Obtener método de pago y estado de alquiler (solo para BLOQUE REAL)
     const metodoPago = (support.metodoPago || "").toUpperCase()
     const estadoAlquiler = alquileresData[support.id]?.estado || null
     const alquilerActivo = estadoAlquiler === 'activo'
-    
+
+    // ─── BLOQUE REAL: Coste Actual (no usa costeTotal ni impuestos de proyección) ───
     // Calcular COSTE ACTUAL según las reglas:
-    // - Coste de alquiler: 
-    //   * Si método de pago = "FIJO" → siempre se calcula
-    //   * Si método de pago = "CUANDO SE ALQUILA" → solo cuando el alquiler está activo
-    //   * Si método de pago = "NO SE PAGA" → no se suma (0)
-    // - Patentes, uso de suelos, luz, gastos administrativos y mantenimiento: solo cuando método de pago = "FIJO"
-    // - Comisión ejec. y alquiler: siempre cuando el alquiler esté activo
-    
+    // - Coste de alquiler: FIJO → siempre; CUANDO SE ALQUILA → solo si activo; NO SE PAGA → 0
+    // - Patentes, uso suelos, luz, gastos admin, mantenimiento: solo si método = "FIJO"
+    // - Comisión ejec.: solo cuando alquiler activo
+
     let costeAlquilerActual = 0
     if (metodoPago === "FIJO") {
       costeAlquilerActual = costeAlquiler
@@ -287,33 +287,18 @@ export default function CostesPage() {
     } else if (metodoPago === "NO SE PAGA") {
       costeAlquilerActual = 0
     } else {
-      // Por defecto, si no hay método de pago definido, usar el valor original
       costeAlquilerActual = costeAlquiler
     }
-    
-    // Patentes, uso de suelos, luz, gastos administrativos y mantenimiento: solo si método de pago = "FIJO"
+
     const costePatentes = metodoPago === "FIJO" ? patentes : 0
     const costeUsoSuelos = metodoPago === "FIJO" ? usoSuelos : 0
     const costeLuz = metodoPago === "FIJO" ? luz : 0
     const costeGastosAdmin = metodoPago === "FIJO" ? gastosAdministrativos : 0
     const costeMantenimiento = metodoPago === "FIJO" ? mantenimiento : 0
-    
-    // Comisión ejecutiva: siempre cuando el alquiler esté activo
     const costeComisionEjec = alquilerActivo ? comisionEjec : 0
-    
-    // COSTE ACTUAL = suma de todos los costes según las reglas
+
     const costeActual = round2(costeAlquilerActual + costePatentes + costeUsoSuelos + costeLuz + costeGastosAdmin + costeComisionEjec + costeMantenimiento)
-    
-    // COSTE = Suma de todos los costes (equivalente a "coste" en calculadora de precios) - MANTENER PARA COMPATIBILIDAD
-    const coste = round2(costeAlquiler + patentes + usoSuelos + luz + gastosAdministrativos + comisionEjec + mantenimiento)
-    
-    // Impuestos 18% (columna): siempre sobre precio de venta (priceMonth), no depende de alquiler activo
-    const impuestos18 = round2(precioVenta * 0.18)
-    
-    // Coste total = coste estructural + impuestos sobre priceMonth (siempre)
-    const costoTotal = round2(coste + impuestos18)
-    
-    // Coste actual total: sin alquiler activo = solo coste base; con activo = coste base + 18% sobre último precio
+
     const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio ?? null
     let costeActualTotal: number
     if (!alquilerActivo) {
@@ -324,25 +309,17 @@ export default function CostesPage() {
     } else {
       costeActualTotal = costeActual
     }
-    
-    // UTILIDAD BRUTA = precio - coste total (equivalente a utilidadBruta en calculadora)
-    const utilidadBruta = round2(precioVenta - costoTotal)
-    
-    // UTILIDAD NETA = utilidad bruta (la comisión ejecutiva ya está incluida en el coste, no se resta)
-    // En la calculadora: utilidadNeta = utilidadBruta - comision
-    // Aquí: como comisionEjec ya está en el coste, la utilidad neta es igual a la utilidad bruta
-    const utilidadMensual = utilidadBruta
-    
-    // precio para % estimada: último precio si existe, si no precio de venta
-    const precioParaEstimada = ultimoPrecio !== null && ultimoPrecio > 0 ? ultimoPrecio : precioVenta
-    // % Utilidad estimada = margen real sobre precio: ((precio - costeActual) / precio) * 100
-    let porcentajeBeneficio = 0
-    if (precioParaEstimada != null && precioParaEstimada > 0) {
-      porcentajeBeneficio = round2(((precioParaEstimada - costeActual) / precioParaEstimada) * 100)
-    }
-    const utilidadEstimadaValor = round2(precioParaEstimada - costeActual)
-    
-    // Utilidad anual = utilidad mensual * 12
+
+    // ─── BLOQUE PROYECCIÓN: Coste Total + Precio Venta + % Utilidad estimada (solo priceMonth + costeTotal) ───
+    // costeBase = suma fija de todos los costes estructurales (no depende de método de pago ni estado alquiler)
+    const costeBase = round2(costeAlquiler + patentes + usoSuelos + luz + gastosAdministrativos + comisionEjec + mantenimiento)
+    const impuestos18 = round2(precioVenta * 0.18)
+    const costoTotal = round2(costeBase + impuestos18)
+
+    const utilidadEstimadaValor = round2(precioVenta - costoTotal)
+    const porcentajeBeneficio = precioVenta > 0 ? round2(((precioVenta - costoTotal) / precioVenta) * 100) : 0
+
+    const utilidadMensual = utilidadEstimadaValor
     const utilidadAnual = round2(utilidadMensual * 12)
 
     return {

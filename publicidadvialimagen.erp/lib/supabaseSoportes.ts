@@ -14,6 +14,9 @@ export type Soporte = {
   area_total_calculada: number | null;
   iluminacion: boolean | null;
   precio_mensual: number | null;
+  precio_3_meses: number | null;
+  precio_6_meses: number | null;
+  precio_12_meses: number | null;
   precio_m2_calculado: number | null;
   impactos_diarios: number | null;
   propietario: string | null;

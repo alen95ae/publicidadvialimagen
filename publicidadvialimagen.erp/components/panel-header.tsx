@@ -320,7 +320,7 @@ export default function PanelHeader() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { tieneFuncionTecnica, puedeVer, esAdmin } = usePermisosContext()
+  const { tieneFuncionTecnica, puedeVer, puedeEditar, esAdmin } = usePermisosContext()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -858,6 +858,9 @@ export default function PanelHeader() {
                         return false;
                       }
                       if (item.href === "/panel/soportes/costes" && !tieneFuncionTecnica("ver costes soportes")) {
+                        return false;
+                      }
+                      if (item.href === "/panel/soportes/precios" && tieneFuncionTecnica("ver costes soportes") && !puedeEditar("soportes")) {
                         return false;
                       }
                       if (item.href === "/panel/ventas/solicitudes" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {

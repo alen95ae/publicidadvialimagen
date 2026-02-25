@@ -154,7 +154,7 @@ export default function EditarCotizacionPage() {
   const [sucursal, setSucursal] = useState("")
   const [vigencia, setVigencia] = useState("30")
   const [plazo, setPlazo] = useState("")
-  const [comprobante, setComprobante] = useState<'factura' | 'nota de remision'>('factura')
+  const [comprobante, setComprobante] = useState<'factura' | 'nota de remision'>('nota de remision')
   const [tipoCambio, setTipoCambio] = useState("6.96")
   const [vendedor, setVendedor] = useState("")
   const [guardando, setGuardando] = useState(false)
@@ -722,7 +722,7 @@ export default function EditarCotizacionPage() {
       setVigencia(cotizacion.vigencia ? String(cotizacion.vigencia) : '30')
       setPlazo(cotizacion.plazo || "")
       setComprobante(
-        cotizacion.comprobante === 'nota de remision' ? 'nota de remision' : 'factura'
+        cotizacion.comprobante === 'factura' ? 'factura' : 'nota de remision'
       )
       setFechaCreacion(cotizacion.fecha_creacion || '')
 

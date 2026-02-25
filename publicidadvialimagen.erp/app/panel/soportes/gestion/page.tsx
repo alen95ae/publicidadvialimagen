@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
@@ -71,6 +71,10 @@ export default function SoportesPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [selectAllMode, setSelectAllMode] = useState<'none' | 'page' | 'all'>('none')
   const [allSoporteIds, setAllSoporteIds] = useState<string[]>([])
+  const [dialogCatálogoPreciosOpen, setDialogCatálogoPreciosOpen] = useState(false)
+  const [include3Meses, setInclude3Meses] = useState(true)
+  const [include6Meses, setInclude6Meses] = useState(true)
+  const [include12Meses, setInclude12Meses] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -730,6 +734,97 @@ export default function SoportesPage() {
     })
   }
 
+  async function openCatálogoPreciosDialog() {
+    const ids = selectAllMode === 'all' ? allSoporteIds : Object.keys(selected).filter(id => selected[id])
+    if (!ids.length) {
+      toast.error("Selecciona al menos un soporte para generar el catálogo de precios")
+      return
+    }
+    try {
+      const res = await fetch('/api/soportes/precios', { credentials: 'include' })
+      if (!res.ok) throw new Error('Error al cargar precios')
+      const json = await res.json()
+      const data = (json.data || []) as { id: number; precio_3_meses: number | null; precio_6_meses: number | null; precio_12_meses: number | null }[]
+      const idSet = new Set(ids)
+      const rows = data.filter(r => idSet.has(String(r.id)))
+      setInclude3Meses(rows.some(r => r.precio_3_meses != null))
+      setInclude6Meses(rows.some(r => r.precio_6_meses != null))
+      setInclude12Meses(rows.some(r => r.precio_12_meses != null))
+      setDialogCatálogoPreciosOpen(true)
+    } catch {
+      toast.error('Error al cargar precios de soportes')
+    }
+  }
+
+  async function exportPDFPrecios(include3: boolean, include6: boolean, include12: boolean) {
+    const ids = selectAllMode === 'all' ? allSoporteIds : Object.keys(selected).filter(id => selected[id])
+    if (!ids.length) {
+      toast.error("Selecciona al menos un soporte para generar el catálogo de precios")
+      return
+    }
+    setDialogCatálogoPreciosOpen(false)
+    const downloadPromise = async () => {
+      let userEmail = ''
+      let userNumero: string | null = null
+      const userRes = await fetch('/api/auth/me')
+      if (userRes.ok) {
+        const userData = await userRes.json()
+        if (userData.success && userData.user) {
+          userEmail = userData.user.email || ''
+          userNumero = userData.user.numero || null
+        }
+      }
+      let disponibilidad: string | undefined
+      if (statusFilter.length === 1) {
+        if (statusFilter[0] === 'Disponible') disponibilidad = 'disponibles'
+        else if (statusFilter[0] === 'Ocupado') disponibilidad = 'ocupados'
+      }
+      let soporteTitulo: string | undefined
+      if (ids.length === 1) {
+        const allSupportsToSearch = (sortColumn && allSupports.length > 0) ? allSupports : supports
+        const sel = allSupportsToSearch.find(s => s.id === ids[0]) ?? supports.find(s => s.id === ids[0])
+        if (sel?.title) soporteTitulo = sel.title
+      }
+      const params = new URLSearchParams({ ids: ids.join(','), variant: 'precios' })
+      params.set('include3Meses', String(include3))
+      params.set('include6Meses', String(include6))
+      params.set('include12Meses', String(include12))
+      if (userEmail) params.set('email', userEmail)
+      if (userNumero) params.set('numero', userNumero)
+      if (disponibilidad) params.set('disponibilidad', disponibilidad)
+      if (cityFilter) params.set('ciudad', cityFilter)
+      if (soporteTitulo) params.set('soporte', encodeURIComponent(soporteTitulo))
+      const url = `/api/soportes/export/pdf?${params.toString()}`
+      const response = await fetch(url, { credentials: 'include' })
+      if (!response.ok) throw new Error('Error al generar el catálogo de precios')
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let fileName = `catalogo-precios-${new Date().toISOString().split('T')[0]}.pdf`
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename\*?=['"]?([^'";]+)['"]?/i)
+        if (fileNameMatch && fileNameMatch[1]) {
+          fileName = fileNameMatch[1]
+          if (fileName.includes("UTF-8''")) fileName = decodeURIComponent(fileName.split("UTF-8''")[1])
+          fileName = fileName.trim().replace(/[_\s]+$/, '')
+        }
+      }
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+      return ids.length
+    }
+    toast.promise(downloadPromise(), {
+      loading: 'Generando catálogo de precios...',
+      success: (count) => `Catálogo de precios generado para ${count} soporte(s)`,
+      error: 'Error al generar el catálogo de precios'
+    })
+  }
+
   // Kanban helpers
   async function changeStatus(id: string, newStatus: keyof typeof STATUS_META) {
     try {
@@ -1194,6 +1289,16 @@ export default function SoportesPage() {
                       <FileDown className="w-4 h-4 mr-2" />
                       Catálogo PDF
                     </Button>
+                    {tieneFuncionTecnica("ver costes soportes") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={openCatálogoPreciosDialog}
+                      >
+                        <FileDown className="w-4 h-4 mr-2" />
+                        Catálogo Precios
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1680,6 +1785,57 @@ export default function SoportesPage() {
           </div>
         )}
       </main>
+    {/* Diálogo selección columnas catálogo precios */}
+    <Dialog open={dialogCatálogoPreciosOpen} onOpenChange={setDialogCatálogoPreciosOpen}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Seleccionar precios para el catálogo</DialogTitle>
+          <DialogDescription>
+            Elige qué columnas de precios incluir en el PDF. Las no marcadas aparecerán como N/A.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="precio-3-meses"
+              checked={include3Meses}
+              onCheckedChange={(checked) => setInclude3Meses(checked === true)}
+            />
+            <Label htmlFor="precio-3-meses" className="text-sm font-normal cursor-pointer">
+              3 meses
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="precio-6-meses"
+              checked={include6Meses}
+              onCheckedChange={(checked) => setInclude6Meses(checked === true)}
+            />
+            <Label htmlFor="precio-6-meses" className="text-sm font-normal cursor-pointer">
+              6 meses
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="precio-12-meses"
+              checked={include12Meses}
+              onCheckedChange={(checked) => setInclude12Meses(checked === true)}
+            />
+            <Label htmlFor="precio-12-meses" className="text-sm font-normal cursor-pointer">
+              12 meses
+            </Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            className="bg-red-600 hover:bg-red-700 text-white"
+            onClick={() => exportPDFPrecios(include3Meses, include6Meses, include12Meses)}
+          >
+            Generar PDF
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
     </>
   )

@@ -218,7 +218,7 @@ export async function createCotizacion(cotizacion: CotizacionInput) {
     total_final: cotizacion.total_final || 0,
     vigencia: cotizacion.vigencia || 30,
     plazo: cotizacion.plazo || null,
-    comprobante: cotizacion.comprobante || 'factura',
+    comprobante: cotizacion.comprobante || 'nota de remision',
     cantidad_items: cotizacion.cantidad_items || 0,
     lineas_cotizacion: cotizacion.lineas_cotizacion || 0,
   }

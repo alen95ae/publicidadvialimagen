@@ -379,42 +379,67 @@ function buildPDFFileName({
   disponibilidad,
   ciudad,
   soporte,
+  precios = false,
 }: {
   disponibilidad?: string; // "disponibles" | "ocupados"
   ciudad?: string;
   soporte?: string;
+  precios?: boolean;
 }): string {
   const hoy = new Date();
   const fecha = `${String(hoy.getDate()).padStart(2, "0")}-${String(
     hoy.getMonth() + 1
   ).padStart(2, "0")}-${hoy.getFullYear()}`;
+  const sufijo = precios ? ` - precios - ${fecha}.pdf` : ` - ${fecha}.pdf`;
 
   // Opción 4: Un solo soporte seleccionado
   if (soporte) {
-    return `${soporte} - ${fecha}.pdf`;
+    return `${soporte}${sufijo}`;
   }
 
   // Opción 1: disponibilidad + ciudad
   if (disponibilidad && ciudad) {
     const dispUpper =
       disponibilidad === "disponibles" ? "Disponibles" : "Ocupados";
-    return `${dispUpper} - ${ciudad} - ${fecha}.pdf`;
+    return `${dispUpper} - ${ciudad}${sufijo}`;
   }
 
   // Opción 2: solo disponibilidad
   if (disponibilidad) {
     const dispUpper =
       disponibilidad === "disponibles" ? "Disponibles" : "Ocupados";
-    return `${dispUpper} - ${fecha}.pdf`;
+    return `${dispUpper}${sufijo}`;
   }
 
   // Opción 3: solo ciudad
   if (ciudad) {
-    return `${ciudad} - ${fecha}.pdf`;
+    return `${ciudad}${sufijo}`;
   }
 
   // Opción 5: nada seleccionado
-  return `Catalogo Vallas Publicitarias - ${fecha}.pdf`;
+  return `Catalogo Vallas Publicitarias${sufijo}`;
+}
+
+/**
+ * Construye el título que se muestra dentro del PDF (misma lógica que el nombre de archivo, sin extensión ni fecha)
+ */
+function buildPDFCatalogTitle({
+  disponibilidad,
+  ciudad,
+  soporte,
+}: {
+  disponibilidad?: string;
+  ciudad?: string;
+  soporte?: string;
+}): string {
+  if (soporte) return soporte;
+  if (disponibilidad && ciudad) {
+    const disp = disponibilidad === "disponibles" ? "Disponibles" : "Ocupados";
+    return `${disp} - ${ciudad}`;
+  }
+  if (disponibilidad) return disponibilidad === "disponibles" ? "Disponibles" : "Ocupados";
+  if (ciudad) return ciudad;
+  return "Catálogo de vallas publicitarias";
 }
 
 export async function GET(request: NextRequest) {
@@ -484,14 +509,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No se encontraron soportes" }, { status: 404 })
     }
 
-    // Generar PDF
-    const pdf = await generatePDF(supports, userEmail, userNumero)
+    const variant = url.searchParams.get('variant') || undefined
+    const include3Meses = (() => { const p = url.searchParams.get('include3Meses'); return p === null ? true : p === 'true' })()
+    const include6Meses = (() => { const p = url.searchParams.get('include6Meses'); return p === null ? true : p === 'true' })()
+    const include12Meses = (() => { const p = url.searchParams.get('include12Meses'); return p === null ? true : p === 'true' })()
+    const catalogTitleLabel = buildPDFCatalogTitle({
+      disponibilidad,
+      ciudad,
+      soporte: soporteTitulo,
+    })
+    const pdf = await generatePDF(supports, userEmail, userNumero, variant === 'precios' ? 'precios' : undefined, catalogTitleLabel, { include3Meses, include6Meses, include12Meses })
     
-    // Construir nombre del archivo dinámico
+    // Construir nombre del archivo dinámico (precios = palabra "precios" antes de la fecha)
     let fileName = buildPDFFileName({
       disponibilidad,
       ciudad,
       soporte: soporteTitulo,
+      precios: variant === 'precios',
     })
     
     // Normalizar el nombre del archivo: eliminar acentos y caracteres especiales
@@ -535,12 +569,12 @@ function obtenerEmailFooter(email?: string): string | undefined {
   return email
 }
 
-async function generatePDF(supports: any[], userEmail?: string, userNumero?: string): Promise<Buffer> {
+async function generatePDF(supports: any[], userEmail?: string, userNumero?: string, variant?: 'precios', catalogTitleLabel?: string, preciosInclude?: { include3Meses: boolean; include6Meses: boolean; include12Meses: boolean }): Promise<Buffer> {
   try {
-    // Obtener el email a mostrar en el footer
     const emailFooter = obtenerEmailFooter(userEmail)
     console.log('📄 Generando PDF catálogo con email:', emailFooter, 'y número:', userNumero)
     const currentDate = new Date().toLocaleDateString('es-ES')
+    const titleForPage = catalogTitleLabel ? `${catalogTitleLabel} - ${currentDate}` : null
     const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
     
@@ -693,11 +727,12 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       // Ejecutar la función del logo
       addLogo()
       
-      // Título del soporte (a la derecha del logo, en rojo y negrita)
+      // Título: en primera página usar título del catálogo (filtros/soporte único/genérico) + fecha; en el resto el título del soporte
       pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
       pdf.setFontSize(18)
       pdf.setFont('helvetica', 'bold')
-      pdf.text(support.title, 70, yPosition + 5) // Movido a la derecha del logo (20 + 35 + 15 de margen)
+      const textToShow = index === 0 && titleForPage ? titleForPage : support.title
+      pdf.text(textToShow, 70, yPosition + 5)
       
       yPosition += 20
       
@@ -828,21 +863,49 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       pdf.line(15, yPosition, 282, yPosition)
       yPosition += 15 // Aumentado de 10 a 15 para más espacio
       
-      // Tabla con 4 columnas y 3 filas (más grande)
+      // Tabla: 4 columnas x 3 filas (igual en gestión y precios; en precios la columna derecha = Precio 3/6/12 meses)
       const tableX = 15
-      const tableWidth = 267 // 297 - 30 (márgenes más pequeños)
+      const tableWidth = 267
       const tableY = yPosition
-      const colWidths = [66, 66, 66, 69] // 4 columnas más anchas
-      const rowHeight = 16 // Altura de cada fila más grande
+      const colWidths = [66, 66, 66, 69]
+      const rowHeight = 16
+      const isPreciosVariant = variant === 'precios'
       const numRows = 3
       
-      // Configurar estilos de tabla
-      pdf.setLineWidth(0.2)
-      pdf.setDrawColor(180, 180, 180)
+      const lonaValue = (() => {
+        const areaCalculada = (support.widthM || 0) * (support.heightM || 0)
+        const areaFinal = areaCalculada > 0 ? areaCalculada : (support.areaM2 || 0)
+        if (support.sustrato_precio_venta && areaFinal > 0) {
+          return (support.sustrato_precio_venta * areaFinal).toLocaleString('es-ES', { maximumFractionDigits: 2 })
+        }
+        return 'N/A'
+      })()
       
-      // Preparar datos para la tabla (4 columnas x 3 filas)
-      // Cada celda tiene un objeto con label (en negrita) y value (normal)
-      const tableData = [
+      // Variante precios: 3 filas, columna derecha = Precio 3 meses, Precio 6 meses, Precio 12 meses
+      const inc = preciosInclude ?? { include3Meses: true, include6Meses: true, include12Meses: true }
+      const val3 = inc.include3Meses ? (support.price3Months?.toLocaleString() ?? 'N/A') : 'N/A'
+      const val6 = inc.include6Meses ? (support.price6Months?.toLocaleString() ?? 'N/A') : 'N/A'
+      const val12 = inc.include12Meses ? (support.price12Months?.toLocaleString() ?? 'N/A') : 'N/A'
+      const tableData = isPreciosVariant ? [
+        [
+          { label: 'Código:', value: support.code || 'N/A' },
+          { label: 'Tipo de soporte:', value: support.type || 'N/A' },
+          { label: 'Período de alquiler:', value: 'Mensual' },
+          { label: 'Precio 3 meses:', value: `${val3} Bs` }
+        ],
+        [
+          { label: 'Ciudad:', value: support.city || 'N/A' },
+          { label: 'Medidas:', value: `${support.widthM || 'N/A'}m × ${support.heightM || 'N/A'}m` },
+          { label: 'Precio de Lona:', value: `${lonaValue} Bs` },
+          { label: 'Precio 6 meses:', value: `${val6} Bs` }
+        ],
+        [
+          { label: 'Zona:', value: support.zona || 'N/A' },
+          { label: 'Iluminación:', value: support.lighting || 'No' },
+          { label: 'Precio 1 Mes:', value: `${support.priceMonth?.toLocaleString() || 'N/A'} Bs` },
+          { label: 'Precio 12 meses:', value: `${val12} Bs` }
+        ]
+      ] : [
         [
           { label: 'Código:', value: support.code || 'N/A' },
           { label: 'Tipo de soporte:', value: support.type || 'N/A' },
@@ -853,15 +916,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
           { label: 'Ciudad:', value: support.city || 'N/A' },
           { label: 'Medidas:', value: `${support.widthM || 'N/A'}m × ${support.heightM || 'N/A'}m` },
           { label: 'Divisa:', value: 'Bs' },
-          { label: 'Precio de Lona:', value: `${(() => {
-            // SIEMPRE recalcular área desde ancho × alto (ignorar valor guardado)
-            const areaCalculada = (support.widthM || 0) * (support.heightM || 0)
-            const areaFinal = areaCalculada > 0 ? areaCalculada : (support.areaM2 || 0)
-            if (support.sustrato_precio_venta && areaFinal > 0) {
-              return (support.sustrato_precio_venta * areaFinal).toLocaleString('es-ES', { maximumFractionDigits: 2 })
-            }
-            return 'N/A'
-          })()} Bs` }
+          { label: 'Precio de Lona:', value: `${lonaValue} Bs` }
         ],
         [
           { label: 'Zona:', value: support.zona || 'N/A' },
@@ -870,6 +925,10 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
           { label: 'Precio de alquiler:', value: `${support.priceMonth?.toLocaleString() || 'N/A'} Bs` }
         ]
       ]
+      
+      // Configurar estilos de tabla
+      pdf.setLineWidth(0.2)
+      pdf.setDrawColor(180, 180, 180)
       
       // Dibujar tabla con bordes
       for (let row = 0; row < numRows; row++) {

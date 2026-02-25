@@ -177,6 +177,9 @@ export function soporteToSupport(soporte: any) {
     zona: soporte.zona ?? null,
     country: soporte.pais ?? 'BO',
     priceMonth: num(soporte.precio_mensual),
+    price3Months: num(soporte.precio_3_meses),
+    price6Months: num(soporte.precio_6_meses),
+    price12Months: num(soporte.precio_12_meses),
     impactosDiarios: soporte.impactos_diarios ?? null,
     googleMapsLink: soporte.enlace_maps ?? null,
     latitude,
@@ -305,6 +308,9 @@ export async function buildSupabasePayload(data: any, existing?: any) {
   if (data.city !== undefined) payload.ciudad = data.city || null
   if (data.country !== undefined) payload.pais = data.country || 'BO'
   if (data.priceMonth !== undefined) payload.precio_mensual = num(data.priceMonth)
+  if (data.price3Months !== undefined) payload.precio_3_meses = num(data.price3Months)
+  if (data.price6Months !== undefined) payload.precio_6_meses = num(data.price6Months)
+  if (data.price12Months !== undefined) payload.precio_12_meses = num(data.price12Months)
   if (data.impactosDiarios !== undefined) payload.impactos_diarios = data.impactosDiarios ?? null
   if (data.googleMapsLink !== undefined) payload.enlace_maps = data.googleMapsLink || null
   if (data.description !== undefined) payload.descripcion = data.description || null

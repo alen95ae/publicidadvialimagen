@@ -95,6 +95,7 @@ interface SupportCosts {
   porcentajeBeneficio: number
   utilidadMensual: number
   utilidadAnual: number
+  utilidadEstimadaValor: number // precio - costeActual (para cifra pequeña bajo % estimada)
   ultimoPrecio: number | null
   porcentajeUtilidadReal: number | null
   estadoAlquiler: 'activo' | 'reservado' | 'proximo' | 'finalizado' | null
@@ -147,8 +148,8 @@ export default function CostesPage() {
   const [filtroEstado, setFiltroEstado] = useState<string>("all")
   const [ciudadesUnicas, setCiudadesUnicas] = useState<string[]>([])
   
-  // Estados para ordenamiento
-  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>(null)
+  // Estados para ordenamiento (por defecto: título A–Z)
+  const [sortColumn, setSortColumn] = useState<"codigo" | "titulo" | "costeAlquiler" | "impuestos" | "costeTotal" | "precioVenta" | "porcentajeUtilidad" | "utilidadAnual" | "costeActual" | "ultimoPrecio" | "utilidadReal" | null>("titulo")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   
   // Estado para controlar cuándo los filtros están cargados
@@ -206,21 +207,27 @@ export default function CostesPage() {
             })
             
             const ultimoAlquiler = sortedAlquileres[0]
-            
-            // Calcular precio mensual: (total / número_de_días) * 30
+            const total = ultimoAlquiler.total != null ? Number(ultimoAlquiler.total) : null
+
+            // Último precio = precio mensual contractual real (total / meses). Sin prorrateo por días.
             let precioMensual: number | null = null
-            if (ultimoAlquiler.total && ultimoAlquiler.inicio && ultimoAlquiler.fin) {
-              const fechaInicio = new Date(ultimoAlquiler.inicio)
-              const fechaFin = new Date(ultimoAlquiler.fin)
-              const diferenciaMs = fechaFin.getTime() - fechaInicio.getTime()
-              const dias = Math.max(1, Math.ceil(diferenciaMs / (1000 * 60 * 60 * 24))) // Al menos 1 día para evitar división por 0
-              
-              if (dias > 0) {
-                const precioPorDia = (ultimoAlquiler.total || 0) / dias
-                precioMensual = round2(precioPorDia * 30)
+            if (total != null && total >= 0) {
+              let mesesContratados: number
+              if (ultimoAlquiler.meses != null && ultimoAlquiler.meses > 0) {
+                mesesContratados = Number(ultimoAlquiler.meses)
+              } else if (ultimoAlquiler.inicio && ultimoAlquiler.fin) {
+                const fechaInicio = new Date(ultimoAlquiler.inicio)
+                const fechaFin = new Date(ultimoAlquiler.fin)
+                const diferenciaMs = fechaFin.getTime() - fechaInicio.getTime()
+                const dias = Math.max(1, Math.ceil(diferenciaMs / (1000 * 60 * 60 * 24)))
+                // Meses contractuales = diferencia en meses redondeada hacia arriba (sin prorratear precio por días)
+                mesesContratados = Math.max(1, Math.ceil(dias / 30))
+              } else {
+                mesesContratados = 1
               }
+              precioMensual = mesesContratados <= 0 ? round2(total) : round2(total / mesesContratados)
             }
-            
+
             alquileresMap[support.id] = {
               ultimoPrecio: precioMensual,
               estado: ultimoAlquiler.estado || null
@@ -300,16 +307,23 @@ export default function CostesPage() {
     // COSTE = Suma de todos los costes (equivalente a "coste" en calculadora de precios) - MANTENER PARA COMPATIBILIDAD
     const coste = round2(costeAlquiler + patentes + usoSuelos + luz + gastosAdministrativos + comisionEjec + mantenimiento)
     
-    // IMPUESTOS 18% = equivalente a factura + IUE en calculadora, se extrae del PRECIO (no del coste)
-    // En la calculadora: factura = precio * 16%, iue = precio * 2% (total 18%)
-    // SOLO se aplican cuando el alquiler está activo
-    const impuestos18 = alquilerActivo ? round2(precioVenta * 0.18) : 0
+    // Impuestos 18% (columna): siempre sobre precio de venta (priceMonth), no depende de alquiler activo
+    const impuestos18 = round2(precioVenta * 0.18)
     
-    // COSTE TOTAL = coste + impuestos 18% (equivalente a costosTotales = coste + factura + iue en calculadora) - MANTENER PARA COMPATIBILIDAD
+    // Coste total = coste estructural + impuestos sobre priceMonth (siempre)
     const costoTotal = round2(coste + impuestos18)
     
-    // COSTE ACTUAL TOTAL = coste actual + impuestos 18% (solo si alquiler activo)
-    const costeActualTotal = round2(costeActual + impuestos18)
+    // Coste actual total: sin alquiler activo = solo coste base; con activo = coste base + 18% sobre último precio
+    const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio ?? null
+    let costeActualTotal: number
+    if (!alquilerActivo) {
+      costeActualTotal = costeActual
+    } else if (ultimoPrecio != null && ultimoPrecio > 0) {
+      const impuestosActual = round2(ultimoPrecio * 0.18)
+      costeActualTotal = round2(costeActual + impuestosActual)
+    } else {
+      costeActualTotal = costeActual
+    }
     
     // UTILIDAD BRUTA = precio - coste total (equivalente a utilidadBruta en calculadora)
     const utilidadBruta = round2(precioVenta - costoTotal)
@@ -319,19 +333,14 @@ export default function CostesPage() {
     // Aquí: como comisionEjec ya está en el coste, la utilidad neta es igual a la utilidad bruta
     const utilidadMensual = utilidadBruta
     
-    // % UTILIDAD = ((últimoPrecio - costeActual) / costeActual) * 100 (Opción B - margen sobre COSTE)
-    // costeActual es el coste sin impuestos
-    // Si costeActual === 0, retornar 100 para evitar división por 0
-    const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio || null
+    // precio para % estimada: último precio si existe, si no precio de venta
+    const precioParaEstimada = ultimoPrecio !== null && ultimoPrecio > 0 ? ultimoPrecio : precioVenta
+    // % Utilidad estimada = margen real sobre precio: ((precio - costeActual) / precio) * 100
     let porcentajeBeneficio = 0
-    if (costeActual === 0) {
-      porcentajeBeneficio = 100
-    } else if (ultimoPrecio !== null && ultimoPrecio > 0) {
-      porcentajeBeneficio = round2(((ultimoPrecio - costeActual) / costeActual) * 100)
-    } else if (precioVenta > 0) {
-      // Fallback: si no hay último precio, usar precio de venta
-      porcentajeBeneficio = round2(((precioVenta - costeActual) / costeActual) * 100)
+    if (precioParaEstimada != null && precioParaEstimada > 0) {
+      porcentajeBeneficio = round2(((precioParaEstimada - costeActual) / precioParaEstimada) * 100)
     }
+    const utilidadEstimadaValor = round2(precioParaEstimada - costeActual)
     
     // Utilidad anual = utilidad mensual * 12
     const utilidadAnual = round2(utilidadMensual * 12)
@@ -361,16 +370,13 @@ export default function CostesPage() {
       porcentajeBeneficio,
       utilidadMensual,
       utilidadAnual,
+      utilidadEstimadaValor,
       ultimoPrecio: alquileresData[support.id]?.ultimoPrecio || null,
       porcentajeUtilidadReal: (() => {
-        const ultimoPrecio = alquileresData[support.id]?.ultimoPrecio || null
-        if (ultimoPrecio === null || ultimoPrecio === 0) return null
-        // % utilidad real = ((ultimoPrecio - costeActualTotal) / costeActualTotal) * 100
-        // Si costeActualTotal === 0, retornar 100 para evitar división por 0
-        if (costeActualTotal === 0) {
-          return 100
-        }
-        return round2(((ultimoPrecio - costeActualTotal) / costeActualTotal) * 100)
+        const up = alquileresData[support.id]?.ultimoPrecio ?? null
+        if (up === null || up <= 0) return null
+        // % utilidad real = margen sobre precio: ((ultimoPrecio - costeActualTotal) / ultimoPrecio) * 100
+        return round2(((up - costeActualTotal) / up) * 100)
       })(),
       estadoAlquiler: alquileresData[support.id]?.estado || null
     }
@@ -437,7 +443,7 @@ export default function CostesPage() {
         setFiltroMetodoPago(f.filtroMetodoPago ?? "all")
         setFiltroPropietario(f.filtroPropietario ?? "all")
         setFiltroEstado(f.filtroEstado ?? "all")
-        setSortColumn(f.sortColumn ?? null)
+        setSortColumn(f.sortColumn ?? "titulo")
         setSortDirection(f.sortDirection ?? "asc")
       } catch (error) {
         console.error('❌ Error parseando filtros guardados:', error)
@@ -990,9 +996,8 @@ export default function CostesPage() {
     .filter(soporte => soporte.estadoAlquiler === 'activo' && soporte.ultimoPrecio !== null)
     .reduce((sum, soporte) => sum + (soporte.ultimoPrecio || 0), 0)
   
-  // % Beneficio = ((totalIngresos - totalCostes) / totalCostes) * 100
-  // Si totalCostes === 0, retornar 100 para evitar división por 0
-  const porcentajeBeneficioTotal = totalCostos === 0 ? 100 : round2(((ingresoTotal - totalCostos) / totalCostos) * 100)
+  // % Beneficio total = margen sobre precio: ((ingresoTotal - totalCostos) / ingresoTotal) * 100
+  const porcentajeBeneficioTotal = (ingresoTotal == null || ingresoTotal <= 0) ? 0 : round2(((ingresoTotal - totalCostos) / ingresoTotal) * 100)
   const beneficioTotal = round2(ingresoTotal - totalCostos)
 
   return (
@@ -1126,7 +1131,7 @@ export default function CostesPage() {
         {/* Actions Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           {/* Etiquetas de filtros activos */}
-          {(searchTerm || filtroCiudad !== "all" || filtroMetodoPago !== "all" || filtroPropietario !== "all" || filtroEstado !== "all" || sortColumn) && (
+          {(searchTerm || filtroCiudad !== "all" || filtroMetodoPago !== "all" || filtroPropietario !== "all" || filtroEstado !== "all" || (sortColumn && !(sortColumn === "titulo" && sortDirection === "asc"))) && (
             <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
               {searchTerm && (
                 <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
@@ -1203,7 +1208,7 @@ export default function CostesPage() {
                 </div>
               )}
               
-              {sortColumn && (
+              {sortColumn && !(sortColumn === "titulo" && sortDirection === "asc") && (
                 <div className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 rounded-full px-3 py-1 text-sm">
                   <span className="font-medium">Orden:</span>
                   <span className="text-gray-700">
@@ -1517,16 +1522,16 @@ export default function CostesPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3 sticky left-0 z-20 bg-white border-r border-gray-200" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900 sticky left-0 z-20 bg-white border-r border-gray-200" style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                         <Checkbox
                           checked={selectedSoportes.length === soportesCostesPaginated.length && soportesCostesPaginated.length > 0}
                           onCheckedChange={handleSelectAllUpdated}
                         />
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900 sticky left-[40px] z-20 bg-white border-r border-gray-200" style={{ width: '120px', minWidth: '120px' }}>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900 sticky left-[40px] z-20 bg-white border-r border-gray-200" style={{ width: '120px', minWidth: '120px' }}>
                         <button
                           onClick={() => handleSort("codigo")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1535,21 +1540,21 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "codigo" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("titulo")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
                         >
                           Título
-                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "titulo" ? "text-[#D54644]" : "text-gray-400"}`} />
+                          <ArrowUpDown className={`h-3 w-3 ${sortColumn === "titulo" && sortDirection !== "asc" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Propietario</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Temporalidad de pago</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Método de pago</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Notas</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Estructura</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Propietario</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Temporalidad de pago</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Método de pago</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Notas</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Estructura</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("costeAlquiler")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1558,13 +1563,13 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "costeAlquiler" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Patentes</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Uso de suelos</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Luz</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Gastos administrativos</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Comisión ejec.</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Mantenimiento</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Patentes</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Uso de suelos</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Luz</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Gastos administrativos</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Comisión ejec.</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Mantenimiento</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("impuestos")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1573,7 +1578,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "impuestos" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("costeTotal")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1582,7 +1587,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "costeTotal" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("precioVenta")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1591,7 +1596,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "precioVenta" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("porcentajeUtilidad")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1600,7 +1605,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "porcentajeUtilidad" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("utilidadAnual")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1609,7 +1614,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadAnual" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("costeActual")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1618,7 +1623,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "costeActual" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("ultimoPrecio")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1627,7 +1632,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "ultimoPrecio" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">
                         <button
                           onClick={() => handleSort("utilidadReal")}
                           className="flex items-center gap-1 hover:text-[#D54644] transition-colors"
@@ -1636,7 +1641,7 @@ export default function CostesPage() {
                           <ArrowUpDown className={`h-3 w-3 ${sortColumn === "utilidadReal" ? "text-[#D54644]" : "text-gray-400"}`} />
                         </button>
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900">Estado</th>
+                      <th className="text-left h-10 px-2 align-middle font-medium text-gray-900">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1654,14 +1659,14 @@ export default function CostesPage() {
                         const canEdit = !permisosLoading && puedeEditar("soportes")
                         
                         return (
-                        <tr key={soporte.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}>
-                          <td className={`py-2 px-3 sticky left-0 z-10 ${isSelected ? 'bg-gray-100' : 'bg-white'} border-r border-gray-200`} style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
+                        <tr key={soporte.id} className={`border-b border-gray-200 transition-colors hover:bg-muted/50 ${isSelected ? 'bg-gray-100' : ''}`}>
+                          <td className={`p-2 align-middle sticky left-0 z-10 ${isSelected ? 'bg-gray-100' : 'bg-white'} border-r border-gray-200`} style={{ width: '40px', minWidth: '40px', maxWidth: '40px' }}>
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={(checked) => handleSelectSoporte(soporte.id, checked as boolean)}
                             />
                           </td>
-                          <td className={`py-2 px-3 whitespace-nowrap sticky left-[40px] z-10 ${isSelected ? 'bg-gray-100' : 'bg-white'} border-r border-gray-200`} style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                          <td className={`p-2 align-middle whitespace-nowrap sticky left-[40px] z-10 ${isSelected ? 'bg-gray-100' : 'bg-white'} border-r border-gray-200`} style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1675,7 +1680,7 @@ export default function CostesPage() {
                               </Tooltip>
                             </TooltipProvider>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle whitespace-nowrap">
                             {soporte.titulo?.length > 40 ? (
                               <TooltipProvider>
                                 <Tooltip>
@@ -1687,7 +1692,7 @@ export default function CostesPage() {
                               </TooltipProvider>
                             ) : (soporte.titulo || '-')}
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="p-2 align-middle">
                             {isSelected && canEdit ? (
                               <Input
                                 value={edited.owner ?? support?.owner ?? ""}
@@ -1705,7 +1710,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 value={edited.temporalidadPago ?? support?.temporalidadPago ?? ""}
@@ -1717,7 +1722,7 @@ export default function CostesPage() {
                               <span className="text-sm">{soporte.temporalidadPago}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Select
                                 value={edited.metodoPago ?? support?.metodoPago ?? ""}
@@ -1738,7 +1743,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 value={edited.notas ?? support?.notas ?? ""}
@@ -1752,7 +1757,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 value={edited.estructura ?? support?.estructura ?? ""}
@@ -1764,7 +1769,7 @@ export default function CostesPage() {
                               <span className="text-sm">{soporte.estructura || '-'}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 type="number"
@@ -1780,7 +1785,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 type="number"
@@ -1794,7 +1799,7 @@ export default function CostesPage() {
                               <span>Bs {formatearBs(soporte.patentes)}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 type="number"
@@ -1808,7 +1813,7 @@ export default function CostesPage() {
                               <span>Bs {formatearBs(soporte.usoSuelos)}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 value={edited.luz ?? support?.luz ?? ""}
@@ -1900,7 +1905,7 @@ export default function CostesPage() {
                               );
                             })()}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 type="number"
@@ -1914,7 +1919,7 @@ export default function CostesPage() {
                               <span>Bs {formatearBs(soporte.gastosAdministrativos)}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 type="number"
@@ -1928,7 +1933,7 @@ export default function CostesPage() {
                               <span>Bs {formatearBs(soporte.comisionEjec)}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {isSelected && canEdit ? (
                               <Input
                                 type="number"
@@ -1942,33 +1947,33 @@ export default function CostesPage() {
                               <span>Bs {formatearBs(soporte.mantenimiento)}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             <span className="font-medium text-orange-600">Bs {formatearBs(soporte.impuestos18)}</span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             <span className="font-medium text-red-600">Bs {formatearBs(soporte.costoTotal)}</span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             <span className="font-medium text-green-600">Bs {formatearBs(soporte.precioVenta)}</span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
-                            <div className={`flex flex-col ${getBeneficioColor(soporte.porcentajeBeneficio)}`}>
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
+                            <div className={`flex flex-col justify-end ${getBeneficioColor(soporte.porcentajeBeneficio)}`}>
                               <div className="flex items-center gap-1">
                                 {getBeneficioIcon(soporte.porcentajeBeneficio)}
                                 <span className="font-medium">{soporte.porcentajeBeneficio.toFixed(1)}%</span>
                               </div>
-                              <span className="text-xs mt-0.5">Bs {formatearBs(soporte.utilidadMensual)}</span>
+                              <span className="text-xs mt-0.5">Bs {formatearBs(soporte.utilidadEstimadaValor)}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             <span className={`font-medium ${soporte.utilidadAnual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               Bs {formatearBs(soporte.utilidadAnual)}
                             </span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             <span className="font-medium text-purple-600">Bs {formatearBs(soporte.costeActual)}</span>
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {soporte.ultimoPrecio !== null ? (
                               <span className="font-medium text-blue-600">
                                 Bs {formatearBs(soporte.ultimoPrecio)}
@@ -1977,7 +1982,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle text-right tabular-nums whitespace-nowrap">
                             {soporte.porcentajeUtilidadReal !== null ? (
                               <div className={`flex items-center gap-1 ${getBeneficioColor(soporte.porcentajeUtilidadReal)}`}>
                                 {getBeneficioIcon(soporte.porcentajeUtilidadReal)}
@@ -1987,7 +1992,7 @@ export default function CostesPage() {
                               <span className="text-gray-500">-</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 whitespace-nowrap">
+                          <td className="p-2 align-middle whitespace-nowrap">
                             {soporte.estadoAlquiler ? (
                               <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
                                 soporte.estadoAlquiler === 'activo' ? 'bg-green-100 text-green-800' :

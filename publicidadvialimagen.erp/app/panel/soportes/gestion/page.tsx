@@ -1289,16 +1289,14 @@ export default function SoportesPage() {
                       <FileDown className="w-4 h-4 mr-2" />
                       Catálogo PDF
                     </Button>
-                    {tieneFuncionTecnica("ver costes soportes") && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={openCatálogoPreciosDialog}
-                      >
-                        <FileDown className="w-4 h-4 mr-2" />
-                        Catálogo Precios
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openCatálogoPreciosDialog}
+                    >
+                      <FileDown className="w-4 h-4 mr-2" />
+                      Catálogo Precios
+                    </Button>
                   </div>
                 </div>
               </div>

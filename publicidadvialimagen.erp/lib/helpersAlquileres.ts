@@ -14,7 +14,8 @@ import {
   registrarAlquilerCreado, 
   registrarAlquilerEliminado,
   addHistorialEvento,
-  getHistorialSoporte
+  getHistorialSoporte,
+  getUltimaReservaPorSoporte
 } from './supabaseHistorial'
 import { getSoporteById } from './supabaseSoportes'
 
@@ -330,6 +331,27 @@ export async function actualizarEstadoSoporte(soporteId: string | number) {
 
     if (estadoActual === 'No disponible') return;
 
+    const soporteIdNum = typeof soporteId === 'number' ? soporteId : parseInt(soporteIdStr, 10);
+
+    // Si está Reservado, consultar historial para saber si es reserva protegida (manual o temporal no expirada)
+    let esReservaProtegida = false;
+    if (estadoActual === 'Reservado') {
+      try {
+        const ultimaReserva = await getUltimaReservaPorSoporte(soporteIdNum);
+        if (ultimaReserva?.datos) {
+          const { tipo, fecha_expiracion } = ultimaReserva.datos;
+          if (tipo === 'reserva_manual') {
+            esReservaProtegida = true;
+          } else if (tipo === 'reserva_temporal' && fecha_expiracion) {
+            const expiracion = new Date(String(fecha_expiracion));
+            if (expiracion.getTime() > Date.now()) esReservaProtegida = true;
+          }
+        }
+      } catch {
+        esReservaProtegida = false;
+      }
+    }
+
     // Obtener TODOS los alquileres del soporte cuya fin >= hoy (vigentes por fecha)
     const alquileresVigentes = await getAlquileresVigentesPorSoporte(soporteId);
 
@@ -366,10 +388,13 @@ export async function actualizarEstadoSoporte(soporteId: string | number) {
     } else if (tieneAlquilerProximo30d) {
       nuevoEstado = 'Reservado';
     } else {
-      // Sin alquileres vigentes ni próximos a 30d
-      const soporteIdNum = typeof soporteId === 'number' ? soporteId : parseInt(soporteIdStr);
-      const debeVolver = await debeVolverAConsultar(soporteIdNum);
-      nuevoEstado = debeVolver ? 'A Consultar' : 'Disponible';
+      // Sin alquileres vigentes ni próximos a 30d: escudo solo evita bajar a Disponible
+      if (esReservaProtegida) {
+        nuevoEstado = 'Reservado';
+      } else {
+        const debeVolver = await debeVolverAConsultar(soporteIdNum);
+        nuevoEstado = debeVolver ? 'A Consultar' : 'Disponible';
+      }
     }
 
     if (estadoActual !== nuevoEstado) {

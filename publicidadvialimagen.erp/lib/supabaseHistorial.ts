@@ -61,6 +61,30 @@ export async function getHistorialSoporte(soporteId: number): Promise<HistorialE
 }
 
 /**
+ * Obtener el último evento RESERVA de un soporte (consulta ligera: solo datos, limit 1).
+ * Usado por el cron para evaluar si una reserva es protegida (manual o temporal no expirada).
+ */
+export async function getUltimaReservaPorSoporte(soporteId: number): Promise<{ datos: Record<string, unknown> | null } | null> {
+  try {
+    const supabase = getSupabaseServer();
+    const { data, error } = await supabase
+      .from('soportes_historial')
+      .select('datos')
+      .eq('soporte_id', soporteId)
+      .eq('tipo_evento', 'RESERVA')
+      .order('fecha', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return null;
+    if (!data || !data.datos) return null;
+    return { datos: data.datos as Record<string, unknown> };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Agregar un nuevo evento al historial
  */
 export async function addHistorialEvento(evento: NuevoHistorialEvento): Promise<HistorialEvento> {

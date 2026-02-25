@@ -90,6 +90,7 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
     const validFields = [
       'codigo', 'titulo', 'tipo_soporte', 'estado', 'ancho', 'alto',
       'area_total', 'area_total_calculada', 'iluminacion', 'precio_mensual',
+      'precio_3_meses', 'precio_6_meses', 'precio_12_meses',
       'precio_m2_calculado', 'impactos_diarios', 'propietario', 'ciudad', 'zona', 'pais',
       'enlace_maps', 'latitud', 'longitud', 'imagen_principal', 'imagen_secundaria_1',
       'imagen_secundaria_2', 'resumen_ia', 'descripcion', 'sustrato',
@@ -196,6 +197,21 @@ export async function PUT(req:Request,{ params }:{ params:Promise<{id:string}> }
           realizado_por: userUuid, // UUID del usuario, no email
           datos: Object.keys(datosHistorial).length > 0 ? datosHistorial : null
         })
+
+        // Si el estado cambió a Reservado desde listado/editar, marcar origen manual (escudo indefinido)
+        if (cleanPayload.estado === 'Reservado' && existing.estado !== 'Reservado') {
+          await addHistorialEvento({
+            soporte_id: typeof soporteId === 'number' ? soporteId : parseInt(String(soporteId)),
+            tipo_evento: 'RESERVA',
+            descripcion: 'Soporte marcado como reservado desde edición (sin expiración automática)',
+            realizado_por: userUuid,
+            datos: {
+              tipo: 'reserva_manual',
+              estado_anterior: existing.estado || 'Disponible',
+              fecha_reserva: new Date().toISOString()
+            }
+          })
+        }
         
         console.log('✅ Evento de historial registrado')
       } catch (historialError) {

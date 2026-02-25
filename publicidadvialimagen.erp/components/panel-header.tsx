@@ -860,7 +860,7 @@ export default function PanelHeader() {
                       if (item.href === "/panel/soportes/costes" && !tieneFuncionTecnica("ver costes soportes")) {
                         return false;
                       }
-                      if (item.href === "/panel/soportes/precios" && tieneFuncionTecnica("ver costes soportes") && !puedeEditar("soportes")) {
+                      if (item.href === "/panel/soportes/precios" && !tieneFuncionTecnica("ver costes soportes")) {
                         return false;
                       }
                       if (item.href === "/panel/ventas/solicitudes" && !tieneFuncionTecnica("ver solicitudes cotizacion")) {

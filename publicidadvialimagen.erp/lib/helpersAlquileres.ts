@@ -317,6 +317,14 @@ async function debeVolverAConsultar(soporteId: number): Promise<boolean> {
  * 4. Si existe alquiler futuro (inicio > hoy) a ≤ 30 días → "Reservado".
  * 5. Si no hay alquileres vigentes ni próximos (≤30d): "A Consultar" si estaba antes, sino "Disponible".
  */
+/** Normaliza a fecha "solo día" en hora local (00:00:00) para evitar bugs de zona horaria. */
+function toLocalDay(d: Date | string): Date {
+  const x = typeof d === 'string' ? new Date(d) : d;
+  const out = new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
 export async function actualizarEstadoSoporte(soporteId: string | number) {
   try {
     const soporteIdStr = typeof soporteId === 'number' ? String(soporteId) : soporteId;
@@ -352,32 +360,30 @@ export async function actualizarEstadoSoporte(soporteId: string | number) {
       }
     }
 
-    // Obtener TODOS los alquileres del soporte cuya fin >= hoy (vigentes por fecha)
+    // Obtener alquileres del soporte con fin >= hoy (vigentes por fecha)
     const alquileresVigentes = await getAlquileresVigentesPorSoporte(soporteId);
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const hoy = toLocalDay(new Date());
+    const hoyMas30 = new Date(hoy);
+    hoyMas30.setDate(hoyMas30.getDate() + 30);
+    hoyMas30.setHours(0, 0, 0, 0);
 
     let tieneAlquilerActivo = false;
     let tieneAlquilerProximo30d = false;
 
     for (const alq of alquileresVigentes) {
-      const inicio = new Date(alq.inicio);
-      inicio.setHours(0, 0, 0, 0);
-      const fin = new Date(alq.fin);
-      fin.setHours(0, 0, 0, 0);
+      const inicio = toLocalDay(alq.inicio);
+      const fin = toLocalDay(alq.fin);
 
-      if (inicio <= hoy && hoy <= fin) {
+      // Ocupado: solo si hoy está entre inicio y fin (inclusive)
+      if (inicio.getTime() <= hoy.getTime() && hoy.getTime() <= fin.getTime()) {
         tieneAlquilerActivo = true;
         break;
       }
 
-      if (inicio > hoy) {
-        const diffMs = inicio.getTime() - hoy.getTime();
-        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        if (diffDias <= 30) {
-          tieneAlquilerProximo30d = true;
-        }
+      // Reservado por alquiler próximo: inicio > hoy y inicio <= hoy + 30 días
+      if (inicio.getTime() > hoy.getTime() && inicio.getTime() <= hoyMas30.getTime()) {
+        tieneAlquilerProximo30d = true;
       }
     }
 

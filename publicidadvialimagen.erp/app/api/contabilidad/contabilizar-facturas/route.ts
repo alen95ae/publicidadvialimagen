@@ -4,11 +4,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { requirePermiso } from "@/lib/permisos";
 
-const EMPRESA_ID = 1;
+/** Cuentas fijas según sistema antiguo (Contabilización de Facturas → Comprobantes). */
+const CUENTA_VENTA_DEFAULT = "112001001";
+const CUENTA_IT_3 = "525002001";
+const CUENTA_IVA_DEBITO_13 = "214001001";
+const CUENTA_IT_POR_PAGAR_3 = "214004001";
+const CUENTA_INGRESO_VENTAS = "411002001";
+
 const TOLERANCIA_BALANCE = 0.02;
 
-/** POST - Contabilizar facturas manuales (ventas) en el rango de fechas.
- * Genera un comprobante por factura usando plantilla VENTA_DF, lo aprueba y actualiza la factura.
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** POST - Contabilizar facturas manuales (solo Ventas) en el rango de fechas.
+ * Un comprobante por factura; detalle = 5 líneas por cada ítem.
+ *
+ * Matemática por ítem (Importe = cantidad*precio_unitario - descuento):
+ *   L1  cuenta_venta   DEBE = Importe        HABER = 0              glosa = descripción ítem
+ *   L2  IT 3%          DEBE = Importe*0.03   HABER = 0              glosa = código factura
+ *   L3  IVA 13%        DEBE = 0              HABER = Importe*0.13   glosa = código factura
+ *   L4  IT por pagar   DEBE = 0              HABER = Importe*0.03   glosa = código factura
+ *   L5  Ingreso ventas DEBE = 0              HABER = Importe*0.87   glosa = descripción ítem
+ *
+ * Balance: DEBE = 1.03*Importe, HABER = 1.03*Importe  ✓
  */
 export async function POST(request: NextRequest) {
   try {
@@ -17,9 +36,8 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
     const body = await request.json().catch(() => ({}));
-    const { desde_fecha, hasta_fecha, ventas } = body;
+    const { desde_fecha, hasta_fecha, ventas, empresa_id, sucursal_id } = body;
 
-    // 1. Validar filtros
     if (!desde_fecha || !hasta_fecha) {
       return NextResponse.json(
         { error: "desde_fecha y hasta_fecha son requeridos" },
@@ -34,21 +52,17 @@ export async function POST(request: NextRequest) {
     }
     if (!ventas) {
       return NextResponse.json(
-        { error: "Debe seleccionar al menos un tipo de documento (ventas)" },
+        { error: "Debe seleccionar Ventas para contabilizar." },
         { status: 400 }
       );
     }
 
-    // 2. Cargar facturas: rango de fechas, no ANULADA, pendientes de contabilizar
-    let queryFacturas = supabase
+    const { data: facturas, error: errFacturas } = await supabase
       .from("facturas_manuales")
-      .select("id, numero, fecha, cliente_nombre, cliente_nit, moneda, tipo_cambio, total, glosa, estado, estado_contable, comprobante_id")
-      .eq("empresa_id", EMPRESA_ID)
+      .select("id, numero, fecha, glosa, estado_contable, comprobante_id")
       .gte("fecha", desde_fecha)
       .lte("fecha", hasta_fecha)
       .neq("estado", "ANULADA");
-
-    const { data: facturas, error: errFacturas } = await queryFacturas;
 
     if (errFacturas) {
       console.error("Error cargando facturas:", errFacturas);
@@ -77,134 +91,78 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Cargar plantilla VENTA_DF y configuración de cuentas
-    const { data: plantilla, error: errPlantilla } = await supabase
-      .from("plantillas_contables")
-      .select("id, codigo, tipo_comprobante")
-      .eq("codigo", "VENTA_DF")
-      .eq("activa", true)
-      .single();
+    const hoy = new Date();
+    const gestion = hoy.getFullYear();
+    const periodo = hoy.getMonth() + 1;
+    const fechaHoy = hoy.toISOString().slice(0, 10);
 
-    if (errPlantilla || !plantilla) {
-      return NextResponse.json(
-        {
-          error: "Plantilla VENTA_DF no encontrada o inactiva.",
-          details: "Cree o active la plantilla con código VENTA_DF en Parámetros de contabilidad (plantillas contables).",
-        },
-        { status: 400 }
-      );
-    }
-
-    const { data: detallesPlantilla, error: errDetalles } = await supabase
-      .from("plantillas_contables_detalle")
-      .select("id, orden, rol, lado, porcentaje, cuenta_fija")
-      .eq("plantilla_id", plantilla.id)
-      .order("orden", { ascending: true });
-
-    if (errDetalles || !detallesPlantilla?.length) {
-      return NextResponse.json(
-        {
-          error: "La plantilla VENTA_DF no tiene detalles configurados.",
-          details: "Añada líneas (Cliente, Ingreso, IVA Débito) a la plantilla VENTA_DF en Parámetros.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const { data: configRows } = await supabase
-      .from("contabilidad_config")
-      .select("key, value")
-      .in("key", ["IVA_DEBITO_CUENTA", "VENTA_DF_CLIENTE_CUENTA", "VENTA_DF_INGRESO_CUENTA"]);
-
-    const config: Record<string, string> = {};
-    configRows?.forEach((r: { key: string; value: string }) => {
-      config[r.key] = r.value;
-    });
-
-    const cuentaCliente = config["VENTA_DF_CLIENTE_CUENTA"];
-    const cuentaIngreso = config["VENTA_DF_INGRESO_CUENTA"];
-    const cuentaIvaDebito = config["IVA_DEBITO_CUENTA"];
-
-    if (!cuentaCliente || !cuentaIngreso || !cuentaIvaDebito) {
-      const keysFaltantes: string[] = [];
-      if (!cuentaCliente) keysFaltantes.push("VENTA_DF_CLIENTE_CUENTA");
-      if (!cuentaIngreso) keysFaltantes.push("VENTA_DF_INGRESO_CUENTA");
-      if (!cuentaIvaDebito) keysFaltantes.push("IVA_DEBITO_CUENTA");
-      return NextResponse.json(
-        {
-          error: "Faltan cuentas en configuración contable.",
-          details: `Claves faltantes en contabilidad_config: ${keysFaltantes.join(", ")}. Ejecute la migración 037 o añada estas claves en Parámetros de contabilidad (tabla contabilidad_config).`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validar que las cuentas existan en plan_cuentas
-    const { data: cuentasExistentes } = await supabase
-      .from("plan_cuentas")
-      .select("cuenta")
-      .in("cuenta", [cuentaCliente, cuentaIngreso, cuentaIvaDebito])
-      .eq("empresa_id", EMPRESA_ID);
-
-    const cuentasOk = (cuentasExistentes || []).map((c: { cuenta: string }) => c.cuenta);
-    const faltantes = [cuentaCliente, cuentaIngreso, cuentaIvaDebito].filter((c) => !cuentasOk.includes(c));
-    if (faltantes.length > 0) {
-      return NextResponse.json(
-        {
-          error: "Las siguientes cuentas no existen en el plan de cuentas (empresa_id=1).",
-          details: `Cuentas: ${faltantes.join(", ")}. Configure VENTA_DF_CLIENTE_CUENTA, VENTA_DF_INGRESO_CUENTA e IVA_DEBITO_CUENTA en Parámetros de contabilidad con códigos que existan en el plan de cuentas.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const porcentajeIVA = 13;
     const comprobantes: { factura_id: string; factura_numero: string | null; comprobante_id: number; numero: string }[] = [];
     const errores_detalle: { factura_id: string; factura_numero: string | null; error: string }[] = [];
 
     for (const factura of candidatas) {
       try {
-        // Validar factura
-        const total = Number(factura.total) || 0;
-        if (total <= 0) {
-          await marcarError(supabase, factura.id, "Total debe ser mayor a 0");
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: "Total debe ser mayor a 0" });
+        const codigoFactura = factura.numero || String(factura.id);
+
+        // Cargar ítems de la factura
+        const { data: items, error: errItems } = await supabase
+          .from("items_factura_manual")
+          .select("id, orden, codigo_producto, descripcion, cantidad, precio_unitario, descuento, importe")
+          .eq("factura_id", factura.id)
+          .order("orden", { ascending: true });
+
+        if (errItems) {
+          await marcarError(supabase, factura.id, "Error al cargar ítems: " + errItems.message);
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errItems.message });
           continue;
         }
 
-        const monedaFactura = (factura.moneda || "BOB").toUpperCase();
-        const monedaComprobante = monedaFactura === "USD" ? "USD" : "BS";
-        const tipoCambio = Number(factura.tipo_cambio) || 1;
-        if (tipoCambio <= 0) {
-          await marcarError(supabase, factura.id, "Tipo de cambio inválido");
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: "Tipo de cambio inválido" });
+        const itemsFactura = items || [];
+        if (itemsFactura.length === 0) {
+          await marcarError(supabase, factura.id, "Factura sin ítems");
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: "Factura sin ítems" });
           continue;
         }
 
-        const fecha = String(factura.fecha).slice(0, 10);
-        const periodo = parseInt(fecha.slice(5, 7), 10) || 1;
-        const gestion = parseInt(fecha.slice(0, 4), 10) || new Date().getFullYear();
+        // Resolver cuenta_venta por código de producto (productos y recursos/soportes)
+        const codigosProducto = [...new Set(itemsFactura.map((i: any) => (i.codigo_producto || "").trim()).filter(Boolean))];
+        const mapaCuentaVenta: Record<string, string> = {};
+        if (codigosProducto.length > 0) {
+          const { data: productos } = await supabase
+            .from("productos")
+            .select("codigo, cuenta_venta")
+            .in("codigo", codigosProducto);
+          (productos || []).forEach((p: any) => {
+            if (p.codigo && p.cuenta_venta) mapaCuentaVenta[p.codigo] = p.cuenta_venta;
+          });
+          const { data: recursos } = await supabase
+            .from("recursos")
+            .select("codigo, cuenta_venta")
+            .in("codigo", codigosProducto);
+          (recursos || []).forEach((r: any) => {
+            if (r.codigo && r.cuenta_venta && !mapaCuentaVenta[r.codigo])
+              mapaCuentaVenta[r.codigo] = r.cuenta_venta;
+          });
+        }
 
-        const montoTotal = total;
-        const montoBase = Math.round((montoTotal / (1 + porcentajeIVA / 100)) * 100) / 100;
-        const montoIVA = Math.round((montoTotal - montoBase) * 100) / 100;
-        const montoTotalAjustado = montoBase + montoIVA;
-
-        const concepto = `Contab. Factura ${factura.numero || factura.id}`;
-
-        const comprobanteData = {
+        // Cabecera del comprobante
+        // empresa_id es INTEGER (legacy) → NO enviar UUID ahí
+        // empresa_uuid es UUID (migración 039) → aquí va el UUID de la empresa
+        // sucursal_id es UUID (migración 039)
+        const comprobanteData: Record<string, unknown> = {
           origen: "Ventas",
-          tipo_comprobante: plantilla.tipo_comprobante,
+          tipo_comprobante: "Traspaso",
           tipo_asiento: "Normal",
-          fecha,
+          fecha: fechaHoy,
           periodo,
           gestion,
-          moneda: monedaComprobante,
-          tipo_cambio: tipoCambio,
-          concepto,
-          beneficiario: factura.cliente_nombre || null,
+          moneda: "BS",
+          tipo_cambio: 6.96,
+          concepto: factura.glosa || null,
+          beneficiario: null,
+          nro_cheque: null,
           estado: "BORRADOR",
-          empresa_id: EMPRESA_ID,
+          empresa_uuid: empresa_id || null,
+          sucursal_id: sucursal_id || null,
         };
 
         const { data: comprobanteCreado, error: errInsertComp } = await supabase
@@ -214,17 +172,14 @@ export async function POST(request: NextRequest) {
           .single();
 
         if (errInsertComp || !comprobanteCreado) {
-          await marcarError(supabase, factura.id, errInsertComp?.message || "Error al crear comprobante");
-          errores_detalle.push({
-            factura_id: factura.id,
-            factura_numero: factura.numero,
-            error: errInsertComp?.message || "Error al crear comprobante",
-          });
+          const msg = errInsertComp?.message || "Error al crear comprobante";
+          console.error("Error insertando comprobante:", msg, comprobanteData);
+          await marcarError(supabase, factura.id, msg);
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: msg });
           continue;
         }
 
         const comprobanteId = comprobanteCreado.id;
-
         const detallesData: Array<{
           comprobante_id: number;
           cuenta: string;
@@ -237,89 +192,119 @@ export async function POST(request: NextRequest) {
           orden: number;
         }> = [];
 
-        detallesPlantilla.forEach((det: any, index: number) => {
-          let cuenta = "";
-          let monto = 0;
-          if (det.rol === "CLIENTE") {
-            cuenta = cuentaCliente;
-            monto = montoTotalAjustado;
-          } else if (det.rol === "INGRESO") {
-            cuenta = cuentaIngreso;
-            monto = montoBase;
-          } else if (det.rol === "IVA_DEBITO") {
-            cuenta = cuentaIvaDebito;
-            monto = montoIVA;
-          } else if (det.cuenta_fija) {
-            cuenta = det.cuenta_fija;
-            monto = 0;
-          }
-          if (!cuenta) return;
+        let orden = 0;
+        for (const item of itemsFactura) {
+          const importe = round2(Number(item.importe) || 0);
+          if (importe <= 0) continue;
 
-          const debe_bs = det.lado === "DEBE" && monedaComprobante === "BS" ? monto : 0;
-          const haber_bs = det.lado === "HABER" && monedaComprobante === "BS" ? monto : 0;
-          const debe_usd = det.lado === "DEBE" && monedaComprobante === "USD" ? monto : 0;
-          const haber_usd = det.lado === "HABER" && monedaComprobante === "USD" ? monto : 0;
+          const cuentaVenta = (item.codigo_producto && mapaCuentaVenta[String(item.codigo_producto).trim()]) || CUENTA_VENTA_DEFAULT;
+          const descripcionItem = (item.descripcion || "").trim() || codigoFactura;
+          const it3 = round2(importe * 0.03);
+          const iva13 = round2(importe * 0.13);
+          const ingreso87 = round2(importe * 0.87);
 
+          // L1: Cuenta por Cobrar (cuenta_venta producto/soporte) — DEBE
+          orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
-            cuenta,
+            cuenta: cuentaVenta,
             auxiliar: null,
-            glosa: null,
-            debe_bs,
-            haber_bs,
-            debe_usd,
-            haber_usd,
-            orden: index + 1,
+            glosa: descripcionItem,
+            debe_bs: importe,
+            haber_bs: 0,
+            debe_usd: 0,
+            haber_usd: 0,
+            orden,
           });
-        });
+          // L2: IT 3% — DEBE
+          orden++;
+          detallesData.push({
+            comprobante_id: comprobanteId,
+            cuenta: CUENTA_IT_3,
+            auxiliar: null,
+            glosa: codigoFactura,
+            debe_bs: it3,
+            haber_bs: 0,
+            debe_usd: 0,
+            haber_usd: 0,
+            orden,
+          });
+          // L3: IVA Débito Fiscal 13% — HABER
+          orden++;
+          detallesData.push({
+            comprobante_id: comprobanteId,
+            cuenta: CUENTA_IVA_DEBITO_13,
+            auxiliar: null,
+            glosa: codigoFactura,
+            debe_bs: 0,
+            haber_bs: iva13,
+            debe_usd: 0,
+            haber_usd: 0,
+            orden,
+          });
+          // L4: IT por Pagar 3% — HABER
+          orden++;
+          detallesData.push({
+            comprobante_id: comprobanteId,
+            cuenta: CUENTA_IT_POR_PAGAR_3,
+            auxiliar: null,
+            glosa: codigoFactura,
+            debe_bs: 0,
+            haber_bs: it3,
+            debe_usd: 0,
+            haber_usd: 0,
+            orden,
+          });
+          // L5: Ingreso por Ventas 87% — HABER (glosa = descripción del ítem)
+          orden++;
+          detallesData.push({
+            comprobante_id: comprobanteId,
+            cuenta: CUENTA_INGRESO_VENTAS,
+            auxiliar: null,
+            glosa: descripcionItem,
+            debe_bs: 0,
+            haber_bs: ingreso87,
+            debe_usd: 0,
+            haber_usd: 0,
+            orden,
+          });
+        }
 
         if (detallesData.length === 0) {
           await supabase.from("comprobantes").delete().eq("id", comprobanteId);
-          await marcarError(supabase, factura.id, "La plantilla no generó líneas contables");
-          errores_detalle.push({
-            factura_id: factura.id,
-            factura_numero: factura.numero,
-            error: "La plantilla no generó líneas contables",
-          });
+          await marcarError(supabase, factura.id, "No se generaron líneas contables");
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: "No se generaron líneas contables" });
           continue;
         }
 
-        const totalDebeBS = detallesData.reduce((s, d) => s + d.debe_bs, 0);
-        const totalHaberBS = detallesData.reduce((s, d) => s + d.haber_bs, 0);
-        const totalDebeUSD = detallesData.reduce((s, d) => s + d.debe_usd, 0);
-        const totalHaberUSD = detallesData.reduce((s, d) => s + d.haber_usd, 0);
+        // Validar balance DEBE = HABER
+        const totalDebeBS = round2(detallesData.reduce((s, d) => s + d.debe_bs, 0));
+        const totalHaberBS = round2(detallesData.reduce((s, d) => s + d.haber_bs, 0));
         const diffBS = Math.abs(totalDebeBS - totalHaberBS);
-        const diffUSD = Math.abs(totalDebeUSD - totalHaberUSD);
 
-        if (diffBS > TOLERANCIA_BALANCE || diffUSD > TOLERANCIA_BALANCE) {
+        if (diffBS > TOLERANCIA_BALANCE) {
           await supabase.from("comprobantes").delete().eq("id", comprobanteId);
-          await marcarError(
-            supabase,
-            factura.id,
-            `Comprobante no balanceado (Debe ≠ Haber). BS: ${diffBS.toFixed(2)}, USD: ${diffUSD.toFixed(2)}`
-          );
-          errores_detalle.push({
-            factura_id: factura.id,
-            factura_numero: factura.numero,
-            error: "Comprobante no balanceado",
-          });
+          const errMsg = `Comprobante no balanceado: Debe=${totalDebeBS}, Haber=${totalHaberBS}, Diff=${diffBS.toFixed(2)}`;
+          await marcarError(supabase, factura.id, errMsg);
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errMsg });
           continue;
         }
 
         const { error: errDetalles } = await supabase.from("comprobante_detalle").insert(detallesData);
 
         if (errDetalles) {
+          console.error("Error insertando detalle:", errDetalles.message, JSON.stringify(detallesData[0]));
           await supabase.from("comprobantes").delete().eq("id", comprobanteId);
           await marcarError(supabase, factura.id, errDetalles.message);
           errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errDetalles.message });
           continue;
         }
 
+        // Asignar número y aprobar
         const { data: ultimoComp } = await supabase
           .from("comprobantes")
           .select("numero")
-          .eq("empresa_id", EMPRESA_ID)
-          .eq("tipo_comprobante", plantilla.tipo_comprobante)
+          .eq("tipo_comprobante", "Traspaso")
           .eq("estado", "APROBADO")
           .order("numero", { ascending: false })
           .limit(1)
@@ -334,8 +319,7 @@ export async function POST(request: NextRequest) {
         const { error: errAprobar } = await supabase
           .from("comprobantes")
           .update({ estado: "APROBADO", numero: siguienteNumero })
-          .eq("id", comprobanteId)
-          .eq("empresa_id", EMPRESA_ID);
+          .eq("id", comprobanteId);
 
         if (errAprobar) {
           await marcarError(supabase, factura.id, errAprobar.message);
@@ -352,8 +336,7 @@ export async function POST(request: NextRequest) {
             error_contabilizacion: null,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", factura.id)
-          .eq("empresa_id", EMPRESA_ID);
+          .eq("id", factura.id);
 
         if (errUpdateFactura) {
           errores_detalle.push({
@@ -390,7 +373,7 @@ export async function POST(request: NextRequest) {
           : `Procesadas ${candidatas.length}: ${comprobantes.length} contabilizadas, ${errores_detalle.length} con error.`,
     });
   } catch (error: any) {
-    console.error("POST /api/contabilidad/contabilizar-facturas:", error);
+    console.error("Error en contabilizar-facturas:", error);
     return NextResponse.json(
       { error: "Error interno del servidor", details: error?.message },
       { status: 500 }
@@ -410,6 +393,5 @@ async function marcarError(
       error_contabilizacion: mensaje.slice(0, 500),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", facturaId)
-    .eq("empresa_id", EMPRESA_ID);
+    .eq("id", facturaId);
 }

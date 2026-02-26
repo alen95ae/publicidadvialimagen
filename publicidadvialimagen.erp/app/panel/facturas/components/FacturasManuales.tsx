@@ -642,7 +642,8 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         onEstadoChange?.(nuevoEstado)
         toast.success(nuevoEstado === "ANULADA" ? "Factura anulada" : "Factura aprobada")
       } else {
-        toast.error(result.error || "Error al actualizar estado")
+        const msg = result.details ? `${result.error || "Error"}: ${result.details}` : (result.error || "Error al actualizar estado")
+        toast.error(msg)
       }
     } catch (e) {
       console.error("Error actualizando estado:", e)

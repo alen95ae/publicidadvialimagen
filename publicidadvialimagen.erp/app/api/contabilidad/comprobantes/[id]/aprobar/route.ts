@@ -28,10 +28,10 @@ export async function POST(
         detalles:comprobante_detalle(*)
       `)
       .eq("id", id)
-      .eq("empresa_id", 1)
       .single()
 
     if (fetchError || !comprobante) {
+      console.error("Error en comprobantes:", fetchError)
       return NextResponse.json(
         { error: "Comprobante no encontrado" },
         { status: 404 }
@@ -86,7 +86,7 @@ export async function POST(
       .maybeSingle()
 
     if (errorUltimo) {
-      console.error("Error obteniendo último comprobante aprobado:", errorUltimo)
+      console.error("Error en comprobantes:", errorUltimo)
       return NextResponse.json(
         { error: "Error al generar el número de comprobante", details: errorUltimo.message },
         { status: 500 }
@@ -108,7 +108,6 @@ export async function POST(
         numero: siguienteNumero
       })
       .eq("id", id)
-      .eq("empresa_id", 1)
       .select(`
         *,
         detalles:comprobante_detalle(*)
@@ -116,7 +115,7 @@ export async function POST(
       .single()
 
     if (errorAprobar) {
-      console.error("Error aprobando comprobante:", errorAprobar)
+      console.error("Error en comprobantes:", errorAprobar)
       return NextResponse.json(
         { error: "Error al aprobar el comprobante", details: errorAprobar.message },
         { status: 500 }
@@ -136,7 +135,7 @@ export async function POST(
       message: "Comprobante aprobado correctamente",
     })
   } catch (error: any) {
-    console.error("Error in POST /api/contabilidad/comprobantes/[id]/aprobar:", error)
+    console.error("Error en comprobantes:", error)
     return NextResponse.json(
       { error: "Error interno del servidor", details: error?.message },
       { status: 500 }

@@ -207,6 +207,8 @@ export function soporteToSupport(soporte: any) {
     comisionEjecutiva: num(soporte.comision_ejecutiva),
     mantenimiento: num(soporte.mantenimiento),
     notas: soporte.notas ?? null,
+    cuenta_venta: soporte.cuenta_venta ?? "112001001",
+    cuenta_compra: soporte.cuenta_compra ?? null,
   }
 }
 
@@ -362,6 +364,10 @@ export async function buildSupabasePayload(data: any, existing?: any) {
   if (data.comisionEjecutiva !== undefined) payload.comision_ejecutiva = num(data.comisionEjecutiva)
   if (data.mantenimiento !== undefined) payload.mantenimiento = num(data.mantenimiento)
   if (data.notas !== undefined) payload.notas = data.notas || null
+
+  // Campos contables
+  if (data.cuenta_venta !== undefined) payload.cuenta_venta = (data.cuenta_venta || "").trim() || "112001001"
+  if (data.cuenta_compra !== undefined) payload.cuenta_compra = (data.cuenta_compra || "").trim() || null
 
   // Manejar imágenes (formato JSONB array para Supabase)
   if (data.images !== undefined && Array.isArray(data.images)) {

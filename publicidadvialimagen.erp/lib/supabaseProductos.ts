@@ -25,6 +25,8 @@ export interface ProductoSupabase {
   calculadora_de_precios?: any
   fecha_creacion: string
   fecha_actualizacion: string
+  cuenta_venta?: string
+  cuenta_compra?: string | null
 }
 
 // Convertir de Supabase a formato interno
@@ -126,7 +128,9 @@ export function supabaseToProducto(record: any): ProductoSupabase {
     proveedores: proveedores,
     calculadora_de_precios: calculadoraDePrecios,
     fecha_creacion: record.fecha_creacion || new Date().toISOString(),
-    fecha_actualizacion: record.fecha_actualizacion || new Date().toISOString()
+    fecha_actualizacion: record.fecha_actualizacion || new Date().toISOString(),
+    cuenta_venta: record.cuenta_venta || '112001001',
+    cuenta_compra: record.cuenta_compra || null
   }
 }
 
@@ -317,6 +321,14 @@ export function productoToSupabase(producto: Partial<ProductoSupabase>): Record<
       console.error('Error serializando calculadora_precios:', e)
       fields.calculadora_precios = {}
     }
+  }
+
+  // Campos contables
+  if (producto.cuenta_venta !== undefined) {
+    fields.cuenta_venta = (typeof producto.cuenta_venta === 'string' ? producto.cuenta_venta.trim() : '') || '112001001'
+  }
+  if (producto.cuenta_compra !== undefined) {
+    fields.cuenta_compra = (typeof producto.cuenta_compra === 'string' && producto.cuenta_compra.trim()) ? producto.cuenta_compra.trim() : null
   }
 
   // Mantener compatibilidad con calculadora_de_precios (formato antiguo)

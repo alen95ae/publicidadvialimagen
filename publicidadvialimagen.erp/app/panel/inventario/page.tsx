@@ -11,7 +11,7 @@ import {
   Trash2, 
   Eye,
   MoreHorizontal,
-  Download,
+  FileDown,
   CheckCircle,
   XCircle,
   Copy,
@@ -1302,7 +1302,7 @@ export default function InventarioPage() {
                       size="sm"
                       onClick={exportPDF}
                     >
-                      <Download className="w-4 h-4 mr-2" />
+                      <FileDown className="w-4 h-4 mr-2" />
                       Descargar Catálogo
                     </Button>
                   </div>

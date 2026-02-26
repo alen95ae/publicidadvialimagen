@@ -134,7 +134,10 @@ export interface Comprobante {
   beneficiario?: string | null
   nro_cheque?: string | null
   estado: "BORRADOR" | "APROBADO"
-  empresa_id?: number
+  /** UUID de empresa (Parámetros de Contabilidad). */
+  empresa_id?: string | null
+  /** UUID de sucursal (Parámetros de Contabilidad). */
+  sucursal_id?: string | null
   created_at?: string
   updated_at?: string
   detalles?: ComprobanteDetalle[]

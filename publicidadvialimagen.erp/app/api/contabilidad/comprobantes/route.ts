@@ -22,18 +22,16 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "100")
     const offset = (page - 1) * limit
 
-    // Obtener comprobantes ordenados por fecha descendente
-    // Ordenar por numero nulls last para que los borradores (sin número) aparezcan al final
+    // Obtener comprobantes ordenados por fecha descendente (empresa_id y sucursal_id son UUID)
     const { data, error, count } = await supabase
       .from("comprobantes")
-      .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_id, created_at, updated_at", { count: "exact" })
-      .eq("empresa_id", 1)
+      .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_id, sucursal_id, created_at, updated_at", { count: "exact" })
       .order("fecha", { ascending: false })
       .order("numero", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1)
 
     if (error) {
-      console.error("Error fetching comprobantes:", error)
+      console.error("Error en comprobantes:", error)
       return NextResponse.json(
         { error: "Error al obtener los comprobantes", details: error.message },
         { status: 500 }
@@ -52,7 +50,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("Error in GET /api/contabilidad/comprobantes:", error)
+    console.error("Error en comprobantes:", error)
     return NextResponse.json(
       { error: "Error interno del servidor", details: error?.message },
       { status: 500 }
@@ -119,7 +117,8 @@ export async function POST(request: NextRequest) {
       beneficiario: cabecera.beneficiario || null,
       nro_cheque: cabecera.nro_cheque || null,
       estado: cabecera.estado || "BORRADOR",
-      empresa_id: 1,
+      empresa_id: cabecera.empresa_id || null,
+      sucursal_id: cabecera.sucursal_id || null,
     }
 
     // Insertar cabecera
@@ -130,8 +129,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (errorCabecera) {
-      console.error("❌ Error creating comprobante:", errorCabecera)
-      console.error("❌ Error details:", JSON.stringify(errorCabecera, null, 2))
+      console.error("Error en comprobantes:", errorCabecera)
       return NextResponse.json(
         { error: "Error al crear el comprobante", details: errorCabecera.message, code: errorCabecera.code },
         { status: 500 }
@@ -157,7 +155,7 @@ export async function POST(request: NextRequest) {
         .insert(detallesData)
 
       if (errorDetalles) {
-        console.error("Error creating detalles:", errorDetalles)
+        console.error("Error en comprobantes:", errorDetalles)
         // Intentar eliminar el comprobante creado
         await supabase.from("comprobantes").delete().eq("id", comprobanteCreado.id)
         return NextResponse.json(
@@ -183,7 +181,7 @@ export async function POST(request: NextRequest) {
       message: "Comprobante creado correctamente",
     })
   } catch (error: any) {
-    console.error("Error in POST /api/contabilidad/comprobantes:", error)
+    console.error("Error en comprobantes:", error)
     return NextResponse.json(
       { error: "Error interno del servidor", details: error?.message },
       { status: 500 }

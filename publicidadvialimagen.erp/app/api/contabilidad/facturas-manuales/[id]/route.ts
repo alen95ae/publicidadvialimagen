@@ -4,8 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { requirePermiso } from "@/lib/permisos";
 
-const EMPRESA_ID = 1;
 const COTIZACION_FIJA = 6.96;
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidUuid(v: unknown): boolean {
+  return typeof v === "string" && UUID_REGEX.test(v.trim());
+}
 
 /** GET - Obtener una factura manual con sus ítems */
 export async function GET(
@@ -27,7 +31,6 @@ export async function GET(
       .from("facturas_manuales")
       .select("*")
       .eq("id", id)
-      .eq("empresa_id", EMPRESA_ID)
       .single();
 
     if (errFactura || !factura) {
@@ -47,11 +50,13 @@ export async function GET(
       console.error("Error fetching items_factura_manual:", errItems);
     }
 
+    // Solo exponer cotizacion como UUID; el valor numérico antiguo (factura.cotizacion) no se envía para no llamar GET /cotizaciones/1
+    const cotizacionParaCliente = factura.cotizacion_id && isValidUuid(factura.cotizacion_id) ? factura.cotizacion_id : null;
     return NextResponse.json({
       success: true,
       data: {
         ...factura,
-        cotizacion: factura.cotizacion_id ?? factura.cotizacion,
+        cotizacion: cotizacionParaCliente,
         items: items || [],
       },
     });
@@ -79,7 +84,21 @@ export async function PUT(
     }
 
     const supabase = getSupabaseAdmin();
-    const body = await request.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Cuerpo de la petición inválido o vacío" },
+        { status: 400 }
+      );
+    }
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Cuerpo de la petición inválido" },
+        { status: 400 }
+      );
+    }
 
     const {
       numero,
@@ -96,35 +115,39 @@ export async function PUT(
     } = body;
 
     const total = Array.isArray(items)
-      ? items.reduce((sum: number, it: any) => sum + (Number(it.importe) || 0), 0)
+      ? items.reduce((sum: number, it: any) => sum + (Number((it as any)?.importe ?? (it as any)?.importe_bs) || 0), 0)
       : 0;
     const subtotal = total;
 
     // vendedor_id tiene FK a auth.users(id); la app usa public.usuarios(id). Se fuerza null hasta alinear FKs.
     const updateRow: Record<string, unknown> = {
-      numero: numero ?? null,
-      fecha: fecha || undefined,
+      numero: numero != null && numero !== "" ? String(numero).trim() : null,
       vendedor_id: null,
-      cliente_nombre: (cliente_nombre ?? "").trim() || "",
-      cliente_nit: (cliente_nit ?? "").trim() || "",
-      glosa: glosa ?? null,
-      moneda: moneda ?? "BOB",
+      cliente_nombre: (cliente_nombre != null ? String(cliente_nombre).trim() : "") || "",
+      cliente_nit: (cliente_nit != null ? String(cliente_nit).trim() : "") || "",
+      glosa: glosa != null && glosa !== "" ? String(glosa).trim() : null,
+      moneda: moneda != null ? String(moneda) : "BOB",
       subtotal: Number(subtotal) || 0,
       total: Number(total) || 0,
       updated_at: new Date().toISOString(),
       ...(estado != null && estado !== undefined ? { estado } : {}),
     };
-    if (Object.prototype.hasOwnProperty.call(body, "cotizacion")) {
-      const uuidVal = (cotizacionId ?? "") === "" ? null : cotizacionId;
-      updateRow.cotizacion_id = uuidVal;
+    if (fecha != null && String(fecha).trim() !== "") {
+      updateRow.fecha = String(fecha).trim().split("T")[0];
     }
-    if (tipo_cambio != null) updateRow.tipo_cambio = Number(tipo_cambio)
+    if (Object.prototype.hasOwnProperty.call(body, "cotizacion")) {
+      // cotizacion_id es UUID en BD; si el cliente envía valor numérico antiguo (ej. 1) usar null
+      updateRow.cotizacion_id = isValidUuid(cotizacionId) ? String(cotizacionId).trim() : null;
+    }
+    if (tipo_cambio != null && tipo_cambio !== "") {
+      const n = Number(tipo_cambio);
+      if (!Number.isNaN(n)) updateRow.tipo_cambio = n;
+    }
 
     const { data: factura, error: errUpdate } = await supabase
       .from("facturas_manuales")
       .update(updateRow)
       .eq("id", id)
-      .eq("empresa_id", EMPRESA_ID)
       .select("id, numero, fecha, total, estado, cotizacion_id")
       .single();
 
@@ -157,17 +180,20 @@ export async function PUT(
     }
 
     if (Array.isArray(items) && items.length > 0) {
-      const rowsItems = items.map((it: any, index: number) => ({
-        factura_id: id,
-        orden: index + 1,
-        codigo_producto: (it.codigo_producto ?? "").trim() || null,
-        descripcion: (it.descripcion ?? "").trim() || "",
-        cantidad: Number(it.cantidad) || 0,
-        unidad_medida: (it.unidad_medida ?? "").trim() || null,
-        precio_unitario: Number(it.precio_unitario) || 0,
-        descuento: Number(it.descuento) || 0,
-        importe: Number(it.importe) || 0,
-      }));
+      const rowsItems = items.map((it: any, index: number) => {
+        const importeVal = Number(it?.importe ?? it?.importe_bs) || 0;
+        return {
+          factura_id: id,
+          orden: index + 1,
+          codigo_producto: (it?.codigo_producto ?? "").trim() || null,
+          descripcion: (it?.descripcion ?? "").trim() || "",
+          cantidad: Number(it?.cantidad) || 0,
+          unidad_medida: (it?.unidad_medida ?? "").trim() || null,
+          precio_unitario: Number(it?.precio_unitario) || 0,
+          descuento: Number(it?.descuento) || 0,
+          importe: importeVal,
+        };
+      });
 
       const { error: errItems } = await supabase
         .from("items_factura_manual")
@@ -244,8 +270,7 @@ export async function DELETE(
     const { error: errDelete } = await supabase
       .from("facturas_manuales")
       .delete()
-      .eq("id", id)
-      .eq("empresa_id", EMPRESA_ID);
+      .eq("id", id);
 
     if (errDelete) {
       console.error("Error delete facturas_manuales:", errDelete);

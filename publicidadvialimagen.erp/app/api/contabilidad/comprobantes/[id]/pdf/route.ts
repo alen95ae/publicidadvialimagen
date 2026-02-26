@@ -139,10 +139,10 @@ export async function GET(
       .from("comprobantes")
       .select("*")
       .eq("id", params.id)
-      .eq("empresa_id", 1)
       .single()
 
     if (errorComprobante || !comprobante) {
+      console.error("Error en comprobantes:", errorComprobante)
       return NextResponse.json(
         { error: "Comprobante no encontrado" },
         { status: 404 }
@@ -165,7 +165,7 @@ export async function GET(
       .order("orden", { ascending: true })
 
     if (errorDetalles) {
-      console.error("Error fetching detalles:", errorDetalles)
+      console.error("Error en comprobantes:", errorDetalles)
       return NextResponse.json(
         { error: "Error al obtener los detalles del comprobante" },
         { status: 500 }
@@ -188,7 +188,7 @@ export async function GET(
       .eq("empresa_id", 1)
 
     if (errorCuentas) {
-      console.error("Error fetching cuentas:", errorCuentas)
+      console.error("Error en comprobantes:", errorCuentas)
     }
 
     // Crear mapa de cuentas para búsqueda rápida
@@ -623,7 +623,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error("Error generating PDF:", error)
+    console.error("Error en comprobantes:", error)
     return NextResponse.json(
       { error: "Error al generar el PDF" },
       { status: 500 }

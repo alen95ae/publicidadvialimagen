@@ -16,7 +16,7 @@ import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown, BookOpen, FileD
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
-import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta, Auxiliar } from "@/lib/types/contabilidad"
+import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta, Auxiliar, Empresa, Sucursal } from "@/lib/types/contabilidad"
 import { LcModal, type LcRegistroDatos } from "./LcModal"
 
 interface ComprobanteFormProps {
@@ -123,6 +123,10 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   const [cargandoContactos, setCargandoContactos] = useState(false)
   const [beneficiarioId, setBeneficiarioId] = useState<string | null>(null)
 
+  // Empresas y sucursales (Parámetros de Contabilidad) — mismos datos y valores por defecto que en Contabilización de Facturas
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+
   const [guardandoComprobante, setGuardandoComprobante] = useState(false)
   const lastTriggerSaveRef = useRef(0)
 
@@ -134,7 +138,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   const [lcDraftByLineIndex, setLcDraftByLineIndex] = useState<Record<number, LcRegistroDatos>>({})
   const [lcSaving, setLcSaving] = useState(false)
 
-  // Estado del formulario
+  // Estado del formulario (empresa_id y sucursal_id como string UUID desde Parámetros de Contabilidad)
   const [formData, setFormData] = useState<Partial<Comprobante>>({
     origen: "Contabilidad",
     tipo_comprobante: "Diario",
@@ -145,6 +149,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     moneda: "BS",
     tipo_cambio: 6.96,
     estado: "BORRADOR",
+    empresa_id: "",
+    sucursal_id: "",
   })
 
   const [detalles, setDetalles] = useState<ComprobanteDetalle[]>(() => [createDefaultDetalleLine()])
@@ -176,6 +182,44 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     }
 
     cargarContactos()
+  }, [])
+
+  // Cargar empresas y sucursales (Parámetros de Contabilidad) y valores por defecto 001 y 001.1
+  useEffect(() => {
+    const loadEmpresas = async () => {
+      try {
+        const res = await api("/api/contabilidad/empresas?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          const list = data.data || []
+          setEmpresas(list)
+          const defaultEmpresa = list.find((e: Empresa) => e.codigo === "001")
+          if (defaultEmpresa) {
+            setFormData((prev) => ({ ...prev, empresa_id: defaultEmpresa.id }))
+          }
+        }
+      } catch {
+        setEmpresas([])
+      }
+    }
+    const loadSucursales = async () => {
+      try {
+        const res = await api("/api/contabilidad/sucursales?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          const list = data.data || []
+          setSucursales(list)
+          const defaultSucursal = list.find((s: Sucursal) => s.codigo === "001.1")
+          if (defaultSucursal) {
+            setFormData((prev) => ({ ...prev, sucursal_id: defaultSucursal.id }))
+          }
+        }
+      } catch {
+        setSucursales([])
+      }
+    }
+    loadEmpresas()
+    loadSucursales()
   }, [])
 
   // Sincronizar beneficiarioId cuando se cargan los contactos y hay un comprobante con beneficiario
@@ -248,7 +292,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         beneficiario: comprobante.beneficiario || "",
         nro_cheque: comprobante.nro_cheque || "",
         estado: comprobante.estado,
-        empresa_id: comprobante.empresa_id,
+        empresa_id: comprobante.empresa_id ?? "",
+        sucursal_id: comprobante.sucursal_id ?? "",
       })
       
       // Buscar el contacto por nombre si existe beneficiario (se hará cuando se carguen los contactos)
@@ -425,6 +470,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   }
 
   const resetForm = () => {
+    const defaultEmpresa = empresas.find((e) => e.codigo === "001")
+    const defaultSucursal = sucursales.find((s) => s.codigo === "001.1")
     setFormData({
       origen: "Contabilidad",
       tipo_comprobante: "Diario",
@@ -432,9 +479,11 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
       fecha: new Date().toISOString().split("T")[0],
       periodo: new Date().getMonth() + 1,
       gestion: new Date().getFullYear(),
-    moneda: "BS",
-    tipo_cambio: 6.96,
-    estado: "BORRADOR",
+      moneda: "BS",
+      tipo_cambio: 6.96,
+      estado: "BORRADOR",
+      empresa_id: defaultEmpresa?.id ?? "",
+      sucursal_id: defaultSucursal?.id ?? "",
     })
     setDetalles([createDefaultDetalleLine()])
     setLcDataByLineIndex({})
@@ -1400,6 +1449,48 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                 disabled
                 className="bg-gray-50 font-semibold"
               />
+            </div>
+
+            {/* Empresa (Parámetros de Contabilidad — misma config que Contabilización de Facturas) */}
+            <div className="space-y-2">
+              <Label htmlFor="empresa_id">Empresa</Label>
+              <Select
+                value={String(formData.empresa_id ?? "")}
+                onValueChange={(value) => setFormData({ ...formData, empresa_id: value })}
+                disabled={isReadOnly}
+              >
+                <SelectTrigger id="empresa_id">
+                  <SelectValue placeholder="Seleccionar empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {empresas.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.codigo} - {e.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sucursal (Parámetros de Contabilidad — código + sucursal) */}
+            <div className="space-y-2">
+              <Label htmlFor="sucursal_id">Sucursal</Label>
+              <Select
+                value={String(formData.sucursal_id ?? "")}
+                onValueChange={(value) => setFormData({ ...formData, sucursal_id: value })}
+                disabled={isReadOnly}
+              >
+                <SelectTrigger id="sucursal_id">
+                  <SelectValue placeholder="Seleccionar sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sucursales.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.codigo} - {s.sucursal ?? "—"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Columna izquierda: Tipo de Comprobante, Fecha, Gestión, Tipo de Cambio */}

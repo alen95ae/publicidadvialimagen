@@ -23,7 +23,7 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    // Obtener comprobante con detalles
+    // Obtener comprobante con detalles (empresa_id y sucursal_id son UUID)
     let { data, error } = await supabase
       .from("comprobantes")
       .select(`
@@ -31,7 +31,6 @@ export async function GET(
         detalles:comprobante_detalle(*)
       `)
       .eq("id", id)
-      .eq("empresa_id", 1)
       .single()
 
     // Si hay error o no hay datos (p. ej. RLS oculta la fila), intentar con admin
@@ -44,7 +43,6 @@ export async function GET(
           detalles:comprobante_detalle(*)
         `)
         .eq("id", id)
-        .eq("empresa_id", 1)
         .single()
 
       if (!adminError && adminData) {
@@ -54,7 +52,7 @@ export async function GET(
     }
 
     if (error) {
-      console.error("Error fetching comprobante:", error)
+      console.error("Error en comprobantes:", error)
       return NextResponse.json(
         { error: "Error al obtener el comprobante" },
         { status: 500 }
@@ -73,7 +71,7 @@ export async function GET(
       data,
     })
   } catch (error) {
-    console.error("Error in GET /api/contabilidad/comprobantes/[id]:", error)
+    console.error("Error en comprobantes:", error)
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }
@@ -102,7 +100,6 @@ export async function PUT(
       .from("comprobantes")
       .select("estado")
       .eq("id", id)
-      .eq("empresa_id", 1)
       .single()
 
     if (!comprobanteActual) {
@@ -138,7 +135,7 @@ export async function PUT(
       )
     }
 
-    // Actualizar cabecera
+    // Actualizar cabecera (empresa_id y sucursal_id son UUID)
     const updateData: any = {
       origen: cabecera.origen,
       tipo_comprobante: cabecera.tipo_comprobante,
@@ -152,18 +149,19 @@ export async function PUT(
       beneficiario: cabecera.beneficiario || null,
       nro_cheque: cabecera.nro_cheque || null,
       estado: cabecera.estado || "BORRADOR",
+      empresa_id: cabecera.empresa_id ?? null,
+      sucursal_id: cabecera.sucursal_id ?? null,
     }
 
     const { data: comprobanteActualizado, error: errorUpdate } = await supabase
       .from("comprobantes")
       .update(updateData)
       .eq("id", id)
-      .eq("empresa_id", 1)
       .select()
       .single()
 
     if (errorUpdate) {
-      console.error("Error updating comprobante:", errorUpdate)
+      console.error("Error en comprobantes:", errorUpdate)
       return NextResponse.json(
         { error: "Error al actualizar el comprobante", details: errorUpdate.message },
         { status: 500 }
@@ -177,7 +175,7 @@ export async function PUT(
       .eq("comprobante_id", id)
 
     if (errorDelete) {
-      console.error("Error deleting detalles:", errorDelete)
+      console.error("Error en comprobantes:", errorDelete)
     }
 
     // Insertar nuevos detalles
@@ -198,8 +196,7 @@ export async function PUT(
       .insert(detallesData)
 
     if (errorDetalles) {
-      console.error("❌ Error creating detalles:", errorDetalles)
-      console.error("❌ Detalles que causaron el error:", JSON.stringify(detallesData, null, 2))
+      console.error("Error en comprobantes:", errorDetalles)
       return NextResponse.json(
         { error: "Error al actualizar los detalles", details: errorDetalles.message },
         { status: 500 }
@@ -222,7 +219,7 @@ export async function PUT(
       message: "Comprobante actualizado correctamente",
     })
   } catch (error: any) {
-    console.error("Error in PUT /api/contabilidad/comprobantes/[id]:", error)
+    console.error("Error en comprobantes:", error)
     return NextResponse.json(
       { error: "Error interno del servidor", details: error?.message },
       { status: 500 }

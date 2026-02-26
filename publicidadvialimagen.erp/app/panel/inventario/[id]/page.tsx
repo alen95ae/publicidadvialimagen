@@ -76,6 +76,8 @@ type ProductoFormState = {
   coste: string
   precio_venta: string
   mostrar_en_web: boolean
+  cuenta_venta: string
+  cuenta_compra: string
 }
 
 export default function ProductoDetailPage() {
@@ -200,7 +202,9 @@ export default function ProductoDetailPage() {
     unidad_medida: "unidad",
     coste: "0",
     precio_venta: "0",
-    mostrar_en_web: false
+    mostrar_en_web: false,
+    cuenta_venta: "112001001",
+    cuenta_compra: ""
   })
   const previewUrlRef = useRef<string | null>(null)
 
@@ -362,7 +366,9 @@ export default function ProductoDetailPage() {
           unidad_medida: data.unidad_medida || "unidad",
           coste: data.coste?.toString() || "0",
           precio_venta: data.precio_venta?.toString() || "0",
-          mostrar_en_web: data.mostrar_en_web ?? false
+          mostrar_en_web: data.mostrar_en_web ?? false,
+          cuenta_venta: data.cuenta_venta || "112001001",
+          cuenta_compra: data.cuenta_compra || ""
         })
 
         // Cargar variantes desde el producto guardado en Supabase
@@ -1935,7 +1941,9 @@ export default function ProductoDetailPage() {
         mostrar_en_web: Boolean(formData.mostrar_en_web),
         receta: Array.isArray(recetaArray) ? recetaArray : [], // FIX 2: Receta SIEMPRE es array, nunca null
         calculadora_precios: calculadoraPrecios,
-        proveedores: proveedoresSanitizados.length > 0 ? proveedoresSanitizados : null
+        proveedores: proveedoresSanitizados.length > 0 ? proveedoresSanitizados : null,
+        cuenta_venta: sanitizeString(formData.cuenta_venta) || "112001001",
+        cuenta_compra: sanitizeString(formData.cuenta_compra) || null
       }
 
       // FIX variantes: Solo enviar variante si hay variantes para guardar
@@ -4105,6 +4113,40 @@ export default function ProductoDetailPage() {
                     </TableBody>
                   </Table>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Contabilidad */}
+            <Card className="lg:col-span-2 mt-8">
+              <CardHeader>
+                <CardTitle>Contabilidad</CardTitle>
+                <CardDescription>Cuentas contables para contabilización automática de facturas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
+                    <Input
+                      id="cuenta_venta"
+                      value={formData.cuenta_venta ?? "112001001"}
+                      onChange={(e) => setFormData({ ...formData, cuenta_venta: e.target.value })}
+                      placeholder="112001001"
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Cuenta contable para ingresos por venta (por defecto: 112001001)</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
+                    <Input
+                      id="cuenta_compra"
+                      value={formData.cuenta_compra ?? ""}
+                      onChange={(e) => setFormData({ ...formData, cuenta_compra: e.target.value })}
+                      placeholder="Opcional"
+                      className="h-9"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Cuenta contable para compras (opcional)</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

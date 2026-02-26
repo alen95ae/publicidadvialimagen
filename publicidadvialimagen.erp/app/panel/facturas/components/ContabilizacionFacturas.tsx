@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,33 +11,100 @@ import { Separator } from "@/components/ui/separator"
 import { Calculator, Loader2, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
+import type { Empresa } from "@/lib/types/contabilidad"
+import type { Sucursal } from "@/lib/types/contabilidad"
+
+/** Formato YYYY-MM-DD para estado y backend (evita problemas de timezone usando fecha local). */
+function formatDateToYYYYMMDD(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/** Primer y último día del mes actual, calculados dinámicamente (28, 29, 30 o 31 según el mes). */
+function getFechasMesActual(): { desde: string; hasta: string } {
+  const hoy = new Date()
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+  const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+  return {
+    desde: formatDateToYYYYMMDD(primerDiaMes),
+    hasta: formatDateToYYYYMMDD(ultimoDiaMes),
+  }
+}
 
 interface ContabilizacionFilters {
   empresa: string
-  regional: string
   sucursal: string
-  clasificador: string
   desde_fecha: string
   a_fecha: string
-  cotizacion: string
   ventas: boolean
   notas_remision: boolean
   cobranzas: boolean
 }
 
+const CLASIFICADOR_FIJO = "CON-CEN"
+const COTIZACION_FIJA = "6.96"
+
 export default function ContabilizacionFacturas() {
-  const [filters, setFilters] = useState<ContabilizacionFilters>({
-    empresa: "",
-    regional: "",
-    sucursal: "",
-    clasificador: "",
-    desde_fecha: new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0],
-    a_fecha: new Date().toISOString().split("T")[0],
-    cotizacion: "1.00",
-    ventas: true,
-    notas_remision: false,
-    cobranzas: false,
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+
+  const [filters, setFilters] = useState<ContabilizacionFilters>(() => {
+    const { desde, hasta } = getFechasMesActual()
+    return {
+      empresa: "",
+      sucursal: "",
+      desde_fecha: desde,
+      a_fecha: hasta,
+      ventas: true,
+      notas_remision: false,
+      cobranzas: false,
+    }
   })
+
+  // Al montar: Desde = primer día del mes actual, A Fecha = último día (28/29/30/31 según mes)
+  useEffect(() => {
+    const { desde, hasta } = getFechasMesActual()
+    setFilters((prev) => ({ ...prev, desde_fecha: desde, a_fecha: hasta }))
+  }, [])
+
+  useEffect(() => {
+    const loadEmpresas = async () => {
+      try {
+        const res = await api("/api/contabilidad/empresas?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          const list = data.data || []
+          setEmpresas(list)
+          const defaultEmpresa = list.find((e: Empresa) => e.codigo === "001")
+          if (defaultEmpresa) {
+            setFilters((prev) => ({ ...prev, empresa: defaultEmpresa.id }))
+          }
+        }
+      } catch {
+        setEmpresas([])
+      }
+    }
+    const loadSucursales = async () => {
+      try {
+        const res = await api("/api/contabilidad/sucursales?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          const list = data.data || []
+          setSucursales(list)
+          const defaultSucursal = list.find((s: Sucursal) => s.codigo === "001.1")
+          if (defaultSucursal) {
+            setFilters((prev) => ({ ...prev, sucursal: defaultSucursal.id }))
+          }
+        }
+      } catch {
+        setSucursales([])
+      }
+    }
+    loadEmpresas()
+    loadSucursales()
+  }, [])
 
   const [info, setInfo] = useState({
     nro_comp_factura_iva: "0",
@@ -87,8 +154,8 @@ export default function ContabilizacionFacturas() {
           desde_fecha: filters.desde_fecha,
           hasta_fecha: filters.a_fecha,
           ventas: filters.ventas,
-          notas_remision: filters.notas_remision,
-          cobranzas: filters.cobranzas,
+          empresa_id: filters.empresa || null,
+          sucursal_id: filters.sucursal || null,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -130,130 +197,113 @@ export default function ContabilizacionFacturas() {
       <CardHeader>
         <CardTitle>Contabilización de Facturas</CardTitle>
         <CardDescription>
-          Contabilizar facturas manuales (ventas) en el periodo seleccionado. Genera un comprobante por factura con plantilla VENTA_DF.
+          Contabilizar facturas manuales (ventas) en el periodo seleccionado. Genera un comprobante por factura con 5 líneas por ítem (cuenta venta, IT 3%, IVA 13%, IT por pagar 3%, ingreso banco).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Filtros */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">Filtros</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="empresa" className="text-xs text-gray-600">
-                Empresa
-              </Label>
-              <Select
-                value={filters.empresa}
-                onValueChange={(value) => handleFilterChange("empresa", value)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar empresa" />
-                </SelectTrigger>
+          <div className="space-y-4">
+            {/* Fila arriba: Empresa, Sucursal, Clasificador */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="empresa" className="text-xs text-gray-600">
+                  Empresa
+                </Label>
+                <Select
+                  value={filters.empresa}
+                  onValueChange={(value) => handleFilterChange("empresa", value)}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Seleccionar empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {empresas.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.codigo} - {e.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="sucursal" className="text-xs text-gray-600">
+                  Sucursal
+                </Label>
+                <Select
+                  value={filters.sucursal}
+                  onValueChange={(value) => handleFilterChange("sucursal", value)}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Seleccionar sucursal" />
+                  </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="001">Empresa 001</SelectItem>
-                  <SelectItem value="002">Empresa 002</SelectItem>
-                  <SelectItem value="003">Empresa 003</SelectItem>
+                  {sucursales.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.codigo} - {s.sucursal ?? "—"}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="clasificador" className="text-xs text-gray-600">
+                  Clasificador
+                </Label>
+                <Input
+                  id="clasificador"
+                  value={CLASIFICADOR_FIJO}
+                  readOnly
+                  className="mt-1 bg-gray-50 font-mono"
+                />
+              </div>
             </div>
-            <div>
-              <Label htmlFor="regional" className="text-xs text-gray-600">
-                Regional
-              </Label>
-              <Select
-                value={filters.regional}
-                onValueChange={(value) => handleFilterChange("regional", value)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar regional" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="01">Regional 01</SelectItem>
-                  <SelectItem value="02">Regional 02</SelectItem>
-                  <SelectItem value="03">Regional 03</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="sucursal" className="text-xs text-gray-600">
-                Sucursal
-              </Label>
-              <Select
-                value={filters.sucursal}
-                onValueChange={(value) => handleFilterChange("sucursal", value)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="001">Sucursal 001</SelectItem>
-                  <SelectItem value="002">Sucursal 002</SelectItem>
-                  <SelectItem value="003">Sucursal 003</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="clasificador" className="text-xs text-gray-600">
-                Clasificador
-              </Label>
-              <Select
-                value={filters.clasificador}
-                onValueChange={(value) => handleFilterChange("clasificador", value)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar clasificador" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CONTABILIDAD">CONTABILIDAD</SelectItem>
-                  <SelectItem value="VENTAS">VENTAS</SelectItem>
-                  <SelectItem value="TESORERIA">TESORERIA</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="desde_fecha" className="text-xs text-gray-600">
-                Desde Fecha
-              </Label>
-              <Input
-                id="desde_fecha"
-                type="date"
-                value={filters.desde_fecha}
-                onChange={(e) => handleFilterChange("desde_fecha", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="a_fecha" className="text-xs text-gray-600">
-                A Fecha
-              </Label>
-              <Input
-                id="a_fecha"
-                type="date"
-                value={filters.a_fecha}
-                onChange={(e) => handleFilterChange("a_fecha", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="cotizacion" className="text-xs text-gray-600">
-                Cotización
-              </Label>
-              <Input
-                id="cotizacion"
-                type="number"
-                step="0.01"
-                value={filters.cotizacion}
-                onChange={(e) => handleFilterChange("cotizacion", e.target.value)}
-                placeholder="1.00"
-                className="mt-1"
-              />
+            {/* Fila abajo: Desde Fecha, A Fecha, Cotización (calendarios con valor YYYY-MM-DD) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="desde_fecha" className="text-xs text-gray-600">
+                  Desde Fecha
+                </Label>
+                <Input
+                  id="desde_fecha"
+                  type="date"
+                  value={filters.desde_fecha}
+                  onChange={(e) => handleFilterChange("desde_fecha", e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="a_fecha" className="text-xs text-gray-600">
+                  A Fecha
+                </Label>
+                <Input
+                  id="a_fecha"
+                  type="date"
+                  value={filters.a_fecha}
+                  onChange={(e) => handleFilterChange("a_fecha", e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="cotizacion" className="text-xs text-gray-600">
+                  Cotización
+                </Label>
+                <Input
+                  id="cotizacion"
+                  type="text"
+                  value={COTIZACION_FIJA}
+                  readOnly
+                  className="mt-1 bg-gray-50 font-mono"
+                />
+              </div>
             </div>
           </div>
         </div>
 
         <Separator />
 
-        {/* Checkboxes */}
+        {/* Tipos de Documentos: solo Ventas activo por defecto; Notas de Remisión y Cobranzas inertes */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">Tipos de Documentos</h3>
           <div className="flex gap-6">
@@ -267,23 +317,15 @@ export default function ContabilizacionFacturas() {
                 Ventas
               </Label>
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="notas_remision"
-                checked={filters.notas_remision}
-                onCheckedChange={(checked) => handleFilterChange("notas_remision", !!checked)}
-              />
-              <Label htmlFor="notas_remision" className="text-sm font-normal cursor-pointer">
+            <div className="flex items-center space-x-2 opacity-60">
+              <Checkbox id="notas_remision" checked={false} disabled />
+              <Label htmlFor="notas_remision" className="text-sm font-normal text-gray-500 cursor-not-allowed">
                 Notas de Remisión
               </Label>
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="cobranzas"
-                checked={filters.cobranzas}
-                onCheckedChange={(checked) => handleFilterChange("cobranzas", !!checked)}
-              />
-              <Label htmlFor="cobranzas" className="text-sm font-normal cursor-pointer">
+            <div className="flex items-center space-x-2 opacity-60">
+              <Checkbox id="cobranzas" checked={false} disabled />
+              <Label htmlFor="cobranzas" className="text-sm font-normal text-gray-500 cursor-not-allowed">
                 Cobranzas
               </Label>
             </div>

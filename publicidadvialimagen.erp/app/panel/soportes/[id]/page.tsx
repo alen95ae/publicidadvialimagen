@@ -120,7 +120,9 @@ export default function SoporteDetailPage() {
     priceMonth: "",
     sustrato_id: null as string | null,
     sustrato_nombre: "" as string,
-    available: true
+    available: true,
+    cuenta_venta: "112001001" as string,
+    cuenta_compra: "" as string
   })
   
   // Estado para el buscador de sustrato
@@ -213,7 +215,9 @@ export default function SoporteDetailPage() {
           priceMonth: data.priceMonth?.toString() || "",
           sustrato_id: data.sustrato_id || null,
           sustrato_nombre: sustratoNombre,
-          available: data.available ?? true
+          available: data.available ?? true,
+          cuenta_venta: data.cuenta_venta || "112001001",
+          cuenta_compra: data.cuenta_compra || ""
         })
       } else {
         toast.error("Soporte no encontrado")
@@ -439,7 +443,7 @@ export default function SoporteDetailPage() {
       
       const dataToSend = {
         ...formData,
-        images: imagesArray, // Para compatibilidad con buildSupabasePayload
+        images: imagesArray,
         widthM: formData.widthM ? parseFloat(formData.widthM) : null,
         heightM: formData.heightM ? parseFloat(formData.heightM) : null,
         areaM2: formData.areaM2 ? parseFloat(formData.areaM2) : null,
@@ -454,6 +458,8 @@ export default function SoporteDetailPage() {
         country: "Bolivia",
         owner: formData.owner || null,
         sustrato_id: formData.sustrato_id || null,
+        cuenta_venta: (formData.cuenta_venta || "").trim() || "112001001",
+        cuenta_compra: (formData.cuenta_compra || "").trim() || null,
       }
       
       // Remover campos de archivos del payload (no se envían al servidor)
@@ -1381,6 +1387,36 @@ export default function SoporteDetailPage() {
                     </div>
                     
                     <p className="text-xs text-gray-500">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
+                  </div>
+
+                  {/* Contabilidad */}
+                  <Separator className="my-4" />
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">Contabilidad</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
+                        <Input
+                          id="cuenta_venta"
+                          value={formData.cuenta_venta}
+                          onChange={(e) => setFormData({ ...formData, cuenta_venta: e.target.value })}
+                          placeholder="112001001"
+                          className="h-9"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Cuenta contable para ingresos por venta (por defecto: 112001001)</p>
+                      </div>
+                      <div>
+                        <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
+                        <Input
+                          id="cuenta_compra"
+                          value={formData.cuenta_compra}
+                          onChange={(e) => setFormData({ ...formData, cuenta_compra: e.target.value })}
+                          placeholder="Opcional"
+                          className="h-9"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Cuenta contable para compras (opcional)</p>
+                      </div>
+                    </div>
                   </div>
                 </>
               ) : (

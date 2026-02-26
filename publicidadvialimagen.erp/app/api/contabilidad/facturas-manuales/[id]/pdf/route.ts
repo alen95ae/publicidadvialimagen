@@ -81,8 +81,6 @@ function numeroALetras(numero: number): string {
   return r.trim();
 }
 
-const EMPRESA_ID = 1;
-
 /**
  * PDF fiscal Bolivia. Esquema: facturas_manuales (numero, fecha, lugar_emision, punto_venta,
  * cliente_nombre, cliente_nit, glosa, moneda, subtotal, descuento, importe_base_cf, total,
@@ -106,7 +104,6 @@ export async function GET(
       .from("facturas_manuales")
       .select("*")
       .eq("id", id)
-      .eq("empresa_id", EMPRESA_ID)
       .single();
 
     if (errF || !factura) {

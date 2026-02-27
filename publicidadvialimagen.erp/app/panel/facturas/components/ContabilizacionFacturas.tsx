@@ -117,7 +117,7 @@ export default function ContabilizacionFacturas() {
     total: number
     contabilizadas: number
     errores: number
-    comprobantes: { factura_numero: string | null; numero: string }[]
+    comprobantes: { factura_numero: string | null; numero: string; tipo_comprobante?: string }[]
     errores_detalle: { factura_numero: string | null; error: string }[]
   } | null>(null)
 
@@ -170,9 +170,10 @@ export default function ContabilizacionFacturas() {
           total: data.total ?? 0,
           contabilizadas: data.contabilizadas ?? 0,
           errores: data.errores ?? 0,
-          comprobantes: (data.comprobantes ?? []).map((c: { factura_numero: string | null; numero: string }) => ({
+          comprobantes: (data.comprobantes ?? []).map((c: { factura_numero: string | null; numero: string; tipo_comprobante?: string }) => ({
             factura_numero: c.factura_numero,
             numero: c.numero,
+            tipo_comprobante: c.tipo_comprobante ?? "Traspaso",
           })),
           errores_detalle: (data.errores_detalle ?? []).map((e: { factura_numero: string | null; error: string }) => ({
             factura_numero: e.factura_numero,
@@ -197,7 +198,7 @@ export default function ContabilizacionFacturas() {
       <CardHeader>
         <CardTitle>Contabilización de Facturas</CardTitle>
         <CardDescription>
-          Contabilizar facturas manuales (ventas) en el periodo seleccionado. Genera un comprobante por factura con 5 líneas por ítem (cuenta venta, IT 3%, IVA 13%, IT por pagar 3%, ingreso banco).
+          Contabilizar facturas manuales en el periodo seleccionado.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -409,11 +410,11 @@ export default function ContabilizacionFacturas() {
 
               {resumen.comprobantes.length > 0 && (
                 <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-xs font-semibold text-gray-700 mb-2">Números de comprobante generados</p>
+                  <p className="text-xs font-semibold text-gray-700 mb-2">Comprobantes generados</p>
                   <ul className="text-sm text-gray-800 space-y-1">
                     {resumen.comprobantes.map((c, i) => (
                       <li key={i} className="flex items-center gap-2">
-                        <span className="font-mono text-green-700 font-medium">Nº {c.numero}</span>
+                        <span className="font-mono text-green-700 font-medium">Nº {c.numero} {c.tipo_comprobante ?? "Traspaso"}</span>
                         <span className="text-gray-500">← Factura {c.factura_numero ?? "—"}</span>
                       </li>
                     ))}

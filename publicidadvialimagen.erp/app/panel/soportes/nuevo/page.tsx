@@ -783,16 +783,14 @@ export default function NuevoSoportePage() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
+                  <p className="text-sm text-muted-foreground">Pega un enlace de Google Maps</p>
                   <Input
                     id="googleMapsLink"
                     type="url"
                     value={formData.googleMapsLink}
                     onChange={(e) => handleChange("googleMapsLink", e.target.value)}
-                    placeholder="Pega aquí el enlace de Google Maps..."
+                    placeholder="https://maps.app.goo.gl/TMcWBMVDR7RjHWN79"
                   />
-                  <p className="text-xs text-gray-500">
-                    💡 Pega cualquier enlace de Google Maps y las coordenadas se extraerán automáticamente
-                  </p>
                 </div>
                 
                 <div className="space-y-2">

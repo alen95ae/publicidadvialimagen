@@ -135,7 +135,7 @@ export async function PUT(
       )
     }
 
-    // Actualizar cabecera (empresa_id y sucursal_id son UUID)
+    // Actualizar cabecera (empresa_uuid y sucursal_id son UUID en BD)
     const updateData: any = {
       origen: cabecera.origen,
       tipo_comprobante: cabecera.tipo_comprobante,
@@ -149,7 +149,7 @@ export async function PUT(
       beneficiario: cabecera.beneficiario || null,
       nro_cheque: cabecera.nro_cheque || null,
       estado: cabecera.estado || "BORRADOR",
-      empresa_id: cabecera.empresa_id ?? null,
+      empresa_uuid: cabecera.empresa_id ?? null,
       sucursal_id: cabecera.sucursal_id ?? null,
     }
 

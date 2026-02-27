@@ -82,7 +82,7 @@ function numeroALetras(numero: number): string {
 }
 
 /**
- * PDF fiscal Bolivia. Esquema: facturas_manuales (numero, fecha, lugar_emision, punto_venta,
+ * PDF fiscal Bolivia. Esquema: facturas_manuales (codigo, fecha, lugar_emision, punto_venta,
  * cliente_nombre, cliente_nit, glosa, moneda, subtotal, descuento, importe_base_cf, total,
  * codigo_autorizacion, qr_url) e items_factura_manual (codigo_producto, descripcion, cantidad,
  * unidad_medida, precio_unitario, descuento, importe). Sin datos se muestra {{campo}}.
@@ -147,8 +147,7 @@ export async function GET(
     pdf.text("(Alto San Pedro) N° 1471 - La Paz", pageWidth - 15, yPosition + 13, { align: "right" });
 
     yPosition = 30;
-    const numeroFactura = factura.numero != null && String(factura.numero).trim() !== "" ? String(factura.numero) : placeholder(factura.numero);
-    const codigoFactura = numeroFactura;
+    const codigoFactura = factura.codigo != null && String(factura.codigo).trim() !== "" ? String(factura.codigo) : placeholder(factura.codigo);
     const fechaStr = factura.fecha ? new Date(factura.fecha).toLocaleDateString("es-ES") : "{{fecha}}";
     const lugarEmision = factura.lugar_emision != null && String(factura.lugar_emision).trim() !== "" ? String(factura.lugar_emision).trim() : "{{lugar_emision}}";
     const codigoAutorizacion = factura.codigo_autorizacion != null && String(factura.codigo_autorizacion).trim() !== "" ? String(factura.codigo_autorizacion).trim() : null;
@@ -420,7 +419,7 @@ export async function GET(
       pdf.text(`Página ${i} de ${totalPages}`, pageWidth - 15, footerTextY, { align: "right" });
     }
 
-    const codigo = (factura.numero || id).toString().replace(/[/\\?%*:|"<>]/g, "-");
+    const codigo = (factura.codigo || id).toString().replace(/[/\\?%*:|"<>]/g, "-");
     const nombreArchivo = codigo ? `${codigo}.pdf` : `factura_${id.slice(0, 8)}.pdf`;
     const pdfBuffer = Buffer.from(pdf.output("arraybuffer"));
     return new NextResponse(pdfBuffer, {

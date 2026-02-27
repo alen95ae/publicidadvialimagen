@@ -68,7 +68,7 @@ interface FacturasManualesProps {
 }
 
 export default function FacturasManuales({ initialFacturaId = null, initialDataFromCotizacion = null, onFacturaLoad, onEstadoChange, onGuardarProps }: FacturasManualesProps) {
-  const [numero, setNumero] = useState("")
+  const [codigo, setCodigo] = useState("")
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0])
   const [vendedorId, setVendedorId] = useState("")
   const [cliente, setCliente] = useState("")
@@ -106,7 +106,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       id: 1,
       item: "1",
       codigo_producto: "",
-      cantidad: 0,
+      cantidad: 1,
       unidad_medida: "",
       descripcion: "",
       precio_unitario: 0,
@@ -141,7 +141,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         id: newId,
         item: newId.toString(),
         codigo_producto: "",
-        cantidad: 0,
+        cantidad: 1,
         unidad_medida: "",
         descripcion: "",
         precio_unitario: 0,
@@ -169,7 +169,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
     setGuardando(true)
     try {
       const payload = {
-        numero: numero.trim() || null,
+        codigo: codigo.trim() || null,
         fecha: fecha || new Date().toISOString().split("T")[0],
         vendedor_id: vendedorId || null,
         cliente_nombre: cliente.trim(),
@@ -233,7 +233,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
 
   const handleNuevaFactura = () => {
     setFacturaId(null)
-    setNumero("")
+    setCodigo("")
     setFecha(new Date().toISOString().split("T")[0])
     setVendedorId("")
     setCliente("")
@@ -244,7 +244,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         id: 1,
         item: "1",
         codigo_producto: "",
-        cantidad: 0,
+        cantidad: 1,
         unidad_medida: "",
         descripcion: "",
         precio_unitario: 0,
@@ -403,7 +403,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         }
       })
       setItems(mapped.length > 0 ? mapped : [
-        { id: 1, item: "1", codigo_producto: "", cantidad: 0, unidad_medida: "", descripcion: "", precio_unitario: 0, descuento: 0, importe_bs: 0 },
+        { id: 1, item: "1", codigo_producto: "", cantidad: 1, unidad_medida: "", descripcion: "", precio_unitario: 0, descuento: 0, importe_bs: 0 },
       ])
       toast.success("Datos de la cotización cargados")
     } catch (_) {
@@ -440,7 +440,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       const estadoFactura = (data.estado ?? "BORRADOR") as string
       setEstado(estadoFactura)
       onFacturaLoad?.({ estado: estadoFactura })
-      setNumero(data.numero ?? "")
+      setCodigo(data.codigo ?? "")
       setFecha(data.fecha ?? new Date().toISOString().split("T")[0])
       setVendedorId(data.vendedor_id ?? "")
       setCliente(data.cliente_nombre ?? "")
@@ -542,7 +542,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         importe_bs: it.importe ?? 0,
       }))
       setItems(mapped.length > 0 ? mapped : [
-        { id: 1, item: "1", codigo_producto: "", cantidad: 0, unidad_medida: "", descripcion: "", precio_unitario: 0, descuento: 0, importe_bs: 0 },
+        { id: 1, item: "1", codigo_producto: "", cantidad: 1, unidad_medida: "", descripcion: "", precio_unitario: 0, descuento: 0, importe_bs: 0 },
       ])
     }
   }, [initialDataFromCotizacion, initialFacturaId])
@@ -554,7 +554,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       try {
         const res = await api("/api/contabilidad/facturas-manuales/generar-numero")
         const data = await res.json().catch(() => ({}))
-        if (data.success && data.codigo) setNumero(data.codigo)
+        if (data.success && data.codigo) setCodigo(data.codigo)
       } catch (_) {}
     }
     cargarSiguienteNumero()
@@ -609,7 +609,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
     setGuardando(true)
     try {
       const payload = {
-        numero: numero.trim() || null,
+        codigo: codigo.trim() || null,
         fecha: fecha || new Date().toISOString().split("T")[0],
         vendedor_id: vendedorId || null,
         cliente_nombre: cliente.trim(),
@@ -682,8 +682,8 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      const codigo = (numero || "").trim() || facturaId.slice(0, 8)
-      a.download = `${codigo.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`
+      const codigoDescarga = (codigo || "").trim() || facturaId.slice(0, 8)
+      a.download = `${codigoDescarga.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -757,14 +757,14 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
           <h3 className="text-sm font-semibold text-gray-700">Datos de la Factura</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <Label htmlFor="numero" className="text-xs text-gray-600">
-                Número
+              <Label htmlFor="codigo" className="text-xs text-gray-600">
+                Código
               </Label>
               <Input
-                id="numero"
-                value={numero}
-                onChange={(e) => setNumero(e.target.value)}
-                placeholder="Número de factura"
+                id="codigo"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                placeholder="Código de factura"
                 className="mt-1 font-mono"
               />
             </div>

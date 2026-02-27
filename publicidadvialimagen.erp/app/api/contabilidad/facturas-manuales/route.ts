@@ -8,18 +8,18 @@ import * as XLSX from "xlsx";
 const EMPRESA_ID = 1;
 const COTIZACION_FIJA = 6.96;
 
-/** Obtiene el siguiente número de factura libre (FAC-0001, FAC-0002, ...). */
+/** Obtiene el siguiente código de factura libre (FAC-0001, FAC-0002, ...). */
 async function obtenerSiguienteNumero(supabase: ReturnType<typeof getSupabaseAdmin>): Promise<string> {
   const { data: facturas } = await supabase
     .from("facturas_manuales")
-    .select("numero")
-    .not("numero", "is", null)
-    .like("numero", "FAC-%")
+    .select("codigo")
+    .not("codigo", "is", null)
+    .like("codigo", "FAC-%")
     .order("created_at", { ascending: false })
     .limit(100);
   const numeros = (facturas || [])
     .map((row: any) => {
-      const match = String(row.numero || "").match(/^FAC-(\d+)$/i);
+      const match = String(row.codigo || "").match(/^FAC-(\d+)$/i);
       return match ? parseInt(match[1], 10) : 0;
     })
     .filter((n: number) => !isNaN(n) && n > 0);
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("facturas_manuales")
-      .select("id, numero, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion_id, tipo_cambio, subtotal, total, estado, created_at, updated_at", (format === "csv" || format === "xlsx") ? {} : { count: "exact" })
+      .select("id, codigo, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion_id, tipo_cambio, subtotal, total, estado, created_at, updated_at", (format === "csv" || format === "xlsx") ? {} : { count: "exact" })
       .eq("empresa_id", EMPRESA_ID)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false });
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       query = query.eq("vendedor_id", vendedor);
     }
     if (search) {
-      query = query.or(`numero.ilike.%${search}%,cliente_nombre.ilike.%${search}%,cliente_nit.ilike.%${search}%`);
+      query = query.or(`codigo.ilike.%${search}%,cliente_nombre.ilike.%${search}%,cliente_nit.ilike.%${search}%`);
     }
     if ((format === "csv" || format === "xlsx") && idsParam.trim()) {
       const idList = idsParam.split(",").map((id) => id.trim()).filter(Boolean);
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Error al exportar" }, { status: 500 });
       }
       const excelData = (rows || []).map((r: any) => ({
-        numero: r.numero ?? "",
+        codigo: r.codigo ?? "",
         fecha: r.fecha ?? "",
         cliente_nombre: r.cliente_nombre ?? "",
         cliente_nit: r.cliente_nit ?? "",
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
 
     const {
-      numero,
+      codigo: codigoBody,
       fecha,
       vendedor_id,
       cliente_nombre,
@@ -155,11 +155,11 @@ export async function POST(request: NextRequest) {
     // creado_por y vendedor_id tienen FK a auth.users(id); la app usa public.usuarios(id).
     // cotizacion en la tabla es numeric(12,4); el UUID de la cotización (documento) va en cotizacion_id.
     const cotizacionUuidVal = (cotizacionId != null && String(cotizacionId).trim() !== "") ? String(cotizacionId).trim() : null;
-    const numeroVal = (numero != null && String(numero).trim() !== "") ? String(numero).trim() : null;
-    const numeroFinal = numeroVal ?? await obtenerSiguienteNumero(supabase);
+    const codigoVal = (codigoBody != null && String(codigoBody).trim() !== "") ? String(codigoBody).trim() : null;
+    const codigoFinal = codigoVal ?? await obtenerSiguienteNumero(supabase);
     const row = {
       empresa_id: EMPRESA_ID,
-      numero: numeroFinal,
+      codigo: codigoFinal,
       fecha: fecha || new Date().toISOString().split("T")[0],
       vendedor_id: null,
       creado_por: null,
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     const { data: factura, error: errInsert } = await supabase
       .from("facturas_manuales")
       .insert(row)
-      .select("id, numero, fecha, total, estado")
+      .select("id, codigo, fecha, total, estado")
       .single();
 
     if (errInsert) {

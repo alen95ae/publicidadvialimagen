@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
 
     const { data: facturas, error } = await supabase
       .from("facturas_manuales")
-      .select("numero")
-      .not("numero", "is", null)
-      .like("numero", "FAC-%")
+      .select("codigo")
+      .not("codigo", "is", null)
+      .like("codigo", "FAC-%")
       .order("created_at", { ascending: false })
       .limit(100)
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     const numeros = (facturas || [])
       .map((row: any) => {
-        const match = String(row.numero || "").match(/^FAC-(\d+)$/i)
+        const match = String(row.codigo || "").match(/^FAC-(\d+)$/i)
         return match ? parseInt(match[1], 10) : 0
       })
       .filter((n: number) => !isNaN(n) && n > 0)

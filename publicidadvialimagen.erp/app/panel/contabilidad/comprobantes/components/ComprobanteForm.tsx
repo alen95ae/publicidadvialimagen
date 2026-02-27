@@ -292,7 +292,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         beneficiario: comprobante.beneficiario || "",
         nro_cheque: comprobante.nro_cheque || "",
         estado: comprobante.estado,
-        empresa_id: comprobante.empresa_id ?? "",
+        empresa_id: (comprobante.empresa_uuid ?? comprobante.empresa_id) ?? "",
         sucursal_id: comprobante.sucursal_id ?? "",
       })
       

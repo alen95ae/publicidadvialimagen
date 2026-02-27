@@ -233,14 +233,14 @@ const CONTABILIDAD_INDICATOR_GREEN = new Set([
   "/panel/contabilidad/informes/libro-diario",
   "/panel/contabilidad/informes/balance-sumas-saldos",
   "/panel/contabilidad/facturas/manuales",
+  "/panel/contabilidad/facturas/contabilizacion",
   "/panel/contabilidad/informes/libro-mayor",
   "/panel/contabilidad/parametros/contabilidad",
   "/panel/contabilidad/informes/libro-auxiliares",
   "/panel/contabilidad/informes/plan-cuentas",
   "/panel/contabilidad/informes/balance-general",
 ])
-const CONTABILIDAD_INDICATOR_YELLOW = new Set([
-  "/panel/contabilidad/facturas/contabilizacion",
+const CONTABILIDAD_INDICATOR_YELLOW = new Set<string>([
 ])
 function ContabilidadIndicator({ href }: { href: string }) {
   if (CONTABILIDAD_INDICATOR_GREEN.has(href)) {

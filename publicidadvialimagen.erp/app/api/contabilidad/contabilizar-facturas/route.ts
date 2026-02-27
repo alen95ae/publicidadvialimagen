@@ -18,16 +18,20 @@ function round2(n: number): number {
 }
 
 /** POST - Contabilizar facturas manuales (solo Ventas) en el rango de fechas.
- * Un comprobante por factura; detalle = 5 líneas por cada ítem.
+ * Un comprobante por factura. Detalle: N líneas (una por ítem, cuenta por cobrar) + 4 líneas consolidadas.
  *
- * Matemática por ítem (Importe = cantidad*precio_unitario - descuento):
- *   L1  cuenta_venta   DEBE = Importe        HABER = 0              glosa = descripción ítem
- *   L2  IT 3%          DEBE = Importe*0.03   HABER = 0              glosa = código factura
- *   L3  IVA 13%        DEBE = 0              HABER = Importe*0.13   glosa = código factura
- *   L4  IT por pagar   DEBE = 0              HABER = Importe*0.03   glosa = código factura
- *   L5  Ingreso ventas DEBE = 0              HABER = Importe*0.87   glosa = descripción ítem
+ * total_factura = suma de importes de todos los ítems.
  *
- * Balance: DEBE = 1.03*Importe, HABER = 1.03*Importe  ✓
+ * PASO 1 — Por cada ítem: 1 línea cuenta_venta (112001001 o la del producto/soporte)
+ *   DEBE = importe ítem, HABER = 0, glosa = descripción ítem.
+ *
+ * PASO 2 — 4 líneas consolidadas con total_factura:
+ *   IT 3% (525002001)         DEBE = total*0.03   HABER = 0   glosa = código factura
+ *   IVA 13% (214001001)       DEBE = 0            HABER = total*0.13  glosa = código factura
+ *   IT por pagar (214004001)  DEBE = 0            HABER = total*0.03   glosa = código factura
+ *   Ingreso ventas (411002001) DEBE = 0           HABER = total*0.87   glosa = código factura
+ *
+ * Balance: DEBE = total_factura + total*0.03 = total*1.03, HABER = total*1.03  ✓
  */
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     const { data: facturas, error: errFacturas } = await supabase
       .from("facturas_manuales")
-      .select("id, numero, fecha, glosa, estado_contable, comprobante_id")
+      .select("id, codigo, fecha, glosa, estado_contable, comprobante_id")
       .gte("fecha", desde_fecha)
       .lte("fecha", hasta_fecha)
       .neq("estado", "ANULADA");
@@ -101,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     for (const factura of candidatas) {
       try {
-        const codigoFactura = factura.numero || String(factura.id);
+        const codigoFactura = factura.codigo || String(factura.id);
 
         // Cargar ítems de la factura
         const { data: items, error: errItems } = await supabase
@@ -112,14 +116,14 @@ export async function POST(request: NextRequest) {
 
         if (errItems) {
           await marcarError(supabase, factura.id, "Error al cargar ítems: " + errItems.message);
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errItems.message });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: errItems.message });
           continue;
         }
 
         const itemsFactura = items || [];
         if (itemsFactura.length === 0) {
           await marcarError(supabase, factura.id, "Factura sin ítems");
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: "Factura sin ítems" });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: "Factura sin ítems" });
           continue;
         }
 
@@ -175,7 +179,7 @@ export async function POST(request: NextRequest) {
           const msg = errInsertComp?.message || "Error al crear comprobante";
           console.error("Error insertando comprobante:", msg, comprobanteData);
           await marcarError(supabase, factura.id, msg);
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: msg });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: msg });
           continue;
         }
 
@@ -192,18 +196,21 @@ export async function POST(request: NextRequest) {
           orden: number;
         }> = [];
 
+        // Total factura = suma de importes de todos los ítems (para líneas consolidadas)
+        const totalFactura = round2(
+          itemsFactura.reduce((sum, it) => sum + round2(Number(it.importe) || 0), 0)
+        );
+
         let orden = 0;
+
+        // PASO 1: Una línea por ítem — cuenta por cobrar (cuenta_venta), DEBE = importe ítem, glosa = descripción ítem
         for (const item of itemsFactura) {
           const importe = round2(Number(item.importe) || 0);
           if (importe <= 0) continue;
 
           const cuentaVenta = (item.codigo_producto && mapaCuentaVenta[String(item.codigo_producto).trim()]) || CUENTA_VENTA_DEFAULT;
           const descripcionItem = (item.descripcion || "").trim() || codigoFactura;
-          const it3 = round2(importe * 0.03);
-          const iva13 = round2(importe * 0.13);
-          const ingreso87 = round2(importe * 0.87);
 
-          // L1: Cuenta por Cobrar (cuenta_venta producto/soporte) — DEBE
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -216,7 +223,14 @@ export async function POST(request: NextRequest) {
             haber_usd: 0,
             orden,
           });
-          // L2: IT 3% — DEBE
+        }
+
+        // PASO 2: 4 líneas consolidadas con total_factura (solo si hay total > 0)
+        if (totalFactura > 0) {
+          const it3 = round2(totalFactura * 0.03);
+          const iva13 = round2(totalFactura * 0.13);
+          const ingreso87 = round2(totalFactura * 0.87);
+
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -229,7 +243,6 @@ export async function POST(request: NextRequest) {
             haber_usd: 0,
             orden,
           });
-          // L3: IVA Débito Fiscal 13% — HABER
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -242,7 +255,6 @@ export async function POST(request: NextRequest) {
             haber_usd: 0,
             orden,
           });
-          // L4: IT por Pagar 3% — HABER
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -255,13 +267,12 @@ export async function POST(request: NextRequest) {
             haber_usd: 0,
             orden,
           });
-          // L5: Ingreso por Ventas 87% — HABER (glosa = descripción del ítem)
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
             cuenta: CUENTA_INGRESO_VENTAS,
             auxiliar: null,
-            glosa: descripcionItem,
+            glosa: codigoFactura,
             debe_bs: 0,
             haber_bs: ingreso87,
             debe_usd: 0,
@@ -273,7 +284,7 @@ export async function POST(request: NextRequest) {
         if (detallesData.length === 0) {
           await supabase.from("comprobantes").delete().eq("id", comprobanteId);
           await marcarError(supabase, factura.id, "No se generaron líneas contables");
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: "No se generaron líneas contables" });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: "No se generaron líneas contables" });
           continue;
         }
 
@@ -286,7 +297,7 @@ export async function POST(request: NextRequest) {
           await supabase.from("comprobantes").delete().eq("id", comprobanteId);
           const errMsg = `Comprobante no balanceado: Debe=${totalDebeBS}, Haber=${totalHaberBS}, Diff=${diffBS.toFixed(2)}`;
           await marcarError(supabase, factura.id, errMsg);
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errMsg });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: errMsg });
           continue;
         }
 
@@ -296,7 +307,7 @@ export async function POST(request: NextRequest) {
           console.error("Error insertando detalle:", errDetalles.message, JSON.stringify(detallesData[0]));
           await supabase.from("comprobantes").delete().eq("id", comprobanteId);
           await marcarError(supabase, factura.id, errDetalles.message);
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errDetalles.message });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: errDetalles.message });
           continue;
         }
 
@@ -323,7 +334,7 @@ export async function POST(request: NextRequest) {
 
         if (errAprobar) {
           await marcarError(supabase, factura.id, errAprobar.message);
-          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: errAprobar.message });
+          errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: errAprobar.message });
           continue;
         }
 
@@ -341,7 +352,7 @@ export async function POST(request: NextRequest) {
         if (errUpdateFactura) {
           errores_detalle.push({
             factura_id: factura.id,
-            factura_numero: factura.numero,
+            factura_numero: factura.codigo,
             error: "Comprobante creado pero no se pudo actualizar la factura: " + errUpdateFactura.message,
           });
           continue;
@@ -349,14 +360,15 @@ export async function POST(request: NextRequest) {
 
         comprobantes.push({
           factura_id: factura.id,
-          factura_numero: factura.numero,
+          factura_numero: factura.codigo,
           comprobante_id: comprobanteId,
           numero: siguienteNumero,
+          tipo_comprobante: "Traspaso",
         });
       } catch (e: any) {
         const msg = e?.message || String(e);
         await marcarError(supabase, factura.id, msg);
-        errores_detalle.push({ factura_id: factura.id, factura_numero: factura.numero, error: msg });
+        errores_detalle.push({ factura_id: factura.id, factura_numero: factura.codigo, error: msg });
       }
     }
 

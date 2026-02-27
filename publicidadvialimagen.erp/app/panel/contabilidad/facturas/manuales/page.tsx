@@ -51,7 +51,7 @@ const getEstadoIcon = (estado: string) => {
 
 interface FacturaManual {
   id: string
-  numero: string | null
+  codigo: string | null
   fecha: string
   vendedor_id: string | null
   cliente_nombre: string
@@ -169,7 +169,7 @@ export default function FacturasManualesListPage() {
   const filteredFacturas = facturas.filter((f) => {
     const matchSearch =
       !searchTerm.trim() ||
-      (f.numero || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (f.codigo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (f.cliente_nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (f.cliente_nit || "").toLowerCase().includes(searchTerm.toLowerCase())
     const matchVendedor = filtroVendedor === "all" || f.vendedor_id === filtroVendedor
@@ -209,7 +209,7 @@ export default function FacturasManualesListPage() {
       const siguienteCodigo = numeroJson.success && numeroJson.codigo ? numeroJson.codigo : null
       const { data } = json
       const payload = {
-        numero: siguienteCodigo,
+        codigo: siguienteCodigo,
         fecha: data.fecha,
         vendedor_id: data.vendedor_id,
         cliente_nombre: data.cliente_nombre,
@@ -272,7 +272,7 @@ export default function FacturasManualesListPage() {
     }
   }
 
-  const handleDescargarPDF = (id: string, numero?: string | null) => {
+  const handleDescargarPDF = (id: string, codigoFactura?: string | null) => {
     setDescargandoPDF(id)
     const url = `/api/contabilidad/facturas-manuales/${id}/pdf`
     fetch(url, { credentials: "include" })
@@ -284,8 +284,8 @@ export default function FacturasManualesListPage() {
         const u = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = u
-        const codigo = (numero || "").trim() || id.slice(0, 8)
-        a.download = `${codigo.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`
+        const nombreArchivo = (codigoFactura || "").trim() || id.slice(0, 8)
+        a.download = `${nombreArchivo.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(u)
@@ -592,7 +592,7 @@ export default function FacturasManualesListPage() {
                           onCheckedChange={handleSelectAll}
                         />
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Número</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-900">Código</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Fecha</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Cliente</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">NIT</th>
@@ -612,7 +612,7 @@ export default function FacturasManualesListPage() {
                         </td>
                         <td className="py-3 px-4 align-middle">
                           <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-1 font-mono text-xs text-gray-800 border border-neutral-200 whitespace-nowrap">
-                            {f.numero || "—"}
+                            {f.codigo || "—"}
                           </span>
                         </td>
                         <td className="py-3 px-4 align-middle text-sm text-gray-600">
@@ -635,7 +635,7 @@ export default function FacturasManualesListPage() {
                               variant="ghost"
                               size="sm"
                               title="Descargar factura"
-                              onClick={() => handleDescargarPDF(f.id, f.numero)}
+                              onClick={() => handleDescargarPDF(f.id, f.codigo)}
                               disabled={descargandoPDF === f.id}
                               className="text-gray-600 hover:text-gray-800 hover:bg-gray-200"
                             >

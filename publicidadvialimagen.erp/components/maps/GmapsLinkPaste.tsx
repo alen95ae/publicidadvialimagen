@@ -67,12 +67,13 @@ export default function GmapsLinkPaste({ onCoords }: { onCoords: (c:{lat:number;
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="gmaps-link">Pega un enlace de Google Maps</Label>
+      <Label htmlFor="gmaps-link">Enlace de Google Maps</Label>
+      <p className="text-sm text-muted-foreground">Pega un enlace de Google Maps</p>
       <div className="relative">
         <Input
           id="gmaps-link"
           className={`flex-1 ${error ? 'border-red-500' : success ? 'border-green-500' : ''}`}
-          placeholder="https://www.google.com/maps/place/.../@40.4168,-3.7038,17z"
+          placeholder="https://maps.app.goo.gl/TMcWBMVDR7RjHWN79"
           value={value}
           onChange={(e)=>setValue(e.target.value)}
           onPaste={(e) => {

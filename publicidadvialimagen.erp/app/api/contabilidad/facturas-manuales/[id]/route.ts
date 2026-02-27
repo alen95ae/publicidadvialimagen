@@ -101,7 +101,7 @@ export async function PUT(
     }
 
     const {
-      numero,
+      codigo: codigoBody,
       fecha,
       vendedor_id,
       cliente_nombre,
@@ -121,7 +121,7 @@ export async function PUT(
 
     // vendedor_id tiene FK a auth.users(id); la app usa public.usuarios(id). Se fuerza null hasta alinear FKs.
     const updateRow: Record<string, unknown> = {
-      numero: numero != null && numero !== "" ? String(numero).trim() : null,
+      codigo: codigoBody != null && codigoBody !== "" ? String(codigoBody).trim() : null,
       vendedor_id: null,
       cliente_nombre: (cliente_nombre != null ? String(cliente_nombre).trim() : "") || "",
       cliente_nit: (cliente_nit != null ? String(cliente_nit).trim() : "") || "",
@@ -148,7 +148,7 @@ export async function PUT(
       .from("facturas_manuales")
       .update(updateRow)
       .eq("id", id)
-      .select("id, numero, fecha, total, estado, cotizacion_id")
+      .select("id, codigo, fecha, total, estado, cotizacion_id")
       .single();
 
     if (errUpdate) {

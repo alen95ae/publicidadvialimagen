@@ -24,6 +24,7 @@ import SupportMap from "@/components/support-map"
 import dynamic from "next/dynamic";
 import { PermisoEditar, PermisoEliminar, PermisoTecnico } from "@/components/permiso"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { CuentaContableSelect } from "@/components/contabilidad/CuentaContableSelect"
 
 const EditableLeafletMap = dynamic(() => import("@/components/maps/EditableLeafletMap"), { ssr: false });
 const GmapsLinkPaste = dynamic(() => import("@/components/maps/GmapsLinkPaste"), { ssr: false });
@@ -1045,7 +1046,6 @@ export default function SoporteDetailPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="googleMapsLink">Enlace de Google Maps</Label>
                     <GmapsLinkPaste 
                       onCoords={(coords) => {
                         console.log('🎯 Coordinates received from URL paste:', coords);
@@ -1061,9 +1061,6 @@ export default function SoporteDetailPage() {
                         toast.success(`¡Ubicación encontrada! ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
                       }}
                     />
-                    <p className="text-xs text-gray-500">
-                      💡 Pega cualquier enlace de Google Maps y la chincheta se moverá automáticamente
-                    </p>
                   </div>
                   
                   <div className="space-y-2">
@@ -1163,6 +1160,8 @@ export default function SoporteDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Precios y Contabilidad: debajo de Características técnicas, a la derecha de Ubicación */}
+          <div className="space-y-8">
           {/* Precios */}
           <Card>
             <CardHeader>
@@ -1388,36 +1387,6 @@ export default function SoporteDetailPage() {
                     
                     <p className="text-xs text-gray-500">Máximo 5MB. Formatos: JPG, PNG, GIF</p>
                   </div>
-
-                  {/* Contabilidad */}
-                  <Separator className="my-4" />
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">Contabilidad</Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
-                        <Input
-                          id="cuenta_venta"
-                          value={formData.cuenta_venta}
-                          onChange={(e) => setFormData({ ...formData, cuenta_venta: e.target.value })}
-                          placeholder="112001001"
-                          className="h-9"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Cuenta contable para ingresos por venta (por defecto: 112001001)</p>
-                      </div>
-                      <div>
-                        <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
-                        <Input
-                          id="cuenta_compra"
-                          value={formData.cuenta_compra}
-                          onChange={(e) => setFormData({ ...formData, cuenta_compra: e.target.value })}
-                          placeholder="Opcional"
-                          className="h-9"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Cuenta contable para compras (opcional)</p>
-                      </div>
-                    </div>
-                  </div>
                 </>
               ) : (
                 <>
@@ -1436,6 +1405,48 @@ export default function SoporteDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Contabilidad (debajo de Precios) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contabilidad</CardTitle>
+              <CardDescription>Cuentas contables para contabilización</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {editing ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
+                    <CuentaContableSelect
+                      value={formData.cuenta_venta}
+                      onChange={(v) => setFormData({ ...formData, cuenta_venta: v })}
+                      placeholder="Seleccionar cuenta..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
+                    <CuentaContableSelect
+                      value={formData.cuenta_compra}
+                      onChange={(v) => setFormData({ ...formData, cuenta_compra: v })}
+                      placeholder="Seleccionar cuenta (opcional)"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Cuenta de Venta</Label>
+                    <p className="font-semibold">{support.cuenta_venta || "—"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Cuenta de Compra</Label>
+                    <p className="font-semibold">{support.cuenta_compra || "—"}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          </div>
         </div>
 
         {/* Información del Sistema */}

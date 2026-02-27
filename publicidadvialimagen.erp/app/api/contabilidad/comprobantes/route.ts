@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "100")
     const offset = (page - 1) * limit
 
-    // Obtener comprobantes ordenados por fecha descendente (empresa_id y sucursal_id son UUID)
+    // Obtener comprobantes ordenados por fecha descendente (empresa_uuid y sucursal_id son UUID)
     const { data, error, count } = await supabase
       .from("comprobantes")
-      .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_id, sucursal_id, created_at, updated_at", { count: "exact" })
+      .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_uuid, sucursal_id, created_at, updated_at", { count: "exact" })
       .order("fecha", { ascending: false })
       .order("numero", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1)
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       beneficiario: cabecera.beneficiario || null,
       nro_cheque: cabecera.nro_cheque || null,
       estado: cabecera.estado || "BORRADOR",
-      empresa_id: cabecera.empresa_id || null,
+      empresa_uuid: cabecera.empresa_id || null,
       sucursal_id: cabecera.sucursal_id || null,
     }
 

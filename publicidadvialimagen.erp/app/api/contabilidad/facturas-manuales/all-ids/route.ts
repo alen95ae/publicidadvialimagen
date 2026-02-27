@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       query = query.eq("vendedor_id", vendedor);
     }
     if (search) {
-      query = query.or(`numero.ilike.%${search}%,cliente_nombre.ilike.%${search}%,cliente_nit.ilike.%${search}%`);
+      query = query.or(`codigo.ilike.%${search}%,cliente_nombre.ilike.%${search}%,cliente_nit.ilike.%${search}%`);
     }
 
     const { data, error } = await query;

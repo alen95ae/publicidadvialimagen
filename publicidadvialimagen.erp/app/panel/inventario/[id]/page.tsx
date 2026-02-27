@@ -24,6 +24,7 @@ import { calcularDiferenciaCoste, calcularDiferenciaPrecio } from "@/lib/variant
 import { calcularCosteVariante } from "@/lib/variantes/calcularCosteVariante"
 import { findResourceVariantPrice } from "@/lib/variantes/variantEngine"
 import { useCategorias } from "@/hooks/use-categorias"
+import { CuentaContableSelect } from "@/components/contabilidad/CuentaContableSelect"
 
 // Helper para fusionar variantes sin duplicados
 function mergeVariantes(prev: any[], nuevas: any[]) {
@@ -3369,66 +3370,33 @@ export default function ProductoDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Variantes del Recurso (Solo visualización - importadas de recursos) */}
-            {editing && variantes.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Variantes del Recurso</CardTitle>
-                  <CardDescription>Variantes importadas desde los recursos de la receta</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    {variantes.map((variante, varianteIndex) => {
-                      const isColorMode = variante.modo === "color"
-                      // Buscar valores en ambos campos para compatibilidad (valores es el formato migrado, posibilidades es el formato antiguo)
-                      const valoresArray = variante.valores ?? variante.posibilidades ?? []
-                      const posibilidadesTexto = Array.isArray(valoresArray) && valoresArray.length > 0
-                        ? valoresArray.map((pos: string) => {
-                          if (isColorMode && pos.includes(":")) {
-                            const [nombre] = pos.split(":")
-                            return nombre
-                          }
-                          return pos
-                        }).join(", ")
-                        : ""
-
-                      return (
-                        <div key={`variante-${variante.id || varianteIndex}-${variante.recurso_id || 'no-recurso'}-${varianteIndex}`} className={`flex items-center justify-between p-3 rounded-lg ${varianteIndex % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <h4 className="font-medium text-sm text-gray-900">{variante.nombre}</h4>
-                              {isColorMode && (
-                                <Badge variant="outline" className="text-xs">
-                                  <Palette className="w-3 h-3 mr-1" />
-                                  Color
-                                </Badge>
-                              )}
-                              {variante.recurso_nombre && (
-                                <Badge variant="secondary" className="text-xs">
-                                  De: {variante.recurso_nombre}
-                                </Badge>
-                              )}
-                            </div>
-                            {posibilidadesTexto && (
-                              <p className="text-xs text-gray-600">{posibilidadesTexto}</p>
-                            )}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveVariante(varianteIndex)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
-                            title="Eliminar variante"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )
-                    })}
+            {/* Contabilidad */}
+            <Card className="lg:col-span-2 mt-8">
+              <CardHeader>
+                <CardTitle>Contabilidad</CardTitle>
+                <CardDescription>Cuentas contables para contabilización automática de facturas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
+                    <CuentaContableSelect
+                      value={formData.cuenta_venta ?? "112001001"}
+                      onChange={(v) => setFormData({ ...formData, cuenta_venta: v })}
+                      placeholder="Seleccionar cuenta..."
+                    />
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                  <div>
+                    <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
+                    <CuentaContableSelect
+                      value={formData.cuenta_compra ?? ""}
+                      onChange={(v) => setFormData({ ...formData, cuenta_compra: v })}
+                      placeholder="Seleccionar cuenta (opcional)"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
@@ -3584,7 +3552,7 @@ export default function ProductoDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Calculadora de Precios */}
+            {/* Calculadora de Precios (a la derecha de la Calculadora de Costes) */}
             <Card className="lg:col-span-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -3696,7 +3664,66 @@ export default function ProductoDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Variantes del Recurso (debajo de la Calculadora de Costes, mismo ancho) */}
+            {variantes.length > 0 && (
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle>Variantes del Recurso</CardTitle>
+                  <CardDescription>Variantes importadas desde los recursos de la receta</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {variantes.map((variante, varianteIndex) => {
+                      const isColorMode = variante.modo === "color"
+                      // Buscar valores en ambos campos para compatibilidad (valores es el formato migrado, posibilidades es el formato antiguo)
+                      const valoresArray = variante.valores ?? variante.posibilidades ?? []
+                      const posibilidadesTexto = Array.isArray(valoresArray) && valoresArray.length > 0
+                        ? valoresArray.map((pos: string) => {
+                          if (isColorMode && pos.includes(":")) {
+                            const [nombre] = pos.split(":")
+                            return nombre
+                          }
+                          return pos
+                        }).join(", ")
+                        : ""
 
+                      return (
+                        <div key={`variante-${variante.id || varianteIndex}-${variante.recurso_id || 'no-recurso'}-${varianteIndex}`} className={`flex items-center justify-between p-3 rounded-lg ${varianteIndex % 2 === 0 ? 'bg-blue-50' : 'bg-white'} border border-gray-200`}>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <h4 className="font-medium text-sm text-gray-900">{variante.nombre}</h4>
+                              {isColorMode && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Palette className="w-3 h-3 mr-1" />
+                                  Color
+                                </Badge>
+                              )}
+                              {variante.recurso_nombre && (
+                                <Badge variant="secondary" className="text-xs">
+                                  De: {variante.recurso_nombre}
+                                </Badge>
+                              )}
+                            </div>
+                            {posibilidadesTexto && (
+                              <p className="text-xs text-gray-600">{posibilidadesTexto}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveVariante(varianteIndex)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
+                            title="Eliminar variante"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Tabla de Variantes del Producto */}
             {(variantes.length > 0 || variantesProducto.length > 0) && (
@@ -4116,39 +4143,6 @@ export default function ProductoDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Contabilidad */}
-            <Card className="lg:col-span-2 mt-8">
-              <CardHeader>
-                <CardTitle>Contabilidad</CardTitle>
-                <CardDescription>Cuentas contables para contabilización automática de facturas</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
-                    <Input
-                      id="cuenta_venta"
-                      value={formData.cuenta_venta ?? "112001001"}
-                      onChange={(e) => setFormData({ ...formData, cuenta_venta: e.target.value })}
-                      placeholder="112001001"
-                      className="h-9"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Cuenta contable para ingresos por venta (por defecto: 112001001)</p>
-                  </div>
-                  <div>
-                    <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
-                    <Input
-                      id="cuenta_compra"
-                      value={formData.cuenta_compra ?? ""}
-                      onChange={(e) => setFormData({ ...formData, cuenta_compra: e.target.value })}
-                      placeholder="Opcional"
-                      className="h-9"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Cuenta contable para compras (opcional)</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         )}
       </main>

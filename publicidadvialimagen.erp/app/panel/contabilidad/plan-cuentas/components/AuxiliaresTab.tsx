@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import type { Auxiliar, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
+import type { Auxiliar, TipoAuxiliar, Moneda, Cuenta } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
 /** Buscador tipo combobox para filtrar auxiliares (misma UX que en detalle del comprobante) */
@@ -104,9 +104,21 @@ function BuscadorAuxiliares({
   )
 }
 
-const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Banco", "Caja", "Empleado", "Otro"]
+const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Empleado", "Banco", "Gobierno", "Patentes"]
 // Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
 const MONEDAS: string[] = ["BS", "USD"]
+// Lista fija de ciudades (mismo estilo que en soportes)
+const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosi", "Tarija", "Oruro", "Beni", "Pando"]
+
+type ContactoLite = {
+  id: string
+  nombre: string
+  nit?: string
+  telefono?: string
+  email?: string
+  direccion?: string
+  ciudad?: string
+}
 
 export default function AuxiliaresTab() {
   const [auxiliares, setAuxiliares] = useState<Auxiliar[]>([])
@@ -116,16 +128,29 @@ export default function AuxiliaresTab() {
   const [searchAuxiliar, setSearchAuxiliar] = useState("")
   const [filterToAuxiliarId, setFilterToAuxiliarId] = useState<string | null>(null)
   const [filteredAuxiliaresForList, setFilteredAuxiliaresForList] = useState<Auxiliar[]>([])
+
+  // Cuentas (plan de cuentas) para el combobox de Cuenta
+  const [cuentas, setCuentas] = useState<Cuenta[]>([])
+  const [loadingCuentas, setLoadingCuentas] = useState(false)
+  const [openCuentaCombobox, setOpenCuentaCombobox] = useState(false)
+  const [filteredCuentasForForm, setFilteredCuentasForForm] = useState<Cuenta[]>([])
+
+  const [openCiudad, setOpenCiudad] = useState(false)
+  const [openContactoCombobox, setOpenContactoCombobox] = useState(false)
+  const [contactoSearch, setContactoSearch] = useState("")
+  const [contactosOptions, setContactosOptions] = useState<ContactoLite[]>([])
+  const [loadingContactos, setLoadingContactos] = useState(false)
   
   // Estado del formulario
   const [formData, setFormData] = useState<any>({
     tipo_auxiliar: "",
     codigo: "",
     nombre: "",
+    contact_id: null,
     cuenta_id: null,
     moneda: "BS",
     es_cuenta_bancaria: false,
-    departamento: "",
+    ciudad: "",
     direccion: "",
     telefono: "",
     email: "",
@@ -136,7 +161,23 @@ export default function AuxiliaresTab() {
 
   useEffect(() => {
     fetchAuxiliares()
+    fetchCuentas()
   }, [])
+
+  const fetchCuentas = async () => {
+    try {
+      setLoadingCuentas(true)
+      const response = await api("/api/contabilidad/cuentas?limit=10000")
+      if (response.ok) {
+        const data = await response.json()
+        setCuentas(data.data || [])
+      }
+    } catch (error) {
+      console.error("Error fetching cuentas:", error)
+    } finally {
+      setLoadingCuentas(false)
+    }
+  }
 
   // DEBUG: Log cuando cambia el estado de auxiliares
   useEffect(() => {
@@ -163,10 +204,11 @@ export default function AuxiliaresTab() {
         tipo_auxiliar: selectedAuxiliar.tipo_auxiliar || "",
         codigo: selectedAuxiliar.codigo || "",
         nombre: nombre,
+        contact_id: (selectedAuxiliar as any).contact_id ?? null,
         cuenta_id: (selectedAuxiliar as any).cuenta_id || null,
         moneda: selectedAuxiliar.moneda || "BS",
         es_cuenta_bancaria: (selectedAuxiliar as any).es_cuenta_bancaria ?? false,
-        departamento: selectedAuxiliar.departamento || "",
+        ciudad: (selectedAuxiliar as any).ciudad || "",
         direccion: selectedAuxiliar.direccion || "",
         telefono: telefono,
         email: email,
@@ -174,6 +216,7 @@ export default function AuxiliaresTab() {
         autorizacion: selectedAuxiliar.autorizacion || "",
         vigente: (selectedAuxiliar as any).vigente ?? true,
       })
+      setContactoSearch(nombre)
     } else {
       resetForm()
     }
@@ -245,10 +288,11 @@ export default function AuxiliaresTab() {
       tipo_auxiliar: "",
       codigo: "",
       nombre: "",
+      contact_id: null,
       cuenta_id: null,
       moneda: "BS",
       es_cuenta_bancaria: false,
-      departamento: "",
+      ciudad: "",
       direccion: "",
       telefono: "",
       email: "",
@@ -256,10 +300,20 @@ export default function AuxiliaresTab() {
       autorizacion: "",
       vigente: true,
     })
+    setContactoSearch("")
+    setContactosOptions([])
   }
 
   const handleSave = async () => {
     try {
+      if (!tipoAuxiliarNormalizado) {
+        toast.error("Primero debes seleccionar Tipo Auxiliar")
+        return
+      }
+      if (!String(formData.nombre || "").trim()) {
+        toast.error("Debes completar el campo Nombre")
+        return
+      }
       setSaving(true)
       
       if (selectedAuxiliar) {
@@ -334,6 +388,107 @@ export default function AuxiliaresTab() {
     resetForm()
   }
 
+  const filtrarCuentasForm = (searchValue: string) => {
+    if (!searchValue || searchValue.trim() === "") {
+      setFilteredCuentasForForm(cuentas.slice(0, 20))
+      return
+    }
+    const search = searchValue.toLowerCase().trim()
+    const filtered = cuentas.filter((c) => {
+      const codigo = (c.cuenta || "").toLowerCase()
+      const descripcion = (c.descripcion || "").toLowerCase()
+      return codigo.startsWith(search) || descripcion.includes(search)
+    }).slice(0, 20)
+    setFilteredCuentasForForm(filtered)
+  }
+
+  const getCuentaDisplayText = (cuentaId: number | null) => {
+    if (cuentaId == null) return "Seleccionar cuenta..."
+    const cuenta = cuentas.find((c) => c.id === cuentaId)
+    if (cuenta) return `${cuenta.cuenta} - ${cuenta.descripcion}`
+    return `Cuenta #${cuentaId}`
+  }
+
+  const seleccionarCuentaForm = (cuenta: Cuenta) => {
+    setFormData((prev: any) => ({ ...prev, cuenta_id: cuenta.id }))
+    setOpenCuentaCombobox(false)
+  }
+
+  const tipoAuxiliarNormalizado = String(formData.tipo_auxiliar || "").trim()
+  const usaAutocompleteContacto =
+    !formData.es_cuenta_bancaria &&
+    ["Cliente", "Proveedor", "Gobierno"].includes(tipoAuxiliarNormalizado)
+  const esNuevo = !selectedAuxiliar
+  const puedeEditarNombre = tipoAuxiliarNormalizado.length > 0
+  const baseCompleta = tipoAuxiliarNormalizado.length > 0 && String(formData.nombre || "").trim().length > 0
+  const bloquearCamposSecundarios = esNuevo && !baseCompleta
+
+  const mapContacto = (raw: any): ContactoLite => ({
+    id: String(raw.id),
+    nombre: raw.displayName || raw.nombre || "",
+    nit: raw.taxId || raw.nit || "",
+    telefono: raw.phone || raw.telefono || "",
+    email: raw.email || "",
+    direccion: raw.address || raw.direccion || "",
+    ciudad: raw.city || raw.ciudad || "",
+  })
+
+  const buscarContactos = async (query: string) => {
+    if (!query.trim()) {
+      setContactosOptions([])
+      return
+    }
+
+    try {
+      setLoadingContactos(true)
+      const response = await api(`/api/contactos?q=${encodeURIComponent(query)}&limit=20`)
+      if (!response.ok) throw new Error("No se pudieron buscar contactos")
+
+      const json = await response.json()
+      const rows = Array.isArray(json?.data) ? json.data : []
+      const mapped = rows
+        .map(mapContacto)
+        .filter((c: ContactoLite) => {
+          const nombre = c.nombre.trim().toLowerCase()
+          return nombre !== "" && nombre.includes(query.trim().toLowerCase())
+        })
+        .slice(0, 20)
+      setContactosOptions(mapped)
+    } catch (error) {
+      console.error("Error buscando contactos:", error)
+      setContactosOptions([])
+    } finally {
+      setLoadingContactos(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!usaAutocompleteContacto) return
+    const timer = setTimeout(() => {
+      void buscarContactos(contactoSearch)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [contactoSearch, usaAutocompleteContacto])
+
+  const aplicarContactoAlFormulario = (contacto: ContactoLite) => {
+    const tipo = formData.tipo_auxiliar || ""
+    const esClienteOProveedor = tipo === "Cliente" || tipo === "Proveedor"
+    const nitContacto = (contacto.nit || "").trim()
+    setFormData((prev: any) => ({
+      ...prev,
+      contact_id: contacto.id,
+      nombre: contacto.nombre || "",
+      ciudad: contacto.ciudad || "",
+      direccion: contacto.direccion || "",
+      nit: contacto.nit ?? prev.nit,
+      telefono: contacto.telefono || "",
+      email: contacto.email || "",
+      codigo: esClienteOProveedor && nitContacto ? nitContacto : prev.codigo,
+    }))
+    setContactoSearch(contacto.nombre || "")
+    setOpenContactoCombobox(false)
+  }
+
   return (
     <div className="flex flex-col gap-4 h-full overflow-hidden">
       {/* Tabla de auxiliares con buscador */}
@@ -371,29 +526,34 @@ export default function AuxiliaresTab() {
                   className="overflow-x-auto max-h-[600px] overflow-y-auto"
                   data-table-container
                 >
-                  <Table className="min-w-full">
+                  <Table className="min-w-full table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-32">Tipo</TableHead>
-                        <TableHead className="w-24">Código</TableHead>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead className="w-20 text-center">Moneda</TableHead>
-                        <TableHead className="w-24 text-center">Vigencia</TableHead>
+                        <TableHead className="w-[7%]">Tipo</TableHead>
+                        <TableHead className="w-[12%]">Código</TableHead>
+                        <TableHead className="w-[39%]">Nombre</TableHead>
+                        <TableHead className="w-[14%]">Cuenta</TableHead>
+                        <TableHead className="w-[9%] text-center">Moneda</TableHead>
+                        <TableHead className="w-[10%] text-center">Vigencia</TableHead>
+                        <TableHead className="w-[8%] text-center">Banco</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredAuxiliaresForList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                          <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                             No hay auxiliares registrados
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredAuxiliaresForList.map((auxiliar) => {
-                          // Priorizar nombre de contactos si existe
                           const contacto = auxiliar.contactos
                           const nombre = contacto?.nombre ?? auxiliar.nombre ?? '—'
                           const vigente = (auxiliar as any).vigente ?? true
+                          const esBanco = (auxiliar as any).es_cuenta_bancaria ?? false
+                          const cuentaId = (auxiliar as any).cuenta_id
+                          const cuentaPlan = cuentaId != null ? cuentas.find((c) => c.id === cuentaId) : null
+                          const cuentaCodigo = cuentaPlan?.cuenta ?? (cuentaId != null ? `#${cuentaId}` : '—')
 
                           return (
                             <TableRow
@@ -403,15 +563,17 @@ export default function AuxiliaresTab() {
                                 selectedAuxiliar?.id === auxiliar.id ? "bg-blue-50" : ""
                               }`}
                             >
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">{auxiliar.tipo_auxiliar}</Badge>
+                              <TableCell className="whitespace-nowrap">
+                                <span className="inline-flex items-center rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 border border-neutral-200">
+                                  {auxiliar.tipo_auxiliar}
+                                </span>
                               </TableCell>
-                              <TableCell className="font-mono">{auxiliar.codigo}</TableCell>
-                              <TableCell>
+                              <TableCell className="font-mono w-[12%] overflow-hidden text-ellipsis whitespace-nowrap" title={auxiliar.codigo ?? ""}>{auxiliar.codigo}</TableCell>
+                              <TableCell className="min-w-0">
                                 {nombre && nombre.length > 40 ? (
                                   <TooltipProvider>
                                     <Tooltip>
-                                      <TooltipTrigger className="text-left">
+                                      <TooltipTrigger className="text-left truncate block">
                                         {nombre.slice(0, 40) + '…'}
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-sm">
@@ -420,9 +582,10 @@ export default function AuxiliaresTab() {
                                     </Tooltip>
                                   </TooltipProvider>
                                 ) : (
-                                  nombre
+                                  <span className="truncate block">{nombre}</span>
                                 )}
                               </TableCell>
+                              <TableCell className="font-mono">{cuentaCodigo}</TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="outline" className="text-xs">{auxiliar.moneda}</Badge>
                               </TableCell>
@@ -431,6 +594,13 @@ export default function AuxiliaresTab() {
                                   <Badge className="bg-green-100 text-green-800 text-xs">Activo</Badge>
                                 ) : (
                                   <Badge variant="secondary" className="text-xs">Inactivo</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {esBanco ? (
+                                  <Badge className="bg-blue-100 text-blue-800 text-xs">Sí</Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-xs">No</Badge>
                                 )}
                               </TableCell>
                             </TableRow>
@@ -471,7 +641,7 @@ export default function AuxiliaresTab() {
                   <span className="text-gray-700">Eliminar</span>
                 </Button>
               )}
-              <Button size="sm" onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              <Button size="sm" onClick={handleSave} disabled={saving || (esNuevo && !baseCompleta)} className="bg-red-600 hover:bg-red-700 text-white">
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? "Guardando..." : "Guardar"}
               </Button>
@@ -485,9 +655,20 @@ export default function AuxiliaresTab() {
               <Label htmlFor="tipo_auxiliar">Tipo Auxiliar *</Label>
               <Select
                 value={formData.tipo_auxiliar || ""}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, tipo_auxiliar: value as TipoAuxiliar })
-                }
+                onValueChange={(value) => {
+                  const tipoSeleccionado = value as TipoAuxiliar
+                  const permiteContacto = ["Cliente", "Proveedor", "Gobierno"].includes(tipoSeleccionado)
+                  if (!permiteContacto) {
+                    setOpenContactoCombobox(false)
+                    setContactoSearch("")
+                    setContactosOptions([])
+                  }
+                  setFormData({
+                    ...formData,
+                    tipo_auxiliar: tipoSeleccionado,
+                    contact_id: permiteContacto ? formData.contact_id : null,
+                  })
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar tipo" />
@@ -518,34 +699,156 @@ export default function AuxiliaresTab() {
                   setFormData({ ...formData, codigo: e.target.value })
                 }
                 className="font-mono"
+                disabled={bloquearCamposSecundarios}
               />
             </div>
 
             {/* Nombre */}
             <div className="space-y-2 md:col-span-2 lg:col-span-1">
               <Label htmlFor="nombre">Nombre *</Label>
-              <Input
-                id="nombre"
-                value={formData.nombre || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, nombre: e.target.value })
-                }
-              />
+              {(!puedeEditarNombre || !usaAutocompleteContacto) ? (
+                <Input
+                  id="nombre"
+                  value={formData.nombre || ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      nombre: e.target.value,
+                      contact_id: formData.es_cuenta_bancaria ? null : formData.contact_id,
+                    })
+                  }
+                  placeholder={puedeEditarNombre ? "Nombre" : "Primero selecciona Tipo Auxiliar"}
+                  disabled={!puedeEditarNombre}
+                />
+              ) : (
+                <Popover
+                  open={openContactoCombobox}
+                  onOpenChange={(open) => {
+                    setOpenContactoCombobox(open)
+                    if (open) setContactoSearch(formData.nombre || "")
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className={cn(
+                        "w-full justify-between text-sm overflow-hidden",
+                        !formData.nombre && "text-muted-foreground"
+                      )}
+                      disabled={!puedeEditarNombre}
+                    >
+                      <span className="truncate text-left flex-1">
+                        {formData.nombre || "Buscar contacto por nombre"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Buscar contacto por nombre"
+                        className="h-9 border-0 focus:ring-0"
+                        value={contactoSearch}
+                        onValueChange={setContactoSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {loadingContactos ? <span>Buscando contactos...</span> : <span>No se encontraron contactos.</span>}
+                        </CommandEmpty>
+                        {contactosOptions.length > 0 && (
+                          <CommandGroup>
+                            {contactosOptions.map((contacto) => (
+                              <CommandItem
+                                key={contacto.id}
+                                value={contacto.nombre}
+                                onSelect={() => aplicarContactoAlFormulario(contacto)}
+                                className="cursor-pointer"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.contact_id === contacto.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="truncate">{contacto.nombre}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
 
-            {/* Cuenta ID (cuenta_id) */}
+            {/* Cuenta (combobox como en comprobantes) */}
             <div className="space-y-2">
-              <Label htmlFor="cuenta_id">Cuenta ID</Label>
-              <Input
-                id="cuenta_id"
-                type="number"
-                value={formData.cuenta_id || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, cuenta_id: e.target.value ? parseInt(e.target.value) : null })
-                }
-                className="font-mono"
-                placeholder="ID de cuenta"
-              />
+              <Label>Cuenta</Label>
+              <Popover
+                open={openCuentaCombobox}
+                onOpenChange={(open) => {
+                  setOpenCuentaCombobox(open)
+                  if (open) setFilteredCuentasForForm(cuentas.slice(0, 20))
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between text-sm overflow-hidden",
+                      !formData.cuenta_id && "text-muted-foreground"
+                    )}
+                    disabled={bloquearCamposSecundarios}
+                  >
+                    <span className="truncate text-left flex-1">
+                      {getCuentaDisplayText(formData.cuenta_id ?? null)}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por código o descripción..."
+                      className="h-9 border-0 focus:ring-0"
+                      onValueChange={filtrarCuentasForm}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {loadingCuentas ? "Cargando..." : "No se encontraron cuentas."}
+                      </CommandEmpty>
+                      {filteredCuentasForForm.length > 0 && (
+                        <CommandGroup>
+                          {filteredCuentasForForm.map((cuenta) => (
+                            <CommandItem
+                              key={cuenta.id}
+                              value={`${cuenta.cuenta} ${cuenta.descripcion}`}
+                              onSelect={() => seleccionarCuentaForm(cuenta)}
+                              className="cursor-pointer"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.cuenta_id === cuenta.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-medium">{cuenta.cuenta}</span>
+                                <span className="text-gray-600 truncate">{cuenta.descripcion}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Moneda */}
@@ -556,6 +859,7 @@ export default function AuxiliaresTab() {
                 onValueChange={(value) =>
                   setFormData({ ...formData, moneda: value })
                 }
+                disabled={bloquearCamposSecundarios}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -576,32 +880,83 @@ export default function AuxiliaresTab() {
               </Select>
             </div>
 
-            {/* Es Cuenta Bancaria */}
+            {/* Es Cuenta Bancaria + Vigente (misma fila) */}
             <div className="space-y-2 md:col-span-2 lg:col-span-1">
-              <div className="flex items-center space-x-2 pt-6">
-                <Checkbox
-                  id="es_cuenta_bancaria"
-                  checked={formData.es_cuenta_bancaria ?? false}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, es_cuenta_bancaria: !!checked })
-                  }
-                />
-                <Label htmlFor="es_cuenta_bancaria" className="cursor-pointer">
-                  Es Cuenta Bancaria
-                </Label>
+              <div className="flex items-center gap-6 pt-6">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="es_cuenta_bancaria"
+                    checked={formData.es_cuenta_bancaria ?? false}
+                    disabled={bloquearCamposSecundarios}
+                    onCheckedChange={(checked) => {
+                      const isBank = !!checked
+                      setFormData((prev: any) => ({
+                        ...prev,
+                        es_cuenta_bancaria: isBank,
+                        contact_id: isBank ? null : prev.contact_id,
+                      }))
+                      if (isBank) {
+                        setOpenContactoCombobox(false)
+                        setContactoSearch("")
+                        setContactosOptions([])
+                      }
+                    }}
+                  />
+                  <Label htmlFor="es_cuenta_bancaria" className="cursor-pointer">
+                    Es Cuenta Bancaria
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="vigente"
+                    checked={formData.vigente ?? true}
+                    disabled={bloquearCamposSecundarios}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, vigente: !!checked })
+                    }
+                  />
+                  <Label htmlFor="vigente" className="cursor-pointer">
+                    Vigente
+                  </Label>
+                </div>
               </div>
             </div>
 
-              {/* Departamento */}
+              {/* Ciudad (mismo estilo que en editar/nuevo soporte) */}
               <div className="space-y-2">
-                <Label htmlFor="departamento">Departamento</Label>
-                <Input
-                  id="departamento"
-                  value={formData.departamento || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, departamento: e.target.value })
-                  }
-                />
+                <Label htmlFor="ciudad">Ciudad</Label>
+                <Popover open={openCiudad} onOpenChange={setOpenCiudad}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openCiudad}
+                      className="w-full justify-between"
+                      disabled={bloquearCamposSecundarios}
+                    >
+                      {formData.ciudad || "Seleccionar ciudad"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start" side="top">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {ciudadesBolivia.map((ciudad) => (
+                        <div
+                          key={ciudad}
+                          className={cn(
+                            "px-3 py-2 cursor-pointer hover:bg-accent text-sm",
+                            formData.ciudad === ciudad && "bg-accent font-medium"
+                          )}
+                          onClick={() => {
+                            setFormData({ ...formData, ciudad })
+                            setOpenCiudad(false)
+                          }}
+                        >
+                          {ciudad}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Dirección */}
@@ -613,6 +968,7 @@ export default function AuxiliaresTab() {
                   onChange={(e) =>
                     setFormData({ ...formData, direccion: e.target.value })
                   }
+                  disabled={bloquearCamposSecundarios}
                 />
               </div>
 
@@ -626,6 +982,7 @@ export default function AuxiliaresTab() {
                   onChange={(e) =>
                     setFormData({ ...formData, telefono: e.target.value })
                   }
+                  disabled={bloquearCamposSecundarios}
                 />
               </div>
 
@@ -639,6 +996,7 @@ export default function AuxiliaresTab() {
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
+                  disabled={bloquearCamposSecundarios}
                 />
               </div>
 
@@ -652,6 +1010,7 @@ export default function AuxiliaresTab() {
                     setFormData({ ...formData, nit: e.target.value })
                   }
                   className="font-mono"
+                  disabled={bloquearCamposSecundarios}
                 />
               </div>
 
@@ -664,27 +1023,14 @@ export default function AuxiliaresTab() {
                 onChange={(e) =>
                   setFormData({ ...formData, autorizacion: e.target.value })
                 }
+                disabled={bloquearCamposSecundarios}
               />
             </div>
 
-            {/* Vigente */}
-            <div className="space-y-2 md:col-span-2 lg:col-span-1">
-              <div className="flex items-center space-x-2 pt-6">
-                <Checkbox
-                  id="vigente"
-                  checked={formData.vigente ?? true}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, vigente: !!checked })
-                  }
-                />
-                <Label htmlFor="vigente" className="cursor-pointer">
-                  Vigente
-                </Label>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
+
     </div>
   )
 }

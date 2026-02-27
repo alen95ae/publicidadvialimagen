@@ -4,6 +4,13 @@ import { getSupabaseUser, getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import type { Auxiliar } from "@/lib/types/contabilidad"
 
+function mapTipoAuxiliarToRelacion(tipo: string): "Cliente" | "Proveedor" | "Ambos" {
+  const t = (tipo || "").toLowerCase().trim()
+  if (t === "proveedor") return "Proveedor"
+  if (t === "cliente" || t === "gobierno") return "Cliente"
+  return "Ambos"
+}
+
 // GET - Obtener un auxiliar por ID
 export async function GET(
   request: NextRequest,
@@ -102,24 +109,100 @@ export async function PUT(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    const body: Partial<Auxiliar> = await request.json()
+    const body = await request.json() as Record<string, unknown>
 
-    // Preparar datos para actualización
-    const updateData: Partial<Auxiliar> = {}
+    const { data: actual } = await supabase
+      .from("auxiliares")
+      .select("contact_id, tipo_auxiliar, nombre, ciudad, direccion, telefono, email, nit, es_cuenta_bancaria")
+      .eq("id", params.id)
+      .maybeSingle()
+
+    // Preparar datos para actualización (nombres de columna en BD: cuenta_id, es_cuenta_bancaria, vigente)
+    const updateData: Record<string, unknown> = {}
     if (body.tipo_auxiliar !== undefined) updateData.tipo_auxiliar = body.tipo_auxiliar
     if (body.codigo !== undefined) updateData.codigo = body.codigo
     if (body.nombre !== undefined) updateData.nombre = body.nombre
-    if (body.cuenta_asociada !== undefined) updateData.cuenta_asociada = body.cuenta_asociada
+    if (body.contact_id !== undefined) updateData.contact_id = body.contact_id
+    if (body.cuenta_id !== undefined) updateData.cuenta_id = body.cuenta_id
     if (body.moneda !== undefined) updateData.moneda = body.moneda
-    if (body.cuenta_bancaria_o_caja !== undefined)
-      updateData.cuenta_bancaria_o_caja = body.cuenta_bancaria_o_caja
-    if (body.departamento !== undefined) updateData.departamento = body.departamento
+    if (body.es_cuenta_bancaria !== undefined) updateData.es_cuenta_bancaria = body.es_cuenta_bancaria
+    if (body.ciudad !== undefined) updateData.ciudad = body.ciudad
     if (body.direccion !== undefined) updateData.direccion = body.direccion
     if (body.telefono !== undefined) updateData.telefono = body.telefono
     if (body.email !== undefined) updateData.email = body.email
     if (body.nit !== undefined) updateData.nit = body.nit
     if (body.autorizacion !== undefined) updateData.autorizacion = body.autorizacion
-    if (body.vigencia !== undefined) updateData.vigencia = body.vigencia
+    if (body.vigente !== undefined) updateData.vigente = body.vigente
+
+    const tipoFinal = String(body.tipo_auxiliar ?? (actual as any)?.tipo_auxiliar ?? "").trim()
+    const nombreFinal = String(body.nombre ?? (actual as any)?.nombre ?? "").trim()
+    const isBankFinal = Boolean(
+      body.es_cuenta_bancaria !== undefined
+        ? body.es_cuenta_bancaria
+        : (actual as any)?.es_cuenta_bancaria
+    )
+
+    let contactIdFinal = (body.contact_id ?? (actual as any)?.contact_id ?? null) as string | null
+    if (isBankFinal) {
+      contactIdFinal = null
+    } else if (tipoFinal && nombreFinal) {
+      const supabaseAdmin = getSupabaseAdmin()
+      const contactoPayload = {
+        nombre: nombreFinal,
+        relacion: mapTipoAuxiliarToRelacion(tipoFinal),
+        ciudad: (body.ciudad ?? (actual as any)?.ciudad ?? null) as string | null,
+        direccion: (body.direccion ?? (actual as any)?.direccion ?? null) as string | null,
+        telefono: (body.telefono ?? (actual as any)?.telefono ?? null) as string | null,
+        email: (body.email ?? (actual as any)?.email ?? null) as string | null,
+        nit: (body.nit ?? (actual as any)?.nit ?? null) as string | null,
+        fecha_actualizacion: new Date().toISOString(),
+      }
+
+      if (contactIdFinal) {
+        const { data: updatedContacto, error: updateContactoError } = await supabaseAdmin
+          .from("contactos")
+          .update(contactoPayload)
+          .eq("id", contactIdFinal)
+          .select("id")
+          .single()
+        if (updateContactoError || !updatedContacto?.id) {
+          const { data: createdContacto, error: createContactoError } = await supabaseAdmin
+            .from("contactos")
+            .insert({
+              ...contactoPayload,
+              tipo_contacto: "Individual",
+              fecha_creacion: new Date().toISOString(),
+            })
+            .select("id")
+            .single()
+          if (createContactoError) {
+            return NextResponse.json(
+              { error: `Error al sincronizar contacto: ${createContactoError.message}` },
+              { status: 500 }
+            )
+          }
+          contactIdFinal = (createdContacto?.id || null) as string | null
+        }
+      } else {
+        const { data: createdContacto, error: createContactoError } = await supabaseAdmin
+          .from("contactos")
+          .insert({
+            ...contactoPayload,
+            tipo_contacto: "Individual",
+            fecha_creacion: new Date().toISOString(),
+          })
+          .select("id")
+          .single()
+        if (createContactoError) {
+          return NextResponse.json(
+            { error: `Error al sincronizar contacto: ${createContactoError.message}` },
+            { status: 500 }
+          )
+        }
+        contactIdFinal = (createdContacto?.id || null) as string | null
+      }
+    }
+    updateData.contact_id = contactIdFinal
 
     updateData.updated_at = new Date().toISOString()
 

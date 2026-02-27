@@ -141,21 +141,22 @@ export async function crearAuxiliar(
     throw new Error('Tipo auxiliar, código y nombre son requeridos')
   }
 
-  // Preparar datos para inserción
-  const auxiliarData: Partial<Auxiliar> = {
+  // Preparar datos para inserción (BD: cuenta_id, es_cuenta_bancaria, vigente)
+  const auxiliarData: Record<string, unknown> = {
     tipo_auxiliar: datos.tipo_auxiliar,
     codigo: datos.codigo,
     nombre: datos.nombre,
-    cuenta_asociada: datos.cuenta_asociada || null,
-    moneda: datos.moneda || 'BOB',
-    cuenta_bancaria_o_caja: datos.cuenta_bancaria_o_caja || false,
-    departamento: datos.departamento || null,
+    contact_id: (datos as any).contact_id ?? null,
+    cuenta_id: (datos as any).cuenta_id ?? null,
+    moneda: datos.moneda || 'BS',
+    es_cuenta_bancaria: (datos as any).es_cuenta_bancaria ?? false,
+    ciudad: (datos as any).ciudad || null,
     direccion: datos.direccion || null,
     telefono: datos.telefono || null,
     email: datos.email || null,
     nit: datos.nit || null,
     autorizacion: datos.autorizacion || null,
-    vigencia: datos.vigencia !== undefined ? datos.vigencia : true,
+    vigente: (datos as any).vigente !== undefined ? (datos as any).vigente : true,
   }
 
   // Insertar en tabla base (no VIEW)

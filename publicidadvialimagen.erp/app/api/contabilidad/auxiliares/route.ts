@@ -6,6 +6,57 @@ import { requirePermiso } from "@/lib/permisos"
 import type { Auxiliar } from "@/lib/types/contabilidad"
 import { crearAuxiliar } from "@/lib/services/auxiliares"
 
+function mapTipoAuxiliarToRelacion(tipo: string): "Cliente" | "Proveedor" | "Ambos" {
+  const t = (tipo || "").toLowerCase().trim()
+  if (t === "proveedor") return "Proveedor"
+  if (t === "cliente" || t === "gobierno") return "Cliente"
+  return "Ambos"
+}
+
+async function ensureContactoForAuxiliar(body: Partial<Auxiliar>) {
+  const isBank = (body as any).es_cuenta_bancaria === true
+  const nombre = (body.nombre || "").trim()
+  const tipo = (body.tipo_auxiliar || "").trim()
+  const existingContactId = ((body as any).contact_id || null) as string | null
+
+  if (isBank || !nombre || !tipo) return null
+
+  const supabaseAdmin = getSupabaseAdmin()
+  const payload = {
+    nombre,
+    relacion: mapTipoAuxiliarToRelacion(tipo),
+    ciudad: ((body as any).ciudad || null) as string | null,
+    direccion: (body.direccion || null) as string | null,
+    telefono: (body.telefono || null) as string | null,
+    email: (body.email || null) as string | null,
+    nit: (body.nit || null) as string | null,
+    fecha_actualizacion: new Date().toISOString(),
+  }
+
+  if (existingContactId) {
+    const { data, error } = await supabaseAdmin
+      .from("contactos")
+      .update(payload)
+      .eq("id", existingContactId)
+      .select("id")
+      .single()
+    if (!error && data?.id) return data.id as string
+  }
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from("contactos")
+    .insert({
+      ...payload,
+      tipo_contacto: "Individual",
+      fecha_creacion: new Date().toISOString(),
+    })
+    .select("id")
+    .single()
+
+  if (createError) throw new Error(`No se pudo crear contacto vinculado: ${createError.message}`)
+  return (created?.id || null) as string | null
+}
+
 // GET - Listar todos los auxiliares
 export async function GET(request: NextRequest) {
   try {
@@ -154,7 +205,12 @@ export async function POST(request: NextRequest) {
 
     // Usar servicio centralizado para crear auxiliar
     try {
-      const auxiliarCreado = await crearAuxiliar(supabase, body)
+      const contactId = await ensureContactoForAuxiliar(body)
+      const bodyConContacto: Partial<Auxiliar> = {
+        ...body,
+        contact_id: contactId,
+      } as any
+      const auxiliarCreado = await crearAuxiliar(supabase, bodyConContacto)
 
       return NextResponse.json({
         success: true,

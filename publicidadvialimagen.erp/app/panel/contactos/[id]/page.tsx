@@ -11,9 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeft, Save, Building2, User, Check, X } from "lucide-react"
+import { ArrowLeft, Save, Building2, User, Check, X, Info } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+// Lista fija de ciudades (mismo estilo que en soportes)
+const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosi", "Tarija", "Oruro", "Beni", "Pando"]
 
 interface SalesOwner {
   id: string
@@ -58,6 +62,9 @@ export default function EditarContactoPage() {
   const [openPersonaContactoCombobox, setOpenPersonaContactoCombobox] = useState(false)
   const [filteredPersonasContacto, setFilteredPersonasContacto] = useState<any[]>([])
   const [personaContactoInputValue, setPersonaContactoInputValue] = useState("")
+
+  const [openCiudad, setOpenCiudad] = useState(false)
+  const [vinculadoAuxiliar, setVinculadoAuxiliar] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -267,6 +274,11 @@ export default function EditarContactoPage() {
           salesOwnerId: data.salesOwnerId || "none",
           notes: data.notes || "",
         })
+        const auxRes = await fetch(`/api/contactos/${id}/tiene-auxiliar`)
+        if (auxRes.ok) {
+          const auxJson = await auxRes.json()
+          setVinculadoAuxiliar(!!auxJson.tieneAuxiliar)
+        }
         
         console.log('📋 [fetchContact] Datos RAW de la API:', {
           razonSocial: data.razonSocial || data.razon_social,
@@ -330,7 +342,7 @@ export default function EditarContactoPage() {
     setSaving(true)
     
     try {
-      const submitData = {
+      const submitData: Record<string, unknown> = {
         ...formData,
         salesOwnerId: formData.salesOwnerId === "none" ? null : formData.salesOwnerId,
         // Para Individual: enviar companyId y company (nombre), para Compañía: enviar personaContacto como JSON
@@ -341,6 +353,11 @@ export default function EditarContactoPage() {
             }
           : { personaContacto: formData.personaContacto.length > 0 ? formData.personaContacto : null }
         )
+      }
+      if (vinculadoAuxiliar) {
+        delete submitData.displayName
+        delete submitData.city
+        delete submitData.taxId
       }
       
       console.log('💾 [handleSubmit] Datos a guardar:', {
@@ -425,6 +442,14 @@ export default function EditarContactoPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {vinculadoAuxiliar && (
+                  <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      Este contacto está vinculado a un auxiliar. Los datos de nombre, ciudad y NIT deben cambiarse en <strong>Auxiliares, Contabilidad</strong>; allí se guardarán en ambos sitios.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {/* Tipo de contacto */}
                 <div className="flex gap-4 mb-4">
                   <div className="flex items-center space-x-2">
@@ -468,6 +493,7 @@ export default function EditarContactoPage() {
                     onChange={(e) => handleChange("displayName", e.target.value)}
                     placeholder={formData.kind === "COMPANY" ? "Nombre de la empresa" : "Nombre completo"}
                     required
+                    disabled={vinculadoAuxiliar}
                   />
                 </div>
 
@@ -686,6 +712,7 @@ export default function EditarContactoPage() {
                       value={formData.taxId}
                       onChange={(e) => handleChange("taxId", e.target.value)}
                       placeholder="Número de identificación tributaria"
+                      disabled={vinculadoAuxiliar}
                     />
                   </div>
                   <div>
@@ -788,12 +815,40 @@ export default function EditarContactoPage() {
                 
                 <div>
                   <Label htmlFor="city">Ciudad</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => handleChange("city", e.target.value)}
-                    placeholder="Ciudad"
-                  />
+                  <Popover open={openCiudad} onOpenChange={vinculadoAuxiliar ? undefined : setOpenCiudad}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCiudad}
+                        className="w-full justify-between"
+                        disabled={vinculadoAuxiliar}
+                      >
+                        {formData.city || "Seleccionar ciudad"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start" side="top">
+                      <div className="max-h-[300px] overflow-y-auto">
+                        {ciudadesBolivia.map((ciudad) => (
+                          <div
+                            key={ciudad}
+                            className={cn(
+                              "px-3 py-2 cursor-pointer hover:bg-accent text-sm",
+                              formData.city === ciudad && "bg-accent font-medium"
+                            )}
+                            onClick={() => {
+                              if (!vinculadoAuxiliar) {
+                                handleChange("city", ciudad)
+                                setOpenCiudad(false)
+                              }
+                            }}
+                          >
+                            {ciudad}
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 <div>

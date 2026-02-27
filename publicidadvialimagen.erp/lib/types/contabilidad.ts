@@ -35,15 +35,20 @@ export interface Auxiliar {
   tipo_auxiliar: string
   codigo: string
   nombre: string
+  contact_id?: string | null
+  cuenta_id?: number | null
   cuenta_asociada?: string
   moneda: string
+  es_cuenta_bancaria?: boolean
   cuenta_bancaria_o_caja: boolean
+  ciudad?: string
   departamento?: string
   direccion?: string
   telefono?: string
   email?: string
   nit?: string
   autorizacion?: string
+  vigente?: boolean
   vigencia: boolean
   created_at?: string
   updated_at?: string
@@ -71,10 +76,10 @@ export type TipoCuenta =
 export type TipoAuxiliar = 
   | "Cliente"
   | "Proveedor"
-  | "Banco"
-  | "Caja"
   | "Empleado"
-  | "Otro"
+  | "Banco"
+  | "Gobierno"
+  | "Patentes"
 
 export type Moneda = "BS" | "USD"
 

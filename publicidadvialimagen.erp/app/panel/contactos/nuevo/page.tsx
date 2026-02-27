@@ -16,6 +16,9 @@ import { ArrowLeft, Save, Building2, User, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
+// Lista fija de ciudades (mismo estilo que en soportes)
+const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosi", "Tarija", "Oruro", "Beni", "Pando"]
+
 interface SalesOwner {
   id: string
   name: string
@@ -55,6 +58,8 @@ export default function NuevoContactoPage() {
   const [openPersonaContactoCombobox, setOpenPersonaContactoCombobox] = useState(false)
   const [filteredPersonasContacto, setFilteredPersonasContacto] = useState<any[]>([])
   const [personaContactoInputValue, setPersonaContactoInputValue] = useState("")
+
+  const [openCiudad, setOpenCiudad] = useState(false)
 
   useEffect(() => {
     fetchSalesOwners()
@@ -610,12 +615,37 @@ export default function NuevoContactoPage() {
                 
                 <div>
                   <Label htmlFor="city">Ciudad</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => handleChange("city", e.target.value)}
-                    placeholder="Ciudad"
-                  />
+                  <Popover open={openCiudad} onOpenChange={setOpenCiudad}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCiudad}
+                        className="w-full justify-between"
+                      >
+                        {formData.city || "Seleccionar ciudad"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start" side="top">
+                      <div className="max-h-[300px] overflow-y-auto">
+                        {ciudadesBolivia.map((ciudad) => (
+                          <div
+                            key={ciudad}
+                            className={cn(
+                              "px-3 py-2 cursor-pointer hover:bg-accent text-sm",
+                              formData.city === ciudad && "bg-accent font-medium"
+                            )}
+                            onClick={() => {
+                              handleChange("city", ciudad)
+                              setOpenCiudad(false)
+                            }}
+                          >
+                            {ciudad}
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 <div>

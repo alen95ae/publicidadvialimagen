@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,8 @@ import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
 import { useCategorias } from "@/hooks/use-categorias"
+import { CuentaContableSelect } from "@/components/contabilidad/CuentaContableSelect"
+import type { Cuenta } from "@/lib/types/contabilidad"
 
 interface Recurso {
   id: string
@@ -29,6 +31,8 @@ interface Recurso {
   unidad_medida: string
   coste: number
   variantes?: any[]
+  cuenta_venta?: number | null
+  cuenta_compra?: number | null
 }
 
 export default function RecursoDetailPage() {
@@ -77,7 +81,9 @@ export default function RecursoDetailPage() {
     formato: [] as Array<{ formato: string; cantidad: number; unidad_medida: string }>,
     responsable: "",
     unidad_medida: "unidad",
-    coste: "0"
+    coste: "0",
+    cuenta_venta: "112001001",
+    cuenta_compra: ""
   })
   
   // Estado para el input de formato
@@ -93,6 +99,30 @@ export default function RecursoDetailPage() {
   // Cargar formatos
   const [formatos, setFormatos] = useState<Array<{ id: string; formato: string; cantidad: number; unidad_medida: string }>>([])
   const [formatosLoading, setFormatosLoading] = useState(false)
+
+  // Lista de cuentas contables (para mapear id <-> codigo)
+  const [cuentas, setCuentas] = useState<Cuenta[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/contabilidad/cuentas?limit=10000')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.data) setCuentas(data.data)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // Sincronizar cuenta_venta/cuenta_compra (id -> codigo) una vez cuando tengamos recurso y cuentas
+  const lastSyncedRecursoIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!recurso || cuentas.length === 0) return
+    if (lastSyncedRecursoIdRef.current === recurso.id) return
+    lastSyncedRecursoIdRef.current = recurso.id
+    const cvCodigo = recurso.cuenta_venta != null ? (cuentas.find((c) => c.id === recurso.cuenta_venta)?.cuenta ?? "112001001") : "112001001"
+    const ccCodigo = recurso.cuenta_compra != null ? (cuentas.find((c) => c.id === recurso.cuenta_compra)?.cuenta ?? "") : ""
+    setFormData((prev) => ({ ...prev, cuenta_venta: cvCodigo, cuenta_compra: ccCodigo }))
+  }, [recurso, cuentas])
 
   // Cargar formatos al montar
   useEffect(() => {
@@ -169,7 +199,8 @@ export default function RecursoDetailPage() {
           }
         }
         
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
           codigo: data.codigo || "",
           nombre: data.nombre || "",
           categoria: data.categoria || "Insumos",
@@ -177,7 +208,7 @@ export default function RecursoDetailPage() {
           responsable: data.responsable || "",
           unidad_medida: data.unidad_medida || "unidad",
           coste: costeRedondeado.toFixed(2)
-        })
+        }))
         // Cargar variantes desde el recurso
         let variantesData = []
         if (data.variantes) {
@@ -460,6 +491,12 @@ export default function RecursoDetailPage() {
     
     try {
       const variantesToSave = buildVariantesToSave(variantes)
+      const cuentaVentaId = (formData.cuenta_venta?.trim() && cuentas.length > 0)
+        ? (cuentas.find((c) => String(c.cuenta).trim() === formData.cuenta_venta.trim())?.id ?? null)
+        : null
+      const cuentaCompraId = (formData.cuenta_compra?.trim() && cuentas.length > 0)
+        ? (cuentas.find((c) => String(c.cuenta).trim() === formData.cuenta_compra.trim())?.id ?? null)
+        : null
       const dataToSend = {
         codigo: formData.codigo.trim(),
         nombre: formData.nombre.trim(),
@@ -475,7 +512,9 @@ export default function RecursoDetailPage() {
           unidad: prov.unidad,
           plazos: prov.plazos,
           comentarios: prov.comentarios
-        })) : []
+        })) : [],
+        cuenta_venta: cuentaVentaId,
+        cuenta_compra: cuentaCompraId
       }
 
       console.log("💾 Guardando recurso:", { id, isNewRecurso, dataToSend })
@@ -752,6 +791,8 @@ export default function RecursoDetailPage() {
     if (!isNewRecurso) {
       try {
         const variantesToSave = buildVariantesToSave(nuevasVariantes)
+        const cvId = (formData.cuenta_venta?.trim() && cuentas.length > 0) ? (cuentas.find((c) => String(c.cuenta).trim() === formData.cuenta_venta.trim())?.id ?? null) : null
+        const ccId = (formData.cuenta_compra?.trim() && cuentas.length > 0) ? (cuentas.find((c) => String(c.cuenta).trim() === formData.cuenta_compra.trim())?.id ?? null) : null
         const dataToSend = {
           codigo: formData.codigo.trim(),
           nombre: formData.nombre.trim(),
@@ -767,7 +808,9 @@ export default function RecursoDetailPage() {
             unidad: prov.unidad,
             plazos: prov.plazos,
             comentarios: prov.comentarios
-          })) : []
+          })) : [],
+          cuenta_venta: cvId,
+          cuenta_compra: ccId
         }
 
         const response = await fetch(`/api/recursos/${id}`, {
@@ -1087,6 +1130,34 @@ export default function RecursoDetailPage() {
                     </div>
                   </>
                 ) : null}
+              </CardContent>
+            </Card>
+
+            {/* Contabilidad */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Contabilidad</CardTitle>
+                <CardDescription>Cuentas contables para contabilización automática de facturas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
+                    <CuentaContableSelect
+                      value={formData.cuenta_venta ?? "112001001"}
+                      onChange={(v) => setFormData({ ...formData, cuenta_venta: v })}
+                      placeholder="Seleccionar cuenta..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
+                    <CuentaContableSelect
+                      value={formData.cuenta_compra ?? ""}
+                      onChange={(v) => setFormData({ ...formData, cuenta_compra: v })}
+                      placeholder="Seleccionar cuenta (opcional)"
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

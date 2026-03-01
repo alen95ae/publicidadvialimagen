@@ -18,6 +18,8 @@ export interface RecursoSupabase {
   variantes?: any[]
   control_stock?: any
   proveedores?: any[]
+  cuenta_venta?: number | null
+  cuenta_compra?: number | null
   fecha_creacion: string
   fecha_actualizacion: string
 }
@@ -189,6 +191,8 @@ export function supabaseToRecurso(record: any): RecursoSupabase {
     variantes,
     control_stock: controlStock,
     proveedores,
+    cuenta_venta: record.cuenta_venta != null ? Number(record.cuenta_venta) : null,
+    cuenta_compra: record.cuenta_compra != null ? Number(record.cuenta_compra) : null,
     fecha_creacion: record.fecha_creacion || new Date().toISOString(),
     fecha_actualizacion:
       record.fecha_actualizacion || new Date().toISOString()
@@ -263,6 +267,13 @@ export function recursoToSupabase(recurso: Partial<RecursoSupabase>): Record<str
     fields.proveedores = Array.isArray(recurso.proveedores)
       ? recurso.proveedores
       : []
+  }
+
+  if (recurso.cuenta_venta !== undefined) {
+    fields.cuenta_venta = recurso.cuenta_venta == null || recurso.cuenta_venta === '' ? null : Number(recurso.cuenta_venta)
+  }
+  if (recurso.cuenta_compra !== undefined) {
+    fields.cuenta_compra = recurso.cuenta_compra == null || recurso.cuenta_compra === '' ? null : Number(recurso.cuenta_compra)
   }
 
   return fields

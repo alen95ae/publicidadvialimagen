@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,8 @@ import { Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { UNIDADES_MEDIDA_AIRTABLE } from "@/lib/constants"
 import { useCategorias } from "@/hooks/use-categorias"
+import { CuentaContableSelect } from "@/components/contabilidad/CuentaContableSelect"
+import type { Cuenta } from "@/lib/types/contabilidad"
 
 interface Consumible {
   id: string
@@ -24,6 +26,8 @@ interface Consumible {
   responsable: string
   unidad_medida: string
   coste: number
+  cuenta_venta?: number | null
+  cuenta_compra?: number | null
 }
 
 export default function ConsumibleDetailPage() {
@@ -52,7 +56,9 @@ export default function ConsumibleDetailPage() {
     formato: [] as Array<{ formato: string; cantidad: number; unidad_medida: string }>,
     responsable: "",
     unidad_medida: "unidad",
-    coste: "0"
+    coste: "0",
+    cuenta_venta: "112001001",
+    cuenta_compra: ""
   })
   
   // Estado para el input de formato
@@ -63,6 +69,30 @@ export default function ConsumibleDetailPage() {
   const [codigosExistentes, setCodigosExistentes] = useState<Set<string>>(new Set())
   const [codigoDuplicado, setCodigoDuplicado] = useState(false)
   
+  // Lista de cuentas contables (para mapear id <-> codigo)
+  const [cuentas, setCuentas] = useState<Cuenta[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/contabilidad/cuentas?limit=10000')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.data) setCuentas(data.data)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // Sincronizar cuenta_venta/cuenta_compra (id -> codigo) una vez cuando tengamos consumible y cuentas
+  const lastSyncedConsumibleIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!consumible || cuentas.length === 0) return
+    if (lastSyncedConsumibleIdRef.current === consumible.id) return
+    lastSyncedConsumibleIdRef.current = consumible.id
+    const cvCodigo = consumible.cuenta_venta != null ? (cuentas.find((c) => c.id === consumible.cuenta_venta)?.cuenta ?? "112001001") : "112001001"
+    const ccCodigo = consumible.cuenta_compra != null ? (cuentas.find((c) => c.id === consumible.cuenta_compra)?.cuenta ?? "") : ""
+    setFormData((prev) => ({ ...prev, cuenta_venta: cvCodigo, cuenta_compra: ccCodigo }))
+  }, [consumible, cuentas])
+
   // Cargar formatos al montar
   useEffect(() => {
     const fetchFormatos = async () => {
@@ -326,6 +356,12 @@ export default function ConsumibleDetailPage() {
     setSaving(true)
     
     try {
+      const cuentaVentaId = (formData.cuenta_venta?.trim() && cuentas.length > 0)
+        ? (cuentas.find((c) => String(c.cuenta).trim() === formData.cuenta_venta.trim())?.id ?? null)
+        : null
+      const cuentaCompraId = (formData.cuenta_compra?.trim() && cuentas.length > 0)
+        ? (cuentas.find((c) => String(c.cuenta).trim() === formData.cuenta_compra.trim())?.id ?? null)
+        : null
       const dataToSend = {
         codigo: formData.codigo.trim(),
         nombre: formData.nombre.trim(),
@@ -333,7 +369,9 @@ export default function ConsumibleDetailPage() {
         formato: formData.formato,
         responsable: formData.responsable.trim() || null,
         unidad_medida: formData.unidad_medida,
-        coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100
+        coste: Math.round((parseFloat(formData.coste) || 0) * 100) / 100,
+        cuenta_venta: cuentaVentaId,
+        cuenta_compra: cuentaCompraId
       }
 
       console.log("💾 Guardando consumible:", { id, isNewConsumible, dataToSend })
@@ -636,6 +674,34 @@ export default function ConsumibleDetailPage() {
                     value={formData.coste}
                     onChange={(e) => handleChange("coste", e.target.value)}
                     placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contabilidad */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contabilidad</CardTitle>
+              <CardDescription>Cuentas contables para contabilización automática de facturas</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="cuenta_venta">Cuenta de Venta</Label>
+                  <CuentaContableSelect
+                    value={formData.cuenta_venta ?? "112001001"}
+                    onChange={(v) => setFormData({ ...formData, cuenta_venta: v })}
+                    placeholder="Seleccionar cuenta..."
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cuenta_compra">Cuenta de Compra</Label>
+                  <CuentaContableSelect
+                    value={formData.cuenta_compra ?? ""}
+                    onChange={(v) => setFormData({ ...formData, cuenta_compra: v })}
+                    placeholder="Seleccionar cuenta (opcional)"
                   />
                 </div>
               </div>

@@ -415,9 +415,10 @@ export default function AuxiliaresTab() {
   }
 
   const tipoAuxiliarNormalizado = String(formData.tipo_auxiliar || "").trim()
+  const tipoAuxiliarLower = tipoAuxiliarNormalizado.toLowerCase()
   const usaAutocompleteContacto =
     !formData.es_cuenta_bancaria &&
-    ["Cliente", "Proveedor", "Gobierno"].includes(tipoAuxiliarNormalizado)
+    ["cliente", "proveedor", "gobierno"].includes(tipoAuxiliarLower)
   const esNuevo = !selectedAuxiliar
   const puedeEditarNombre = tipoAuxiliarNormalizado.length > 0
   const baseCompleta = tipoAuxiliarNormalizado.length > 0 && String(formData.nombre || "").trim().length > 0
@@ -441,7 +442,11 @@ export default function AuxiliaresTab() {
 
     try {
       setLoadingContactos(true)
-      const response = await api(`/api/contactos?q=${encodeURIComponent(query)}&limit=20`)
+      // Si el tipo de auxiliar es Cliente o Proveedor, filtrar contactos por esa relación (misma API que cotizaciones)
+      const tipo = String(formData.tipo_auxiliar || "").trim().toLowerCase()
+      const relation = tipo === "proveedor" ? "Proveedor" : (tipo === "cliente" || tipo === "gobierno") ? "Cliente" : ""
+      const relationParam = relation ? `&relation=${encodeURIComponent(relation)}` : ""
+      const response = await api(`/api/contactos?q=${encodeURIComponent(query)}&limit=20${relationParam}`)
       if (!response.ok) throw new Error("No se pudieron buscar contactos")
 
       const json = await response.json()
@@ -468,11 +473,11 @@ export default function AuxiliaresTab() {
       void buscarContactos(contactoSearch)
     }, 300)
     return () => clearTimeout(timer)
-  }, [contactoSearch, usaAutocompleteContacto])
+  }, [contactoSearch, usaAutocompleteContacto, formData.tipo_auxiliar])
 
   const aplicarContactoAlFormulario = (contacto: ContactoLite) => {
-    const tipo = formData.tipo_auxiliar || ""
-    const esClienteOProveedor = tipo === "Cliente" || tipo === "Proveedor"
+    const tipo = String(formData.tipo_auxiliar || "").trim().toLowerCase()
+    const esClienteOProveedor = tipo === "cliente" || tipo === "proveedor"
     const nitContacto = (contacto.nit || "").trim()
     setFormData((prev: any) => ({
       ...prev,

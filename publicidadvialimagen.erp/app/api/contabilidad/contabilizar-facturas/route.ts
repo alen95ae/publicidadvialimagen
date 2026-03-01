@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     const { data: facturas, error: errFacturas } = await supabase
       .from("facturas_manuales")
-      .select("id, codigo, fecha, glosa, estado_contable, comprobante_id")
+      .select("id, codigo, fecha, glosa, estado_contable, comprobante_id, cliente_nit, cliente_nombre")
       .gte("fecha", desde_fecha)
       .lte("fecha", hasta_fecha)
       .neq("estado", "ANULADA");
@@ -148,6 +148,49 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        // Resolver auxiliar del cliente (para líneas que permitan auxiliar)
+        let auxiliarClienteCodigo: string | null = null;
+        const clienteNit = String((factura as any).cliente_nit ?? "").trim();
+        const clienteNombre = String((factura as any).cliente_nombre ?? "").trim();
+        if (clienteNit || clienteNombre) {
+          let queryAux = supabase
+            .from("auxiliares")
+            .select("id, codigo")
+            .eq("tipo_auxiliar", "Cliente")
+            .limit(1);
+          if (clienteNit) {
+            queryAux = queryAux.eq("codigo", clienteNit);
+          } else {
+            queryAux = queryAux.ilike("nombre", `%${clienteNombre.replace(/%/g, "\\%")}%`);
+          }
+          const { data: auxCliente } = await queryAux.maybeSingle();
+          if (auxCliente?.codigo) {
+            auxiliarClienteCodigo = auxCliente.codigo;
+          }
+        }
+
+        // Mapa permite_auxiliar por cuenta (plan_cuentas)
+        const codigosCuentaUsados = new Set<string>([
+          CUENTA_VENTA_DEFAULT,
+          CUENTA_IT_3,
+          CUENTA_IVA_DEBITO_13,
+          CUENTA_IT_POR_PAGAR_3,
+          CUENTA_INGRESO_VENTAS,
+          ...Object.values(mapaCuentaVenta),
+        ]);
+        const { data: filasPlan } = await supabase
+          .from("plan_cuentas")
+          .select("cuenta, permite_auxiliar")
+          .in("cuenta", [...codigosCuentaUsados])
+          .eq("empresa_id", 1);
+        const mapaPermiteAuxiliar: Record<string, boolean> = {};
+        (filasPlan || []).forEach((f: any) => {
+          if (f.cuenta != null) mapaPermiteAuxiliar[String(f.cuenta)] = f.permite_auxiliar === true;
+        });
+
+        const debeAsignarAuxiliar = (cuenta: string): boolean =>
+          Boolean(mapaPermiteAuxiliar[cuenta] && auxiliarClienteCodigo);
+
         // Cabecera del comprobante
         // empresa_id es INTEGER (legacy) → NO enviar UUID ahí
         // empresa_uuid es UUID (migración 039) → aquí va el UUID de la empresa
@@ -210,12 +253,13 @@ export async function POST(request: NextRequest) {
 
           const cuentaVenta = (item.codigo_producto && mapaCuentaVenta[String(item.codigo_producto).trim()]) || CUENTA_VENTA_DEFAULT;
           const descripcionItem = (item.descripcion || "").trim() || codigoFactura;
+          const asignarAux = debeAsignarAuxiliar(cuentaVenta);
 
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
             cuenta: cuentaVenta,
-            auxiliar: null,
+            auxiliar: asignarAux ? auxiliarClienteCodigo : null,
             glosa: descripcionItem,
             debe_bs: importe,
             haber_bs: 0,
@@ -225,7 +269,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // PASO 2: 4 líneas consolidadas con total_factura (solo si hay total > 0)
+        // PASO 2: 4 líneas consolidadas con total_factura (solo si hay total > 0). IVA/IT sin auxiliar; ingreso según permite_auxiliar.
         if (totalFactura > 0) {
           const it3 = round2(totalFactura * 0.03);
           const iva13 = round2(totalFactura * 0.13);
@@ -267,11 +311,12 @@ export async function POST(request: NextRequest) {
             haber_usd: 0,
             orden,
           });
+          const asignarAuxIngreso = debeAsignarAuxiliar(CUENTA_INGRESO_VENTAS);
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
             cuenta: CUENTA_INGRESO_VENTAS,
-            auxiliar: null,
+            auxiliar: asignarAuxIngreso ? auxiliarClienteCodigo : null,
             glosa: codigoFactura,
             debe_bs: 0,
             haber_bs: ingreso87,

@@ -15,6 +15,8 @@ export interface ConsumibleSupabase {
   coste: number
   stock: number
   control_stock?: any
+  cuenta_venta?: number | null
+  cuenta_compra?: number | null
   fecha_creacion: string
   fecha_actualizacion: string
 }
@@ -77,6 +79,8 @@ export function supabaseToConsumible(record: any): ConsumibleSupabase {
     coste: Number(record.coste) || 0,
     stock: Number(record.stock) || 0,
     control_stock: controlStock,
+    cuenta_venta: record.cuenta_venta != null ? Number(record.cuenta_venta) : null,
+    cuenta_compra: record.cuenta_compra != null ? Number(record.cuenta_compra) : null,
     fecha_creacion: record.fecha_creacion || new Date().toISOString(),
     fecha_actualizacion:
       record.fecha_actualizacion || new Date().toISOString()
@@ -126,6 +130,13 @@ export function consumibleToSupabase(consumible: Partial<ConsumibleSupabase>): R
   fields.control_stock = consumible.control_stock && typeof consumible.control_stock === 'object'
     ? consumible.control_stock
     : {}
+
+  if (consumible.cuenta_venta !== undefined) {
+    fields.cuenta_venta = consumible.cuenta_venta == null || consumible.cuenta_venta === '' ? null : Number(consumible.cuenta_venta)
+  }
+  if (consumible.cuenta_compra !== undefined) {
+    fields.cuenta_compra = consumible.cuenta_compra == null || consumible.cuenta_compra === '' ? null : Number(consumible.cuenta_compra)
+  }
 
   return fields
 }

@@ -418,13 +418,14 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
                         <TableHead className="w-16 text-center">Nivel</TableHead>
                         <TableHead className="w-24 text-center">Vigencia</TableHead>
                         <TableHead className="w-20 text-center">AITB</TableHead>
+                        <TableHead className="w-24 text-center">Auxiliar</TableHead>
                         <TableHead className="w-28 text-center">Transaccional</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredCuentasForList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                          <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                             No hay cuentas registradas
                           </TableCell>
                         </TableRow>
@@ -468,6 +469,13 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
                             <TableCell className="text-center">
                               {cuenta.aitb ? (
                                 <Badge className="bg-purple-100 text-purple-800 text-xs">Sí</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">No</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {cuenta.permite_auxiliar ? (
+                                <Badge className="bg-amber-100 text-amber-800 text-xs">Sí</Badge>
                               ) : (
                                 <Badge variant="secondary" className="text-xs">No</Badge>
                               )}

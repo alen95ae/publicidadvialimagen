@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import { getAllLeads, findLeadById } from "@/lib/supabaseLeads"
 import { getSupabaseUser } from "@/lib/supabaseServer"
 import { NextRequest } from "next/server"
+import { formatDateBolivia } from "@/lib/utils"
 import * as XLSX from "xlsx"
 
 // Columnas a exportar (sin ID)
@@ -21,7 +22,7 @@ const HEADERS = [
 
 function rowFromLead(lead: any): (string | number)[] {
   const createdDate = lead.created_at
-    ? new Date(lead.created_at).toLocaleDateString('es-ES')
+    ? formatDateBolivia(lead.created_at)
     : ''
   return [
     lead.nombre ?? '',

@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { formatDateBolivia } from "@/lib/utils"
 
 const meses = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -585,12 +586,8 @@ export default function PlanificacionPage() {
     return filas.flat() // Aplanar para tener todos los alquileres con su número de fila
   }
 
-  // Función para formatear fecha (usa UTC para consistencia)
-  const formatDate = (dateString: string) => {
-    const date = parseUTC(dateString)
-    if (!date) return dateString
-    return date.toLocaleDateString('es-ES', { timeZone: 'UTC' })
-  }
+  // Función para formatear fecha en zona Bolivia
+  const formatDate = (dateString: string) => formatDateBolivia(dateString)
 
   // Función para formatear precio
   const formatPrice = (price: number | null) => {

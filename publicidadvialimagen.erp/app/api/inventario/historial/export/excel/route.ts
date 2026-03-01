@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabaseServer'
 import { filterUltimaVersionPorCotizacion } from '@/lib/historialStockUtils'
+import { formatDateTimeBolivia } from "@/lib/utils"
 import * as XLSX from 'xlsx'
 
 const supabase = getSupabaseServer()
@@ -118,18 +119,8 @@ export async function GET(request: NextRequest) {
 
     // Mapear datos para Excel
     const excelData = (dataConUsuario || []).map((entry: any) => {
-      // Formatear fecha
-      let fechaFormateada = entry.fecha
-      try {
-        const date = new Date(entry.fecha)
-        fechaFormateada = date.toLocaleString('es-ES', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      } catch {}
+      // Formatear fecha (zona Bolivia)
+      const fechaFormateada = formatDateTimeBolivia(entry.fecha)
 
       // Formatear origen
       const origenLabels: Record<string, string> = {

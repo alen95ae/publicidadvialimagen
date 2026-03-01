@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { PermisoEliminar } from "@/components/permiso"
+import { formatDateBolivia } from "@/lib/utils"
 
 interface Lead {
   id: string
@@ -219,7 +220,7 @@ export default function PapeleraLeadsPage() {
                       <TableCell>{lead.interes || '-'}</TableCell>
                       <TableCell>{lead.origen || '-'}</TableCell>
                       <TableCell className="text-sm text-gray-500">
-                        {lead.deleted_at ? new Date(lead.deleted_at).toLocaleDateString() : '-'}
+                        {lead.deleted_at ? formatDateBolivia(lead.deleted_at) : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

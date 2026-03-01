@@ -33,7 +33,7 @@ import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { generarPDFCotizacion } from "@/lib/pdfCotizacion"
 import { usePermisosContext } from "@/hooks/permisos-provider"
-import { normalizeText } from "@/lib/utils"
+import { normalizeText, formatDateBolivia } from "@/lib/utils"
 
 interface Cotizacion {
   id: string
@@ -229,6 +229,7 @@ export default function CotizacionesPage() {
         vigencia_dias: cotizacionOriginal.vigencia || 30,
         plazo: cotizacionOriginal.plazo || null,
         total_final: cotizacionOriginal.total_final,
+        comprobante: cotizacionOriginal.comprobante === 'nota de remision' ? 'nota de remision' : 'factura',
         lineas: lineasOriginales.map((linea: any, index: number) => ({
           tipo: linea.tipo,
           codigo_producto: linea.codigo_producto,
@@ -1164,7 +1165,7 @@ export default function CotizacionesPage() {
                         </td>
                         <td className="py-3 px-4 align-middle">
                           <span className="text-sm text-gray-600">
-                            {new Date(cotizacion.fecha_creacion).toLocaleDateString('es-ES')}
+                            {formatDateBolivia(cotizacion.fecha_creacion)}
                           </span>
                         </td>
                         <td className="py-3 px-4 align-middle">

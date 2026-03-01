@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server"
 import { getSoporteById } from "@/lib/supabaseSoportes"
+import { formatDateBolivia, todayBolivia } from "@/lib/utils"
 import { getProductoById } from "@/lib/supabaseProductos"
 import { rowToSupport, getSustratoDefaultId } from "../../helpers"
 import jsPDF from 'jspdf'
@@ -573,7 +574,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
   try {
     const emailFooter = obtenerEmailFooter(userEmail)
     console.log('📄 Generando PDF catálogo con email:', emailFooter, 'y número:', userNumero)
-    const currentDate = new Date().toLocaleDateString('es-ES')
+    const currentDate = todayBolivia()
     const titleForPage = catalogTitleLabel ? `${catalogTitleLabel} - ${currentDate}` : null
     const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
@@ -994,7 +995,7 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
         
         // Fecha de creación si está disponible
         if (support.createdTime) {
-          const createdDate = new Date(support.createdTime).toLocaleDateString('es-ES')
+          const createdDate = formatDateBolivia(support.createdTime)
           pdf.text(`Creado: ${createdDate}`, 20, yPosition)
         }
       }

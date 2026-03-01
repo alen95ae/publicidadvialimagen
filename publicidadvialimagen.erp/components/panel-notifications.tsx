@@ -195,7 +195,8 @@ export default function PanelNotifications() {
         day: 'numeric', 
         month: 'short',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone: 'America/La_Paz'
       })
     } catch {
       return dateString

@@ -8,6 +8,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { formatDateBolivia } from "@/lib/utils";
 
 export interface NotificacionData {
   titulo: string;
@@ -293,7 +294,7 @@ export async function notificarEventoProximo(
 ): Promise<void> {
   await crearNotificacion({
     titulo: 'Evento próximo',
-    mensaje: `${eventoNombre} está programado para ${new Date(fecha).toLocaleDateString('es-ES')}`,
+    mensaje: `${eventoNombre} está programado para ${formatDateBolivia(fecha)}`,
     tipo: 'info',
     entidad_tipo: 'evento',
     entidad_id: eventoId,

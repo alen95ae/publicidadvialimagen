@@ -13,9 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Search, Filter, Building2, User, Edit, Trash2, Users, Merge, AlertTriangle, X, FileSpreadsheet } from "lucide-react"
+import { Plus, Search, Filter, Building2, User, Edit, Trash2, X, FileSpreadsheet } from "lucide-react"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { PermisoEliminar } from "@/components/permiso"
@@ -31,7 +30,7 @@ interface Contact {
   city?: string
   postalCode?: string
   country?: string
-  relation: string
+  relation: string[]
   status: string
   notes?: string
   salesOwnerId?: string | null
@@ -42,7 +41,7 @@ interface Contact {
 
 interface ContactFilters {
   q: string
-  relation: string
+  relation: string[]
   kind: string
 }
 
@@ -56,10 +55,6 @@ export default function ContactosPage() {
   const [allContactIds, setAllContactIds] = useState<string[]>([])
   const [editedContacts, setEditedContacts] = useState<Record<string, Partial<Contact>>>({})
   const [savingChanges, setSavingChanges] = useState(false)
-  const [duplicates, setDuplicates] = useState<any[]>([])
-  const [showDuplicates, setShowDuplicates] = useState(false)
-  const [duplicatesLoading, setDuplicatesLoading] = useState(false)
-  const [selectedPrimary, setSelectedPrimary] = useState<Record<number, string>>({})
   const [currentPage, setCurrentPage] = useState(1)
   const [salesOwners, setSalesOwners] = useState<Record<string, string>>({})
   const [salesOwnersData, setSalesOwnersData] = useState<Record<string, any>>({})
@@ -435,95 +430,6 @@ export default function ContactosPage() {
   }
 
 
-  // Duplicados: detectar
-  const detectDuplicates = async () => {
-    setDuplicatesLoading(true)
-    try {
-      const response = await fetch('/api/contactos/duplicates')
-      if (!response.ok) {
-        toast.error('Error al detectar duplicados')
-        return
-      }
-      const data = await response.json()
-      setDuplicates(data.duplicates || [])
-      const mapping: Record<number, string> = {}
-      ;(data.duplicates || []).forEach((g: any, i: number) => { mapping[i] = g.primary?.id })
-      setSelectedPrimary(mapping)
-      setShowDuplicates(true)
-      toast.success(`Se encontraron ${data.duplicates?.length || 0} grupos de duplicados`)
-    } catch (e) {
-      toast.error('Error de conexión')
-    } finally {
-      setDuplicatesLoading(false)
-    }
-  }
-
-  // Duplicados: fusionar
-  const mergeContacts = async (primaryId: string, duplicateIds: string[], groupIndex: number) => {
-    console.log('🔄 Frontend merge request:', { primaryId, duplicateIds, groupIndex })
-    
-    try {
-      // Para enviar mergedFields al backend REST, construimos campos fusionados en el front
-      const group = duplicates[groupIndex]
-      const allContacts = [group.primary, ...(group.duplicates || [])]
-      const primary = allContacts.find((c: any) => c.id === primaryId) || group.primary
-
-      // Sencillo merge superficial: prioriza campos del seleccionado si están presentes
-      const mergedFields: any = {}
-      const fields = ['Nombre','Empresa','Email','Teléfono','Telefono','NIT','CIF','Dirección','Direccion','Ciudad','Código Postal','País','Relación','Sitio Web','Notas','Tipo de Contacto']
-      for (const f of fields) mergedFields[f] = undefined
-
-      // Nota: El front no tiene todos los campos internos; el backend debería aceptar los que existan
-      // Enviamos solo Email, Teléfono, NIT, Nombre si disponibles desde el modal (summary)
-      mergedFields['Nombre'] = primary.displayName || undefined
-      mergedFields['Email'] = primary.email || undefined
-      mergedFields['Teléfono'] = primary.phone || undefined
-      mergedFields['NIT'] = primary.taxId || undefined
-
-      const response = await fetch('/api/contactos/merge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mainId: primaryId, duplicates: duplicateIds, mergedFields })
-      })
-      
-      console.log('📡 Response status:', response.status)
-      const result = await response.json().catch(() => ({}))
-      console.log('📡 Response data:', result)
-      
-      if (response.ok) {
-        toast.success(`Fusión completada: ${result.merged || duplicateIds.length + 1} fusionados, ${result.deleted || duplicateIds.length} eliminados`)
-        
-        // Remover solo el grupo fusionado de la lista
-        setDuplicates(prev => prev.filter((_, index) => index !== groupIndex))
-        
-        // Limpiar selección del grupo eliminado
-        setSelectedPrimary(prev => {
-          const newSelected = { ...prev }
-          delete newSelected[groupIndex]
-          // Reindexar las claves para los grupos restantes
-          const reindexed: Record<number, string> = {}
-          Object.entries(newSelected).forEach(([key, value]) => {
-            const oldIndex = parseInt(key)
-            if (oldIndex > groupIndex) {
-              reindexed[oldIndex - 1] = value
-            } else if (oldIndex < groupIndex) {
-              reindexed[oldIndex] = value
-            }
-          })
-          return reindexed
-        })
-        
-        fetchContacts()
-      } else {
-        console.error('❌ Merge failed:', result)
-        toast.error(`Error: ${result.error || 'No se pudo fusionar'}`)
-      }
-    } catch (e) {
-      console.error('❌ Network error:', e)
-      toast.error('Error de conexión')
-    }
-  }
-
   const filteredContacts = useMemo(() => {
     if (!contacts || contacts.length === 0) return []
     
@@ -536,29 +442,26 @@ export default function ContactosPage() {
     return filtered
   }, [contacts, filters.kind])
 
-  const getRelationLabel = (relation: string) => {
-    switch (relation) {
-      case "CUSTOMER": return "Cliente"
-      case "SUPPLIER": return "Proveedor"
-      case "BOTH": return "Ambos"
-      default: return relation
-    }
-  }
-
+  const getRelationLabel = (relation: string) => relation || "—"
   const getRelationColor = (relation: string) => {
     switch (relation) {
-      case "CUSTOMER": 
-      case "Cliente": 
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      case "SUPPLIER": 
-      case "Proveedor": 
-        return "bg-purple-100 text-purple-800 border-purple-200"
-      case "BOTH": 
-      case "Ambos": 
-        return "bg-green-100 text-green-800 border-green-200"
-      default: 
-        return "bg-gray-100 text-gray-800 border-gray-200"
+      case "Cliente": return "bg-blue-100 text-blue-800 border-blue-200"
+      case "Proveedor": return "bg-purple-100 text-purple-800 border-purple-200"
+      default: return "bg-gray-100 text-gray-800 border-gray-200"
     }
+  }
+  const relationArrayToSelectValue = (arr: string[]): string => {
+    if (!arr?.length) return ""
+    if (arr.includes("Cliente") && arr.includes("Proveedor")) return "Cliente y Proveedor"
+    if (arr.includes("Cliente")) return "Cliente"
+    if (arr.includes("Proveedor")) return "Proveedor"
+    return ""
+  }
+  const relationSelectValueToArray = (value: string): string[] => {
+    if (value === "Cliente y Proveedor") return ["Cliente", "Proveedor"]
+    if (value === "Cliente") return ["Cliente"]
+    if (value === "Proveedor") return ["Proveedor"]
+    return []
   }
 
   return (
@@ -648,7 +551,6 @@ export default function ContactosPage() {
                 <SelectItem value="ALL">Relación</SelectItem>
                 <SelectItem value="Cliente">Cliente</SelectItem>
                 <SelectItem value="Proveedor">Proveedor</SelectItem>
-                <SelectItem value="Ambos">Ambos</SelectItem>
               </SelectContent>
             </Select>
 
@@ -669,12 +571,6 @@ export default function ContactosPage() {
 
             {/* Botones - Derecha */}
             <div className="flex gap-2">
-              {tieneFuncionTecnica("detectar duplicados contactos") && (
-                <Button variant="outline" onClick={detectDuplicates} disabled={duplicatesLoading}>
-                  <Users className="w-4 h-4 mr-2" />
-                  {duplicatesLoading ? 'Detectando...' : 'Detectar duplicados'}
-                </Button>
-              )}
               {tieneFuncionTecnica("ver boton exportar") && (
                 <Button variant="outline" onClick={handleExport}>
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
@@ -701,14 +597,17 @@ export default function ContactosPage() {
                       : `${selectedContacts.size} contacto(s) seleccionado(s)`
                     }
                   </span>
-                  <Select onValueChange={(value) => handleBulkFieldChange('relation', value)}>
+                  <Select onValueChange={(value) => {
+                    const arr = value === "Cliente y Proveedor" ? ["Cliente", "Proveedor"] : value ? [value] : []
+                    handleBulkFieldChange("relation", arr)
+                  }}>
                     <SelectTrigger className="h-8 w-40">
                       <SelectValue placeholder="Relación" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Cliente">Cliente</SelectItem>
                       <SelectItem value="Proveedor">Proveedor</SelectItem>
-                      <SelectItem value="Ambos">Ambos</SelectItem>
+                      <SelectItem value="Cliente y Proveedor">Cliente y Proveedor</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select onValueChange={handleBulkSalesOwnerChange}>
@@ -1040,23 +939,30 @@ export default function ContactosPage() {
                         </TableCell>
                         <TableCell>
                           {selectedContacts.has(contact.id) && puedeEditar("contactos") ? (
-                            <Select 
-                              value={editedContacts[contact.id]?.relation ?? contact.relation}
-                              onValueChange={(value) => handleFieldChange(contact.id, 'relation', value)}
+                            <Select
+                              value={relationArrayToSelectValue(editedContacts[contact.id]?.relation ?? contact.relation)}
+                              onValueChange={(value) => handleFieldChange(contact.id, "relation", relationSelectValueToArray(value))}
                             >
-                              <SelectTrigger className="h-8 w-32">
-                                <SelectValue />
+                              <SelectTrigger className="h-8 w-40">
+                                <SelectValue placeholder="Relación" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="Cliente">Cliente</SelectItem>
                                 <SelectItem value="Proveedor">Proveedor</SelectItem>
-                                <SelectItem value="Ambos">Ambos</SelectItem>
+                                <SelectItem value="Cliente y Proveedor">Cliente y Proveedor</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (
-                            <Badge className={getRelationColor(contact.relation)}>
-                              {getRelationLabel(contact.relation)}
-                            </Badge>
+                            <div className="flex flex-wrap gap-1">
+                              {(Array.isArray(contact.relation) ? contact.relation : []).length > 0
+                                ? (Array.isArray(contact.relation) ? contact.relation : []).map((r) => (
+                                    <Badge key={r} className={getRelationColor(r)} variant="secondary">
+                                      {r}
+                                    </Badge>
+                                  ))
+                                : <span className="text-sm text-gray-400">—</span>
+                              }
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>
@@ -1140,80 +1046,6 @@ export default function ContactosPage() {
             </div>
           </div>
         )}
-        {/* Modal de duplicados */}
-        <Dialog open={showDuplicates} onOpenChange={setShowDuplicates}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                Contactos duplicados detectados ({duplicates.length} grupos)
-              </DialogTitle>
-              <DialogDescription>
-                Se encontraron grupos de contactos con similitudes en Nombre, NIT, Teléfono o Email.
-+                Elige el principal de cada grupo y fusiona los demás.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {duplicates.length === 0 && (
-                <div className="text-sm text-gray-500">No se detectaron duplicados.</div>
-              )}
-
-              {duplicates.map((group: any, index: number) => {
-                const allContacts = [group.primary, ...(group.duplicates || [])]
-                const value = selectedPrimary[index] || group.primary?.id
-                return (
-                  <Card key={index} className="border-yellow-200 bg-yellow-50">
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <div className="font-medium text-sm text-yellow-800">
-                          Grupo {index + 1} - Contactos similares (elige el principal)
-                        </div>
-
-                        <RadioGroup
-                          value={value}
-                          onValueChange={(v) => setSelectedPrimary(prev => ({ ...prev, [index]: v }))}
-                          className="gap-2"
-                        >
-                          {allContacts.map((c: any, idx: number) => (
-                            <div key={c.id} className="bg-white p-3 rounded border flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <RadioGroupItem value={c.id} id={`g${index}-c${idx}`} />
-                                <label htmlFor={`g${index}-c${idx}`} className="cursor-pointer">
-                                  <div className="font-medium">{c.displayName || '-'}</div>
-                                  <div className="text-sm text-gray-600">
-                                    {c.email && `Email: ${c.email}`}
-                                    {c.phone && ` | Tel: ${c.phone}`}
-                                    {c.taxId && ` | NIT: ${c.taxId}`}
-                                  </div>
-                                </label>
-                              </div>
-                              <Badge className={value === c.id ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-red-50 text-red-700 border-red-200"}>
-                                {value === c.id ? 'Principal' : 'Duplicado'}
-                              </Badge>
-                            </div>
-                          ))}
-                        </RadioGroup>
-
-                        <Button
-                          onClick={() => {
-                            const primaryId = selectedPrimary[index] || group.primary?.id
-                            const duplicateIds = allContacts.map((c: any) => c.id).filter((id: string) => id !== primaryId)
-                            mergeContacts(primaryId, duplicateIds, index)
-                          }}
-                          className="w-full bg-yellow-600 hover:bg-yellow-700"
-                        >
-                          <Merge className="w-4 h-4 mr-2" />
-                          Fusionar (mantener seleccionado)
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          </DialogContent>
-        </Dialog>
       </main>
     </div>
   )

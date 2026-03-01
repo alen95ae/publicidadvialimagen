@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Search, Edit, Trash2, UserCheck, UserX, MoreHorizontal, Upload, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateBolivia } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface User {
@@ -414,10 +415,10 @@ export default function MembersSection() {
                     <Badge variant="secondary">{user.rol}</Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    {new Date(user.fechaCreacion).toLocaleDateString()}
+                    {formatDateBolivia(user.fechaCreacion)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {user.ultimoAcceso ? new Date(user.ultimoAcceso).toLocaleDateString() : "Nunca"}
+                    {user.ultimoAcceso ? formatDateBolivia(user.ultimoAcceso) : "Nunca"}
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1">

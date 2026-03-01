@@ -11,6 +11,7 @@ import { filterUltimaVersionPorCotizacion } from '@/lib/historialStockUtils'
 import jsPDF from 'jspdf'
 import path from "path"
 import fs from "fs/promises"
+import { formatDateTimeBolivia } from "@/lib/utils"
 
 const supabase = getSupabaseServer()
 
@@ -476,17 +477,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Formatear datos
-      let fechaFormateada = entry.fecha
-      try {
-        const date = new Date(entry.fecha)
-        fechaFormateada = date.toLocaleString('es-ES', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      } catch {}
+      const fechaFormateada = formatDateTimeBolivia(entry.fecha)
 
       const origenLabel = origenLabelsShort[entry.origen] || entry.origen
       const itemNombre = entry.item_nombre || ''

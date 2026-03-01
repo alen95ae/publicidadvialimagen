@@ -6,6 +6,7 @@ import { requirePermiso } from "@/lib/permisos";
 import jsPDF from "jspdf";
 import path from "path";
 import fs from "fs/promises";
+import { formatDateBolivia } from "@/lib/utils";
 
 function placeholder(val: unknown): string {
   if (val === null || val === undefined || String(val).trim() === "") return "{{campo}}";
@@ -148,7 +149,7 @@ export async function GET(
 
     yPosition = 30;
     const codigoFactura = factura.codigo != null && String(factura.codigo).trim() !== "" ? String(factura.codigo) : placeholder(factura.codigo);
-    const fechaStr = factura.fecha ? new Date(factura.fecha).toLocaleDateString("es-ES") : "{{fecha}}";
+    const fechaStr = factura.fecha ? formatDateBolivia(factura.fecha) : "{{fecha}}";
     const lugarEmision = factura.lugar_emision != null && String(factura.lugar_emision).trim() !== "" ? String(factura.lugar_emision).trim() : "{{lugar_emision}}";
     const codigoAutorizacion = factura.codigo_autorizacion != null && String(factura.codigo_autorizacion).trim() !== "" ? String(factura.codigo_autorizacion).trim() : null;
 

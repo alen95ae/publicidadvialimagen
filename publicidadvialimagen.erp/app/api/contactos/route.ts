@@ -99,11 +99,20 @@ export async function POST(req: Request) {
       )
     }
 
-    // Preparar datos del contacto con validación
+    // relation: array de "Cliente" | "Proveedor"
+    const relationArr = Array.isArray(body.relation)
+      ? body.relation.filter((r: string) => r === "Cliente" || r === "Proveedor")
+      : body.relation === "Proveedor"
+        ? ["Proveedor"]
+        : body.relation === "SUPPLIER"
+          ? ["Proveedor"]
+          : body.relation === "BOTH" || body.relation === "Ambos"
+            ? ["Cliente", "Proveedor"]
+            : ["Cliente"]
     const contactoData: Partial<Contacto> = {
       displayName: body.displayName.trim(),
       kind: (body.kind === 'COMPANY' ? 'COMPANY' : 'INDIVIDUAL') as 'INDIVIDUAL' | 'COMPANY',
-      relation: body.relation || 'CUSTOMER',
+      relation: [...new Set(relationArr)],
       country: body.country || 'Bolivia'
     }
 

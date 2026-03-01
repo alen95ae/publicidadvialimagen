@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDateBolivia } from "@/lib/utils"
 
 interface TransaccionBS {
   id: number
@@ -105,7 +106,7 @@ export default function ActivoTransaccionesBSTab() {
                   <TableRow key={transaccion.id}>
                     <TableCell>{transaccion.tipo_transaccion}</TableCell>
                     <TableCell>
-                      {new Date(transaccion.fecha).toLocaleDateString("es-ES")}
+                      {formatDateBolivia(transaccion.fecha)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {transaccion.depreciacion_acumulada.toLocaleString("es-ES", {

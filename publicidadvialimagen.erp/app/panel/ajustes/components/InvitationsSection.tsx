@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Plus, Copy, ExternalLink, Clock, CheckCircle, XCircle, Key, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermisosContext } from "@/hooks/permisos-provider";
+import { formatDateBolivia } from "@/lib/utils";
 
 interface Invitation {
   id: string;
@@ -490,12 +491,12 @@ export default function InvitationsSection() {
                     {getStatusBadge(invitation.estado)}
                   </TableCell>
                   <TableCell>
-                    {new Date(invitation.fechaCreacion).toLocaleDateString()}
+                    {formatDateBolivia(invitation.fechaCreacion)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-1">
                       <span className={isExpired(invitation.fechaExpiracion) ? "text-red-600" : ""}>
-                        {new Date(invitation.fechaExpiracion).toLocaleDateString()}
+                        {formatDateBolivia(invitation.fechaExpiracion)}
                       </span>
                       {isExpired(invitation.fechaExpiracion) && invitation.estado === "pendiente" && (
                         <XCircle className="h-4 w-4 text-red-500" />

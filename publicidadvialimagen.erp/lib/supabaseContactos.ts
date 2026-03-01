@@ -12,7 +12,7 @@ export interface ContactoSupabase {
   company_id?: string | null // ID del contacto empresa (para Individual)
   razon_social?: string | null
   persona_contacto?: any | null // JSONB: Array<{ id: string; nombre: string }>
-  relacion: 'Cliente' | 'Proveedor' | 'Ambos'
+  relacion: string[] // jsonb array: ["Cliente"], ["Proveedor"], ["Cliente","Proveedor"], []
   email?: string | null
   telefono?: string | null
   nit?: string | null
@@ -45,7 +45,7 @@ export interface Contacto {
   city: string
   postalCode: string
   country: string
-  relation: string
+  relation: string[] // array de "Cliente" | "Proveedor"
   website: string
   status: string
   notes: string
@@ -72,17 +72,16 @@ export function supabaseToContacto(record: ContactoSupabase): Contacto {
     }
   }
 
-  // Mapear relación de español a inglés para el frontend
-  const relationMap: { [key: string]: string } = {
-    'Cliente': 'CUSTOMER',
-    'Proveedor': 'SUPPLIER',
-    'Ambos': 'BOTH',
-    'CUSTOMER': 'CUSTOMER',
-    'SUPPLIER': 'SUPPLIER',
-    'BOTH': 'BOTH'
+  // Normalizar relacion: BD ahora es jsonb array; soportar legacy string
+  let relationArr: string[] = []
+  if (Array.isArray(record.relacion)) {
+    relationArr = record.relacion.filter((r): r is string => r === 'Cliente' || r === 'Proveedor')
+  } else if (typeof record.relacion === 'string') {
+    const v = (record.relacion || 'Cliente').trim()
+    if (v === 'Ambos') relationArr = ['Cliente', 'Proveedor']
+    else if (v === 'Proveedor') relationArr = ['Proveedor']
+    else relationArr = ['Cliente']
   }
-  const relationValue = record.relacion || 'Cliente'
-  const mappedRelation = relationMap[relationValue] || 'CUSTOMER'
 
   return {
     id: record.id,
@@ -100,7 +99,7 @@ export function supabaseToContacto(record: ContactoSupabase): Contacto {
     city: record.ciudad || '',
     postalCode: '',
     country: record.pais || 'Bolivia',
-    relation: mappedRelation,
+    relation: relationArr,
     website: record.sitio_web || '',
     status: 'activo',
     notes: record.notas || '',
@@ -127,17 +126,12 @@ export function contactoToSupabase(contacto: Partial<Contacto>): Partial<Contact
     supabaseData.tipo_contacto = contacto.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
   }
 
-  // Campo requerido: relacion (con valor por defecto)
+  // relacion: array de strings (jsonb)
   if (contacto.relation !== undefined) {
-    const relationMap: { [key: string]: 'Cliente' | 'Proveedor' | 'Ambos' } = {
-      'CUSTOMER': 'Cliente',
-      'SUPPLIER': 'Proveedor',
-      'BOTH': 'Ambos',
-      'Cliente': 'Cliente',
-      'Proveedor': 'Proveedor',
-      'Ambos': 'Ambos'
-    }
-    supabaseData.relacion = relationMap[contacto.relation] || 'Cliente'
+    const arr = Array.isArray(contacto.relation)
+      ? contacto.relation.filter((r) => r === 'Cliente' || r === 'Proveedor')
+      : []
+    supabaseData.relacion = [...new Set(arr)]
   }
 
   // Campos opcionales (nullable)
@@ -233,11 +227,10 @@ export async function getAllContactos(options?: {
       }
 
       if (options?.relation && options.relation !== 'ALL') {
-        const relations = options.relation.split(',').map(r => r.trim())
-        if (relations.length === 1) {
-          queryBuilder = queryBuilder.eq('relacion', relations[0])
-        } else {
-          queryBuilder = queryBuilder.in('relacion', relations)
+        // relacion es jsonb array: filtrar por contains (stringificado para PostgREST)
+        const val = options.relation.trim()
+        if (val === 'Cliente' || val === 'Proveedor') {
+          queryBuilder = queryBuilder.contains('relacion', JSON.stringify([val]))
         }
       }
 
@@ -284,11 +277,10 @@ export async function getAllContactos(options?: {
       }
 
       if (options?.relation && options.relation !== 'ALL') {
-        const relations = options.relation.split(',').map(r => r.trim())
-        if (relations.length === 1) {
-          queryBuilder = queryBuilder.eq('relacion', relations[0])
-        } else {
-          queryBuilder = queryBuilder.in('relacion', relations)
+        // relacion es jsonb array: filtrar por contains (stringificado para PostgREST)
+        const val = options.relation.trim()
+        if (val === 'Cliente' || val === 'Proveedor') {
+          queryBuilder = queryBuilder.contains('relacion', JSON.stringify([val]))
         }
       }
 
@@ -400,9 +392,9 @@ export async function createContacto(contactoData: Partial<Contacto>): Promise<C
     supabaseData.tipo_contacto = 'Individual'
   }
 
-  // relacion: NOT NULL DEFAULT 'Cliente'
-  if (!supabaseData.relacion) {
-    supabaseData.relacion = 'Cliente'
+  // relacion: jsonb array, default ['Cliente']
+  if (!Array.isArray(supabaseData.relacion) || supabaseData.relacion.length === 0) {
+    supabaseData.relacion = ['Cliente']
   }
 
   // pais: DEFAULT 'Bolivia' (aunque no es NOT NULL, es bueno tener un valor por defecto)

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { FileDown, Search, FileText } from "lucide-react"
 import { toast } from "sonner"
+import { formatDateBolivia } from "@/lib/utils"
 
 interface LibroVentasFilters {
   empresa: string
@@ -296,7 +297,7 @@ export default function LibroVentasIVAReporte() {
                 <TableBody>
                   {results.map((item, index) => (
                     <TableRow key={index}>
-                      <TableCell>{new Date(item.fecha).toLocaleDateString("es-ES")}</TableCell>
+                      <TableCell>{formatDateBolivia(item.fecha)}</TableCell>
                       <TableCell className="font-mono">{item.nro_factura}</TableCell>
                       <TableCell>{item.cliente}</TableCell>
                       <TableCell className="text-right font-mono">

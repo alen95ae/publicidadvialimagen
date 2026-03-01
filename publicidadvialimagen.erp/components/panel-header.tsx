@@ -618,7 +618,7 @@ export default function PanelHeader() {
       if (diffMins < 60) return `Hace ${diffMins} min`
       if (diffHours < 24) return `Hace ${diffHours} h`
       if (diffDays < 7) return `Hace ${diffDays} días`
-      return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" })
+      return date.toLocaleDateString("es-BO", { day: "numeric", month: "short", timeZone: "America/La_Paz" })
     } catch {
       return dateString
     }

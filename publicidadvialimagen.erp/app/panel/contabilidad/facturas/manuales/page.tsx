@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
+import { formatDateBolivia } from "@/lib/utils"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 
 const ESTADO_META: Record<string, { label: string; className: string }> = {
@@ -616,7 +617,7 @@ export default function FacturasManualesListPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 align-middle text-sm text-gray-600">
-                          {new Date(f.fecha).toLocaleDateString("es-ES")}
+                          {formatDateBolivia(f.fecha)}
                         </td>
                         <td className="py-3 px-4 align-middle text-sm text-gray-900">{f.cliente_nombre}</td>
                         <td className="py-3 px-4 align-middle text-sm font-mono text-gray-600">{f.cliente_nit || "—"}</td>

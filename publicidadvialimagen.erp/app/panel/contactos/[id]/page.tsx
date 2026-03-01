@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowLeft, Save, Building2, User, Check, X, Info } from "lucide-react"
@@ -35,7 +36,7 @@ export default function EditarContactoPage() {
   const [salesOwners, setSalesOwners] = useState<SalesOwner[]>([])
   const [formData, setFormData] = useState({
     kind: "COMPANY" as "INDIVIDUAL" | "COMPANY",
-    relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH",
+    relation: ["Cliente"] as string[],
     displayName: "",
     company: "",
     companyId: "", // ID del contacto empresa (para Individual)
@@ -239,26 +240,14 @@ export default function EditarContactoPage() {
           companyId: companyIdValue
         })
 
-        // Mapear relación de español a inglés si viene de BD
-        const relationMap: { [key: string]: "CUSTOMER" | "SUPPLIER" | "BOTH" } = {
-          'Cliente': 'CUSTOMER',
-          'Proveedor': 'SUPPLIER',
-          'Ambos': 'BOTH',
-          'CUSTOMER': 'CUSTOMER',
-          'SUPPLIER': 'SUPPLIER',
-          'BOTH': 'BOTH'
-        }
-        const relationValue = data.relation || 'Cliente'
-        const mappedRelation = relationMap[relationValue] || 'CUSTOMER'
-        
-        console.log('🔄 [fetchContact] Mapeando relación:', {
-          original: relationValue,
-          mapeado: mappedRelation
-        })
+        // relation viene como array desde la API
+        const relationArr = Array.isArray(data.relation)
+          ? data.relation.filter((r: string) => r === 'Cliente' || r === 'Proveedor')
+          : ['Cliente']
 
         setFormData({
           kind: data.kind || "COMPANY",
-          relation: mappedRelation,
+          relation: relationArr,
           displayName: data.displayName || "",
           company: companyName,
           companyId: companyIdValue, // ID de la empresa si es Individual
@@ -443,10 +432,10 @@ export default function EditarContactoPage() {
             <CardContent>
               <div className="space-y-4">
                 {vinculadoAuxiliar && (
-                  <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-                    <Info className="h-4 w-4" />
-                    <AlertDescription>
-                      Este contacto está vinculado a un auxiliar. Los datos de nombre, ciudad y NIT deben cambiarse en <strong>Auxiliares, Contabilidad</strong>; allí se guardarán en ambos sitios.
+                  <Alert className="w-full border-amber-200 bg-amber-50 text-amber-900">
+                    <Info className="h-4 w-4 shrink-0" />
+                    <AlertDescription className="w-full min-w-0 !block">
+                      <span className="inline">Este contacto está vinculado a un auxiliar. Los datos de nombre, ciudad y NIT deben cambiarse en <strong>Auxiliares, Contabilidad</strong>; allí se guardarán en ambos sitios.</span>
                     </AlertDescription>
                   </Alert>
                 )}
@@ -716,23 +705,31 @@ export default function EditarContactoPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="relation">Relación *</Label>
-                    <Select 
-                      value={formData.relation || "CUSTOMER"} 
-                      onValueChange={(value) => {
-                        console.log('🔄 Cambiando relación a:', value)
-                        handleChange("relation", value)
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Seleccionar relación" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CUSTOMER">Cliente</SelectItem>
-                        <SelectItem value="SUPPLIER">Proveedor</SelectItem>
-                        <SelectItem value="BOTH">Ambos</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Relación</Label>
+                    <div className="flex flex-wrap gap-4 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={formData.relation?.includes("Cliente") ?? false}
+                          onCheckedChange={(checked) => {
+                            const prev = formData.relation || []
+                            const next = checked ? [...new Set([...prev, "Cliente"])] : prev.filter((r) => r !== "Cliente")
+                            handleChange("relation", next)
+                          }}
+                        />
+                        <span>Cliente</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={formData.relation?.includes("Proveedor") ?? false}
+                          onCheckedChange={(checked) => {
+                            const prev = formData.relation || []
+                            const next = checked ? [...new Set([...prev, "Proveedor"])] : prev.filter((r) => r !== "Proveedor")
+                            handleChange("relation", next)
+                          }}
+                        />
+                        <span>Proveedor</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>

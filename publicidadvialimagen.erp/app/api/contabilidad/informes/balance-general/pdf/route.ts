@@ -7,6 +7,7 @@ import { requirePermiso } from "@/lib/permisos"
 import jsPDF from "jspdf"
 import path from "path"
 import fs from "fs/promises"
+import { formatDateBolivia } from "@/lib/utils"
 import { getDataBalanceGeneral } from "../getData"
 
 async function cargarLogo(): Promise<string | null> {
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
 
     pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
-    pdf.text(`A fecha: ${new Date(a_fecha).toLocaleDateString("es-ES")}`, margin, yPosition)
+    pdf.text(`A fecha: ${formatDateBolivia(a_fecha)}`, margin, yPosition)
     yPosition += 5
     pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, yPosition)
     yPosition += 8

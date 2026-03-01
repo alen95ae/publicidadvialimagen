@@ -130,26 +130,16 @@ function processCsvRow(row: any): any {
     city: row.Ciudad || row.ciudad || '',
     postalCode: row['Código Postal'] || row.codigo_postal || row['Codigo Postal'] || row.codigo_postal || '',
     country: row.País || row.pais || row.Pais || row.pais || 'Bolivia',
-    relation: mapRelation(row.Relación || row.relacion || row.Relacion || row.relacion || 'Cliente'),
+    relation: mapRelationToArray(row.Relación || row.relacion || row.Relacion || row.relacion || 'Cliente'),
     website: row['Sitio Web'] || row.sitio_web || row.Website || row.website || '',
     notes: row.Notas || row.notas || ''
   }
 }
 
-/** Mapea valores de relación */
-function mapRelation(relation: string): string {
-  const relationMap: { [key: string]: string } = {
-    'cliente': 'Cliente',
-    'customer': 'Cliente',
-    'CUSTOMER': 'Cliente',
-    'proveedor': 'Proveedor',
-    'supplier': 'Proveedor',
-    'SUPPLIER': 'Proveedor',
-    'ambos': 'Ambos',
-    'both': 'Ambos',
-    'BOTH': 'Ambos'
-  }
-  
-  const normalized = relation.toLowerCase().trim()
-  return relationMap[normalized] || 'Cliente'
+/** Mapea valor de relación del CSV a array para la BD (jsonb). */
+function mapRelationToArray(relation: string): string[] {
+  const normalized = (relation || "Cliente").toLowerCase().trim()
+  if (normalized === "proveedor" || normalized === "supplier") return ["Proveedor"]
+  if (normalized === "ambos" || normalized === "both") return ["Cliente", "Proveedor"]
+  return ["Cliente"]
 }

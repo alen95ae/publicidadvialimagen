@@ -32,7 +32,7 @@ import {
   Building2,
   User
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatDateBolivia } from "@/lib/utils"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
 import { generarPDFCotizacion, generarPDFOT } from "@/lib/pdfCotizacion"
@@ -3147,8 +3147,8 @@ export default function NuevaCotizacionPage() {
                         </td>
                         <td className="py-2 px-3">
                           <div className="text-xs">
-                            <div>Inicio: {new Date(info.fechaInicio).toLocaleDateString('es-ES')}</div>
-                            <div>Fin: {new Date(info.fechaFin).toLocaleDateString('es-ES')}</div>
+                            <div>Inicio: {formatDateBolivia(info.fechaInicio)}</div>
+                            <div>Fin: {formatDateBolivia(info.fechaFin)}</div>
                             <div className="text-gray-500">
                               ({info.meses === 0.5 ? '15 días' : `${info.meses} mes${info.meses !== 1 ? 'es' : ''}`})
                             </div>

@@ -28,6 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { formatDateBolivia } from "@/lib/utils"
 
 interface Vendedor {
   id: string
@@ -409,9 +410,7 @@ export default function AlquileresPage() {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES')
-  }
+  const formatDate = (dateString: string) => formatDateBolivia(dateString)
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("es-ES", {

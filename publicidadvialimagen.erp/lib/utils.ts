@@ -37,3 +37,42 @@ export function compareTextIgnoreAccents(text1: string, text2: string): boolean 
 export function includesIgnoreAccents(text: string, search: string): boolean {
   return normalizeText(text).includes(normalizeText(search))
 }
+
+// --- Fechas en zona horaria Bolivia (America/La_Paz, UTC-4) ---
+const ZONA_BOLIVIA = "America/La_Paz"
+const LOCALE_BOLIVIA = "es-BO"
+
+/**
+ * Formatea una fecha en zona horaria Bolivia (solo fecha, ej. 20/5/2024).
+ * Acepta string ISO o Date. Devuelve "" si la fecha es inválida.
+ */
+export function formatDateBolivia(dateInput: string | Date | null | undefined): string {
+  if (dateInput == null) return ""
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleDateString(LOCALE_BOLIVIA, { timeZone: ZONA_BOLIVIA })
+}
+
+/**
+ * Formatea fecha y hora en zona horaria Bolivia.
+ */
+export function formatDateTimeBolivia(dateInput: string | Date | null | undefined): string {
+  if (dateInput == null) return ""
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleString(LOCALE_BOLIVIA, {
+    timeZone: ZONA_BOLIVIA,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+/**
+ * Fecha "hoy" en Bolivia (para PDFs, encabezados, etc.).
+ */
+export function todayBolivia(): string {
+  return new Date().toLocaleDateString(LOCALE_BOLIVIA, { timeZone: ZONA_BOLIVIA })
+}

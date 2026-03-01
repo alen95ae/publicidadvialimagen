@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateBolivia } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 
 interface InvitationData {
@@ -267,7 +268,7 @@ export default function RegisterInner() {
               <div className="space-y-1">
                 <p><strong>Email:</strong> {invitationData.email}</p>
                 <p><strong>Rol asignado:</strong> {invitationData.rol}</p>
-                <p><strong>Expira:</strong> {new Date(invitationData.fechaExpiracion).toLocaleDateString()}</p>
+                <p><strong>Expira:</strong> {formatDateBolivia(invitationData.fechaExpiracion)}</p>
               </div>
             </AlertDescription>
           </Alert>

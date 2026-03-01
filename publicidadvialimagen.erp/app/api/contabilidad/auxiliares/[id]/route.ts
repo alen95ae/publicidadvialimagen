@@ -4,11 +4,11 @@ import { getSupabaseUser, getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import type { Auxiliar } from "@/lib/types/contabilidad"
 
-function mapTipoAuxiliarToRelacion(tipo: string): "Cliente" | "Proveedor" | "Ambos" {
+function tipoAuxiliarToRelacionItem(tipo: string): "Cliente" | "Proveedor" | null {
   const t = (tipo || "").toLowerCase().trim()
   if (t === "proveedor") return "Proveedor"
   if (t === "cliente" || t === "gobierno") return "Cliente"
-  return "Ambos"
+  return null
 }
 
 // GET - Obtener un auxiliar por ID
@@ -147,9 +147,29 @@ export async function PUT(
       contactIdFinal = null
     } else if (tipoFinal && nombreFinal) {
       const supabaseAdmin = getSupabaseAdmin()
+      const itemToAdd = tipoAuxiliarToRelacionItem(tipoFinal)
+      let relacionFinal: string[] = []
+      if (contactIdFinal) {
+        const { data: existing } = await supabaseAdmin
+          .from("contactos")
+          .select("relacion")
+          .eq("id", contactIdFinal)
+          .maybeSingle()
+        const current = existing?.relacion
+        if (Array.isArray(current)) {
+          relacionFinal = [...new Set([...current.filter((r) => r === "Cliente" || r === "Proveedor"), ...(itemToAdd ? [itemToAdd] : [])])]
+        } else if (typeof current === "string") {
+          const base = current === "Ambos" ? ["Cliente", "Proveedor"] : current === "Proveedor" ? ["Proveedor"] : ["Cliente"]
+          relacionFinal = itemToAdd ? [...new Set([...base, itemToAdd])] : base
+        } else {
+          relacionFinal = itemToAdd ? [itemToAdd] : ["Cliente"]
+        }
+      } else {
+        relacionFinal = itemToAdd ? [itemToAdd] : ["Cliente"]
+      }
       const contactoPayload = {
         nombre: nombreFinal,
-        relacion: mapTipoAuxiliarToRelacion(tipoFinal),
+        relacion: relacionFinal,
         ciudad: (body.ciudad ?? (actual as any)?.ciudad ?? null) as string | null,
         direccion: (body.direccion ?? (actual as any)?.direccion ?? null) as string | null,
         telefono: (body.telefono ?? (actual as any)?.telefono ?? null) as string | null,

@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import { todayBolivia } from '@/lib/utils'
 
 // Función auxiliar para redondear a 2 decimales
 function redondearADosDecimales(num: number): number {
@@ -191,7 +192,7 @@ function obtenerEmailFooter(email?: string): string | undefined {
 export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4')
   const primaryColor: [number, number, number] = [190, 8, 18] // #be0812
-  const currentDate = new Date().toLocaleDateString('es-ES')
+  const currentDate = todayBolivia()
   const currentYear = new Date().getFullYear()
   
   let yPosition = 10
@@ -662,7 +663,7 @@ export async function generarPDFCotizacion(datos: DatosCotizacion): Promise<void
 export async function generarPDFOT(datos: DatosCotizacion): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4')
   const primaryColor: [number, number, number] = [190, 8, 18] // #be0812
-  const currentDate = new Date().toLocaleDateString('es-ES')
+  const currentDate = todayBolivia()
   const currentYear = new Date().getFullYear()
   
   let yPosition = 10

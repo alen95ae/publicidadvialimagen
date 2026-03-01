@@ -6,6 +6,7 @@ import { requirePermiso } from "@/lib/permisos"
 import jsPDF from "jspdf"
 import path from "path"
 import fs from "fs/promises"
+import { formatDateBolivia } from "@/lib/utils"
 
 // Función para obtener el email a mostrar en el footer
 function obtenerEmailFooter(email?: string): string | undefined {
@@ -270,7 +271,7 @@ export async function GET(
     // Fecha alineada a la derecha
     pdf.setFont('helvetica', 'normal')
     pdf.setFontSize(10)
-    const fechaFormateada = new Date(comprobante.fecha).toLocaleDateString('es-ES')
+    const fechaFormateada = formatDateBolivia(comprobante.fecha)
     pdf.text(`Fecha: ${fechaFormateada}`, pageWidth - 15, yPosition, { align: 'right' })
 
     yPosition += 12

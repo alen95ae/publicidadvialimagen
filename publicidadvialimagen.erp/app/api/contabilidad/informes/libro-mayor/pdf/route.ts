@@ -7,6 +7,7 @@ import { requirePermiso } from "@/lib/permisos"
 import jsPDF from "jspdf"
 import path from "path"
 import fs from "fs/promises"
+import { formatDateBolivia } from "@/lib/utils"
 
 async function cargarLogo(): Promise<string | null> {
   try {
@@ -202,8 +203,8 @@ export async function GET(request: NextRequest) {
     pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
     if (fecha_inicial && fecha_final) {
-      const fi = new Date(fecha_inicial).toLocaleDateString("es-ES")
-      const ff = new Date(fecha_final).toLocaleDateString("es-ES")
+      const fi = formatDateBolivia(fecha_inicial)
+      const ff = formatDateBolivia(fecha_final)
       pdf.text(`Período: ${fi} al ${ff}`, margin, yPosition)
       yPosition += 5
     }
@@ -270,7 +271,7 @@ export async function GET(request: NextRequest) {
       }
 
       const fechaStr = mov.fecha
-        ? new Date(mov.fecha).toLocaleDateString("es-ES")
+        ? formatDateBolivia(mov.fecha)
         : "-"
       const desc = (mov.descripcion_cuenta || "-").slice(0, 22)
       const glosa = (mov.glosa_comprobante || "-").slice(0, 22)

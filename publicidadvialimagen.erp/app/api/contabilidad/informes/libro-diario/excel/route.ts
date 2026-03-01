@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import * as XLSX from "xlsx"
+import { formatDateBolivia } from "@/lib/utils"
 
 // Función para formatear números
 function formatearNumero(numero: number): string {
@@ -190,7 +191,7 @@ export async function GET(request: NextRequest) {
       
       if (detallesComp.length === 0) continue
 
-      const fechaComp = new Date(comprobante.fecha).toLocaleDateString('es-ES')
+      const fechaComp = formatDateBolivia(comprobante.fecha)
       const numeroComp = comprobante.numero || 'N/A'
       const tipoComp = comprobante.tipo_comprobante || 'N/A'
       const conceptoComp = comprobante.concepto || ''

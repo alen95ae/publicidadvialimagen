@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { FileDown, Search, FileSpreadsheet } from "lucide-react"
 import { api } from "@/lib/fetcher"
+import { formatDateBolivia } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface LibroDiarioFilters {
@@ -491,7 +492,7 @@ export default function LibroDiarioInforme() {
                         <div>
                           <span className="text-gray-600">Fecha:</span>
                           <span className="ml-2">
-                            {new Date(comprobante.fecha).toLocaleDateString("es-ES")}
+                            {formatDateBolivia(comprobante.fecha)}
                           </span>
                         </div>
                         <div>

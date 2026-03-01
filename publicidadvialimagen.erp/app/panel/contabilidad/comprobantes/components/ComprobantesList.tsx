@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search } from "lucide-react"
 import { api } from "@/lib/fetcher"
+import { formatDateBolivia } from "@/lib/utils"
 import type { Comprobante } from "@/lib/types/contabilidad"
 import {
   Select,
@@ -195,7 +196,7 @@ export default function ComprobantesList({ onSelect, selectedId }: ComprobantesL
                         {comprobante.numero}
                       </TableCell>
                       <TableCell>
-                        {new Date(comprobante.fecha).toLocaleDateString("es-BO")}
+                        {formatDateBolivia(comprobante.fecha)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{comprobante.origen}</Badge>

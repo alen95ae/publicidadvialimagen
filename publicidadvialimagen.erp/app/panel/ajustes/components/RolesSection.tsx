@@ -382,7 +382,7 @@ export default function RolesSection() {
       inventario: "Acceso completo al módulo de Inventario.\n\nPestañas disponibles:\n• Productos\n• Recursos\n• Control de Stock\n\nFunciones especiales:\n• Ajustar stock manualmente\n• Gestionar variantes de productos\n• Modificar precios y costes\n• Ver movimientos completos de stock\n• Gestionar categorías y recursos\n• Exportar datos completos\n\nBotones adicionales:\n• Crear/editar/eliminar productos\n• Gestionar recursos completos\n• Ajustes masivos de stock",
       contabilidad: "Acceso completo al módulo de Contabilidad.\n\nPestañas disponibles:\n• Plan de Cuentas\n• Auxiliares\n• Comprobantes\n• Presupuestos\n• Empresas\n• Informes\n\nFunciones especiales:\n• Aprobar comprobantes\n• Generar informes completos (PDF, Excel)\n• Modificar estructuras contables\n• Gestionar empresas\n• Editar plantillas contables\n• Reordenar estructuras\n\nBotones adicionales:\n• Crear/editar/eliminar comprobantes\n• Gestionar auxiliares completos\n• Aplicar plantillas a comprobantes",
       ajustes: "Acceso completo al módulo de Ajustes.\n\nPestañas disponibles:\n• Usuarios\n• Roles y Permisos\n• Invitaciones\n• Notificaciones\n\nFunciones especiales:\n• Crear/editar/eliminar usuarios\n• Gestionar roles completos (crear, editar, eliminar)\n• Configurar sistema de notificaciones\n• Gestionar invitaciones\n• Asignar roles a usuarios\n• Exportar datos de usuarios\n\nBotones adicionales:\n• Crear nuevo rol\n• Editar cualquier rol\n• Eliminar roles\n• Gestionar permisos de roles",
-      contactos: "Acceso completo al módulo de Contactos.\n\nPestañas disponibles:\n• Contactos\n• Leads (requiere admin)\n• Miembros (requiere admin)\n\nFunciones especiales:\n• Convertir leads a contactos\n• Gestionar miembros completos\n• Edición masiva completa\n• Gestionar papelera de leads\n• Restaurar leads eliminados\n• Detectar duplicados\n\nBotones adicionales:\n• Crear/editar/eliminar contactos\n• Matar/restaurar leads\n• Edición masiva de contactos y leads\n• Acceso a pestañas Leads y Miembros (solo admin)\n\nNota: Exportar e Importar se controlan mediante funciones técnicas, no mediante este permiso.",
+      contactos: "Acceso completo al módulo de Contactos.\n\nPestañas disponibles:\n• Contactos\n• Leads (requiere admin)\n• Miembros (requiere admin)\n\nFunciones especiales:\n• Convertir leads a contactos\n• Gestionar miembros completos\n• Edición masiva completa\n• Gestionar papelera de leads\n• Restaurar leads eliminados\n\nBotones adicionales:\n• Crear/editar/eliminar contactos\n• Matar/restaurar leads\n• Edición masiva de contactos y leads\n• Acceso a pestañas Leads y Miembros (solo admin)\n\nNota: Exportar e Importar se controlan mediante funciones técnicas, no mediante este permiso.",
       mensajes: "Acceso completo al módulo de Mensajes.\n\nPestañas disponibles:\n• Mensajes\n• Formularios (requiere admin)\n• Notificaciones\n\nFunciones especiales:\n• Marcar como leído/no leído\n• Responder mensajes\n• Gestionar estados masivamente\n• Ver todos los mensajes sin restricciones\n• Eliminar formularios\n\nBotones adicionales:\n• Eliminar mensajes y formularios\n• Gestión masiva de estados\n\nNota: Las notificaciones siempre se pueden eliminar. Exportar e Importar se controlan mediante funciones técnicas, no mediante este permiso.",
       metricas: "Acceso completo al módulo de Métricas.\n\nFunciones especiales:\n• Ver todas las métricas y análisis\n• Exportar reportes completos\n• Configurar dashboards\n• Ver métricas avanzadas\n• Acceso a todos los gráficos y visualizaciones\n\nBotones adicionales:\n• Exportar datos\n• Personalizar vistas\n• Generar reportes personalizados"
     };
@@ -472,9 +472,11 @@ export default function RolesSection() {
     );
   };
 
-  // Función para ordenar permisos técnicos: "descargar ot" -> resto
+  // Función para ordenar permisos técnicos: "descargar ot" -> resto (excluir "detectar duplicados contactos", ya no se usa)
   const ordenarPermisosTecnicos = (permisos: Array<{ id: string; accion: string; asignado: boolean }>) => {
-    return [...permisos].sort((a, b) => {
+    return [...permisos]
+      .filter((p) => p.accion !== "detectar duplicados contactos")
+      .sort((a, b) => {
       const accionA = a.accion.toLowerCase();
       const accionB = b.accion.toLowerCase();
       

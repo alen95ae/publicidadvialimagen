@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Edit, Trash2, Eye } from "lucide-react"
+import { formatDateBolivia } from "@/lib/utils"
 
 interface ItemInventario {
   id: number
@@ -197,7 +198,7 @@ export default function ItemsInventarioTab() {
                       <TableCell className="font-mono">{item.codigo_alterno}</TableCell>
                       <TableCell>{item.descripcion}</TableCell>
                       <TableCell>
-                        {new Date(item.fecha_creacion).toLocaleDateString("es-ES")}
+                        {formatDateBolivia(item.fecha_creacion)}
                       </TableCell>
                       <TableCell>{item.tipo_item}</TableCell>
                       <TableCell>

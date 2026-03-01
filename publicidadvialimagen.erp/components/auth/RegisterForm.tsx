@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/fetcher";
+import { formatDateBolivia } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
@@ -146,7 +147,7 @@ export default function RegisterForm({ invite, presetEmail }: { invite?: string;
               <p className="font-medium">Invitación válida</p>
               <p className="text-sm">Email: {invitationData.email}</p>
               <p className="text-sm">Rol asignado: {invitationData.rol}</p>
-              <p className="text-sm">Expira: {new Date(invitationData.fechaExpiracion).toLocaleDateString()}</p>
+              <p className="text-sm">Expira: {formatDateBolivia(invitationData.fechaExpiracion)}</p>
             </div>
           </AlertDescription>
         </Alert>

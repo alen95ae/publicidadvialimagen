@@ -14,7 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { FileDown, FileSpreadsheet, Play, Loader2, ChevronsUpDown, Check } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
-import { cn } from "@/lib/utils"
+import { cn, formatDateBolivia } from "@/lib/utils"
 import type { Auxiliar } from "@/lib/types/contabilidad"
 import type { Cuenta } from "@/lib/types/contabilidad"
 
@@ -873,7 +873,7 @@ export default function LibroAuxiliaresForm() {
                               className={mov.es_saldo_inicial ? "bg-white" : ""}
                             >
                               <TableCell className={mov.es_saldo_inicial ? "italic text-gray-700" : ""}>
-                                {mov.es_saldo_inicial ? (mov.fecha ? new Date(mov.fecha).toLocaleDateString("es-ES") : "") : (mov.fecha ? new Date(mov.fecha).toLocaleDateString("es-ES") : "-")}
+                                {mov.es_saldo_inicial ? formatDateBolivia(mov.fecha) : (formatDateBolivia(mov.fecha) || "-")}
                               </TableCell>
                               <TableCell className={mov.es_saldo_inicial ? "italic text-gray-700" : ""}>
                                 {mov.es_saldo_inicial ? "" : (mov.numero_comprobante ?? "-")}

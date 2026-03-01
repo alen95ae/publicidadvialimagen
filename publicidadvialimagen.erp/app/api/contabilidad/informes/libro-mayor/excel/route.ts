@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import * as XLSX from "xlsx"
+import { formatDateBolivia } from "@/lib/utils"
 
 function formatearNumero(numero: number): string {
   const n = Number(numero)
@@ -159,7 +160,7 @@ export async function GET(request: NextRequest) {
     ]
 
     const dataRows = movimientosConSaldo.map((m: any) => [
-      m.fecha ? new Date(m.fecha).toLocaleDateString("es-ES") : "",
+      m.fecha ? formatDateBolivia(m.fecha) : "",
       m.numero_comprobante || "",
       m.cuenta || "",
       m.descripcion_cuenta || "",

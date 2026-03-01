@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { verifySession } from "@/lib/auth/verifySession"
+import { formatDateBolivia } from "@/lib/utils"
 import * as XLSX from "xlsx"
 
 const HEADERS = [
@@ -23,7 +24,7 @@ function rowFromMensaje(m: any): (string | number)[] {
     m.telefono ?? '',
     m.empresa ?? '',
     m.mensaje ?? '',
-    m.fecha_recepcion ? new Date(m.fecha_recepcion).toLocaleDateString('es-ES') : '',
+    m.fecha_recepcion ? formatDateBolivia(m.fecha_recepcion) : '',
     m.estado ?? ''
   ]
 }

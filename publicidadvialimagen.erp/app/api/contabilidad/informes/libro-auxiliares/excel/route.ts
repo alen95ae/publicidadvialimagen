@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import * as XLSX from "xlsx"
+import { formatDateBolivia } from "@/lib/utils"
 import { getDataLibroAuxiliares } from "../getData"
 
 function formatearNumero(n: number): string {
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
             rows.push([
               auxLabel,
               cta.cuenta,
-              mov.fecha ? new Date(mov.fecha).toLocaleDateString("es-ES") : "",
+              mov.fecha ? formatDateBolivia(mov.fecha) : "",
               esSaldoInicial ? "" : (mov.numero_comprobante ?? ""),
               esSaldoInicial ? "" : (mov.tipo_comprobante ?? ""),
               mov.glosa ?? "",

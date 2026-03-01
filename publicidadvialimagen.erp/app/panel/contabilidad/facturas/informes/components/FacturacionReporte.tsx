@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { FileDown, Search } from "lucide-react"
+import { formatDateBolivia } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface FacturacionFilters {
@@ -269,7 +270,7 @@ export default function FacturacionReporte() {
                   {results.map((item, index) => (
                     <TableRow key={index}>
                       <TableCell className="font-mono">{item.nro_documento}</TableCell>
-                      <TableCell>{new Date(item.fecha).toLocaleDateString("es-ES")}</TableCell>
+                      <TableCell>{formatDateBolivia(item.fecha)}</TableCell>
                       <TableCell>{item.cliente}</TableCell>
                       <TableCell>{item.tipo_documento}</TableCell>
                       <TableCell className="text-right font-mono">

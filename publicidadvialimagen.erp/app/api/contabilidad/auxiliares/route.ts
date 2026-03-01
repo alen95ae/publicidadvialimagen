@@ -6,11 +6,12 @@ import { requirePermiso } from "@/lib/permisos"
 import type { Auxiliar } from "@/lib/types/contabilidad"
 import { crearAuxiliar } from "@/lib/services/auxiliares"
 
-function mapTipoAuxiliarToRelacion(tipo: string): "Cliente" | "Proveedor" | "Ambos" {
+/** Añade el valor de relación según tipo_auxiliar al array existente (sin duplicados). */
+function tipoAuxiliarToRelacionItem(tipo: string): "Cliente" | "Proveedor" | null {
   const t = (tipo || "").toLowerCase().trim()
   if (t === "proveedor") return "Proveedor"
   if (t === "cliente" || t === "gobierno") return "Cliente"
-  return "Ambos"
+  return null
 }
 
 async function ensureContactoForAuxiliar(body: Partial<Auxiliar>) {
@@ -21,10 +22,32 @@ async function ensureContactoForAuxiliar(body: Partial<Auxiliar>) {
 
   if (isBank || !nombre || !tipo) return null
 
+  const itemToAdd = tipoAuxiliarToRelacionItem(tipo)
   const supabaseAdmin = getSupabaseAdmin()
+
+  let relacionFinal: string[] = []
+  if (existingContactId) {
+    const { data: existing } = await supabaseAdmin
+      .from("contactos")
+      .select("relacion")
+      .eq("id", existingContactId)
+      .maybeSingle()
+    const current = existing?.relacion
+    if (Array.isArray(current)) {
+      relacionFinal = [...new Set([...current.filter((r) => r === "Cliente" || r === "Proveedor"), ...(itemToAdd ? [itemToAdd] : [])])]
+    } else if (typeof current === "string") {
+      const base = current === "Ambos" ? ["Cliente", "Proveedor"] : current === "Proveedor" ? ["Proveedor"] : ["Cliente"]
+      relacionFinal = itemToAdd ? [...new Set([...base, itemToAdd])] : base
+    } else {
+      relacionFinal = itemToAdd ? [itemToAdd] : ["Cliente"]
+    }
+  } else {
+    relacionFinal = itemToAdd ? [itemToAdd] : ["Cliente"]
+  }
+
   const payload = {
     nombre,
-    relacion: mapTipoAuxiliarToRelacion(tipo),
+    relacion: relacionFinal,
     ciudad: ((body as any).ciudad || null) as string | null,
     direccion: (body.direccion || null) as string | null,
     telefono: (body.telefono || null) as string | null,

@@ -25,10 +25,9 @@ const HEADERS = [
 
 function rowFromContacto(contacto: any, salesOwnersMap: Record<string, string>): (string | number)[] {
   const kindDisplay = contacto.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
-  const relationDisplay = contacto.relation === 'CUSTOMER' ? 'Cliente'
-    : contacto.relation === 'SUPPLIER' ? 'Proveedor'
-    : contacto.relation === 'BOTH' ? 'Ambos'
-    : contacto.relation || ''
+  const relationDisplay = Array.isArray(contacto.relation) && contacto.relation.length > 0
+    ? contacto.relation.join(", ")
+    : ""
   const comercialName = contacto.salesOwnerId && salesOwnersMap[contacto.salesOwnerId]
     ? salesOwnersMap[contacto.salesOwnerId]
     : ''

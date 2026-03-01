@@ -30,6 +30,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Toaster } from "sonner"
+import { formatDateBolivia } from "@/lib/utils"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 
 // Tipos para los mensajes
@@ -621,7 +622,7 @@ export default function FormulariosPage() {
                       </td>
                       <td className="py-3 px-4">
                         <span className="text-sm">
-                          {new Date(mensaje.fecha_recepcion).toLocaleDateString('es-ES')}
+                          {formatDateBolivia(mensaje.fecha_recepcion)}
                         </span>
                       </td>
                       <td className="py-3 px-4">

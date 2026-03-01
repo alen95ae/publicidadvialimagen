@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Check } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatDateTimeBolivia } from "@/lib/utils"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Save, MapPin, Trash2, Edit, Eye, Calculator, ImageIcon, FolderClock } from "lucide-react"
 import { toast } from "sonner"
@@ -544,15 +544,7 @@ export default function SoporteDetailPage() {
     }).format(price)
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    })
-  }
+  const formatDate = (dateString: string) => formatDateTimeBolivia(dateString)
 
   if (loading) {
     return (

@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { usePermisosContext } from "@/hooks/permisos-provider"
+import { formatDateBolivia } from "@/lib/utils"
 
 // Interface para los datos de mantenimiento
 interface Mantenimiento {
@@ -126,9 +127,7 @@ export default function MantenimientoPage() {
     mantenimiento.tecnico.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES')
-  }
+  const formatDate = (dateString: string) => formatDateBolivia(dateString)
 
   const isOverdue = (dateString: string) => {
     const date = new Date(dateString)

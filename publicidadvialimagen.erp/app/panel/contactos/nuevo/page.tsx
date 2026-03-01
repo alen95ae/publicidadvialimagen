@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
@@ -31,7 +32,7 @@ export default function NuevoContactoPage() {
   const [salesOwners, setSalesOwners] = useState<SalesOwner[]>([])
   const [formData, setFormData] = useState({
     kind: "COMPANY" as "INDIVIDUAL" | "COMPANY",
-    relation: "CUSTOMER" as "CUSTOMER" | "SUPPLIER" | "BOTH",
+    relation: ["Cliente"] as string[],
     displayName: "",
     company: "",
     companyId: "", // ID del contacto empresa (para Individual)
@@ -516,23 +517,31 @@ export default function NuevoContactoPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="relation">Relación *</Label>
-                    <Select 
-                      value={formData.relation || "CUSTOMER"} 
-                      onValueChange={(value) => {
-                        console.log('🔄 Cambiando relación a:', value)
-                        handleChange("relation", value)
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Seleccionar relación" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CUSTOMER">Cliente</SelectItem>
-                        <SelectItem value="SUPPLIER">Proveedor</SelectItem>
-                        <SelectItem value="BOTH">Ambos</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Relación</Label>
+                    <div className="flex flex-wrap gap-4 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={formData.relation?.includes("Cliente") ?? true}
+                          onCheckedChange={(checked) => {
+                            const prev = formData.relation || []
+                            const next = checked ? [...new Set([...prev, "Cliente"])] : prev.filter((r) => r !== "Cliente")
+                            handleChange("relation", next)
+                          }}
+                        />
+                        <span>Cliente</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={formData.relation?.includes("Proveedor") ?? false}
+                          onCheckedChange={(checked) => {
+                            const prev = formData.relation || []
+                            const next = checked ? [...new Set([...prev, "Proveedor"])] : prev.filter((r) => r !== "Proveedor")
+                            handleChange("relation", next)
+                          }}
+                        />
+                        <span>Proveedor</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>

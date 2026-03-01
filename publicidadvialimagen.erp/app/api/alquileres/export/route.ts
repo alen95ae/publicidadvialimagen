@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server"
 import { getAlquileres, getAlquilerById } from "@/lib/supabaseAlquileres"
 import { getSupabaseServer } from "@/lib/supabaseServer"
+import { formatDateBolivia } from "@/lib/utils"
 import * as XLSX from "xlsx"
 
 // Columnas a exportar (sin ID ni Cotización ID)
@@ -23,15 +24,15 @@ const HEADERS = [
 function rowFromAlquiler(a: any): (string | number)[] {
   return [
     a.codigo || '',
-    a.inicio ? new Date(a.inicio).toLocaleDateString('es-ES') : '',
-    a.fin ? new Date(a.fin).toLocaleDateString('es-ES') : '',
+    a.inicio ? formatDateBolivia(a.inicio) : '',
+    a.fin ? formatDateBolivia(a.fin) : '',
     a.meses ?? '',
     a.soporte_codigo || '',
     a.cliente || '',
     a.vendedor || '',
     a.total ?? '',
     a.estado || '',
-    a.fecha_creacion ? new Date(a.fecha_creacion).toLocaleDateString('es-ES') : ''
+    a.fecha_creacion ? formatDateBolivia(a.fecha_creacion) : ''
   ]
 }
 

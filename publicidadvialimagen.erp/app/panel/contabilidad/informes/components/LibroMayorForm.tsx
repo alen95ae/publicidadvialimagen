@@ -14,7 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { FileDown, FileSpreadsheet, Play, Loader2, ChevronsUpDown, Check } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
-import { cn } from "@/lib/utils"
+import { cn, formatDateBolivia } from "@/lib/utils"
 import type { Empresa } from "@/lib/types/contabilidad"
 import type { Sucursal } from "@/lib/types/contabilidad"
 import type { Cuenta } from "@/lib/types/contabilidad"
@@ -684,7 +684,7 @@ export default function LibroMayorForm() {
                     movimientos.map((mov, index) => (
                       <TableRow key={`${mov.cuenta}-${mov.fecha}-${mov.numero_comprobante}-${index}`}>
                         <TableCell className="font-mono text-sm">
-                          {mov.fecha ? new Date(mov.fecha).toLocaleDateString("es-BO") : "-"}
+                          {formatDateBolivia(mov.fecha) || "-"}
                         </TableCell>
                         <TableCell className="font-mono font-semibold">
                           {mov.numero_comprobante || "-"}

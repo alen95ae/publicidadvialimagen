@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 
 import { NextResponse, NextRequest } from "next/server"
 import { getProductoById } from "@/lib/supabaseProductos"
+import { todayBolivia } from "@/lib/utils"
 import jsPDF from 'jspdf'
 import fs from 'fs'
 import path from 'path'
@@ -217,7 +218,7 @@ async function generatePDF(productos: any[], userEmail?: string, userNumero?: st
     // Obtener el email a mostrar en el footer
     const emailFooter = obtenerEmailFooter(userEmail)
     console.log('📄 Generando PDF catálogo de productos con email:', emailFooter, 'y número:', userNumero)
-    const currentDate = new Date().toLocaleDateString('es-ES')
+    const currentDate = todayBolivia()
     const currentYear = new Date().getFullYear()
     // Formato cuadrado 210x210mm
     const pdf = new jsPDF({

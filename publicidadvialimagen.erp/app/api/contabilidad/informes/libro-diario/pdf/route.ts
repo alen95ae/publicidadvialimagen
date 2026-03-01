@@ -7,6 +7,7 @@ import { requirePermiso } from "@/lib/permisos"
 import jsPDF from "jspdf"
 import path from "path"
 import fs from "fs/promises"
+import { formatDateBolivia } from "@/lib/utils"
 
 // Función para obtener el email a mostrar en el footer
 function obtenerEmailFooter(email?: string): string | undefined {
@@ -265,8 +266,8 @@ export async function GET(request: NextRequest) {
     let infoY = yPosition
     
     if (fecha_inicial && fecha_final) {
-      const fechaIni = new Date(fecha_inicial).toLocaleDateString('es-ES')
-      const fechaFin = new Date(fecha_final).toLocaleDateString('es-ES')
+      const fechaIni = formatDateBolivia(fecha_inicial)
+      const fechaFin = formatDateBolivia(fecha_final)
       pdf.text(`Período: ${fechaIni} al ${fechaFin}`, 15, infoY)
       infoY += 5
     }
@@ -309,7 +310,7 @@ export async function GET(request: NextRequest) {
         }
 
         // ===== ENCABEZADO DEL COMPROBANTE =====
-        const fechaComp = new Date(comprobante.fecha).toLocaleDateString('es-ES')
+        const fechaComp = formatDateBolivia(comprobante.fecha)
         const numeroComp = comprobante.numero || 'N/A'
         const tipoComp = comprobante.tipo_comprobante || 'N/A'
         const estadoComp = comprobante.estado || 'N/A'

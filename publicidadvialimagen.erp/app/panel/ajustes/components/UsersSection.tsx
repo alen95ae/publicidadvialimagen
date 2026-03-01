@@ -13,6 +13,7 @@ import { Plus, Search, Edit, Trash2, UserCheck, UserX, MoreHorizontal, Upload, L
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { formatDateBolivia } from "@/lib/utils";
 import { usePermisosContext } from "@/hooks/permisos-provider";
 
 interface User {
@@ -511,10 +512,10 @@ export default function UsersSection() {
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    {new Date(user.fechaCreacion).toLocaleDateString()}
+                    {formatDateBolivia(user.fechaCreacion)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {user.ultimoAcceso ? new Date(user.ultimoAcceso).toLocaleDateString() : "Nunca"}
+                    {user.ultimoAcceso ? formatDateBolivia(user.ultimoAcceso) : "Nunca"}
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1">

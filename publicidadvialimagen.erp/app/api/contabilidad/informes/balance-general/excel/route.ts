@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabaseServer"
 import { requirePermiso } from "@/lib/permisos"
 import * as XLSX from "xlsx"
+import { formatDateBolivia } from "@/lib/utils"
 import { getDataBalanceGeneral } from "../getData"
 
 function formatearNumero(n: number): string {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const sheetData: (string | number)[][] = []
     sheetData.push(["BALANCE GENERAL"])
-    sheetData.push([`A fecha: ${new Date(a_fecha).toLocaleDateString("es-ES")}`, "", ""])
+    sheetData.push([`A fecha: ${formatDateBolivia(a_fecha)}`, "", ""])
     sheetData.push(["Moneda:", moneda === "USD" ? "USD" : "Bs", ""])
     sheetData.push([])
 

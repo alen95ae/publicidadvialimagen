@@ -6,6 +6,7 @@ import { getCotizaciones, getCotizacionById } from "@/lib/supabaseCotizaciones"
 import { getLineasByCotizacionId } from "@/lib/supabaseCotizacionLineas"
 import { getUserByIdSupabase } from "@/lib/supabaseUsers"
 import { findContactoById } from "@/lib/supabaseContactos"
+import { formatDateBolivia } from "@/lib/utils"
 import * as XLSX from "xlsx"
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -63,8 +64,8 @@ const HEADERS_COMBINADO = [
 function rowSoloCotizacion(cot: any, clienteNombre: string, vendedorNombre: string): (string | number)[] {
   return [
     cot.codigo ?? '',
-    cot.fecha_creacion ? new Date(cot.fecha_creacion).toLocaleDateString('es-ES') : '',
-    cot.fecha_actualizacion ? new Date(cot.fecha_actualizacion).toLocaleDateString('es-ES') : '',
+    formatDateBolivia(cot.fecha_creacion),
+    formatDateBolivia(cot.fecha_actualizacion),
     clienteNombre,
     vendedorNombre,
     cot.sucursal ?? '',
@@ -84,8 +85,8 @@ function rowCombinado(
   clienteNombre: string,
   vendedorNombre: string
 ): (string | number | boolean)[] {
-  const cotFechaCreacion = cot.fecha_creacion ? new Date(cot.fecha_creacion).toLocaleDateString('es-ES') : ''
-  const cotFechaActualizacion = cot.fecha_actualizacion ? new Date(cot.fecha_actualizacion).toLocaleDateString('es-ES') : ''
+  const cotFechaCreacion = formatDateBolivia(cot.fecha_creacion)
+  const cotFechaActualizacion = formatDateBolivia(cot.fecha_actualizacion)
   return [
     cot.codigo ?? '',
     cotFechaCreacion,

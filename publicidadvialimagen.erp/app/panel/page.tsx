@@ -10,6 +10,7 @@ import PanelNotifications from "@/components/panel-notifications";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getAlquileres } from "@/lib/supabaseAlquileres";
 import { getUrgeAlquilarList } from "@/lib/urgeAlquilar";
+import { formatDateBolivia } from "@/lib/utils";
 
 export default async function PanelPage() {
   const cookieStore = await cookies();
@@ -71,7 +72,7 @@ export default async function PanelPage() {
     console.error('Error obteniendo urge alquilar:', error);
   }
 
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('es-ES');
+  const formatDate = (dateString: string) => formatDateBolivia(dateString);
   const STATUS_META: Record<string, { label: string; className: string }> = {
     'Disponible': { label: 'Disponible', className: 'bg-green-100 text-green-800' },
     'Reservado': { label: 'Reservado', className: 'bg-yellow-100 text-yellow-800' },

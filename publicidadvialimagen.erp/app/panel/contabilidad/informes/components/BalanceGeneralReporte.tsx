@@ -31,10 +31,30 @@ const TIPOS_COMPROBANTE = [
   { value: "Ctas por Pagar", label: "Ctas por Pagar" },
 ]
 
+/** Formato YYYY-MM-DD con fecha local (igual que en contabilización de facturas, evita timezone). */
+function formatDateToYYYYMMDD(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/** Primer y último día del mes actual (28, 29, 30 o 31 según el mes). */
+function getFechasMesActual(): { desde: string; hasta: string } {
+  const hoy = new Date()
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+  const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+  return {
+    desde: formatDateToYYYYMMDD(primerDiaMes),
+    hasta: formatDateToYYYYMMDD(ultimoDiaMes),
+  }
+}
+
 interface BalanceGeneralFilters {
   empresa_id: string
   sucursal_id: string
   tipo_comprobante: string
+  desde_fecha: string
   a_fecha: string
   moneda: string
   estado: string
@@ -43,14 +63,23 @@ interface BalanceGeneralFilters {
 export default function BalanceGeneralReporte() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
-  const [filters, setFilters] = useState<BalanceGeneralFilters>({
-    empresa_id: "todos",
-    sucursal_id: "todos",
-    tipo_comprobante: "Todos",
-    a_fecha: new Date().toISOString().split("T")[0],
-    moneda: "BOB",
-    estado: "Todos",
+  const [filters, setFilters] = useState<BalanceGeneralFilters>(() => {
+    const { desde, hasta } = getFechasMesActual()
+    return {
+      empresa_id: "todos",
+      sucursal_id: "todos",
+      tipo_comprobante: "Todos",
+      desde_fecha: desde,
+      a_fecha: hasta,
+      moneda: "BOB",
+      estado: "Todos",
+    }
   })
+
+  useEffect(() => {
+    const { desde, hasta } = getFechasMesActual()
+    setFilters((prev) => ({ ...prev, desde_fecha: desde, a_fecha: hasta }))
+  }, [])
 
   useEffect(() => {
     const loadEmpresas = async () => {
@@ -106,6 +135,7 @@ export default function BalanceGeneralReporte() {
 
   const buildParams = () => {
     const params = new URLSearchParams()
+    params.set("desde_fecha", filters.desde_fecha)
     params.set("a_fecha", filters.a_fecha)
     if (filters.empresa_id && filters.empresa_id !== "todos") params.set("empresa_id", filters.empresa_id)
     if (filters.sucursal_id && filters.sucursal_id !== "todos") params.set("sucursal_id", filters.sucursal_id)
@@ -155,7 +185,7 @@ export default function BalanceGeneralReporte() {
       const u = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = u
-      a.download = `balance_general_${filters.a_fecha}.xlsx`
+      a.download = `balance_general_${filters.desde_fecha}_${filters.a_fecha}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(u)
@@ -182,7 +212,7 @@ export default function BalanceGeneralReporte() {
       const u = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = u
-      a.download = `balance_general_${filters.a_fecha}.pdf`
+      a.download = `balance_general_${filters.desde_fecha}_${filters.a_fecha}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(u)
@@ -217,7 +247,7 @@ export default function BalanceGeneralReporte() {
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <CardTitle>BALANCE GENERAL</CardTitle>
+            <CardTitle>Filtros y Resultados</CardTitle>
             <CardDescription>
               Configure los filtros para generar el balance general
             </CardDescription>
@@ -317,10 +347,10 @@ export default function BalanceGeneralReporte() {
 
         <Separator />
 
-        {/* Filtros: Tipo de comprobante + A fecha + Moneda */}
+        {/* Filtros: Tipo de comprobante + Desde fecha / A fecha + Moneda */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">Filtros</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <Label htmlFor="tipo_comprobante" className="text-xs text-gray-600">
                 Tipo de comprobante
@@ -342,8 +372,20 @@ export default function BalanceGeneralReporte() {
               </Select>
             </div>
             <div>
+              <Label htmlFor="desde_fecha" className="text-xs text-gray-600">
+                Desde fecha
+              </Label>
+              <Input
+                id="desde_fecha"
+                type="date"
+                value={filters.desde_fecha}
+                onChange={(e) => handleFilterChange("desde_fecha", e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
               <Label htmlFor="a_fecha" className="text-xs text-gray-600">
-                A Fecha
+                A fecha
               </Label>
               <Input
                 id="a_fecha"
@@ -410,7 +452,7 @@ export default function BalanceGeneralReporte() {
             <Separator />
             {!data || (!data.activo?.length && !data.pasivo?.length && !data.patrimonio?.length) ? (
               <p className="text-gray-500 text-sm py-4">
-                No hay movimientos hasta la fecha seleccionada.
+                No hay movimientos en el rango de fechas seleccionado.
               </p>
             ) : (
               <div className="space-y-6">

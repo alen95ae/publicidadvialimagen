@@ -87,10 +87,11 @@ export async function GET(request: NextRequest) {
     if (permiso instanceof Response) return permiso
 
     const { searchParams } = new URL(request.url)
+    const desde_fecha = searchParams.get("desde_fecha") || ""
     const a_fecha = searchParams.get("a_fecha") || ""
-    if (!a_fecha) {
+    if (!desde_fecha || !a_fecha) {
       return NextResponse.json(
-        { error: "El parámetro a_fecha es obligatorio" },
+        { error: "Los parámetros desde_fecha y a_fecha son obligatorios" },
         { status: 400 }
       )
     }
@@ -100,6 +101,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin()
     const data = await getDataBalanceGeneral(supabase, {
+      desde_fecha,
       a_fecha,
       empresa_id: searchParams.get("empresa_id") || "",
       sucursal_id: searchParams.get("sucursal_id") || "",
@@ -137,7 +139,7 @@ export async function GET(request: NextRequest) {
 
     pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
-    pdf.text(`A fecha: ${formatDateBolivia(a_fecha)}`, margin, yPosition)
+    pdf.text(`Desde: ${formatDateBolivia(desde_fecha)} - A fecha: ${formatDateBolivia(a_fecha)}`, margin, yPosition)
     yPosition += 5
     pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, yPosition)
     yPosition += 8

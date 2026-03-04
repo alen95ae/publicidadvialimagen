@@ -11,9 +11,9 @@ export interface BalanceGeneralData {
 
 export async function getDataBalanceGeneral(
   supabase: any,
-  params: { a_fecha: string; empresa_id?: string; sucursal_id?: string; moneda?: string; estado?: string }
+  params: { desde_fecha: string; a_fecha: string; empresa_id?: string; sucursal_id?: string; moneda?: string; estado?: string }
 ): Promise<BalanceGeneralData> {
-  const { a_fecha, empresa_id = "", moneda = "BOB", estado: estadoParam = "Aprobado" } = params
+  const { desde_fecha, a_fecha, empresa_id = "", moneda = "BOB", estado: estadoParam = "Aprobado" } = params
 
   const estadoFiltro =
     estadoParam && estadoParam !== "Todos" ? estadoParam.toUpperCase() : "APROBADO"
@@ -29,7 +29,10 @@ export async function getDataBalanceGeneral(
   if (empresa_id && empresa_id !== "todos" && empresaIdIsNumeric) {
     comprobantesQuery = comprobantesQuery.eq("empresa_id", empresaIdNum)
   }
-  comprobantesQuery = comprobantesQuery.eq("estado", estadoFiltro).lte("fecha", a_fecha)
+  comprobantesQuery = comprobantesQuery
+    .eq("estado", estadoFiltro)
+    .gte("fecha", desde_fecha)
+    .lte("fecha", a_fecha)
 
   const { data: comprobantes, error: comprobantesError } = await comprobantesQuery
 

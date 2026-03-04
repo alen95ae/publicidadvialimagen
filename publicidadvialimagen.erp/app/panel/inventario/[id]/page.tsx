@@ -1831,6 +1831,14 @@ export default function ProductoDetailPage() {
         return rowCopy
       })
 
+      // Si hay coste calculado (calculadora de costes), asegurar que la fila Coste de la calculadora de precios no quede en 0
+      if (totalCost > 0) {
+        const costeRowIndex = priceRowsSanitizados.findIndex((r: any) => r.campo === "Coste")
+        if (costeRowIndex >= 0 && (parseNum(priceRowsSanitizados[costeRowIndex]?.valor ?? 0) === 0)) {
+          priceRowsSanitizados[costeRowIndex].valor = Math.round(totalCost * 100) / 100
+        }
+      }
+
       const calculadoraPrecios = {
         priceRows: priceRowsSanitizados,
         totalPrice: precioFinalValidado,
@@ -2134,11 +2142,16 @@ export default function ProductoDetailPage() {
           const updated = prev.map(row =>
             row.campo === "Coste" ? { ...row, valor: totalCost } : row
           )
-          // Si hay un precio, recalcular desde precio
+
           const precio = parseNum(updated.find((r: any) => r.campo === "Precio")?.valor ?? 0)
+
+          // Si hay precio, recalculamos toda la tabla
           if (precio > 0) {
             return recalcFromTargetPrice(precio, updated)
           }
+
+          // Si no hay precio, devolver updated para que el Coste se refleje en pantalla
+          return updated
         }
         return prev
       })

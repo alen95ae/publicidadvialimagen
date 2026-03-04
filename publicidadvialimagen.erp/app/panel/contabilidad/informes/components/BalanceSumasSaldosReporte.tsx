@@ -342,7 +342,7 @@ export default function BalanceSumasSaldosReporte() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>BALANCE DE SUMAS Y SALDOS</CardTitle>
+            <CardTitle>Filtros y Resultados</CardTitle>
             <CardDescription>
               Configure los filtros para generar el balance de sumas y saldos
             </CardDescription>

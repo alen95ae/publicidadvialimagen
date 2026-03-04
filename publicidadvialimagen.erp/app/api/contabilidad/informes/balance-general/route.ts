@@ -15,16 +15,18 @@ export async function GET(request: NextRequest) {
     if (permiso instanceof Response) return permiso
 
     const { searchParams } = new URL(request.url)
+    const desde_fecha = searchParams.get("desde_fecha") || ""
     const a_fecha = searchParams.get("a_fecha") || ""
-    if (!a_fecha) {
+    if (!desde_fecha || !a_fecha) {
       return NextResponse.json(
-        { error: "El parámetro a_fecha es obligatorio" },
+        { error: "Los parámetros desde_fecha y a_fecha son obligatorios" },
         { status: 400 }
       )
     }
 
     const supabase = getSupabaseAdmin()
     const data = await getDataBalanceGeneral(supabase, {
+      desde_fecha,
       a_fecha,
       empresa_id: searchParams.get("empresa_id") || "",
       sucursal_id: searchParams.get("sucursal_id") || "",
@@ -38,7 +40,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data,
-      ...(tieneDatos ? {} : { message: "No hay movimientos hasta la fecha seleccionada" }),
+      ...(tieneDatos ? {} : { message: "No hay movimientos en el rango de fechas seleccionado" }),
     })
   } catch (error: any) {
     console.error("Error in GET /api/contabilidad/informes/balance-general:", error)

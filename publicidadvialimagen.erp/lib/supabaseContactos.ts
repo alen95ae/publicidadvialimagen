@@ -207,6 +207,7 @@ export async function getAllContactos(options?: {
   query?: string
   relation?: string
   kind?: string
+  comercial?: string
   page?: number
   limit?: number
 }): Promise<Contacto[]> {
@@ -237,6 +238,14 @@ export async function getAllContactos(options?: {
       if (options?.kind && options.kind !== 'ALL') {
         const tipoContacto = options.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
         queryBuilder = queryBuilder.eq('tipo_contacto', tipoContacto)
+      }
+
+      if (options?.comercial && options.comercial !== 'ALL') {
+        if (options.comercial === 'none') {
+          queryBuilder = queryBuilder.is('comercial', null)
+        } else {
+          queryBuilder = queryBuilder.eq('comercial', options.comercial)
+        }
       }
 
       const from = (options.page - 1) * options.limit
@@ -287,6 +296,14 @@ export async function getAllContactos(options?: {
       if (options?.kind && options.kind !== 'ALL') {
         const tipoContacto = options.kind === 'INDIVIDUAL' ? 'Individual' : 'Compañía'
         queryBuilder = queryBuilder.eq('tipo_contacto', tipoContacto)
+      }
+
+      if (options?.comercial && options.comercial !== 'ALL') {
+        if (options.comercial === 'none') {
+          queryBuilder = queryBuilder.is('comercial', null)
+        } else {
+          queryBuilder = queryBuilder.eq('comercial', options.comercial)
+        }
       }
 
       const { data, error } = await queryBuilder

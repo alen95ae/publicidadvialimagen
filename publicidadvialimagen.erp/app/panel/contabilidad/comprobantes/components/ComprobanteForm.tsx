@@ -1043,7 +1043,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     return nuevosDetalles
   }
 
-  // Obtener el texto a mostrar: por código (nuevo) o por nombre (legacy)
+  // Mostrar siempre el código del auxiliar (nunca el nombre)
   const getAuxiliarDisplayText = (auxiliarVal: string | null | undefined) => {
     if (!auxiliarVal) return "Seleccionar auxiliar..."
     const a = auxiliares.find(
@@ -1051,7 +1051,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         x.codigo === auxiliarVal ||
         (x.contactos?.nombre ?? x.nombre) === auxiliarVal
     )
-    if (a) return a.contactos?.nombre ?? a.nombre ?? a.codigo
+    if (a?.codigo) return a.codigo
     return auxiliarVal
   }
 

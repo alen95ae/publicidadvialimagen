@@ -83,7 +83,8 @@ export function LcModal({
   const cargarContactos = useCallback(async () => {
     setCargandoContactos(true)
     try {
-      const response = await fetch("/api/contactos")
+      // Solo contactos con relación Proveedor o Ambos (nunca solo Cliente)
+      const response = await fetch("/api/contactos?relation=Proveedor")
       const data = await response.json()
       const list = data.data || []
       setContactos(list)

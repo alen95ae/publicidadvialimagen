@@ -73,14 +73,20 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
   const [vendedorId, setVendedorId] = useState("")
   const [cliente, setCliente] = useState("")
   const [nit, setNit] = useState("")
+  const [auxiliarCodigo, setAuxiliarCodigo] = useState("")
+  const [contactId, setContactId] = useState<string | null>(null)
   const [detalle, setDetalle] = useState("")
   const [moneda, setMoneda] = useState("BOB")
   const [contactos, setContactos] = useState<any[]>([])
   const [filteredContactos, setFilteredContactos] = useState<any[]>([])
   const [openClienteCombobox, setOpenClienteCombobox] = useState(false)
   const [openNitCombobox, setOpenNitCombobox] = useState(false)
+  const [openAuxiliarCombobox, setOpenAuxiliarCombobox] = useState(false)
   const [filteredContactosPorNit, setFilteredContactosPorNit] = useState<any[]>([])
+  const [auxiliares, setAuxiliares] = useState<any[]>([])
+  const [filteredAuxiliares, setFilteredAuxiliares] = useState<any[]>([])
   const [cargandoContactos, setCargandoContactos] = useState(false)
+  const [cargandoAuxiliares, setCargandoAuxiliares] = useState(false)
   const [vendedores, setVendedores] = useState<any[]>([])
   const [filteredVendedores, setFilteredVendedores] = useState<any[]>([])
   const [openVendedorCombobox, setOpenVendedorCombobox] = useState(false)
@@ -174,6 +180,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         vendedor_id: vendedorId || null,
         cliente_nombre: cliente.trim(),
         cliente_nit: nit.trim(),
+        cliente_auxiliar_codigo: auxiliarCodigo.trim() || null,
         glosa: detalle.trim() || null,
         moneda,
         cotizacion: cotizacionId || null,
@@ -238,6 +245,8 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
     setVendedorId("")
     setCliente("")
     setNit("")
+    setAuxiliarCodigo("")
+    setContactId(null)
     setDetalle("")
     setItems([
       {
@@ -257,7 +266,8 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
   const cargarContactos = useCallback(async () => {
     setCargandoContactos(true)
     try {
-      const response = await fetch("/api/contactos")
+      // Solo contactos con relación Cliente o Ambos (nunca solo Proveedor)
+      const response = await fetch("/api/contactos?relation=Cliente")
       const data = await response.json()
       const list = data.data || []
       setContactos(list)
@@ -299,6 +309,47 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       console.error("Error cargando lista de facturas:", error)
     } finally {
       setCargandoLista(false)
+    }
+  }, [])
+
+  const cargarAuxiliares = useCallback(async () => {
+    setCargandoAuxiliares(true)
+    try {
+      const res = await api("/api/contabilidad/auxiliares?tipo_auxiliar=Cliente&limit=2000")
+      const json = await res.json().catch(() => ({}))
+      const list = json.data || []
+      setAuxiliares(list)
+      setFilteredAuxiliares(list.slice(0, 50))
+    } catch (error) {
+      console.error("Error cargando auxiliares:", error)
+      setFilteredAuxiliares([])
+    } finally {
+      setCargandoAuxiliares(false)
+    }
+  }, [])
+
+  const filtrarAuxiliares = (value: string) => {
+    if (!value.trim()) {
+      setFilteredAuxiliares(auxiliares.slice(0, 50))
+      return
+    }
+    const v = value.toLowerCase()
+    const filtered = auxiliares.filter(
+      (a: any) =>
+        (a.codigo || "").toLowerCase().includes(v) ||
+        (a.nombre || "").toLowerCase().includes(v)
+    )
+    setFilteredAuxiliares(filtered.slice(0, 50))
+  }
+
+  const cargarAuxiliarPorContacto = useCallback(async (contactoId: string) => {
+    try {
+      const res = await api(`/api/contabilidad/auxiliares?contact_id=${encodeURIComponent(contactoId)}`)
+      const json = await res.json().catch(() => ({}))
+      const aux = json.data
+      setAuxiliarCodigo(aux?.codigo ?? "")
+    } catch (_) {
+      setAuxiliarCodigo("")
     }
   }, [])
 
@@ -445,6 +496,8 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       setVendedorId(data.vendedor_id ?? "")
       setCliente(data.cliente_nombre ?? "")
       setNit(data.cliente_nit ?? "")
+      setAuxiliarCodigo(data.cliente_auxiliar_codigo ?? "")
+      setContactId(null)
       setDetalle(data.glosa ?? "")
       setMoneda(data.moneda ?? "BOB")
       setTipoCambio(Number(data.tipo_cambio) || TIPO_CAMBIO_DEFAULT)
@@ -614,6 +667,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         vendedor_id: vendedorId || null,
         cliente_nombre: cliente.trim(),
         cliente_nit: nit.trim(),
+        cliente_auxiliar_codigo: auxiliarCodigo.trim() || null,
         glosa: detalle.trim() || null,
         moneda,
         cotizacion: cotizacionId || null,
@@ -755,8 +809,8 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
         {/* Campos principales */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">Datos de la Factura</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-w-0">
+            <div className="min-w-0 max-w-[10rem]">
               <Label htmlFor="codigo" className="text-xs text-gray-600">
                 Código
               </Label>
@@ -765,10 +819,10 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value)}
                 placeholder="Código de factura"
-                className="mt-1 font-mono"
+                className="mt-1 font-mono w-full"
               />
             </div>
-            <div className="w-fit">
+            <div className="min-w-0 max-w-[10.5rem]">
               <Label htmlFor="fecha" className="text-xs text-gray-600">
                 Fecha
               </Label>
@@ -777,38 +831,97 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                className="mt-1 w-[10.5rem] min-w-0"
+                className="mt-1 w-full min-w-0"
               />
             </div>
-            <div className="w-[8.5rem]">
-              <Label htmlFor="moneda" className="text-xs text-gray-600">
-                Moneda
-              </Label>
-              <Select value={moneda} onValueChange={setMoneda}>
-                <SelectTrigger className="mt-1 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BOB">Bolivianos</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex flex-row gap-2 min-w-0 items-end">
+              <div className="min-w-0 flex-1">
+                <Label htmlFor="moneda" className="text-xs text-gray-600">
+                  Moneda
+                </Label>
+                <Select value={moneda} onValueChange={setMoneda}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BOB">Bolivianos</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-0 flex-1">
+                <Label htmlFor="tipo_cambio" className="text-xs text-gray-600">
+                  Tipo de cambio
+                </Label>
+                <Input
+                  id="tipo_cambio"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tipoCambio}
+                  readOnly
+                  className="mt-1 w-full font-mono bg-muted"
+                />
+              </div>
             </div>
-            <div className="w-[8.5rem]">
-              <Label htmlFor="tipo_cambio" className="text-xs text-gray-600">
-                Tipo de cambio
-              </Label>
-              <Input
-                id="tipo_cambio"
-                type="number"
-                step="0.01"
-                min="0"
-                value={tipoCambio}
-                onChange={(e) => setTipoCambio(Number(e.target.value) || 0)}
-                className="mt-1 w-full font-mono"
-              />
+            <div className="min-w-0">
+              <Label className="text-xs text-gray-600">Cotización</Label>
+              <Popover
+                open={openCotizacionCombobox}
+                onOpenChange={(open) => {
+                  setOpenCotizacionCombobox(open)
+                  if (open) cargarCotizacionesPorBusqueda("")
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "mt-1 w-full justify-between font-normal",
+                      !cotizacionCodigoDisplay && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate">
+                      {cotizacionCodigoDisplay || "Buscar por código..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[320px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por código..."
+                      className="h-9 border-0 focus:ring-0"
+                      onValueChange={filtrarCotizaciones}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {cargandoCotizaciones ? "Cargando..." : "No se encontraron cotizaciones."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {filteredCotizaciones.map((c: any) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.codigo || c.id}
+                            onSelect={() => cargarDatosDesdeCotizacion(c.id, c.codigo || "")}
+                            className="cursor-pointer"
+                          >
+                            <Check className="mr-2 h-4 w-4 opacity-0" />
+                            <span className="font-mono">{c.codigo}</span>
+                            {c.cliente && (
+                              <span className="ml-2 text-xs text-gray-500 truncate">{c.cliente}</span>
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="cliente" className="text-xs text-gray-600">
                 Cliente
               </Label>
@@ -854,8 +967,11 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                                   : ""
                               setCliente(nombre)
                               setNit(nitVal)
+                              setContactId(contacto.id)
+                              cargarAuxiliarPorContacto(contacto.id)
                               setOpenClienteCombobox(false)
                               setOpenNitCombobox(false)
+                              setOpenAuxiliarCombobox(false)
                             }}
                             className="cursor-pointer"
                           >
@@ -876,7 +992,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                 </PopoverContent>
               </Popover>
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="nit" className="text-xs text-gray-600">
                 NIT
               </Label>
@@ -923,8 +1039,11 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                               onSelect={() => {
                                 setNit(nitVal)
                                 setCliente(nombre)
+                                setContactId(contacto.id)
+                                cargarAuxiliarPorContacto(contacto.id)
                                 setOpenNitCombobox(false)
                                 setOpenClienteCombobox(false)
+                                setOpenAuxiliarCombobox(false)
                               }}
                               className="cursor-pointer"
                             >
@@ -944,7 +1063,86 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                 </PopoverContent>
               </Popover>
             </div>
-            <div>
+            <div className="min-w-0">
+              <Label htmlFor="auxiliar" className="text-xs text-gray-600">
+                Auxiliar
+              </Label>
+              <Popover
+                open={openAuxiliarCombobox}
+                onOpenChange={(open) => {
+                  setOpenAuxiliarCombobox(open)
+                  if (open && auxiliares.length === 0) cargarAuxiliares()
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "mt-1 w-full justify-between font-normal text-left",
+                      !auxiliarCodigo && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate">
+                      {auxiliarCodigo || "Buscar por código o nombre..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por código o nombre..."
+                      className="h-9 border-0 focus:ring-0"
+                      onValueChange={filtrarAuxiliares}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        {cargandoAuxiliares ? "Cargando..." : "No se encontraron auxiliares."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {filteredAuxiliares.map((aux: any) => (
+                          <CommandItem
+                            key={aux.id}
+                            value={aux.codigo || aux.nombre || aux.id}
+                            onSelect={() => {
+                              setAuxiliarCodigo(aux.codigo ?? "")
+                              const cid = aux.contact_id
+                              if (cid) {
+                                const c = contactos.find((x: any) => x.id === cid)
+                                if (c) {
+                                  const nombre =
+                                    c.displayName || c.nombre || c.legalName || ""
+                                  const nitVal =
+                                    (c.taxId ?? c.nit ?? "") !== ""
+                                      ? String(c.taxId ?? c.nit)
+                                      : ""
+                                  setCliente(nombre)
+                                  setNit(nitVal)
+                                  setContactId(c.id)
+                                }
+                              }
+                              setOpenAuxiliarCombobox(false)
+                              setOpenClienteCombobox(false)
+                              setOpenNitCombobox(false)
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Check className="mr-2 h-4 w-4 opacity-0" />
+                            <div className="flex flex-col">
+                              <span className="font-medium font-mono">{aux.codigo ?? "—"}</span>
+                              <span className="text-xs text-gray-500">{aux.nombre ?? ""}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="min-w-0">
               <Label htmlFor="vendedor" className="text-xs text-gray-600">
                 Vendedor
               </Label>
@@ -996,63 +1194,6 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                               )}
                             />
                             <span className="font-medium">{user.nombre}</span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="min-w-0 flex-1">
-              <Label className="text-xs text-gray-600">Cotización</Label>
-              <Popover
-                open={openCotizacionCombobox}
-                onOpenChange={(open) => {
-                  setOpenCotizacionCombobox(open)
-                  if (open) cargarCotizacionesPorBusqueda("")
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    className={cn(
-                      "mt-1 w-full justify-between font-normal",
-                      !cotizacionCodigoDisplay && "text-muted-foreground"
-                    )}
-                  >
-                    <span className="truncate">
-                      {cotizacionCodigoDisplay || "Buscar por código..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[320px] p-0" align="start">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      placeholder="Buscar por código..."
-                      className="h-9 border-0 focus:ring-0"
-                      onValueChange={filtrarCotizaciones}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        {cargandoCotizaciones ? "Cargando..." : "No se encontraron cotizaciones."}
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {filteredCotizaciones.map((c: any) => (
-                          <CommandItem
-                            key={c.id}
-                            value={c.codigo || c.id}
-                            onSelect={() => cargarDatosDesdeCotizacion(c.id, c.codigo || "")}
-                            className="cursor-pointer"
-                          >
-                            <Check className="mr-2 h-4 w-4 opacity-0" />
-                            <span className="font-mono">{c.codigo}</span>
-                            {c.cliente && (
-                              <span className="ml-2 text-xs text-gray-500 truncate">{c.cliente}</span>
-                            )}
                           </CommandItem>
                         ))}
                       </CommandGroup>

@@ -106,6 +106,7 @@ export async function PUT(
       vendedor_id,
       cliente_nombre,
       cliente_nit,
+      cliente_auxiliar_codigo: clienteAuxiliarCodigo,
       glosa,
       moneda,
       cotizacion: cotizacionId,
@@ -132,6 +133,8 @@ export async function PUT(
       updated_at: new Date().toISOString(),
       ...(estado != null && estado !== undefined ? { estado } : {}),
     };
+    const auxCodigo = (clienteAuxiliarCodigo != null && String(clienteAuxiliarCodigo).trim() !== "") ? String(clienteAuxiliarCodigo).trim() : null;
+    if (auxCodigo !== null) updateRow.cliente_auxiliar_codigo = auxCodigo;
     if (fecha != null && String(fecha).trim() !== "") {
       updateRow.fecha = String(fecha).trim().split("T")[0];
     }
@@ -144,13 +147,24 @@ export async function PUT(
       if (!Number.isNaN(n)) updateRow.tipo_cambio = n;
     }
 
-    const { data: factura, error: errUpdate } = await supabase
+    let updateResult = await supabase
       .from("facturas_manuales")
       .update(updateRow)
       .eq("id", id)
       .select("id, codigo, fecha, total, estado, cotizacion_id")
       .single();
 
+    if (updateResult.error && (updateResult.error.message?.includes("cliente_auxiliar_codigo") || (updateResult.error as any).code === "42703")) {
+      delete updateRow.cliente_auxiliar_codigo;
+      updateResult = await supabase
+        .from("facturas_manuales")
+        .update(updateRow)
+        .eq("id", id)
+        .select("id, codigo, fecha, total, estado, cotizacion_id")
+        .single();
+    }
+
+    const { data: factura, error: errUpdate } = updateResult;
     if (errUpdate) {
       console.error("Error update facturas_manuales:", errUpdate);
       return NextResponse.json(

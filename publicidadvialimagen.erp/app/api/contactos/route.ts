@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const query = searchParams.get('q') || ''
     const relationFilter = searchParams.get('relation') || ''
     const kindFilter = searchParams.get('kind') || ''
+    const comercialFilter = searchParams.get('comercial') || ''
     const page = parseInt(searchParams.get('page') || '1')
     // Solo aplicar límite si viene explícitamente en la URL
     const limitParam = searchParams.get('limit')
@@ -19,7 +20,8 @@ export async function GET(request: Request) {
     const contactos = await getAllContactos({
       query,
       relation: relationFilter,
-      kind: kindFilter
+      kind: kindFilter,
+      comercial: comercialFilter || undefined
     })
 
     // Ordenamiento personalizado: números primero, luego letras A-Z, sin nombre al final

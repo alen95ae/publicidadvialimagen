@@ -10,14 +10,16 @@ export async function GET(request: Request) {
     const query = searchParams.get('q') || ''
     const relationFilter = searchParams.get('relation') || ''
     const kindFilter = searchParams.get('kind') || ''
+    const comercialFilter = searchParams.get('comercial') || ''
 
-    console.log('🔍 Getting all contact IDs with filters:', { query, relationFilter, kindFilter })
+    console.log('🔍 Getting all contact IDs with filters:', { query, relationFilter, kindFilter, comercialFilter })
 
     // Obtener todos los contactos con filtros
     const contactos = await getAllContactos({
       query,
       relation: relationFilter,
-      kind: kindFilter
+      kind: kindFilter,
+      comercial: comercialFilter || undefined
     })
 
     // Ordenamiento personalizado: números primero, luego letras A-Z, sin nombre al final

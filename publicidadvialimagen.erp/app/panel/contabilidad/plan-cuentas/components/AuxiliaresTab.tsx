@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import type { Auxiliar, TipoAuxiliar, Moneda, Cuenta } from "@/lib/types/contabilidad"
+import type { Auxiliar, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
 /** Buscador tipo combobox para filtrar auxiliares (misma UX que en detalle del comprobante) */
@@ -129,12 +129,6 @@ export default function AuxiliaresTab() {
   const [filterToAuxiliarId, setFilterToAuxiliarId] = useState<string | null>(null)
   const [filteredAuxiliaresForList, setFilteredAuxiliaresForList] = useState<Auxiliar[]>([])
 
-  // Cuentas (plan de cuentas) para el combobox de Cuenta
-  const [cuentas, setCuentas] = useState<Cuenta[]>([])
-  const [loadingCuentas, setLoadingCuentas] = useState(false)
-  const [openCuentaCombobox, setOpenCuentaCombobox] = useState(false)
-  const [filteredCuentasForForm, setFilteredCuentasForForm] = useState<Cuenta[]>([])
-
   const [openCiudad, setOpenCiudad] = useState(false)
   const [openContactoCombobox, setOpenContactoCombobox] = useState(false)
   const [contactoSearch, setContactoSearch] = useState("")
@@ -161,23 +155,7 @@ export default function AuxiliaresTab() {
 
   useEffect(() => {
     fetchAuxiliares()
-    fetchCuentas()
   }, [])
-
-  const fetchCuentas = async () => {
-    try {
-      setLoadingCuentas(true)
-      const response = await api("/api/contabilidad/cuentas?limit=10000")
-      if (response.ok) {
-        const data = await response.json()
-        setCuentas(data.data || [])
-      }
-    } catch (error) {
-      console.error("Error fetching cuentas:", error)
-    } finally {
-      setLoadingCuentas(false)
-    }
-  }
 
   // DEBUG: Log cuando cambia el estado de auxiliares
   useEffect(() => {
@@ -388,32 +366,6 @@ export default function AuxiliaresTab() {
     resetForm()
   }
 
-  const filtrarCuentasForm = (searchValue: string) => {
-    if (!searchValue || searchValue.trim() === "") {
-      setFilteredCuentasForForm(cuentas.slice(0, 20))
-      return
-    }
-    const search = searchValue.toLowerCase().trim()
-    const filtered = cuentas.filter((c) => {
-      const codigo = (c.cuenta || "").toLowerCase()
-      const descripcion = (c.descripcion || "").toLowerCase()
-      return codigo.startsWith(search) || descripcion.includes(search)
-    }).slice(0, 20)
-    setFilteredCuentasForForm(filtered)
-  }
-
-  const getCuentaDisplayText = (cuentaId: number | null) => {
-    if (cuentaId == null) return "Seleccionar cuenta..."
-    const cuenta = cuentas.find((c) => c.id === cuentaId)
-    if (cuenta) return `${cuenta.cuenta} - ${cuenta.descripcion}`
-    return `Cuenta #${cuentaId}`
-  }
-
-  const seleccionarCuentaForm = (cuenta: Cuenta) => {
-    setFormData((prev: any) => ({ ...prev, cuenta_id: cuenta.id }))
-    setOpenCuentaCombobox(false)
-  }
-
   const tipoAuxiliarNormalizado = String(formData.tipo_auxiliar || "").trim()
   const tipoAuxiliarLower = tipoAuxiliarNormalizado.toLowerCase()
   const usaAutocompleteContacto =
@@ -537,7 +489,6 @@ export default function AuxiliaresTab() {
                         <TableHead className="w-[7%]">Tipo</TableHead>
                         <TableHead className="w-[12%]">Código</TableHead>
                         <TableHead className="w-[39%]">Nombre</TableHead>
-                        <TableHead className="w-[14%]">Cuenta</TableHead>
                         <TableHead className="w-[9%] text-center">Moneda</TableHead>
                         <TableHead className="w-[10%] text-center">Vigencia</TableHead>
                         <TableHead className="w-[8%] text-center">Banco</TableHead>
@@ -546,7 +497,7 @@ export default function AuxiliaresTab() {
                     <TableBody>
                       {filteredAuxiliaresForList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                          <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                             No hay auxiliares registrados
                           </TableCell>
                         </TableRow>
@@ -556,9 +507,6 @@ export default function AuxiliaresTab() {
                           const nombre = contacto?.nombre ?? auxiliar.nombre ?? '—'
                           const vigente = (auxiliar as any).vigente ?? true
                           const esBanco = (auxiliar as any).es_cuenta_bancaria ?? false
-                          const cuentaId = (auxiliar as any).cuenta_id
-                          const cuentaPlan = cuentaId != null ? cuentas.find((c) => c.id === cuentaId) : null
-                          const cuentaCodigo = cuentaPlan?.cuenta ?? (cuentaId != null ? `#${cuentaId}` : '—')
 
                           return (
                             <TableRow
@@ -590,7 +538,6 @@ export default function AuxiliaresTab() {
                                   <span className="truncate block">{nombre}</span>
                                 )}
                               </TableCell>
-                              <TableCell className="font-mono">{cuentaCodigo}</TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="outline" className="text-xs">{auxiliar.moneda}</Badge>
                               </TableCell>
@@ -655,43 +602,70 @@ export default function AuxiliaresTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Tipo Auxiliar */}
-            <div className="space-y-2">
-              <Label htmlFor="tipo_auxiliar">Tipo Auxiliar *</Label>
-              <Select
-                value={formData.tipo_auxiliar || ""}
-                onValueChange={(value) => {
-                  const tipoSeleccionado = value as TipoAuxiliar
-                  const permiteContacto = ["Cliente", "Proveedor", "Gobierno"].includes(tipoSeleccionado)
-                  if (!permiteContacto) {
-                    setOpenContactoCombobox(false)
-                    setContactoSearch("")
-                    setContactosOptions([])
+            {/* Tipo Auxiliar + Moneda (primera fila, misma celda) */}
+            <div className="flex gap-4 min-w-0">
+              <div className="space-y-2 flex-1 min-w-0">
+                <Label htmlFor="tipo_auxiliar">Tipo Auxiliar *</Label>
+                <Select
+                  value={formData.tipo_auxiliar || ""}
+                  onValueChange={(value) => {
+                    const tipoSeleccionado = value as TipoAuxiliar
+                    const permiteContacto = ["Cliente", "Proveedor", "Gobierno"].includes(tipoSeleccionado)
+                    if (!permiteContacto) {
+                      setOpenContactoCombobox(false)
+                      setContactoSearch("")
+                      setContactosOptions([])
+                    }
+                    setFormData({
+                      ...formData,
+                      tipo_auxiliar: tipoSeleccionado,
+                      contact_id: permiteContacto ? formData.contact_id : null,
+                    })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPOS_AUXILIAR.map((tipo) => (
+                      <SelectItem key={tipo} value={tipo}>
+                        {tipo}
+                      </SelectItem>
+                    ))}
+                    {formData.tipo_auxiliar && formData.tipo_auxiliar.trim() !== "" && !TIPOS_AUXILIAR.includes(formData.tipo_auxiliar as TipoAuxiliar) && (
+                      <SelectItem value={formData.tipo_auxiliar}>
+                        {formData.tipo_auxiliar}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 flex-1 min-w-0">
+                <Label htmlFor="moneda">Moneda</Label>
+                <Select
+                  value={formData.moneda || "BS"}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, moneda: value })
                   }
-                  setFormData({
-                    ...formData,
-                    tipo_auxiliar: tipoSeleccionado,
-                    contact_id: permiteContacto ? formData.contact_id : null,
-                  })
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIPOS_AUXILIAR.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
-                  {/* Si hay un tipo que no está en la lista, mostrarlo también */}
-                  {formData.tipo_auxiliar && formData.tipo_auxiliar.trim() !== "" && !TIPOS_AUXILIAR.includes(formData.tipo_auxiliar as TipoAuxiliar) && (
-                    <SelectItem value={formData.tipo_auxiliar}>
-                      {formData.tipo_auxiliar}
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                  disabled={bloquearCamposSecundarios}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONEDAS.map((moneda) => (
+                      <SelectItem key={moneda} value={moneda}>
+                        {moneda}
+                      </SelectItem>
+                    ))}
+                    {formData.moneda && !MONEDAS.includes(formData.moneda) && (
+                      <SelectItem value={formData.moneda}>
+                        {formData.moneda}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Código Auxiliar */}
@@ -790,104 +764,9 @@ export default function AuxiliaresTab() {
               )}
             </div>
 
-            {/* Cuenta (combobox como en comprobantes) */}
-            <div className="space-y-2">
-              <Label>Cuenta</Label>
-              <Popover
-                open={openCuentaCombobox}
-                onOpenChange={(open) => {
-                  setOpenCuentaCombobox(open)
-                  if (open) setFilteredCuentasForForm(cuentas.slice(0, 20))
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className={cn(
-                      "w-full justify-between text-sm overflow-hidden",
-                      !formData.cuenta_id && "text-muted-foreground"
-                    )}
-                    disabled={bloquearCamposSecundarios}
-                  >
-                    <span className="truncate text-left flex-1">
-                      {getCuentaDisplayText(formData.cuenta_id ?? null)}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0" align="start">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      placeholder="Buscar por código o descripción..."
-                      className="h-9 border-0 focus:ring-0"
-                      onValueChange={filtrarCuentasForm}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        {loadingCuentas ? "Cargando..." : "No se encontraron cuentas."}
-                      </CommandEmpty>
-                      {filteredCuentasForForm.length > 0 && (
-                        <CommandGroup>
-                          {filteredCuentasForForm.map((cuenta) => (
-                            <CommandItem
-                              key={cuenta.id}
-                              value={`${cuenta.cuenta} ${cuenta.descripcion}`}
-                              onSelect={() => seleccionarCuentaForm(cuenta)}
-                              className="cursor-pointer"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  formData.cuenta_id === cuenta.id ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-medium">{cuenta.cuenta}</span>
-                                <span className="text-gray-600 truncate">{cuenta.descripcion}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Moneda */}
-            <div className="space-y-2">
-              <Label htmlFor="moneda">Moneda</Label>
-              <Select
-                value={formData.moneda || "BS"}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, moneda: value })
-                }
-                disabled={bloquearCamposSecundarios}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MONEDAS.map((moneda) => (
-                    <SelectItem key={moneda} value={moneda}>
-                      {moneda}
-                    </SelectItem>
-                  ))}
-                  {/* Si hay una moneda que no está en la lista, mostrarla también */}
-                  {formData.moneda && !MONEDAS.includes(formData.moneda) && (
-                    <SelectItem value={formData.moneda}>
-                      {formData.moneda}
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Es Cuenta Bancaria + Vigente (misma fila) */}
-            <div className="space-y-2 md:col-span-2 lg:col-span-1">
-              <div className="flex items-center gap-6 pt-6">
+            {/* Fila 2 col 1: Es Cuenta Bancaria + Vigente (misma fila que NIT) */}
+            <div className="space-y-2 flex flex-col justify-end pb-3">
+              <div className="flex items-center gap-6">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="es_cuenta_bancaria"
@@ -927,106 +806,89 @@ export default function AuxiliaresTab() {
               </div>
             </div>
 
-              {/* Ciudad (mismo estilo que en editar/nuevo soporte) */}
-              <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
-                <Popover open={openCiudad} onOpenChange={setOpenCiudad}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openCiudad}
-                      className="w-full justify-between"
-                      disabled={bloquearCamposSecundarios}
-                    >
-                      {formData.ciudad || "Seleccionar ciudad"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start" side="top">
-                    <div className="max-h-[300px] overflow-y-auto">
-                      {ciudadesBolivia.map((ciudad) => (
-                        <div
-                          key={ciudad}
-                          className={cn(
-                            "px-3 py-2 cursor-pointer hover:bg-accent text-sm",
-                            formData.ciudad === ciudad && "bg-accent font-medium"
-                          )}
-                          onClick={() => {
-                            setFormData({ ...formData, ciudad })
-                            setOpenCiudad(false)
-                          }}
-                        >
-                          {ciudad}
-                        </div>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* Dirección */}
-              <div className="space-y-2">
-                <Label htmlFor="direccion">Dirección</Label>
-                <Input
-                  id="direccion"
-                  value={formData.direccion || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, direccion: e.target.value })
-                  }
-                  disabled={bloquearCamposSecundarios}
-                />
-              </div>
-
-              {/* Teléfono */}
-              <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono</Label>
-                <Input
-                  id="telefono"
-                  type="tel"
-                  value={formData.telefono || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, telefono: e.target.value })
-                  }
-                  disabled={bloquearCamposSecundarios}
-                />
-              </div>
-
-              {/* Email */}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  disabled={bloquearCamposSecundarios}
-                />
-              </div>
-
-              {/* NIT */}
-              <div className="space-y-2">
-                <Label htmlFor="nit">NIT</Label>
-                <Input
-                  id="nit"
-                  value={formData.nit || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nit: e.target.value })
-                  }
-                  className="font-mono"
-                  disabled={bloquearCamposSecundarios}
-                />
-              </div>
-
-            {/* Autorización */}
+            {/* NIT (debajo de Código Auxiliar, mismo ancho) */}
             <div className="space-y-2">
-              <Label htmlFor="autorizacion">Autorización</Label>
+              <Label htmlFor="nit">NIT</Label>
               <Input
-                id="autorizacion"
-                value={formData.autorizacion || ""}
+                id="nit"
+                value={formData.nit || ""}
                 onChange={(e) =>
-                  setFormData({ ...formData, autorizacion: e.target.value })
+                  setFormData({ ...formData, nit: e.target.value })
+                }
+                className="font-mono"
+                disabled={bloquearCamposSecundarios}
+              />
+            </div>
+
+            {/* Ciudad (debajo de Nombre, mismo ancho) */}
+            <div className="space-y-2 md:col-span-2 lg:col-span-1">
+              <Label htmlFor="ciudad">Ciudad</Label>
+              <Popover open={openCiudad} onOpenChange={setOpenCiudad}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCiudad}
+                    className="w-full justify-between"
+                    disabled={bloquearCamposSecundarios}
+                  >
+                    {formData.ciudad || "Seleccionar ciudad"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start" side="top">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {ciudadesBolivia.map((ciudad) => (
+                      <div
+                        key={ciudad}
+                        className={cn(
+                          "px-3 py-2 cursor-pointer hover:bg-accent text-sm",
+                          formData.ciudad === ciudad && "bg-accent font-medium"
+                        )}
+                        onClick={() => {
+                          setFormData({ ...formData, ciudad })
+                          setOpenCiudad(false)
+                        }}
+                      >
+                        {ciudad}
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Tercera fila: Dirección, Teléfono, Email */}
+            <div className="space-y-2">
+              <Label htmlFor="direccion">Dirección</Label>
+              <Input
+                id="direccion"
+                value={formData.direccion || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, direccion: e.target.value })
+                }
+                disabled={bloquearCamposSecundarios}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="telefono">Teléfono</Label>
+              <Input
+                id="telefono"
+                type="tel"
+                value={formData.telefono || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, telefono: e.target.value })
+                }
+                disabled={bloquearCamposSecundarios}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
                 }
                 disabled={bloquearCamposSecundarios}
               />

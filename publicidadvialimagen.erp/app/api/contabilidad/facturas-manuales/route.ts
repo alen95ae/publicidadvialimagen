@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
       vendedor_id,
       cliente_nombre,
       cliente_nit,
+      cliente_auxiliar_codigo: clienteAuxiliarCodigo,
       glosa,
       moneda,
       cotizacion: cotizacionId,
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
     const cotizacionUuidVal = (cotizacionId != null && String(cotizacionId).trim() !== "") ? String(cotizacionId).trim() : null;
     const codigoVal = (codigoBody != null && String(codigoBody).trim() !== "") ? String(codigoBody).trim() : null;
     const codigoFinal = codigoVal ?? await obtenerSiguienteNumero(supabase);
-    const row = {
+    const row: Record<string, unknown> = {
       empresa_id: EMPRESA_ID,
       codigo: codigoFinal,
       fecha: fecha || new Date().toISOString().split("T")[0],
@@ -173,13 +174,25 @@ export async function POST(request: NextRequest) {
       total: Number(total) || 0,
       estado: "BORRADOR",
     };
+    const auxCodigo = (clienteAuxiliarCodigo != null && String(clienteAuxiliarCodigo).trim() !== "") ? String(clienteAuxiliarCodigo).trim() : null;
+    if (auxCodigo !== null) (row as any).cliente_auxiliar_codigo = auxCodigo;
 
-    const { data: factura, error: errInsert } = await supabase
+    let result = await supabase
       .from("facturas_manuales")
       .insert(row)
       .select("id, codigo, fecha, total, estado")
       .single();
 
+    if (result.error && (result.error.message?.includes("cliente_auxiliar_codigo") || (result.error as any).code === "42703")) {
+      delete (row as any).cliente_auxiliar_codigo;
+      result = await supabase
+        .from("facturas_manuales")
+        .insert(row)
+        .select("id, codigo, fecha, total, estado")
+        .single();
+    }
+
+    const { data: factura, error: errInsert } = result;
     if (errInsert) {
       console.error("Error insert facturas_manuales:", errInsert);
       return NextResponse.json(

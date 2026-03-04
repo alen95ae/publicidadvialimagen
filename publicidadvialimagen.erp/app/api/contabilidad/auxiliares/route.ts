@@ -95,6 +95,25 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const contactId = searchParams.get("contact_id") || ""
+    if (contactId.trim()) {
+      const supabaseAdmin = getSupabaseAdmin()
+      const { data: auxByContact, error: errContact } = await supabaseAdmin
+        .from("auxiliares")
+        .select("id, codigo, nombre, tipo_auxiliar, contact_id")
+        .eq("contact_id", contactId.trim())
+        .eq("tipo_auxiliar", "Cliente")
+        .limit(1)
+        .maybeSingle()
+      if (errContact) {
+        return NextResponse.json(
+          { error: "Error al obtener auxiliar por contacto", details: errContact.message },
+          { status: 500 }
+        )
+      }
+      return NextResponse.json({ success: true, data: auxByContact })
+    }
+
     const page = parseInt(searchParams.get("page") || "1")
     // Aumentar límite por defecto para cargar todos los auxiliares (2284+ registros)
     const limit = parseInt(searchParams.get("limit") || "10000")

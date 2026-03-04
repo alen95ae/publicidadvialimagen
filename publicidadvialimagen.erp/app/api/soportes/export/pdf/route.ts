@@ -574,8 +574,6 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
   try {
     const emailFooter = obtenerEmailFooter(userEmail)
     console.log('📄 Generando PDF catálogo con email:', emailFooter, 'y número:', userNumero)
-    const currentDate = todayBolivia()
-    const titleForPage = catalogTitleLabel ? `${catalogTitleLabel} - ${currentDate}` : null
     const currentYear = new Date().getFullYear()
     const pdf = new jsPDF('l', 'mm', 'a4') // Cambio a landscape (horizontal)
     
@@ -728,12 +726,11 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       // Ejecutar la función del logo
       addLogo()
       
-      // Título: en primera página usar título del catálogo (filtros/soporte único/genérico) + fecha; en el resto el título del soporte
+      // Título: en todas las páginas (incluida la primera) el nombre del soporte; el título del archivo solo va en el nombre del PDF
       pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
       pdf.setFontSize(18)
       pdf.setFont('helvetica', 'bold')
-      const textToShow = index === 0 && titleForPage ? titleForPage : support.title
-      pdf.text(textToShow, 70, yPosition + 5)
+      pdf.text(support.title, 70, yPosition + 5)
       
       yPosition += 20
       

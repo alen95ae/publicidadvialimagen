@@ -10,11 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Search, Filter, Building2, User, Edit, Trash2, X, FileSpreadsheet } from "lucide-react"
+import { Plus, Search, Filter, Building2, User, Edit, Trash2, X, FileSpreadsheet, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { usePermisosContext } from "@/hooks/permisos-provider"
 import { PermisoEliminar } from "@/components/permiso"
@@ -41,8 +42,9 @@ interface Contact {
 
 interface ContactFilters {
   q: string
-  relation: string[]
+  relation: string
   kind: string
+  comercial: string
 }
 
 export default function ContactosPage() {
@@ -69,9 +71,11 @@ export default function ContactosPage() {
   const [filters, setFilters] = useState<ContactFilters>({
     q: "",
     relation: "ALL",
-    kind: "ALL"
+    kind: "ALL",
+    comercial: "ALL"
   })
   const [filtersLoaded, setFiltersLoaded] = useState(false)
+  const [openComercial, setOpenComercial] = useState(false)
 
   // 1) Cargar los filtros una sola vez al montar
   useEffect(() => {
@@ -83,7 +87,8 @@ export default function ContactosPage() {
         setFilters({
           q: f.q ?? "",
           relation: f.relation ?? "ALL",
-          kind: f.kind ?? "ALL"
+          kind: f.kind ?? "ALL",
+          comercial: f.comercial ?? "ALL"
         })
       } catch (error) {
         console.error('❌ Error parseando filtros guardados:', error)
@@ -100,12 +105,13 @@ export default function ContactosPage() {
     sessionStorage.setItem("contactos_filtros", JSON.stringify({
       q: filters.q,
       relation: filters.relation,
-      kind: filters.kind
+      kind: filters.kind,
+      comercial: filters.comercial
     }))
   }, [filters, filtersLoaded])
 
   // Función para eliminar un filtro específico
-  const eliminarFiltro = (tipo: 'busqueda' | 'relacion' | 'tipo') => {
+  const eliminarFiltro = (tipo: 'busqueda' | 'relacion' | 'tipo' | 'comercial') => {
     switch (tipo) {
       case 'busqueda':
         setFilters(prev => ({ ...prev, q: "" }))
@@ -116,6 +122,9 @@ export default function ContactosPage() {
       case 'tipo':
         setFilters(prev => ({ ...prev, kind: "ALL" }))
         break
+      case 'comercial':
+        setFilters(prev => ({ ...prev, comercial: "ALL" }))
+        break
     }
   }
 
@@ -124,7 +133,8 @@ export default function ContactosPage() {
     setFilters({
       q: "",
       relation: "ALL",
-      kind: "ALL"
+      kind: "ALL",
+      comercial: "ALL"
     })
     sessionStorage.removeItem('contactos_filtros')
   }
@@ -175,6 +185,7 @@ export default function ContactosPage() {
       if (filters.q) params.append("q", filters.q)
       if (filters.relation && filters.relation !== "ALL") params.append("relation", filters.relation)
       if (filters.kind && filters.kind !== "ALL") params.append("kind", filters.kind)
+      if (filters.comercial && filters.comercial !== "ALL") params.append("comercial", filters.comercial)
       params.set('page', page.toString())
       params.set('limit', '100')
 
@@ -209,6 +220,7 @@ export default function ContactosPage() {
       if (filters.q) params.append("q", filters.q)
       if (filters.relation && filters.relation !== "ALL") params.append("relation", filters.relation)
       if (filters.kind && filters.kind !== "ALL") params.append("kind", filters.kind)
+      if (filters.comercial && filters.comercial !== "ALL") params.append("comercial", filters.comercial)
       params.set('allIds', 'true')
 
       const response = await fetch(`/api/contactos/all-ids?${params}`)
@@ -476,7 +488,7 @@ export default function ContactosPage() {
         {/* Barra superior sticky */}
         <div className="sticky top-0 z-10 bg-white border border-gray-200 rounded-lg p-4 mb-6 shadow-sm">
           {/* Etiquetas de filtros activos */}
-          {(filters.q || filters.relation !== "ALL" || filters.kind !== "ALL") && (
+          {(filters.q || filters.relation !== "ALL" || filters.kind !== "ALL" || filters.comercial !== "ALL") && (
             <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b">
               {filters.q && (
                 <div className="flex items-center gap-1 bg-blue-100 hover:bg-blue-200 rounded-full px-3 py-1 text-sm">
@@ -519,6 +531,22 @@ export default function ContactosPage() {
                   </button>
                 </div>
               )}
+
+              {filters.comercial !== "ALL" && (
+                <div className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 rounded-full px-3 py-1 text-sm">
+                  <span className="font-medium">Comercial:</span>
+                  <span className="text-gray-700">
+                    {filters.comercial === "none" ? "Sin asignar" : (salesOwners[filters.comercial] || filters.comercial)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => eliminarFiltro('comercial')}
+                    className="ml-1 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
               
               {/* Botón para limpiar todos */}
               <button
@@ -544,7 +572,8 @@ export default function ContactosPage() {
 
             {/* Filtro Relación */}
             <Select value={filters.relation} onValueChange={(value) => setFilters(prev => ({ ...prev, relation: value }))}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32 relative pl-9 pr-3 [&>span]:text-black [&>svg]:ml-auto [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                 <SelectValue placeholder="Relación" />
               </SelectTrigger>
               <SelectContent>
@@ -556,7 +585,8 @@ export default function ContactosPage() {
 
             {/* Filtro Tipo */}
             <Select value={filters.kind} onValueChange={(value) => setFilters(prev => ({ ...prev, kind: value }))}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32 relative pl-9 pr-3 [&>span]:text-black [&>svg]:ml-auto [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10" />
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
@@ -565,6 +595,53 @@ export default function ContactosPage() {
                 <SelectItem value="COMPANY">Compañía</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Filtro Comercial (mismo estilo scroll que Vendedor en cotizaciones) */}
+            <Popover open={openComercial} onOpenChange={setOpenComercial}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openComercial}
+                  className="relative w-44 justify-between !pl-9"
+                >
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none z-10 shrink-0" />
+                  <span className="truncate">
+                    {filters.comercial === "ALL"
+                      ? "Comercial"
+                      : filters.comercial === "none"
+                        ? "Sin asignar"
+                        : (salesOwners[filters.comercial] || filters.comercial)}
+                  </span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-0" align="start">
+                <div className="max-h-[300px] overflow-y-auto">
+                  <div
+                    className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filters.comercial === "ALL" ? "bg-accent font-medium" : ""}`}
+                    onClick={() => { setFilters(prev => ({ ...prev, comercial: "ALL" })); setOpenComercial(false); }}
+                  >
+                    Comercial
+                  </div>
+                  <div
+                    className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filters.comercial === "none" ? "bg-accent font-medium" : ""}`}
+                    onClick={() => { setFilters(prev => ({ ...prev, comercial: "none" })); setOpenComercial(false); }}
+                  >
+                    Sin asignar
+                  </div>
+                  {Object.entries(salesOwners).map(([id, name]) => (
+                    <div
+                      key={id}
+                      className={`px-3 py-2 cursor-pointer hover:bg-accent text-sm ${filters.comercial === id ? "bg-accent font-medium" : ""}`}
+                      onClick={() => { setFilters(prev => ({ ...prev, comercial: id })); setOpenComercial(false); }}
+                    >
+                      {name}
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Espacio flexible */}
             <div className="flex-1"></div>

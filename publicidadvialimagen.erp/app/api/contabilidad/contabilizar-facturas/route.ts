@@ -12,6 +12,7 @@ const CUENTA_IT_POR_PAGAR_3 = "214004001";
 const CUENTA_INGRESO_VENTAS = "411002001";
 
 const TOLERANCIA_BALANCE = 0.02;
+const TIPO_CAMBIO_USD = 6.96;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -61,13 +62,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: facturas, error: errFacturas } = await supabase
+    let facturasResult = await supabase
       .from("facturas_manuales")
-      .select("id, codigo, fecha, glosa, estado_contable, comprobante_id, cliente_nit, cliente_nombre")
+      .select("id, codigo, fecha, glosa, estado_contable, comprobante_id, cliente_nit, cliente_nombre, cliente_auxiliar_codigo")
       .gte("fecha", desde_fecha)
       .lte("fecha", hasta_fecha)
       .neq("estado", "ANULADA");
 
+    if (facturasResult.error && (facturasResult.error.message?.includes("cliente_auxiliar_codigo") || (facturasResult.error as any).code === "42703")) {
+      facturasResult = await supabase
+        .from("facturas_manuales")
+        .select("id, codigo, fecha, glosa, estado_contable, comprobante_id, cliente_nit, cliente_nombre")
+        .gte("fecha", desde_fecha)
+        .lte("fecha", hasta_fecha)
+        .neq("estado", "ANULADA");
+    }
+
+    const { data: facturas, error: errFacturas } = facturasResult;
     if (errFacturas) {
       console.error("Error cargando facturas:", errFacturas);
       return NextResponse.json(
@@ -148,48 +159,32 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Resolver auxiliar del cliente (para líneas que permitan auxiliar)
-        let auxiliarClienteCodigo: string | null = null;
-        const clienteNit = String((factura as any).cliente_nit ?? "").trim();
-        const clienteNombre = String((factura as any).cliente_nombre ?? "").trim();
-        if (clienteNit || clienteNombre) {
-          let queryAux = supabase
-            .from("auxiliares")
-            .select("id, codigo")
-            .eq("tipo_auxiliar", "Cliente")
-            .limit(1);
-          if (clienteNit) {
-            queryAux = queryAux.eq("codigo", clienteNit);
-          } else {
-            queryAux = queryAux.ilike("nombre", `%${clienteNombre.replace(/%/g, "\\%")}%`);
-          }
-          const { data: auxCliente } = await queryAux.maybeSingle();
-          if (auxCliente?.codigo) {
-            auxiliarClienteCodigo = auxCliente.codigo;
+        // Resolver auxiliar del cliente: primero el guardado en factura (cliente_auxiliar_codigo), sino por NIT/nombre
+        let auxiliarClienteCodigo: string | null = String((factura as any).cliente_auxiliar_codigo ?? "").trim() || null;
+        if (!auxiliarClienteCodigo) {
+          const clienteNit = String((factura as any).cliente_nit ?? "").trim();
+          const clienteNombre = String((factura as any).cliente_nombre ?? "").trim();
+          if (clienteNit || clienteNombre) {
+            let queryAux = supabase
+              .from("auxiliares")
+              .select("id, codigo")
+              .eq("tipo_auxiliar", "Cliente")
+              .limit(1);
+            if (clienteNit) {
+              queryAux = queryAux.eq("codigo", clienteNit);
+            } else {
+              queryAux = queryAux.ilike("nombre", `%${clienteNombre.replace(/%/g, "\\%")}%`);
+            }
+            const { data: auxCliente } = await queryAux.maybeSingle();
+            if (auxCliente?.codigo) {
+              auxiliarClienteCodigo = auxCliente.codigo;
+            }
           }
         }
 
-        // Mapa permite_auxiliar por cuenta (plan_cuentas)
-        const codigosCuentaUsados = new Set<string>([
-          CUENTA_VENTA_DEFAULT,
-          CUENTA_IT_3,
-          CUENTA_IVA_DEBITO_13,
-          CUENTA_IT_POR_PAGAR_3,
-          CUENTA_INGRESO_VENTAS,
-          ...Object.values(mapaCuentaVenta),
-        ]);
-        const { data: filasPlan } = await supabase
-          .from("plan_cuentas")
-          .select("cuenta, permite_auxiliar")
-          .in("cuenta", [...codigosCuentaUsados])
-          .eq("empresa_id", 1);
-        const mapaPermiteAuxiliar: Record<string, boolean> = {};
-        (filasPlan || []).forEach((f: any) => {
-          if (f.cuenta != null) mapaPermiteAuxiliar[String(f.cuenta)] = f.permite_auxiliar === true;
-        });
-
-        const debeAsignarAuxiliar = (cuenta: string): boolean =>
-          Boolean(mapaPermiteAuxiliar[cuenta] && auxiliarClienteCodigo);
+        // En contabilización de facturas: asignar auxiliar del cliente a todas las líneas cuya cuenta empiece por 1 (ítems) y a la de ingreso (4.x)
+        const asignarAuxiliarEnLinea = (cuenta: string): boolean =>
+          Boolean(auxiliarClienteCodigo && (cuenta.startsWith("1") || cuenta === CUENTA_INGRESO_VENTAS));
 
         // Cabecera del comprobante
         // empresa_id es INTEGER (legacy) → NO enviar UUID ahí
@@ -253,8 +248,9 @@ export async function POST(request: NextRequest) {
 
           const cuentaVenta = (item.codigo_producto && mapaCuentaVenta[String(item.codigo_producto).trim()]) || CUENTA_VENTA_DEFAULT;
           const descripcionItem = (item.descripcion || "").trim() || codigoFactura;
-          const asignarAux = debeAsignarAuxiliar(cuentaVenta);
+          const asignarAux = asignarAuxiliarEnLinea(cuentaVenta);
 
+          const debeUsd = round2(importe / TIPO_CAMBIO_USD);
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -263,7 +259,7 @@ export async function POST(request: NextRequest) {
             glosa: descripcionItem,
             debe_bs: importe,
             haber_bs: 0,
-            debe_usd: 0,
+            debe_usd: debeUsd,
             haber_usd: 0,
             orden,
           });
@@ -275,6 +271,9 @@ export async function POST(request: NextRequest) {
           const iva13 = round2(totalFactura * 0.13);
           const ingreso87 = round2(totalFactura * 0.87);
 
+          const it3Usd = round2(it3 / TIPO_CAMBIO_USD);
+          const iva13Usd = round2(iva13 / TIPO_CAMBIO_USD);
+          const ingreso87Usd = round2(ingreso87 / TIPO_CAMBIO_USD);
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -283,7 +282,7 @@ export async function POST(request: NextRequest) {
             glosa: codigoFactura,
             debe_bs: it3,
             haber_bs: 0,
-            debe_usd: 0,
+            debe_usd: it3Usd,
             haber_usd: 0,
             orden,
           });
@@ -296,7 +295,7 @@ export async function POST(request: NextRequest) {
             debe_bs: 0,
             haber_bs: iva13,
             debe_usd: 0,
-            haber_usd: 0,
+            haber_usd: iva13Usd,
             orden,
           });
           orden++;
@@ -308,10 +307,10 @@ export async function POST(request: NextRequest) {
             debe_bs: 0,
             haber_bs: it3,
             debe_usd: 0,
-            haber_usd: 0,
+            haber_usd: it3Usd,
             orden,
           });
-          const asignarAuxIngreso = debeAsignarAuxiliar(CUENTA_INGRESO_VENTAS);
+          const asignarAuxIngreso = asignarAuxiliarEnLinea(CUENTA_INGRESO_VENTAS);
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -321,7 +320,7 @@ export async function POST(request: NextRequest) {
             debe_bs: 0,
             haber_bs: ingreso87,
             debe_usd: 0,
-            haber_usd: 0,
+            haber_usd: ingreso87Usd,
             orden,
           });
         }

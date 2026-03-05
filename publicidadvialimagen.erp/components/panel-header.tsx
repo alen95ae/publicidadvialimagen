@@ -241,8 +241,13 @@ const CONTABILIDAD_INDICATOR_GREEN = new Set([
   "/panel/contabilidad/informes/balance-general",
   "/panel/contabilidad/informes/estado-resultados",
   "/panel/contabilidad/informes/estado-auxiliares",
+  "/panel/contabilidad/informes/libro-compras-iva",
+  "/panel/contabilidad/facturas/informes/libro-ventas-iva",
+  "/panel/contabilidad/facturas/informes/reporte-facturacion",
 ])
 const CONTABILIDAD_INDICATOR_YELLOW = new Set<string>([
+  "/panel/contabilidad/informes/ejecucion-presupuestaria",
+  "/panel/contabilidad/presupuestos",
 ])
 function ContabilidadIndicator({ href }: { href: string }) {
   if (CONTABILIDAD_INDICATOR_GREEN.has(href)) {

@@ -228,3 +228,15 @@ export interface Sucursal {
   created_at?: string
   updated_at?: string
 }
+
+export interface Divisa {
+  id: string
+  codigo: string
+  nombre: string
+  simbolo: string
+  tipo_cambio: number
+  es_base: boolean
+  estado: string
+  created_at?: string
+  updated_at?: string
+}

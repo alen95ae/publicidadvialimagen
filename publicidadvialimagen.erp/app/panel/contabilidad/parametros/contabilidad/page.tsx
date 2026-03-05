@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import EmpresasTab from "./components/EmpresasTab"
 import SucursalesTab from "./components/SucursalesTab"
+import DivisasTab from "./components/DivisasTab"
 
 export default function ParametrosContabilidadPage() {
   return (
@@ -20,9 +21,10 @@ export default function ParametrosContabilidadPage() {
       <Card>
         <CardContent className="pt-6">
           <Tabs defaultValue="empresas" className="w-full">
-            <TabsList className="mb-6 w-full grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <TabsList className="mb-6 w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
               <TabsTrigger value="empresas" className="text-xs lg:text-sm">Empresas</TabsTrigger>
               <TabsTrigger value="sucursales" className="text-xs lg:text-sm">Sucursales</TabsTrigger>
+              <TabsTrigger value="divisas" className="text-xs lg:text-sm">Divisas</TabsTrigger>
             </TabsList>
 
             <TabsContent value="empresas" className="mt-0">
@@ -31,6 +33,10 @@ export default function ParametrosContabilidadPage() {
 
             <TabsContent value="sucursales" className="mt-0">
               <SucursalesTab />
+            </TabsContent>
+
+            <TabsContent value="divisas" className="mt-0">
+              <DivisasTab />
             </TabsContent>
           </Tabs>
         </CardContent>

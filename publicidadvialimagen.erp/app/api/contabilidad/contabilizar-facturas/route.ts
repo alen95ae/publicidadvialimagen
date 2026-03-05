@@ -186,10 +186,7 @@ export async function POST(request: NextRequest) {
         const asignarAuxiliarEnLinea = (cuenta: string): boolean =>
           Boolean(auxiliarClienteCodigo && (cuenta.startsWith("1") || cuenta === CUENTA_INGRESO_VENTAS));
 
-        // Cabecera del comprobante
-        // empresa_id es INTEGER (legacy) → NO enviar UUID ahí
-        // empresa_uuid es UUID (migración 039) → aquí va el UUID de la empresa
-        // sucursal_id es UUID (migración 039)
+        // Cabecera del comprobante: empresa y sucursal = valores seleccionados en Contabilización de facturas; beneficiario = cliente de la factura
         const comprobanteData: Record<string, unknown> = {
           origen: "Ventas",
           tipo_comprobante: "Traspaso",
@@ -200,11 +197,11 @@ export async function POST(request: NextRequest) {
           moneda: "BS",
           tipo_cambio: 6.96,
           concepto: factura.glosa || null,
-          beneficiario: null,
+          beneficiario: (factura.cliente_nombre ?? "").trim() || null,
           nro_cheque: null,
           estado: "BORRADOR",
-          empresa_uuid: empresa_id || null,
-          sucursal_id: sucursal_id || null,
+          empresa_uuid: empresa_id ?? null,
+          sucursal_id: sucursal_id ?? null,
         };
 
         const { data: comprobanteCreado, error: errInsertComp } = await supabase

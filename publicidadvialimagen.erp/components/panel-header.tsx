@@ -239,6 +239,8 @@ const CONTABILIDAD_INDICATOR_GREEN = new Set([
   "/panel/contabilidad/informes/libro-auxiliares",
   "/panel/contabilidad/informes/plan-cuentas",
   "/panel/contabilidad/informes/balance-general",
+  "/panel/contabilidad/informes/estado-resultados",
+  "/panel/contabilidad/informes/estado-auxiliares",
 ])
 const CONTABILIDAD_INDICATOR_YELLOW = new Set<string>([
 ])

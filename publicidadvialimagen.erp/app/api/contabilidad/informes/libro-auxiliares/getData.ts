@@ -143,7 +143,17 @@ export async function getDataLibroAuxiliares(
   if (fecha_inicial) comprobantesQuery = comprobantesQuery.gte("fecha", fecha_inicial)
   if (fecha_final) comprobantesQuery = comprobantesQuery.lte("fecha", fecha_final)
 
-  const { data: comprobantes, error: comprobantesError } = await comprobantesQuery
+  const auxiliaresQuery = supabase
+    .from("auxiliares")
+    .select("id, tipo_auxiliar, codigo, nombre")
+    .eq("vigencia", true)
+
+  const [comprobantesResult, auxiliaresResult] = await Promise.all([
+    comprobantesQuery,
+    auxiliaresQuery,
+  ])
+
+  const { data: comprobantes, error: comprobantesError } = comprobantesResult
   const comprobantes_total = comprobantes?.length ?? 0
   if (comprobantesError || !comprobantes?.length) {
     const debug = buildDebug({ filtros_efectivos: filtrosEfectivos, comprobantes_total })
@@ -172,7 +182,6 @@ export async function getDataLibroAuxiliares(
     return { data: [], tipo_reporte: "Detalle", debug }
   }
 
-  // Join con plan_cuentas por comprobante_detalle.cuenta (código) = plan_cuentas.cuenta. No usar cuenta_id.
   const cuentaCodes = [...new Set(detalles.map((d: any) => d.cuenta))]
   let cuentasMap: Record<string, { descripcion: string; tipo_cuenta: string }> = {}
   if (cuentaCodes.length > 0) {
@@ -187,12 +196,7 @@ export async function getDataLibroAuxiliares(
     }
   }
 
-  // Cargar TODOS los auxiliares (sin filtro tipo_auxiliar) para resolver; luego se aplica filtro sobre resueltos.
-  const auxiliaresQuery = supabase
-    .from("auxiliares")
-    .select("id, tipo_auxiliar, codigo, nombre")
-    .eq("vigencia", true)
-  const { data: auxiliaresList } = await auxiliaresQuery
+  const { data: auxiliaresList } = auxiliaresResult
   const auxiliares_total = auxiliaresList?.length ?? 0
 
   const byCodigo: Record<string, { codigo: string; tipo_auxiliar: string; nombre: string }> = {}

@@ -12,6 +12,20 @@ export async function GET(request: NextRequest) {
     if (permiso instanceof Response) return permiso
 
     const supabase = getSupabaseAdmin()
+
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single()
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const clasificador = searchParams.get("clasificador")
     const desde_cuenta = searchParams.get("desde_cuenta")
@@ -24,7 +38,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("plan_cuentas")
       .select("cuenta, descripcion, nivel, tipo_cuenta, cuenta_padre, aitb, transaccional")
-      .eq("empresa_id", 1)
+      .eq("empresa_id", userData.empresa_id)
       .order("cuenta", { ascending: true })
 
     if (clasificador) query = query.eq("clasificador", clasificador)

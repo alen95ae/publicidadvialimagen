@@ -135,6 +135,19 @@ export async function GET(
 
     const supabase = getSupabaseAdmin()
 
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single()
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      )
+    }
+
     // Obtener comprobante con detalles y descripciones de cuentas
     const { data: comprobante, error: errorComprobante } = await supabase
       .from("comprobantes")
@@ -147,6 +160,14 @@ export async function GET(
       return NextResponse.json(
         { error: "Comprobante no encontrado" },
         { status: 404 }
+      )
+    }
+
+    const comprobanteEmpresaId = (comprobante as any).empresa_id ?? null
+    if (comprobanteEmpresaId != null && comprobanteEmpresaId !== userData.empresa_id) {
+      return NextResponse.json(
+        { error: "No tiene permiso para acceder a este comprobante" },
+        { status: 403 }
       )
     }
 
@@ -186,7 +207,7 @@ export async function GET(
       .from("plan_cuentas")
       .select("cuenta, descripcion")
       .in("cuenta", cuentasCodigos)
-      .eq("empresa_id", 1)
+      .eq("empresa_id", userData.empresa_id)
 
     if (errorCuentas) {
       console.error("Error en comprobantes:", errorCuentas)

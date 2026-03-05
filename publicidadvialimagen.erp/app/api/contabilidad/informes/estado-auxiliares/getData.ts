@@ -92,7 +92,17 @@ export async function getDataEstadoAuxiliares(
     comprobantesQuery = comprobantesQuery.eq("sucursal_id", sucursal_id)
   }
 
-  const { data: comprobantes, error: errComp } = await comprobantesQuery
+  const auxiliaresQuery = supabase
+    .from("auxiliares")
+    .select("codigo, nombre")
+    .eq("vigencia", true)
+
+  const [comprobantesResult, auxiliaresResult] = await Promise.all([
+    comprobantesQuery,
+    auxiliaresQuery,
+  ])
+
+  const { data: comprobantes, error: errComp } = comprobantesResult
   if (errComp || !comprobantes?.length) return vacio
 
   const comprobanteIds = comprobantes.map((c: any) => c.id)
@@ -101,7 +111,6 @@ export async function getDataEstadoAuxiliares(
     return acc
   }, {})
 
-  // 2) comprobante_detalle: solo líneas con auxiliar no nulo/vacío; filtro cuenta
   let detallesQuery = supabase
     .from("comprobante_detalle")
     .select("comprobante_id, cuenta, auxiliar, debe_bs, haber_bs, debe_usd, haber_usd")
@@ -131,10 +140,7 @@ export async function getDataEstadoAuxiliares(
     }
   })
 
-  const { data: auxiliaresList } = await supabase
-    .from("auxiliares")
-    .select("codigo, nombre")
-    .eq("vigencia", true)
+  const { data: auxiliaresList } = auxiliaresResult
   const byCodigo: Record<string, string> = {}
   const byNombreNorm: Record<string, string> = {}
   ;(auxiliaresList || []).forEach((a: any) => {

@@ -14,18 +14,32 @@ export async function GET(request: NextRequest) {
       return permiso
     }
 
-    // Usar admin directamente para evitar problemas con RLS
     const supabase = getSupabaseAdmin()
+
+    // Obtener empresa del usuario autenticado
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single()
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      )
+    }
 
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "100")
     const offset = (page - 1) * limit
 
-    // Obtener comprobantes ordenados por fecha descendente (empresa_uuid y sucursal_id son UUID)
+    // Obtener comprobantes ordenados por fecha descendente, filtrados por empresa del usuario
     const { data, error, count } = await supabase
       .from("comprobantes")
       .select("id, numero, origen, tipo_comprobante, tipo_asiento, fecha, periodo, gestion, moneda, tipo_cambio, concepto, beneficiario, nro_cheque, estado, empresa_uuid, sucursal_id, created_at, updated_at", { count: "exact" })
+      .eq("empresa_id", userData.empresa_id)
       .order("fecha", { ascending: false })
       .order("numero", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1)
@@ -81,21 +95,51 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Permitir comprobantes sin detalles (se usarán para aplicar plantillas)
     if (!detalles || !Array.isArray(detalles)) {
       return NextResponse.json(
         { error: "Detalles debe ser un array" },
         { status: 400 }
       )
     }
-    
-    // Solo validar detalles si hay alguno
-    if (detalles.length > 0) {
-      // Validar que todos los detalles tengan cuenta
-      const detallesInvalidos = detalles.some((d: ComprobanteDetalle) => !d.cuenta)
-      if (detallesInvalidos) {
+
+    if (detalles.length === 0) {
+      return NextResponse.json(
+        { error: "El comprobante debe tener al menos una línea contable" },
+        { status: 400 }
+      )
+    }
+
+    const totalDebeBs = detalles.reduce((s: number, d: ComprobanteDetalle) => s + (Number(d.debe_bs) || 0), 0)
+    const totalHaberBs = detalles.reduce((s: number, d: ComprobanteDetalle) => s + (Number(d.haber_bs) || 0), 0)
+    const totalDebeUsd = detalles.reduce((s: number, d: ComprobanteDetalle) => s + (Number(d.debe_usd) || 0), 0)
+    const totalHaberUsd = detalles.reduce((s: number, d: ComprobanteDetalle) => s + (Number(d.haber_usd) || 0), 0)
+    const diffBs = Math.abs(totalDebeBs - totalHaberBs)
+    const diffUsd = Math.abs(totalDebeUsd - totalHaberUsd)
+    if (diffBs > 0.02 || diffUsd > 0.02) {
+      return NextResponse.json(
+        {
+          error: "El comprobante no está balanceado (Debe ≠ Haber). Total Debe debe ser igual a Total Haber.",
+          detalles: { diferencia_bs: diffBs, diferencia_usd: diffUsd },
+        },
+        { status: 400 }
+      )
+    }
+
+    for (let i = 0; i < detalles.length; i++) {
+      const d = detalles[i] as ComprobanteDetalle
+      if (!d.cuenta || String(d.cuenta).trim() === "") {
         return NextResponse.json(
           { error: "Todos los detalles deben tener una cuenta asignada" },
+          { status: 400 }
+        )
+      }
+      const debeBs = Number(d.debe_bs) || 0
+      const haberBs = Number(d.haber_bs) || 0
+      const debeUsd = Number(d.debe_usd) || 0
+      const haberUsd = Number(d.haber_usd) || 0
+      if (debeBs === 0 && haberBs === 0 && debeUsd === 0 && haberUsd === 0) {
+        return NextResponse.json(
+          { error: `La línea ${i + 1} debe tener Debe o Haber (no puede tener ambos en cero)` },
           { status: 400 }
         )
       }

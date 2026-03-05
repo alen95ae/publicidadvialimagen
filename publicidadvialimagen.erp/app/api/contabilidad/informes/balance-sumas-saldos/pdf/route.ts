@@ -39,8 +39,28 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin()
 
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single()
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
-    const empresaId = searchParams.get("empresa_id") || "1"
+    const empresaIdParam = searchParams.get("empresa_id")
+    if (empresaIdParam && parseInt(empresaIdParam, 10) !== userData.empresa_id) {
+      return NextResponse.json(
+        { error: "No tiene permiso para los datos de la empresa solicitada" },
+        { status: 403 }
+      )
+    }
+    const empresaId = userData.empresa_id
     const gestion = searchParams.get("gestion")
     const periodo = searchParams.get("periodo")
     const estado = searchParams.get("estado")
@@ -62,7 +82,7 @@ export async function GET(request: NextRequest) {
     let comprobantesQuery = supabase
       .from("comprobantes")
       .select("id")
-      .eq("empresa_id", parseInt(empresaId))
+      .eq("empresa_id", empresaId)
       .eq("gestion", parseInt(gestion))
       .eq("periodo", parseInt(periodo))
     
@@ -120,7 +140,7 @@ export async function GET(request: NextRequest) {
     let cuentasQuery = supabase
       .from("plan_cuentas")
       .select("cuenta, descripcion, nivel, tipo_cuenta")
-      .eq("empresa_id", parseInt(empresaId))
+      .eq("empresa_id", empresaId)
       .eq("vigente", true)
     
     if (desdeCuenta) {

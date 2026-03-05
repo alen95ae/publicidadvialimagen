@@ -45,8 +45,15 @@ export async function POST(
       )
     }
 
-    // Validar que el comprobante esté balanceado
     const detalles = comprobante.detalles || []
+    if (detalles.length === 0) {
+      return NextResponse.json(
+        { error: "No se puede aprobar un comprobante sin líneas contables" },
+        { status: 400 }
+      )
+    }
+
+    // Validar que el comprobante esté balanceado (Debe = Haber)
     const totales = detalles.reduce(
       (acc: any, det: any) => ({
         debe_bs: acc.debe_bs + (det.debe_bs || 0),

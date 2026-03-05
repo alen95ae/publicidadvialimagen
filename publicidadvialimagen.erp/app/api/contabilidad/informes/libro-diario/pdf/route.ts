@@ -59,6 +59,19 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin()
 
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single()
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const gestion = searchParams.get("gestion")
     const periodo = searchParams.get("periodo")
@@ -68,7 +81,7 @@ export async function GET(request: NextRequest) {
     const tipo_comprobante = searchParams.get("tipo_comprobante")
     const estado = searchParams.get("estado")
 
-    // Construir query base para comprobantes (mismo que el endpoint GET)
+    // Construir query base para comprobantes (filtrado por empresa del usuario)
     let query = supabase
       .from("comprobantes")
       .select(
@@ -87,7 +100,7 @@ export async function GET(request: NextRequest) {
         periodo
       `
       )
-      .eq("empresa_id", 1)
+      .eq("empresa_id", userData.empresa_id)
       .order("fecha", { ascending: true })
       .order("numero", { ascending: true })
 

@@ -5,7 +5,6 @@ import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { requirePermiso } from "@/lib/permisos";
 import * as XLSX from "xlsx";
 
-const EMPRESA_ID = 1;
 const COTIZACION_FIJA = 6.96;
 
 /** Obtiene el siguiente código de factura libre (FAC-0001, FAC-0002, ...). */
@@ -34,6 +33,20 @@ export async function GET(request: NextRequest) {
     if (permiso instanceof Response) return permiso;
 
     const supabase = getSupabaseAdmin();
+
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single();
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const format = (searchParams.get("format") || "").toLowerCase();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -47,7 +60,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("facturas_manuales")
       .select("id, codigo, fecha, vendedor_id, cliente_nombre, cliente_nit, glosa, moneda, cotizacion_id, tipo_cambio, subtotal, total, estado, created_at, updated_at", (format === "csv" || format === "xlsx") ? {} : { count: "exact" })
-      .eq("empresa_id", EMPRESA_ID)
+      .eq("empresa_id", userData.empresa_id)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false });
 
@@ -132,6 +145,20 @@ export async function POST(request: NextRequest) {
     if (permiso instanceof Response) return permiso;
 
     const supabase = getSupabaseAdmin();
+
+    const { data: userData } = await supabase
+      .from("usuarios")
+      .select("empresa_id")
+      .eq("id", permiso.userId)
+      .single();
+
+    if (!userData?.empresa_id) {
+      return NextResponse.json(
+        { error: "Usuario sin empresa asignada" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
 
     const {
@@ -159,7 +186,7 @@ export async function POST(request: NextRequest) {
     const codigoVal = (codigoBody != null && String(codigoBody).trim() !== "") ? String(codigoBody).trim() : null;
     const codigoFinal = codigoVal ?? await obtenerSiguienteNumero(supabase);
     const row: Record<string, unknown> = {
-      empresa_id: EMPRESA_ID,
+      empresa_id: userData.empresa_id,
       codigo: codigoFinal,
       fecha: fecha || new Date().toISOString().split("T")[0],
       vendedor_id: null,

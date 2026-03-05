@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("divisas")
       .select("*", { count: "exact" })
+      .order("es_base", { ascending: false })
       .order("codigo", { ascending: true })
       .range(offset, offset + limit - 1)
 

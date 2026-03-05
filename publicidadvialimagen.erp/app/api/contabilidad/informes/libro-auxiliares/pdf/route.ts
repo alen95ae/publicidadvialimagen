@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin()
     const { searchParams } = new URL(request.url)
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
     const fecha_inicial = searchParams.get("fecha_inicial") || ""
     const fecha_final = searchParams.get("fecha_final") || ""
 
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
       pdf.text(`Período: ${fi} al ${ff}`, margin, infoY)
       infoY += 5
     }
-    pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, infoY)
+    pdf.text(`Moneda: ${monedaNombre}`, margin, infoY)
     infoY += 5
     pdf.text(`Tipo de reporte: ${tipo_reporte}`, margin, infoY)
     yPosition = infoY + 8

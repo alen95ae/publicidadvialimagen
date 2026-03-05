@@ -97,7 +97,8 @@ export async function GET(request: NextRequest) {
     }
 
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
 
     const supabase = getSupabaseAdmin()
     const data = await getDataBalanceGeneral(supabase, {
@@ -141,7 +142,7 @@ export async function GET(request: NextRequest) {
     pdf.setFont("helvetica", "normal")
     pdf.text(`Desde: ${formatDateBolivia(desde_fecha)} - A fecha: ${formatDateBolivia(a_fecha)}`, margin, yPosition)
     yPosition += 5
-    pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, yPosition)
+    pdf.text(`Moneda: ${monedaNombre}`, margin, yPosition)
     yPosition += 8
 
     const tableWidth = pageWidth - 2 * margin

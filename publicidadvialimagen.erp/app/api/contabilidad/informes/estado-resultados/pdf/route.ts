@@ -10,8 +10,6 @@ import fs from "fs/promises"
 import { formatDateBolivia } from "@/lib/utils"
 import { getDataEstadoResultados } from "../getData"
 
-const TIPO_CAMBIO_USD = 6.96
-
 async function cargarLogo(): Promise<string | null> {
   try {
     const logoPath = path.join(process.cwd(), "public", "logo.jpg")
@@ -108,7 +106,9 @@ export async function GET(request: NextRequest) {
     }
 
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
+    const monedaTipoCambio = searchParams.get("moneda_tipo_cambio")
 
     const supabase = getSupabaseAdmin()
     const data = await getDataEstadoResultados(supabase, {
@@ -159,10 +159,10 @@ export async function GET(request: NextRequest) {
       yPosition
     )
     yPosition += 5
-    pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, yPosition)
+    pdf.text(`Moneda: ${monedaNombre}`, margin, yPosition)
     yPosition += 5
-    if (moneda === "USD") {
-      pdf.text(`Tipo de cambio: ${TIPO_CAMBIO_USD} Bs/USD`, margin, yPosition)
+    if (monedaTipoCambio) {
+      pdf.text(`Tipo de cambio: ${monedaTipoCambio}`, margin, yPosition)
       yPosition += 5
     }
     yPosition += 8

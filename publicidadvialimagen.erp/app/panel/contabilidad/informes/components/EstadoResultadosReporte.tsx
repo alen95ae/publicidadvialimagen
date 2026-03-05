@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Play, Loader2, AlertTriangle, FileSpreadsheet, FileDown } from "lucide-react"
 import { api } from "@/lib/fetcher"
 import { toast } from "sonner"
-import type { Empresa, Sucursal } from "@/lib/types/contabilidad"
+import type { Empresa, Sucursal, Divisa } from "@/lib/types/contabilidad"
 
 interface EstadoResultadosFila {
   cuenta: string
@@ -66,12 +66,14 @@ export default function EstadoResultadosReporte() {
   const { desde, hasta } = getFechasMesActual()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [filters, setFilters] = useState<EstadoResultadosFilters>({
     empresa_id: "todos",
     sucursal_id: "todos",
     desde_fecha: desde,
     a_fecha: hasta,
-    moneda: "BOB",
+    moneda: "",
     nivel: "5",
     estado: "Todos",
   })
@@ -95,6 +97,29 @@ export default function EstadoResultadosReporte() {
       }
     }
     loadEmpresas()
+  }, [])
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          const list = (json.data || []) as Divisa[]
+          setDivisas(list)
+          const base = list.find((d) => d.es_base) ?? list[0]
+          if (base) {
+            setFilters((prev) => ({ ...prev, moneda: prev.moneda || base.codigo }))
+          }
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
   }, [])
 
   useEffect(() => {
@@ -146,7 +171,12 @@ export default function EstadoResultadosReporte() {
     params.set("a_fecha", filters.a_fecha)
     if (filters.empresa_id && filters.empresa_id !== "todos") params.set("empresa_id", filters.empresa_id)
     if (filters.sucursal_id && filters.sucursal_id !== "todos") params.set("sucursal_id", filters.sucursal_id)
-    if (filters.moneda) params.set("moneda", filters.moneda)
+    const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+    params.set("moneda", monedaCodigo)
+    const selectedDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+    if (selectedDivisa?.simbolo) params.set("moneda_simbolo", selectedDivisa.simbolo)
+    if (selectedDivisa?.nombre) params.set("moneda_nombre", selectedDivisa.nombre)
+    if (selectedDivisa?.tipo_cambio != null) params.set("moneda_tipo_cambio", String(selectedDivisa.tipo_cambio))
     if (filters.nivel) params.set("nivel", filters.nivel)
     if (filters.estado) params.set("estado", filters.estado)
     return params
@@ -241,7 +271,8 @@ export default function EstadoResultadosReporte() {
   const tieneDatos =
     data &&
     (data.ingresos?.length || data.costos?.length || data.gastos?.length)
-  const monedaSufijo = filters.moneda === "USD" ? "$" : "Bs"
+  const selectedDivisa = divisas.find((d) => d.codigo === (filters.moneda || divisas.find((x) => x.es_base)?.codigo))
+  const monedaSufijo = selectedDivisa?.simbolo ?? filters.moneda ?? ""
 
   function formatearNumero(n: number): string {
     const s = Number(n).toFixed(2)
@@ -433,15 +464,19 @@ export default function EstadoResultadosReporte() {
                 Moneda
               </Label>
               <Select
-                value={filters.moneda}
+                value={filters.moneda || divisas.find((d) => d.es_base)?.codigo ?? ""}
                 onValueChange={(v) => handleFilterChange("moneda", v)}
+                disabled={loadingDivisas}
               >
                 <SelectTrigger id="moneda" className="mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BOB">Bolivianos</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
+                  {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                    <SelectItem key={d.id} value={d.codigo}>
+                      {d.nombre}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

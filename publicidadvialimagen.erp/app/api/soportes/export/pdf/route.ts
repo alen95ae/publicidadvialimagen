@@ -728,7 +728,12 @@ async function generatePDF(supports: any[], userEmail?: string, userNumero?: str
       
       // Título: en todas las páginas (incluida la primera) el nombre del soporte; el título del archivo solo va en el nombre del PDF
       pdf.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      pdf.setFontSize(18)
+      const titleLength = support.title.length
+      const titleFontSize = titleLength <= 60 ? 18
+        : titleLength <= 70 ? 16
+        : titleLength <= 80 ? 14
+        : 12
+      pdf.setFontSize(titleFontSize)
       pdf.setFont('helvetica', 'bold')
       pdf.text(support.title, 70, yPosition + 5)
       

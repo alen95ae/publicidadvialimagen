@@ -8,8 +8,6 @@ import * as XLSX from "xlsx"
 import { formatDateBolivia } from "@/lib/utils"
 import { getDataEstadoResultados } from "../getData"
 
-const TIPO_CAMBIO_USD = 6.96
-
 function formatearNumero(n: number): string {
   const s = Number(n).toFixed(2)
   const [entera, decimal] = s.split(".")
@@ -32,7 +30,9 @@ export async function GET(request: NextRequest) {
     }
 
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
+    const monedaTipoCambio = searchParams.get("moneda_tipo_cambio")
 
     const supabase = getSupabaseAdmin()
     const data = await getDataEstadoResultados(supabase, {
@@ -55,9 +55,9 @@ export async function GET(request: NextRequest) {
       "",
       "",
     ])
-    sheetData.push(["Moneda:", moneda === "USD" ? "USD" : "Bs", ""])
-    if (moneda === "USD") {
-      sheetData.push(["Tipo de cambio:", `${TIPO_CAMBIO_USD} Bs/USD`, ""])
+    sheetData.push(["Moneda:", monedaNombre, ""])
+    if (monedaTipoCambio) {
+      sheetData.push(["Tipo de cambio:", `${monedaTipoCambio}`, ""])
     }
     sheetData.push([])
 

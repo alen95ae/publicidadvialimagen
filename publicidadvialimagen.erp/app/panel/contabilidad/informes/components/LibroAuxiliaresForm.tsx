@@ -15,8 +15,7 @@ import { FileDown, FileSpreadsheet, Play, Loader2, ChevronsUpDown, Check } from 
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
 import { cn, formatDateBolivia } from "@/lib/utils"
-import type { Auxiliar } from "@/lib/types/contabilidad"
-import type { Cuenta } from "@/lib/types/contabilidad"
+import type { Auxiliar, Cuenta, Divisa } from "@/lib/types/contabilidad"
 
 interface LibroAuxiliaresFilters {
   clasificador: string
@@ -62,6 +61,8 @@ export default function LibroAuxiliaresForm() {
   const [filteredCuentasHasta, setFilteredCuentasHasta] = useState<Cuenta[]>([])
   const [filteredAuxiliaresDesde, setFilteredAuxiliaresDesde] = useState<Auxiliar[]>([])
   const [filteredAuxiliaresHasta, setFilteredAuxiliaresHasta] = useState<Auxiliar[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [filters, setFilters] = useState<LibroAuxiliaresFilters>({
     clasificador: "todos",
     desde_cuenta: "",
@@ -71,7 +72,7 @@ export default function LibroAuxiliaresForm() {
     hasta_auxiliar: "",
     fecha_inicial: new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0],
     fecha_final: new Date().toISOString().split("T")[0],
-    moneda: "BOB",
+    moneda: "",
     estado: "Todos",
     tipo_reporte: "Detalle",
   })
@@ -83,7 +84,31 @@ export default function LibroAuxiliaresForm() {
   const [tipoReporteActual, setTipoReporteActual] = useState<"Resumen" | "Detalle">("Detalle")
   const [hasGenerated, setHasGenerated] = useState(false)
 
-  const monedaSufijo = filters.moneda === "USD" ? "$" : "Bs"
+  const selectedDivisa = divisas.find((d) => d.codigo === (filters.moneda || divisas.find((x) => x.es_base)?.codigo))
+  const monedaSufijo = selectedDivisa?.simbolo ?? filters.moneda ?? ""
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          const list = (json.data || []) as Divisa[]
+          setDivisas(list)
+          const base = list.find((d) => d.es_base) ?? list[0]
+          if (base) {
+            setFilters((prev) => ({ ...prev, moneda: prev.moneda || base.codigo }))
+          }
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
+  }, [])
 
   useEffect(() => {
     const loadTipos = async () => {
@@ -239,7 +264,11 @@ export default function LibroAuxiliaresForm() {
     if (filters.hasta_cuenta) params.set("hasta_cuenta", filters.hasta_cuenta)
     if (filters.fecha_inicial) params.set("fecha_inicial", filters.fecha_inicial)
     if (filters.fecha_final) params.set("fecha_final", filters.fecha_final)
-    if (filters.moneda) params.set("moneda", filters.moneda)
+    const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+    params.set("moneda", monedaCodigo)
+    const selDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+    if (selDivisa?.simbolo) params.set("moneda_simbolo", selDivisa.simbolo)
+    if (selDivisa?.nombre) params.set("moneda_nombre", selDivisa.nombre)
     if (filters.estado && filters.estado !== "Todos") params.set("estado", filters.estado)
     if (filters.tipo_reporte) params.set("tipo_reporte", filters.tipo_reporte)
     return params
@@ -695,15 +724,19 @@ export default function LibroAuxiliaresForm() {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700">Sección Moneda</h3>
             <Select
-              value={filters.moneda}
+              value={filters.moneda || divisas.find((d) => d.es_base)?.codigo ?? ""}
               onValueChange={(v) => handleFilterChange("moneda", v)}
+              disabled={loadingDivisas}
             >
               <SelectTrigger className="w-full max-w-[200px]">
-                <SelectValue />
+                <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="BOB">Bolivianos (Bs)</SelectItem>
-                <SelectItem value="USD">USD ($)</SelectItem>
+                {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                  <SelectItem key={d.id} value={d.codigo}>
+                    {d.nombre}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

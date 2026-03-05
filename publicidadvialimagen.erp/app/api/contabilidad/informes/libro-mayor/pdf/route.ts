@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
     const fecha_final = searchParams.get("fecha_final") || ""
     const estadoParam = searchParams.get("estado") || "Aprobado"
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
 
     let comprobantesQuery = supabase
       .from("comprobantes")
@@ -208,7 +209,7 @@ export async function GET(request: NextRequest) {
       pdf.text(`Período: ${fi} al ${ff}`, margin, yPosition)
       yPosition += 5
     }
-    pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, yPosition)
+    pdf.text(`Moneda: ${monedaNombre}`, margin, yPosition)
     yPosition += 5
     pdf.text(`Estado: ${estadoFiltro}`, margin, yPosition)
     yPosition += 8

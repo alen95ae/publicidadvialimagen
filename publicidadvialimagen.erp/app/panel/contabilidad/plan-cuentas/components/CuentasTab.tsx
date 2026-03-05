@@ -16,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import type { Cuenta, TipoCuenta, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
+import type { Cuenta, TipoCuenta, TipoAuxiliar, Divisa } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
 interface CuentasTabProps {
@@ -106,11 +106,11 @@ function BuscadorCuentas({
 
 const TIPOS_CUENTA: TipoCuenta[] = ["Activo", "Pasivo", "Patrimonio", "Ingreso", "Gasto"]
 const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Banco", "Caja", "Empleado", "Otro"]
-// Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
-const MONEDAS: string[] = ["BS", "USD"]
 
 export default function CuentasTab({ empresaId }: CuentasTabProps) {
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [selectedCuenta, setSelectedCuenta] = useState<Cuenta | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -130,7 +130,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
     descripcion: "",
     cuenta_padre: null,
     tipo_cuenta: "",
-    moneda: "BS",
+    moneda: "BOB",
     nivel: 1,
     permite_auxiliar: false,
     cuenta_presupuestaria: false,
@@ -147,6 +147,24 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
   }, [])
 
   useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          setDivisas((json.data || []) as Divisa[])
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
+  }, [])
+
+  useEffect(() => {
     if (selectedCuenta) {
       setFormData({
         empresa_id: selectedCuenta.empresa_id || empresaId,
@@ -155,7 +173,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
         descripcion: selectedCuenta.descripcion || "",
         cuenta_padre: selectedCuenta.cuenta_padre || null,
         tipo_cuenta: selectedCuenta.tipo_cuenta || "",
-        moneda: selectedCuenta.moneda || "BS",
+        moneda: selectedCuenta.moneda || "BOB",
         nivel: selectedCuenta.nivel || 1,
         permite_auxiliar: selectedCuenta.permite_auxiliar ?? false,
         cuenta_presupuestaria: selectedCuenta.cuenta_presupuestaria ?? false,
@@ -284,7 +302,7 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
       descripcion: "",
       cuenta_padre: null,
       tipo_cuenta: "",
-      moneda: "BS",
+      moneda: "BOB",
       nivel: 1,
       permite_auxiliar: false,
       cuenta_presupuestaria: false,
@@ -646,22 +664,22 @@ export default function CuentasTab({ empresaId }: CuentasTabProps) {
               <div className="space-y-2">
                 <Label htmlFor="moneda">Moneda</Label>
                 <Select
-                  value={formData.moneda || "BS"}
+                  value={formData.moneda || divisas.find((d) => d.es_base)?.codigo ?? "BOB"}
                   onValueChange={(value) =>
                     setFormData({ ...formData, moneda: value })
                   }
+                  disabled={loadingDivisas}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {MONEDAS.map((moneda) => (
-                      <SelectItem key={moneda} value={moneda}>
-                        {moneda}
+                    {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                      <SelectItem key={d.id} value={d.codigo}>
+                        {d.nombre || d.codigo}
                       </SelectItem>
                     ))}
-                    {/* Si hay una moneda que no está en la lista, mostrarla también */}
-                    {formData.moneda && !MONEDAS.includes(formData.moneda) && (
+                    {formData.moneda && !divisas.some((d) => d.codigo === formData.moneda) && (
                       <SelectItem value={formData.moneda}>
                         {formData.moneda}
                       </SelectItem>

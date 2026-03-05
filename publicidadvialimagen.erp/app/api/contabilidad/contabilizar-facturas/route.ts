@@ -12,7 +12,6 @@ const CUENTA_IT_POR_PAGAR_3 = "214004001";
 const CUENTA_INGRESO_VENTAS = "411002001";
 
 const TOLERANCIA_BALANCE = 0.02;
-const TIPO_CAMBIO_USD = 6.96;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -61,6 +60,36 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Tipo de cambio USD desde tabla divisas (evita hardcodeo)
+    const { data: divisasRows, error: errDivisas } = await supabase
+      .from("divisas")
+      .select("id, codigo, tipo_cambio")
+      .eq("codigo", "USD")
+      .eq("estado", "Activo")
+      .limit(1)
+      .maybeSingle();
+
+    if (errDivisas) {
+      console.error("Error cargando divisas:", errDivisas);
+      return NextResponse.json(
+        { error: "Error al obtener tipo de cambio. Verifique la configuración de Divisas en Parámetros." },
+        { status: 500 }
+      );
+    }
+
+    const divisaUsd = divisasRows;
+    if (!divisaUsd || typeof divisaUsd.tipo_cambio !== "number" || divisaUsd.tipo_cambio <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No hay divisa USD activa configurada o el tipo de cambio no es válido. Configure las divisas en Contabilidad → Parámetros → Divisas.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const tipoCambioUsd = divisaUsd.tipo_cambio;
 
     let facturasResult = await supabase
       .from("facturas_manuales")
@@ -195,7 +224,7 @@ export async function POST(request: NextRequest) {
           periodo,
           gestion,
           moneda: "BS",
-          tipo_cambio: 6.96,
+          tipo_cambio: tipoCambioUsd,
           concepto: factura.glosa || null,
           beneficiario: (factura.cliente_nombre ?? "").trim() || null,
           nro_cheque: null,
@@ -247,7 +276,7 @@ export async function POST(request: NextRequest) {
           const descripcionItem = (item.descripcion || "").trim() || codigoFactura;
           const asignarAux = asignarAuxiliarEnLinea(cuentaVenta);
 
-          const debeUsd = round2(importe / TIPO_CAMBIO_USD);
+          const debeUsd = round2(importe / tipoCambioUsd);
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,
@@ -268,9 +297,9 @@ export async function POST(request: NextRequest) {
           const iva13 = round2(totalFactura * 0.13);
           const ingreso87 = round2(totalFactura * 0.87);
 
-          const it3Usd = round2(it3 / TIPO_CAMBIO_USD);
-          const iva13Usd = round2(iva13 / TIPO_CAMBIO_USD);
-          const ingreso87Usd = round2(ingreso87 / TIPO_CAMBIO_USD);
+          const it3Usd = round2(it3 / tipoCambioUsd);
+          const iva13Usd = round2(iva13 / tipoCambioUsd);
+          const ingreso87Usd = round2(ingreso87 / tipoCambioUsd);
           orden++;
           detallesData.push({
             comprobante_id: comprobanteId,

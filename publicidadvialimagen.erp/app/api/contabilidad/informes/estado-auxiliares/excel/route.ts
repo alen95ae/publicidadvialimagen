@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     }
 
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
 
     const supabase = getSupabaseAdmin()
     const data = await getDataEstadoAuxiliares(supabase, {
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
       "",
       "",
     ])
-    sheetData.push(["Moneda:", moneda === "USD" ? "USD" : "Bs", "", "", "", "", ""])
+    sheetData.push(["Moneda:", monedaNombre, "", "", "", "", ""])
     sheetData.push([])
     sheetData.push(headers)
 

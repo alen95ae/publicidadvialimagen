@@ -11,8 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { Calculator, Loader2, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
-import type { Empresa } from "@/lib/types/contabilidad"
-import type { Sucursal } from "@/lib/types/contabilidad"
+import type { Empresa, Sucursal, Divisa } from "@/lib/types/contabilidad"
 
 /** Formato YYYY-MM-DD para estado y backend (evita problemas de timezone usando fecha local). */
 function formatDateToYYYYMMDD(d: Date): string {
@@ -44,11 +43,11 @@ interface ContabilizacionFilters {
 }
 
 const CLASIFICADOR_FIJO = "CON-CEN"
-const COTIZACION_FIJA = "6.96"
 
 export default function ContabilizacionFacturas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [cotizacionDisplay, setCotizacionDisplay] = useState<string>("")
 
   const [filters, setFilters] = useState<ContabilizacionFilters>(() => {
     const { desde, hasta } = getFechasMesActual()
@@ -104,6 +103,29 @@ export default function ContabilizacionFacturas() {
     }
     loadEmpresas()
     loadSucursales()
+  }, [])
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          const list = (data.data || []) as Divisa[]
+          const usd = list.find((d) => d.codigo === "USD")
+          if (usd != null && typeof usd.tipo_cambio === "number") {
+            setCotizacionDisplay(String(usd.tipo_cambio))
+          } else {
+            setCotizacionDisplay("—")
+          }
+        } else {
+          setCotizacionDisplay("—")
+        }
+      } catch {
+        setCotizacionDisplay("—")
+      }
+    }
+    loadDivisas()
   }, [])
 
   const [info, setInfo] = useState({
@@ -293,7 +315,7 @@ export default function ContabilizacionFacturas() {
                 <Input
                   id="cotizacion"
                   type="text"
-                  value={COTIZACION_FIJA}
+                  value={cotizacionDisplay || "Cargando..."}
                   readOnly
                   className="mt-1 bg-gray-50 font-mono"
                 />

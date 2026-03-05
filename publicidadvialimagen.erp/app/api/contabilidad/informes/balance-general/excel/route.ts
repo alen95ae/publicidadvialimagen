@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
     }
 
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
 
     const supabase = getSupabaseAdmin()
     const data = await getDataBalanceGeneral(supabase, {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
     const sheetData: (string | number)[][] = []
     sheetData.push(["BALANCE GENERAL"])
     sheetData.push([`Desde: ${formatDateBolivia(desde_fecha)} - A fecha: ${formatDateBolivia(a_fecha)}`, "", ""])
-    sheetData.push(["Moneda:", moneda === "USD" ? "USD" : "Bs", ""])
+    sheetData.push(["Moneda:", monedaNombre, ""])
     sheetData.push([])
 
     sheetData.push(["ACTIVO"])

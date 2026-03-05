@@ -36,11 +36,12 @@ export interface LcRegistroDatos {
   credito_fiscal: number
 }
 
-const COTIZACION_FIJA = 6.96
+/** Cotización fija para comprobantes (igual que en ComprobanteForm: 6.96) */
+const COTIZACION_DEFAULT = 6.96
 
 const emptyLc: LcRegistroDatos = {
   fecha: new Date().toISOString().split("T")[0],
-  cotizacion: COTIZACION_FIJA,
+  cotizacion: COTIZACION_DEFAULT,
   nro_dui: "",
   nro_documento: "",
   proveedor_nombre: "",
@@ -61,7 +62,7 @@ interface LcModalProps {
   initialData?: Partial<LcRegistroDatos> | null
   /** Fecha del comprobante (por defecto para Fecha) */
   fechaComprobante?: string
-  /** Cotización del comprobante (readonly) */
+  /** Cotización del comprobante (readonly); debe venir del formulario padre (tipo de cambio dinámico desde divisas) */
   cotizacionComprobante?: number
   onSave: (data: LcRegistroDatos) => void
 }
@@ -71,7 +72,7 @@ export function LcModal({
   onOpenChange,
   initialData,
   fechaComprobante,
-  cotizacionComprobante = 6.96,
+  cotizacionComprobante = COTIZACION_DEFAULT,
   onSave,
 }: LcModalProps) {
   const [form, setForm] = useState<LcRegistroDatos>({ ...emptyLc })
@@ -101,7 +102,7 @@ export function LcModal({
       cargarContactos()
       const base = { ...emptyLc }
       base.fecha = fechaComprobante ?? new Date().toISOString().split("T")[0]
-      base.cotizacion = cotizacionComprobante ?? COTIZACION_FIJA
+      base.cotizacion = cotizacionComprobante ?? COTIZACION_DEFAULT
       if (initialData) {
         if (initialData.id != null) base.id = initialData.id
         if (initialData.fecha) base.fecha = initialData.fecha
@@ -203,7 +204,7 @@ export function LcModal({
                 <Input
                   id="lc-cotizacion"
                   type="number"
-                  value={cotizacionComprobante ?? COTIZACION_FIJA}
+                  value={cotizacionComprobante ?? COTIZACION_DEFAULT}
                   disabled
                   readOnly
                   className="bg-gray-50 font-mono"

@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import type { Auxiliar, TipoAuxiliar, Moneda } from "@/lib/types/contabilidad"
+import type { Auxiliar, TipoAuxiliar, Divisa } from "@/lib/types/contabilidad"
 import { api } from "@/lib/fetcher"
 
 /** Buscador tipo combobox para filtrar auxiliares (misma UX que en detalle del comprobante) */
@@ -105,8 +105,6 @@ function BuscadorAuxiliares({
 }
 
 const TIPOS_AUXILIAR: TipoAuxiliar[] = ["Cliente", "Proveedor", "Empleado", "Banco", "Gobierno", "Patentes"]
-// Monedas: BS es el valor por defecto en la BD, pero también puede haber USD
-const MONEDAS: string[] = ["BS", "USD"]
 // Lista fija de ciudades (mismo estilo que en soportes)
 const ciudadesBolivia = ["La Paz", "Santa Cruz", "Cochabamba", "El Alto", "Sucre", "Potosi", "Tarija", "Oruro", "Beni", "Pando"]
 
@@ -122,6 +120,8 @@ type ContactoLite = {
 
 export default function AuxiliaresTab() {
   const [auxiliares, setAuxiliares] = useState<Auxiliar[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [selectedAuxiliar, setSelectedAuxiliar] = useState<Auxiliar | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -142,7 +142,7 @@ export default function AuxiliaresTab() {
     nombre: "",
     contact_id: null,
     cuenta_id: null,
-    moneda: "BS",
+    moneda: "BOB",
     es_cuenta_bancaria: false,
     ciudad: "",
     direccion: "",
@@ -155,6 +155,24 @@ export default function AuxiliaresTab() {
 
   useEffect(() => {
     fetchAuxiliares()
+  }, [])
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          setDivisas((json.data || []) as Divisa[])
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
   }, [])
 
   // DEBUG: Log cuando cambia el estado de auxiliares
@@ -184,7 +202,7 @@ export default function AuxiliaresTab() {
         nombre: nombre,
         contact_id: (selectedAuxiliar as any).contact_id ?? null,
         cuenta_id: (selectedAuxiliar as any).cuenta_id || null,
-        moneda: selectedAuxiliar.moneda || "BS",
+        moneda: selectedAuxiliar.moneda || "BOB",
         es_cuenta_bancaria: (selectedAuxiliar as any).es_cuenta_bancaria ?? false,
         ciudad: (selectedAuxiliar as any).ciudad || "",
         direccion: selectedAuxiliar.direccion || "",
@@ -268,7 +286,7 @@ export default function AuxiliaresTab() {
       nombre: "",
       contact_id: null,
       cuenta_id: null,
-      moneda: "BS",
+      moneda: "BOB",
       es_cuenta_bancaria: false,
       ciudad: "",
       direccion: "",
@@ -643,22 +661,22 @@ export default function AuxiliaresTab() {
               <div className="space-y-2 flex-1 min-w-0">
                 <Label htmlFor="moneda">Moneda</Label>
                 <Select
-                  value={formData.moneda || "BS"}
+                  value={formData.moneda || divisas.find((d) => d.es_base)?.codigo ?? "BOB"}
                   onValueChange={(value) =>
                     setFormData({ ...formData, moneda: value })
                   }
-                  disabled={bloquearCamposSecundarios}
+                  disabled={bloquearCamposSecundarios || loadingDivisas}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {MONEDAS.map((moneda) => (
-                      <SelectItem key={moneda} value={moneda}>
-                        {moneda}
+                    {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                      <SelectItem key={d.id} value={d.codigo}>
+                        {d.nombre || d.codigo}
                       </SelectItem>
                     ))}
-                    {formData.moneda && !MONEDAS.includes(formData.moneda) && (
+                    {formData.moneda && !divisas.some((d) => d.codigo === formData.moneda) && (
                       <SelectItem value={formData.moneda}>
                         {formData.moneda}
                       </SelectItem>

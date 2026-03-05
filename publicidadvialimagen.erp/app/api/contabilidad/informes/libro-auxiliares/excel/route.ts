@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin()
     const { searchParams } = new URL(request.url)
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
 
     const { data, tipo_reporte } = await getDataLibroAuxiliares(supabase, searchParams)
 

@@ -14,7 +14,7 @@ import { FileDown, FileSpreadsheet, Play, Loader2, ChevronsUpDown, Check } from 
 import { api } from "@/lib/fetcher"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import type { Empresa, Sucursal, Cuenta, Auxiliar } from "@/lib/types/contabilidad"
+import type { Empresa, Sucursal, Cuenta, Auxiliar, Divisa } from "@/lib/types/contabilidad"
 
 interface EstadoAuxiliaresFila {
   auxiliar_codigo: string | null
@@ -84,6 +84,8 @@ export default function EstadoAuxiliaresReporte() {
   const [filteredCuentasHasta, setFilteredCuentasHasta] = useState<Cuenta[]>([])
   const [filteredAuxiliaresDesde, setFilteredAuxiliaresDesde] = useState<Auxiliar[]>([])
   const [filteredAuxiliaresHasta, setFilteredAuxiliaresHasta] = useState<Auxiliar[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [filters, setFilters] = useState<EstadoAuxiliaresFilters>({
     empresa_id: "todos",
     sucursal_id: "todos",
@@ -94,7 +96,7 @@ export default function EstadoAuxiliaresReporte() {
     hasta_auxiliar: "",
     fecha_inicial: desde,
     fecha_final: hasta,
-    moneda: "BOB",
+    moneda: "",
     estado: "Todos",
   })
 
@@ -117,6 +119,29 @@ export default function EstadoAuxiliaresReporte() {
       }
     }
     loadEmpresas()
+  }, [])
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          const list = (json.data || []) as Divisa[]
+          setDivisas(list)
+          const base = list.find((d) => d.es_base) ?? list[0]
+          if (base) {
+            setFilters((prev) => ({ ...prev, moneda: prev.moneda || base.codigo }))
+          }
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
   }, [])
 
   useEffect(() => {
@@ -293,7 +318,11 @@ export default function EstadoAuxiliaresReporte() {
       if (filters.hasta_auxiliar) params.set("hasta_auxiliar", filters.hasta_auxiliar)
       params.set("fecha_inicial", filters.fecha_inicial)
       params.set("fecha_final", filters.fecha_final)
-      params.set("moneda", filters.moneda)
+      const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+      params.set("moneda", monedaCodigo)
+      const selectedDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+      if (selectedDivisa?.simbolo) params.set("moneda_simbolo", selectedDivisa.simbolo)
+      if (selectedDivisa?.nombre) params.set("moneda_nombre", selectedDivisa.nombre)
       params.set("estado", filters.estado)
       const res = await api(`/api/contabilidad/informes/estado-auxiliares?${params.toString()}`)
       const json = await res.json()
@@ -324,7 +353,11 @@ export default function EstadoAuxiliaresReporte() {
     if (filters.hasta_auxiliar) params.set("hasta_auxiliar", filters.hasta_auxiliar)
     params.set("fecha_inicial", filters.fecha_inicial)
     params.set("fecha_final", filters.fecha_final)
-    params.set("moneda", filters.moneda)
+    const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+    params.set("moneda", monedaCodigo)
+    const selectedDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+    if (selectedDivisa?.simbolo) params.set("moneda_simbolo", selectedDivisa.simbolo)
+    if (selectedDivisa?.nombre) params.set("moneda_nombre", selectedDivisa.nombre)
     params.set("estado", filters.estado)
     return params
   }
@@ -782,7 +815,6 @@ export default function EstadoAuxiliaresReporte() {
 
         <Separator />
 
-        {/* Parámetros: Moneda (USD/BS con tipo de cambio 6.96 en backend) y Estado */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">Parámetros</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -791,15 +823,19 @@ export default function EstadoAuxiliaresReporte() {
                 Moneda
               </Label>
               <Select
-                value={filters.moneda}
+                value={filters.moneda || divisas.find((d) => d.es_base)?.codigo ?? ""}
                 onValueChange={(v) => handleFilterChange("moneda", v)}
+                disabled={loadingDivisas}
               >
                 <SelectTrigger id="moneda" className="mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BOB">Bolivianos</SelectItem>
-                  <SelectItem value="USD">USD (tipo cambio 6.96 Bs/USD)</SelectItem>
+                  {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                    <SelectItem key={d.id} value={d.codigo}>
+                      {d.nombre}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

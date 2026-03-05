@@ -15,9 +15,7 @@ import { FileDown, FileSpreadsheet, Play, Loader2, ChevronsUpDown, Check } from 
 import { toast } from "sonner"
 import { api } from "@/lib/fetcher"
 import { cn, formatDateBolivia } from "@/lib/utils"
-import type { Empresa } from "@/lib/types/contabilidad"
-import type { Sucursal } from "@/lib/types/contabilidad"
-import type { Cuenta } from "@/lib/types/contabilidad"
+import type { Empresa, Sucursal, Cuenta, Divisa } from "@/lib/types/contabilidad"
 
 interface LibroMayorFilters {
   empresa_id: string
@@ -63,6 +61,8 @@ export default function LibroMayorForm() {
   const [openHastaCuenta, setOpenHastaCuenta] = useState(false)
   const [filteredCuentasDesde, setFilteredCuentasDesde] = useState<Cuenta[]>([])
   const [filteredCuentasHasta, setFilteredCuentasHasta] = useState<Cuenta[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [filters, setFilters] = useState<LibroMayorFilters>({
     empresa_id: "todos",
     sucursal_id: "todos",
@@ -71,7 +71,7 @@ export default function LibroMayorForm() {
     hasta_cuenta: "",
     fecha_inicial: new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0],
     fecha_final: new Date().toISOString().split("T")[0],
-    moneda: "BOB",
+    moneda: "",
     estado: "Aprobado",
   })
 
@@ -81,7 +81,8 @@ export default function LibroMayorForm() {
   const [movimientos, setMovimientos] = useState<MovimientoConSaldo[]>([])
   const [hasGenerated, setHasGenerated] = useState(false)
 
-  const monedaSufijo = filters.moneda === "USD" ? "$" : "Bs"
+  const selectedDivisa = divisas.find((d) => d.codigo === (filters.moneda || divisas.find((x) => x.es_base)?.codigo))
+  const monedaSufijo = selectedDivisa?.simbolo ?? filters.moneda ?? ""
 
   useEffect(() => {
     const loadEmpresas = async () => {
@@ -96,6 +97,29 @@ export default function LibroMayorForm() {
       }
     }
     loadEmpresas()
+  }, [])
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          const list = (json.data || []) as Divisa[]
+          setDivisas(list)
+          const base = list.find((d) => d.es_base) ?? list[0]
+          if (base) {
+            setFilters((prev) => ({ ...prev, moneda: prev.moneda || base.codigo }))
+          }
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
   }, [])
 
   useEffect(() => {
@@ -202,7 +226,11 @@ export default function LibroMayorForm() {
     if (filters.hasta_cuenta) params.set("hasta_cuenta", filters.hasta_cuenta)
     if (filters.fecha_inicial) params.set("fecha_inicial", filters.fecha_inicial)
     if (filters.fecha_final) params.set("fecha_final", filters.fecha_final)
-    if (filters.moneda) params.set("moneda", filters.moneda)
+    const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+    params.set("moneda", monedaCodigo)
+    const selDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+    if (selDivisa?.simbolo) params.set("moneda_simbolo", selDivisa.simbolo)
+    if (selDivisa?.nombre) params.set("moneda_nombre", selDivisa.nombre)
     if (filters.estado && filters.estado !== "Todos") {
       params.set("estado", filters.estado)
     }
@@ -592,15 +620,19 @@ export default function LibroMayorForm() {
                   Moneda
                 </Label>
                 <Select
-                  value={filters.moneda}
+                  value={filters.moneda || divisas.find((d) => d.es_base)?.codigo ?? ""}
                   onValueChange={(v) => handleFilterChange("moneda", v)}
+                  disabled={loadingDivisas}
                 >
                   <SelectTrigger id="moneda" className="mt-1">
-                    <SelectValue />
+                    <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BOB">Bolivianos</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
+                    {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                      <SelectItem key={d.id} value={d.codigo}>
+                        {d.nombre}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -81,7 +81,8 @@ export type TipoAuxiliar =
   | "Gobierno"
   | "Patentes"
 
-export type Moneda = "BS" | "USD"
+/** Código de divisa (ej. BOB, USD). Dinámico según tabla divisas. */
+export type Moneda = string
 
 export interface PlanCuentasFilters {
   clasificador?: string

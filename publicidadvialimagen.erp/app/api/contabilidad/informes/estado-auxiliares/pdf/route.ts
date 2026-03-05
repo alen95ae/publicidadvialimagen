@@ -107,7 +107,8 @@ export async function GET(request: NextRequest) {
     }
 
     const moneda = searchParams.get("moneda") || "BOB"
-    const monedaSufijo = moneda === "USD" ? "$" : "Bs"
+    const monedaSufijo = searchParams.get("moneda_simbolo") || moneda
+    const monedaNombre = searchParams.get("moneda_nombre") || moneda
 
     const supabase = getSupabaseAdmin()
     const data = await getDataEstadoAuxiliares(supabase, {
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
       yPosition
     )
     yPosition += 5
-    pdf.text(`Moneda: ${moneda === "USD" ? "USD" : "Bs"}`, margin, yPosition)
+    pdf.text(`Moneda: ${monedaNombre}`, margin, yPosition)
     yPosition += 8
 
     const tableWidth = pageWidth - 2 * margin

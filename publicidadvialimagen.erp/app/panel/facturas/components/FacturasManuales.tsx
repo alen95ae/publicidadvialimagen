@@ -15,8 +15,7 @@ import { Check, ChevronsUpDown, Trash2, Save, FileDown, CheckCircle } from "luci
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
 import { toast } from "sonner"
-
-const TIPO_CAMBIO_DEFAULT = 6.96
+import type { Divisa } from "@/lib/types/contabilidad"
 
 interface ProductoInventario {
   id: string
@@ -76,7 +75,9 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
   const [auxiliarCodigo, setAuxiliarCodigo] = useState("")
   const [contactId, setContactId] = useState<string | null>(null)
   const [detalle, setDetalle] = useState("")
-  const [moneda, setMoneda] = useState("BOB")
+  const [moneda, setMoneda] = useState("")
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [contactos, setContactos] = useState<any[]>([])
   const [filteredContactos, setFilteredContactos] = useState<any[]>([])
   const [openClienteCombobox, setOpenClienteCombobox] = useState(false)
@@ -100,7 +101,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
   const [cargandoProductos, setCargandoProductos] = useState(false)
   const [openCodigoProductoCombobox, setOpenCodigoProductoCombobox] = useState<Record<number, boolean>>({})
   const [estado, setEstado] = useState<string>("BORRADOR")
-  const [tipoCambio, setTipoCambio] = useState<number>(TIPO_CAMBIO_DEFAULT)
+  const [tipoCambio, setTipoCambio] = useState<number>(0)
   const [cotizacionId, setCotizacionId] = useState<string>("")
   const [cotizacionCodigoDisplay, setCotizacionCodigoDisplay] = useState<string>("")
   const [cotizaciones, setCotizaciones] = useState<any[]>([])
@@ -500,7 +501,7 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
       setContactId(null)
       setDetalle(data.glosa ?? "")
       setMoneda(data.moneda ?? "BOB")
-      setTipoCambio(Number(data.tipo_cambio) || TIPO_CAMBIO_DEFAULT)
+      setTipoCambio(Number(data.tipo_cambio) || 6.96)
       setCotizacionId(data.cotizacion ?? "")
       setCotizacionCodigoDisplay("")
       if (data.cotizacion) {
@@ -566,6 +567,29 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
   useEffect(() => {
     cargarProductos()
   }, [cargarProductos])
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        const json = await res.json().catch(() => ({}))
+        const list = (json.data || []) as Divisa[]
+        setDivisas(list)
+        const base = list.find((d) => d.es_base) ?? list.find((d) => d.codigo === "BOB")
+        const usd = list.find((d) => d.codigo === "USD")
+        setMoneda((prev) => (prev === "" ? (base?.codigo ?? "BOB") : prev))
+        setTipoCambio((prev) => (prev === 0 ? (usd ? Number(usd.tipo_cambio) : 6.96) : prev))
+      } catch {
+        setDivisas([])
+        setMoneda((prev) => prev === "" ? "BOB" : prev)
+        setTipoCambio((prev) => (prev === 0 ? 6.96 : prev))
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
+  }, [])
 
   useEffect(() => {
     if (initialFacturaId) {
@@ -839,13 +863,28 @@ export default function FacturasManuales({ initialFacturaId = null, initialDataF
                 <Label htmlFor="moneda" className="text-xs text-gray-600">
                   Moneda
                 </Label>
-                <Select value={moneda} onValueChange={setMoneda}>
+                <Select
+                  value={moneda}
+                  onValueChange={(v) => {
+                    setMoneda(v)
+                    const d = divisas.find((x) => x.codigo === v)
+                    if (d != null) setTipoCambio(Number(d.tipo_cambio) || 0)
+                  }}
+                >
                   <SelectTrigger className="mt-1 w-full">
-                    <SelectValue />
+                    <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BOB">Bolivianos</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
+                    {divisas.length > 0
+                      ? divisas.map((d) => (
+                          <SelectItem key={d.id} value={d.codigo}>
+                            {d.nombre || d.codigo}
+                          </SelectItem>
+                        ))
+                      : [
+                          <SelectItem key="BOB" value="BOB">Bolivianos</SelectItem>,
+                          <SelectItem key="USD" value="USD">USD</SelectItem>,
+                        ]}
                   </SelectContent>
                 </Select>
               </div>

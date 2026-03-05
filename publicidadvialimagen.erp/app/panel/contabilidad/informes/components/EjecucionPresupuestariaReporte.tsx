@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { FileDown, FileSpreadsheet, Play, Loader2, ChevronDown } from "lucide-react"
 import { api } from "@/lib/fetcher"
 import { toast } from "sonner"
-import type { Empresa, Sucursal } from "@/lib/types/contabilidad"
+import type { Empresa, Sucursal, Divisa } from "@/lib/types/contabilidad"
 
 interface EjecucionPresupuestariaFilters {
   empresa_id: string
@@ -71,6 +71,8 @@ const MESES = [
 export default function EjecucionPresupuestariaReporte() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
@@ -86,9 +88,32 @@ export default function EjecucionPresupuestariaReporte() {
         ? `0${new Date().getMonth() + 1}`
         : `${new Date().getMonth() + 1}`,
     gestion: new Date().getFullYear().toString(),
-    moneda: "BOB",
+    moneda: "",
     estado: "Todos",
   })
+
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const json = await res.json()
+          const list = (json.data || []) as Divisa[]
+          setDivisas(list)
+          const base = list.find((d) => d.es_base) ?? list[0]
+          if (base) {
+            setFilters((prev) => ({ ...prev, moneda: prev.moneda || base.codigo }))
+          }
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
+  }, [])
 
   useEffect(() => {
     const loadEmpresas = async () => {
@@ -159,7 +184,11 @@ export default function EjecucionPresupuestariaReporte() {
       if (filters.clasificador) params.set("clasificador", filters.clasificador)
       params.set("mes", filters.mes)
       params.set("gestion", filters.gestion)
-      params.set("moneda", filters.moneda)
+      const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+      params.set("moneda", monedaCodigo)
+      const selectedDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+      if (selectedDivisa?.simbolo) params.set("moneda_simbolo", selectedDivisa.simbolo)
+      if (selectedDivisa?.nombre) params.set("moneda_nombre", selectedDivisa.nombre)
       params.set("estado", filters.estado)
       const res = await api(`/api/contabilidad/informes/ejecucion-presupuestaria?${params.toString()}`)
       const json = await res.json()
@@ -188,7 +217,11 @@ export default function EjecucionPresupuestariaReporte() {
     if (filters.clasificador) params.set("clasificador", filters.clasificador)
     params.set("mes", filters.mes)
     params.set("gestion", filters.gestion)
-    params.set("moneda", filters.moneda)
+    const monedaCodigo = filters.moneda || divisas.find((d) => d.es_base)?.codigo || "BOB"
+    params.set("moneda", monedaCodigo)
+    const selectedDivisa = divisas.find((d) => d.codigo === monedaCodigo)
+    if (selectedDivisa?.simbolo) params.set("moneda_simbolo", selectedDivisa.simbolo)
+    if (selectedDivisa?.nombre) params.set("moneda_nombre", selectedDivisa.nombre)
     params.set("estado", filters.estado)
     return params.toString()
   }
@@ -432,15 +465,19 @@ export default function EjecucionPresupuestariaReporte() {
                 Moneda
               </Label>
               <Select
-                value={filters.moneda}
+                value={filters.moneda || divisas.find((d) => d.es_base)?.codigo ?? ""}
                 onValueChange={(value) => handleFilterChange("moneda", value)}
+                disabled={loadingDivisas}
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder={loadingDivisas ? "Cargando..." : "Moneda"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BOB">Bolivianos</SelectItem>
-                  <SelectItem value="USD">USD (tipo cambio 6.96 Bs/USD)</SelectItem>
+                  {divisas.filter((d) => (d.estado || "").toUpperCase() === "ACTIVO").map((d) => (
+                    <SelectItem key={d.id} value={d.codigo}>
+                      {d.nombre}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -16,7 +16,7 @@ import { Plus, Save, Trash2, CheckCircle, Check, ChevronsUpDown, BookOpen, FileD
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/fetcher"
-import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta, Auxiliar, Empresa, Sucursal } from "@/lib/types/contabilidad"
+import type { Comprobante, ComprobanteDetalle, OrigenComprobante, TipoComprobante, TipoAsiento, EstadoComprobante, Moneda, Cuenta, Auxiliar, Empresa, Sucursal, Divisa } from "@/lib/types/contabilidad"
 import { LcModal, type LcRegistroDatos } from "./LcModal"
 
 interface ComprobanteFormProps {
@@ -36,6 +36,8 @@ interface ComprobanteFormProps {
 const ORIGENES: OrigenComprobante[] = ["Contabilidad", "Ventas", "Tesorería", "Activos", "Planillas"]
 const TIPOS_COMPROBANTE: TipoComprobante[] = ["Ingreso", "Egreso", "Diario", "Traspaso", "Ctas por Pagar"]
 const TIPOS_ASIENTO: TipoAsiento[] = ["Normal", "Apertura", "Cierre", "Ajuste"]
+/** Tipo de cambio fijo para cálculos Debe/Haber USD en comprobantes (solo informativo: moneda y tipo_cambio vienen de tabla divisas) */
+const TIPO_CAMBIO_COMPROBANTES = 6.96
 const MONEDAS: Moneda[] = ["BS", "USD"]
 
 // Componente para detectar truncado y mostrar tooltip
@@ -127,6 +129,10 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
 
+  // Divisas (Parámetros) — selector dinámico y tipo de cambio desde BD
+  const [divisas, setDivisas] = useState<Divisa[]>([])
+  const [loadingDivisas, setLoadingDivisas] = useState(false)
+
   const [guardandoComprobante, setGuardandoComprobante] = useState(false)
   const lastTriggerSaveRef = useRef(0)
 
@@ -139,6 +145,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   const [lcSaving, setLcSaving] = useState(false)
 
   // Estado del formulario (empresa_id y sucursal_id como string UUID desde Parámetros de Contabilidad)
+  // moneda y tipo_cambio son informativos (desde divisas); los cálculos Debe/Haber USD usan siempre TIPO_CAMBIO_COMPROBANTES
   const [formData, setFormData] = useState<Partial<Comprobante>>({
     origen: "Contabilidad",
     tipo_comprobante: "Diario",
@@ -147,7 +154,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     periodo: new Date().getMonth() + 1,
     gestion: new Date().getFullYear(),
     moneda: "BS",
-    tipo_cambio: 6.96,
+    tipo_cambio: TIPO_CAMBIO_COMPROBANTES,
     estado: "BORRADOR",
     empresa_id: "",
     sucursal_id: "",
@@ -222,6 +229,35 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
     loadSucursales()
   }, [])
 
+  // Cargar divisas (Parámetros) solo para mostrar en selector y tipo de cambio (informativo); cálculos usan TIPO_CAMBIO_COMPROBANTES
+  useEffect(() => {
+    const loadDivisas = async () => {
+      setLoadingDivisas(true)
+      try {
+        const res = await api("/api/contabilidad/divisas?limit=1000")
+        if (res.ok) {
+          const data = await res.json()
+          const list = (data.data || []) as Divisa[]
+          setDivisas(list)
+          if (list.length > 0 && !comprobante) {
+            const usd = list.find((d) => d.codigo === "USD")
+            const base = list.find((d) => d.es_base) ?? list[0]
+            setFormData((prev) => ({
+              ...prev,
+              moneda: (base?.codigo ?? prev.moneda) as Moneda,
+              tipo_cambio: usd?.tipo_cambio ?? base?.tipo_cambio ?? TIPO_CAMBIO_COMPROBANTES,
+            }))
+          }
+        }
+      } catch {
+        setDivisas([])
+      } finally {
+        setLoadingDivisas(false)
+      }
+    }
+    loadDivisas()
+  }, [])
+
   // Sincronizar beneficiarioId cuando se cargan los contactos y hay un comprobante con beneficiario
   useEffect(() => {
     if (comprobante?.beneficiario && todosLosContactos.length > 0) {
@@ -287,7 +323,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         periodo: comprobante.periodo,
         gestion: comprobante.gestion,
         moneda: comprobante.moneda,
-        tipo_cambio: 6.96,
+        tipo_cambio: comprobante.tipo_cambio ?? TIPO_CAMBIO_COMPROBANTES,
         concepto: comprobante.concepto || "",
         beneficiario: comprobante.beneficiario || "",
         nro_cheque: comprobante.nro_cheque || "",
@@ -349,7 +385,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
               nro_dui: row.nro_dui ?? "",
               nro_documento: row.nro_documento ?? "",
               fecha: row.fecha ?? "",
-              cotizacion: row.cotizacion ?? 6.96,
+              cotizacion: row.cotizacion ?? TIPO_CAMBIO_COMPROBANTES,
               proveedor_id: row.proveedor_id,
               proveedor_nombre: row.proveedor_nombre ?? "",
               proveedor_nit: row.nit ?? "",
@@ -480,7 +516,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
       periodo: new Date().getMonth() + 1,
       gestion: new Date().getFullYear(),
       moneda: "BS",
-      tipo_cambio: 6.96,
+      tipo_cambio: TIPO_CAMBIO_COMPROBANTES,
       estado: "BORRADOR",
       empresa_id: defaultEmpresa?.id ?? "",
       sucursal_id: defaultSucursal?.id ?? "",
@@ -608,8 +644,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         setDetalles(nuevosDetalles)
         return
       } else {
-        // No hay plantilla: actualizar campo editado y recalcular solo el par BS ↔ USD de esa línea (tipo cambio 6.96)
-        const tipoCambio = formData.tipo_cambio ?? 6.96
+        // No hay plantilla: actualizar campo editado y recalcular BS ↔ USD con tipo de cambio fijo 6.96
+        const tipoCambio = TIPO_CAMBIO_COMPROBANTES
         const updated = [...detalles]
         const det = { ...updated[index] }
         if (field === "debe_bs") {
@@ -989,8 +1025,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
       })
     }
 
-    // 6. CALCULAR USD AUTOMÁTICAMENTE desde BS usando tipo de cambio
-    const tipoCambio = formData.tipo_cambio ?? 6.96
+    // 6. CALCULAR USD AUTOMÁTICAMENTE desde BS con tipo de cambio fijo 6.96
+    const tipoCambio = TIPO_CAMBIO_COMPROBANTES
     
     if (campo === "debe_bs" || campo === "haber_bs") {
       // Si se editó BS, calcular USD
@@ -1082,8 +1118,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
   )
 
   const detallesAjustados = useMemo(
-    () => ajustarRedondeoUsd(detalles, formData.tipo_cambio ?? 6.96),
-    [detalles, formData.tipo_cambio, ajustarRedondeoUsd]
+    () => ajustarRedondeoUsd(detalles, TIPO_CAMBIO_COMPROBANTES),
+    [detalles, ajustarRedondeoUsd]
   )
 
   // Calcular totales (desde detalles ajustados para que Diferencia USD = 0,00)
@@ -1122,6 +1158,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
 
       const payload = {
         ...formData,
+        moneda: formData.moneda === "BOB" ? "BS" : formData.moneda,
+        tipo_cambio: TIPO_CAMBIO_COMPROBANTES,
         estado: "BORRADOR",
         detalles: detallesAjustados.map((d, index) => ({
           ...d,
@@ -1176,7 +1214,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                   nro_dui: lcDraft.nro_dui || null,
                   nro_documento: lcDraft.nro_documento || null,
                   fecha: lcDraft.fecha,
-                  cotizacion: lcDraft.cotizacion ?? 6.96,
+                      cotizacion: lcDraft.cotizacion ?? TIPO_CAMBIO_COMPROBANTES,
                   proveedor_id: lcDraft.proveedor_id ?? null,
                   proveedor_nombre: lcDraft.proveedor_nombre || null,
                   nit: lcDraft.proveedor_nit || null,
@@ -1268,6 +1306,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         }
         const payloadAprobar = {
           ...formData,
+          moneda: formData.moneda === "BOB" ? "BS" : formData.moneda,
+          tipo_cambio: TIPO_CAMBIO_COMPROBANTES,
           estado: "BORRADOR",
           detalles: detallesAjustados.map((d, index) => ({ ...d, orden: index + 1 })),
         }
@@ -1301,6 +1341,8 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
         }
         const payload = {
           ...formData,
+          moneda: formData.moneda === "BOB" ? "BS" : formData.moneda,
+          tipo_cambio: TIPO_CAMBIO_COMPROBANTES,
           detalles: detallesAjustados.map((d, index) => ({ ...d, orden: index + 1 })),
         }
         const createRes = await api("/api/contabilidad/comprobantes", {
@@ -1334,7 +1376,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
               nro_dui: lcDraft.nro_dui || null,
               nro_documento: lcDraft.nro_documento || null,
               fecha: lcDraft.fecha,
-              cotizacion: lcDraft.cotizacion ?? 6.96,
+              cotizacion: lcDraft.cotizacion ?? TIPO_CAMBIO_COMPROBANTES,
               proveedor_id: lcDraft.proveedor_id ?? null,
               proveedor_nombre: lcDraft.proveedor_nombre || null,
               nit: lcDraft.proveedor_nit || null,
@@ -1616,8 +1658,9 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
                 id="tipo_cambio"
                 type="number"
                 step="0.0001"
-                value="6.96"
+                value={formData.tipo_cambio ?? TIPO_CAMBIO_COMPROBANTES}
                 disabled
+                readOnly
                 className="bg-gray-50 font-mono"
               />
             </div>
@@ -1626,19 +1669,31 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
               <Select
                 value={formData.moneda || "BS"}
                 onValueChange={(value) => {
-                  setFormData({ ...formData, moneda: value as Moneda })
+                  const divisa = divisas.find((d) => d.codigo === value)
+                  setFormData((prev) => ({
+                    ...prev,
+                    moneda: value as Moneda,
+                    tipo_cambio: divisa?.tipo_cambio ?? TIPO_CAMBIO_COMPROBANTES,
+                  }))
                 }}
                 disabled={isReadOnly}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Moneda" />
                 </SelectTrigger>
                 <SelectContent>
-                  {MONEDAS.map((moneda) => (
-                    <SelectItem key={moneda} value={moneda}>
-                      {moneda}
-                    </SelectItem>
-                  ))}
+                  {divisas.length > 0
+                    ? divisas.map((divisa) => (
+                        <SelectItem key={divisa.id} value={divisa.codigo}>
+                          {divisa.nombre}
+                        </SelectItem>
+                      ))
+                    : (
+                        <>
+                          <SelectItem value="BS">Bolivianos</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                        </>
+                      )}
                 </SelectContent>
               </Select>
             </div>
@@ -2273,12 +2328,12 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
           lcModalOpen && lcOpenedFromLineIndex !== null
             ? (comprobante?.id ? lcDataByLineIndex[lcOpenedFromLineIndex] : lcDraftByLineIndex[lcOpenedFromLineIndex]) ?? {
                 fecha: formData.fecha ?? new Date().toISOString().split("T")[0],
-                cotizacion: formData.tipo_cambio ?? 6.96,
+                cotizacion: TIPO_CAMBIO_COMPROBANTES,
               }
             : undefined
         }
         fechaComprobante={formData.fecha}
-        cotizacionComprobante={formData.tipo_cambio ?? 6.96}
+        cotizacionComprobante={formData.tipo_cambio ?? TIPO_CAMBIO_COMPROBANTES}
         onSave={async (data) => {
           const lineN = lcOpenedFromLineIndex ?? 0
           setLcModalOpen(false)
@@ -2288,7 +2343,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
           // DEBE: Gasto (base_gasto) + Crédito fiscal (iva); HABER: Proveedor (monto). Total Debe = Total Haber = monto.
           setDetalles((prev) => {
             if (prev.length === 0) return prev
-            const tipoCambio = formData.tipo_cambio ?? 6.96
+            const tipoCambio = TIPO_CAMBIO_COMPROBANTES
             const totalFactura = data.monto ?? 0
             const creditoFiscal = data.credito_fiscal ?? 0
             const baseImponible = Math.round((totalFactura - creditoFiscal) * 100) / 100
@@ -2363,7 +2418,7 @@ export default function ComprobanteForm({ comprobante, onNew, onSave, onAprobado
               nro_dui: data.nro_dui || null,
               nro_documento: data.nro_documento || null,
               fecha: data.fecha,
-              cotizacion: data.cotizacion ?? 6.96,
+              cotizacion: data.cotizacion ?? TIPO_CAMBIO_COMPROBANTES,
               proveedor_id: data.proveedor_id ?? null,
               proveedor_nombre: data.proveedor_nombre || null,
               nit: data.proveedor_nit || null,
